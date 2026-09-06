@@ -26,9 +26,30 @@ with seven upstream warnings. After preparing the pinned native asset,
 smoke explicitly requests Vulkan and submits a compute pipeline. The other tests
 cover Windows surface descriptors and invalid handles.
 
-This does not establish DX12, rectangle pixels, asynchronous readback, or live
+That upstream suite alone does not establish DX12, rectangle pixels, or live
 HWND presentation. The upstream [platform status](https://github.com/moonbit-community/wgpu-mbt/blob/5b0608223bc491688a6f0f41492f23682717bc3b/docs/platform_support_status.md)
 also distinguishes these missing presentation checks from its headless coverage.
+
+The isolated `experiments/wgpu_binding` module now exercises the published
+`Milky2018/wgpu_mbt@0.16.0` package with DX12 explicitly requested and asserted.
+Four RGBA8 rectangle cases (640×360 twice, 317×193, and 1×1) check every pixel
+against independently calculated colors with a one-channel rounding tolerance.
+Rows use 256-byte alignment; padding is excluded from pixel comparisons.
+Resources are released with `defer`. Both NVIDIA GeForce RTX 3060 and Microsoft
+Basic Render Driver passed all four cases locally on 2026-09-06.
+
+Run `mise run native:binding`; set `METONIC_GPU_FALLBACK=1` for the fallback
+adapter. The task runs `scripts/verify-wgpu-binding.mbtx`, which downloads and
+hash-checks the fixed asset, extracts it, prepares MSVC, and runs the native test.
+The generated, ignored `.work/wgpu-assets/vs-env.cmd` only calls Microsoft's
+environment setup and returns environment variables. Orchestration is MoonBit;
+the candidate's external CommonJS prebuild remains unchanged. The nested
+`package.json` establishes that CommonJS boundary.
+
+This proves the candidate can replace the custom bridge for this offscreen
+operation. It does not yet justify replacing the working HWND renderer or its
+command host. Interactive asynchronous completion, surface teardown/resize,
+distribution size, and comparative timing remain unverified.
 
 ## Build integration findings
 
@@ -48,8 +69,8 @@ warnings must be addressed or scoped before integrating strict project checks.
 
 ## Next acceptance
 
-Port the current rectangle readback and HWND lifetime probes to this binding,
-preserving pixel comparisons, adapter identification, resize and teardown checks.
+Port the HWND lifetime probe to this binding, preserving adapter identification,
+resize and teardown checks. Retain the existing renderer as the comparison baseline.
 Record required C glue and toolchain dependencies. Prefer reusing the binding if
 it meets these requirements; retain custom code only for demonstrated gaps.
 Upstream's current JavaScript prebuild is an external dependency boundary, not

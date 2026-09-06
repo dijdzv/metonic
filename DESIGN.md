@@ -29,6 +29,12 @@ MoonBit backend through a typed contract.
 Rust/C may provide OS, GPU, text, and layout primitives behind explicit bridges.
 GPUI, Solid, and Slint are design references, not mandatory runtimes.
 
+Before adding a bridge, compare existing MoonBit implementations and bindings for
+the required target. Preserve working baselines while evaluating replacements;
+see the [library reuse evaluation](docs/verification/library-reuse.md) for pinned
+candidates, executed checks and remaining acceptance criteria. Candidate lists do
+not constitute adoption decisions.
+
 Non-goals include React/Solid/Vue compatibility renderers, a DOM/CSS engine,
 a custom UI language, arbitrary npm execution, and a bundled Node/Bun/WebView
 runtime. External JS integrations and embedded web panels are deferred until a

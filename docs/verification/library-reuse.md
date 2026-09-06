@@ -1,0 +1,74 @@
+# Library reuse evaluation
+
+Date: 2026-09-06. This supplements dependency selection; it does not replace the
+architecture or authorize adoption of every candidate. Working implementations
+remain comparison baselines until equivalent requirements pass.
+
+## Current boundaries
+
+| Existing code | Responsibility | Reuse comparison |
+| --- | --- | --- |
+| `bridges/wgpu/src/lib.rs`, `window.rs` | wgpu 30.0.1 DX12 resources, offscreen readback and HWND presentation | `Milky2018/wgpu_mbt` over pinned wgpu-native |
+| `examples/p0/native_window/bridge.c` | HWND, bounded event queue and lifetime | `wzzc-dev/window/windows`, raw handle compatibility |
+| `examples/p0/native_window/async_workers.h` | Worker completion, cancellation and UI wakeup | `moonbitlang/async`; event-loop integration still needed |
+| `examples/p0/native_headless/bridge.c` | Bounded stdio, encoding, DLL and capture-file boundary | MoonBit I/O where equivalent; retain necessary OS boundary |
+| `examples/p0/browser/host/*.mjs` | WebGPU, DOM/input and host scheduling | Compare required calls against `mizchi/js_browser` and `bikallem/webapi` |
+| `tools/devtools/*.mjs`, `scripts/*` | CLI/MCP transport and development verification | MoonBit orchestration first; external SDK adapters scoped separately |
+| `examples/p0/text_position`, `semantics`, `task_scope` | Position validity, semantic actions and cancellation policy | Framework responsibilities; library presence does not replace these contracts |
+
+`examples/p0` contains bounded architecture probes, not a supported public API.
+Shared prototype packages currently live there so each experiment can reuse the
+same contracts. Promote reusable implementations to library packages when their
+responsibility and tests are established; keep demonstration hosts in examples.
+Dependency experiments use isolated modules under `experiments` to avoid changing
+the root module's target and dependency requirements during comparison.
+
+## Initial results
+
+These are source-checkout results unless explicitly identified as published
+package tests. Checkout version fields do not prove registry equivalence.
+
+| Area | Current implementation | Candidate/version | Required behavior | Native result | Browser result | Gap and decision | Evidence |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| GPU | Custom Rust wgpu bridge | Published `Milky2018/wgpu_mbt@0.16.0` | DX12, pixels, surface lifetime | Four offscreen cases passed on RTX 3060 and Microsoft Basic Render Driver | Not a browser binding | Viable offscreen path; retain HWND baseline pending surface comparison | [GPU evaluation](wgpu-mbt.md) |
+| Window | Direct Win32 C host | `wzzc-dev/window` checkout version `0.5.4-0.1.7` | Hidden HWND, events, resize, wakeup and cleanup | `moon check --target native` passed, one warning | Not run | No event-loop or IME execution claim; compare before replacement | [Pinned fork](https://github.com/wzzc-dev/window/tree/b33c9f0ac85002bca4a9cceccbbcd512d13b7ceb) |
+| Handles | HWND/HINSTANCE bridge arguments | Fork workspace `Milky2018/windowing@0.1.0` | Compatible handles and ownership | Included in window check | Not run | Matching version names do not prove fork/registry source equality | Same pinned fork |
+| Layout | No general engine selected | `Milky2018/chicle` checkout version `0.6.0` | Typed tree/style, measurement and invalidation | Native type check passed | Upstream tests: 80/80 JS and 80/80 WasmGC; no browser integration | Next: project-specific typed layout tests; no JSON UI DSL adoption | [Pinned source](https://github.com/moonbit-community/chicle/tree/d517dbfde05b42ad2f4b83242b4947043ec864cb) |
+| Text | Position validation; no shaper selected | `Milky2018/moon_cosmic` checkout version `0.3.3` | Japanese/emoji/fallback, shaping and editing positions | Native type check passed with 36 warnings | Not run | Font-based execution and target coverage required before selection | [Pinned source](https://github.com/moonbit-community/moon_cosmic/tree/c7c736d588aeaae129c534a354c7a6f3319fb5bd) |
+| Async scripts | Incremental PS/MJS migration | Published `moonbitlang/async@0.21.2` | Files, subprocesses and exit handling | Native UI integration not established | `.mbtx` default runtime executes toolchain and GPU orchestration on Windows | Script success does not establish UI event-loop integration | `scripts/doctor.mbtx`, `scripts/verify-wgpu-binding.mbtx` |
+
+The window fork default branch was `moui-support` at inspection. Its workspace
+contains `modules/window` and `modules/windowing`; it is not interchangeable with
+the upstream macOS-oriented window implementation. Its native check includes
+MoonBit sources and does not compile/link/execute Win32 C or validate presentation.
+
+The text checkout declares `moon_swash@0.1.10`, `moon_zeno@0.1.3`,
+`moon_skrifa@0.1.8`, `moonbitlang/x@0.4.45`, and
+`moonbit-community/harfbuzz@0.1.0`. Inspect the actual shaping path and target
+requirements before assuming a pure MoonBit dependency graph.
+
+Commands used with `MOON_HOME` and the explicit compiler from `toolchain.json`:
+`moon check --target native` in each pinned checkout; additionally
+`moon test --target js` and `moon test --target wasm-gc` in chicle.
+The cloned sources were not patched. Warnings were retained, not treated as
+proof of incompatibility or silently disabled.
+
+## Remaining comparisons
+
+- GPU: reuse the existing hidden HWND host to isolate surface behavior before
+  changing the event loop. Check resize, acquire/present, failure cleanup and
+  destruction order; then measure startup, transfers and distribution size.
+- Layout/text: prioritize typed chicle usage and font-backed moon_cosmic tests.
+  Evaluate moon_swash/moon_zeno through text dependencies before creating separate
+  public APIs. Preserve UTF-16/UTF-8/scalar validity requirements.
+- Accessibility: compare `Milky2018/moon_accesskit` data model and updates with
+  current semantics; verify Windows UI Automation independently. No OS adapter
+  or current package version has been validated in this pass.
+- Browser: inventory required WebGPU, input and semantic DOM calls before choosing
+  `mizchi/js_browser` or `bikallem/webapi`; JS/WasmGC coverage must be demonstrated.
+- RPC: inspect `moonbitlang/protoc-gen-mbt` generator/runtime compatibility before
+  adding codec code. Native gRPC remains distinct from Node grpc-js bindings.
+
+MoUI and Kagura are integration references, not selected framework dependencies.
+Additional candidates are pending investigation, not rejected. Adoption decisions
+will update only relevant ADR/dependency sections after comparison evidence exists.
