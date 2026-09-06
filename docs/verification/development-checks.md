@@ -2,16 +2,18 @@
 
 Recorded: 2026-09-06.
 
-## Runtime and CI scope
+## Runtime and manual CI
 
 With mise 2026.8.5 and Node 26.8.1, `mise run verify` and
 `mise run verify-native` passed the JS, WasmGC, and Windows native contract
 tests, frontend execution probes, valid isolated builds, and four compile-fail
 fixtures per target. These remain console tests, not GUI verification.
 
-`pwsh -NoProfile -File scripts/ci-scope.Tests.ps1` passed documentation,
-source/configuration, mixed, rename, empty-change, and invalid-input cases.
-`pwsh -NoProfile -File scripts/verify-docs.ps1` passed tracked Markdown link checks.
+The manual-only workflow no longer classifies changed paths. All verification
+steps remain enabled on dispatch, and artifact upload steps retain `always()`.
+The earlier scope classifier and its tests were removed rather than translated.
+`moon run scripts/verify-docs.mbtx` checks tracked Markdown links; positive and
+missing-link fixtures were exercised during its PowerShell-to-MoonBit migration.
 
 ## Pre-commit
 

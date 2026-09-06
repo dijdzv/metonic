@@ -89,6 +89,12 @@ environment for child processes. Validation logic runs in MoonBit, and the
 parent shell's environment is not modified. Toolchain installation remains a
 separate bootstrap step.
 
+Native probe build tasks use `scripts/build-native.mbtx` with explicit headless,
+window or async modes. Each mode builds the locked Rust bridge and headless
+baseline; window/async additionally rebuild their C stub and executable. The
+script checks output artifacts and rejects unsupported modes before building.
+This migrates build orchestration, not the retained Rust/C implementation.
+
 `mise run hooks:install` uses mise's built-in Git hook generator. Run it once per
 clone with the default Git hooks directory; it replaces `.git/hooks/pre-commit`,
 so preserve any custom hook before running it. Git must be able to find `mise`

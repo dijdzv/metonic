@@ -7,7 +7,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: verify-${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  group: verify-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -18,61 +18,36 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
           persist-credentials: false
-      - name: Test CI scope classification
-        shell: pwsh
-        run: ./scripts/ci-scope.Tests.ps1
-      - name: Determine verification scope
-        id: scope
-        shell: pwsh
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch') {
-            ./scripts/ci-scope.ps1 -Full -WriteGitHubOutput
-          } else {
-            ./scripts/ci-scope.ps1 -BaseSha "$env:BASE_SHA" -HeadSha "$env:HEAD_SHA" -WriteGitHubOutput
-          }
       - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
-        if: github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true'
         with:
           version: 2026.8.5
           cache: false
       - name: Bootstrap pinned MoonBit
-        if: github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true'
         run: mise run bootstrap
       - name: Verify tracked Markdown links
         shell: pwsh
         run: ./.tools/moonbit/bin/moon.exe run scripts/verify-docs.mbtx
       - name: Verify WasmGC and JavaScript
-        if: github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true'
         run: mise run verify
       - name: Verify browser artifacts
-        if: github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true'
         run: mise run browser:verify
       - name: Verify browser server
-        if: github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true'
         run: mise run browser:server-test
       - name: Install browser test dependencies
-        if: github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true'
         run: pnpm install --frozen-lockfile
       - name: Install headless Chromium
-        if: github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true'
         run: mise run browser:install
       - name: Verify headless WebGPU (software adapter)
-        if: github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true'
         env:
           METONIC_GPU_BACKEND: swiftshader
         run: mise run browser:headless
       - name: Verify browser async behavior
-        if: github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true'
         env:
           METONIC_GPU_BACKEND: swiftshader
         run: node scripts/verify-browser-async.mjs
       - name: Save browser async artifacts
-        if: always() && (github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true')
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: browser-async-swiftshader
@@ -81,7 +56,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
       - name: Save headless verification images
-        if: always() && (github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true')
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: browser-headless-swiftshader
@@ -90,42 +65,35 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
       - name: Verify Windows native
-        if: github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true'
         run: mise run verify-native
       - name: Install Rust native probe toolchain
-        if: github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true'
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           rustup toolchain install 1.98.1 --profile minimal --component rustfmt
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Verify native headless fallback
-        if: github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true'
         env:
           METONIC_GPU_FALLBACK: '1'
         run: mise run native:headless
       - name: Verify native client transport
-        if: github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true'
         env:
           METONIC_GPU_FALLBACK: '1'
         run: node --test tools/devtools/native-client.test.mjs
       - name: Verify native control
-        if: github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true'
         env:
           METONIC_GPU_FALLBACK: '1'
         run: node scripts/verify-native-control.mjs
       - name: Verify native MCP
-        if: github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true'
         env:
           METONIC_GPU_FALLBACK: '1'
         run: node scripts/verify-native-mcp.mjs
       - name: Verify native semantics
-        if: github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true'
         env:
           METONIC_GPU_FALLBACK: '1'
         run: node scripts/verify-native-semantics.mjs
       - name: Save native headless fallback
-        if: always() && (github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true')
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: native-headless-fallback
@@ -134,7 +102,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
       - name: Save native control artifacts
-        if: always() && (github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true')
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: native-control
@@ -143,7 +111,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
       - name: Save native MCP artifacts
-        if: always() && (github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true')
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: native-mcp
@@ -152,7 +120,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
       - name: Save native semantics artifacts
-        if: always() && (github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true')
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: native-semantics
@@ -161,12 +129,11 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
       - name: Verify hidden native window
-        if: github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true'
         env:
           METONIC_GPU_FALLBACK: '1'
         run: mise run native:window
       - name: Save native window artifacts
-        if: always() && (github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true')
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: native-window
@@ -175,12 +142,11 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
       - name: Verify native async
-        if: github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true'
         env:
           METONIC_GPU_FALLBACK: '1'
         run: mise run native:async
       - name: Save native async artifacts
-        if: always() && (github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true')
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: native-async
@@ -189,7 +155,6 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
       - name: Verify existing MoonBit GPU binding
-        if: github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true'
         timeout-minutes: 3
         env:
           METONIC_GPU_FALLBACK: '1'

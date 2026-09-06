@@ -1,0 +1,151 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/env",
+}
+
+///|
+fn fail(message : String) -> Unit {
+  println(message)
+  abort(message)
+}
+
+///|
+async fn main {
+  @async.with_timeout(300000, async fn() {
+    let mode = match @env.get_env_var("METONIC_NATIVE_BUILD") {
+      Some(value) => value
+      None => "headless"
+    }
+    if mode != "headless" && mode != "window" && mode != "async" {
+      fail("invalid native build mode: " + mode)
+    }
+    let moon = @fs.realpath(".tools/moonbit/bin/moon.exe")
+    let moon_home = @fs.realpath(".tools/moonbit")
+    let program_files = @env.get_env_var("ProgramFiles(x86)").unwrap_or(
+      "C:/Program Files (x86)",
+    )
+    let vswhere = program_files +
+      "/Microsoft Visual Studio/Installer/vswhere.exe"
+    let (where_code, where_out, where_err) = @process.collect_output(
+      vswhere,
+      [
+        "-utf8", "-latest", "-products", "*", "-requires", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+        "-property", "installationPath",
+      ],
+      no_console_window=true,
+    )
+    if where_code != 0 {
+      fail(where_err.text())
+    }
+    let install = where_out.text().trim().to_owned()
+    if install == "" ||
+      install.contains("\r") ||
+      install.contains("\n") ||
+      install.contains("\"") {
+      fail("invalid Visual Studio installation")
+    }
+    let dir = ".work/native-build-env"
+    if !@fs.exists(dir) {
+      @fs.mkdir(dir, recursive=true)
+    }
+    let script = dir + "/vs-env.cmd"
+    @fs.write_file(
+      script,
+      "@echo off\r\nchcp 65001>nul\r\ncall \"" +
+      install +
+      "/Common7/Tools/VsDevCmd.bat\" -no_logo -arch=x64 -host_arch=x64\r\nif errorlevel 1 exit /b 1\r\nset\r\n",
+    )
+    let (cmd_code, cmd_out, cmd_err) = @process.collect_output(
+      "cmd.exe",
+      ["/d", "/c", ".work\\native-build-env\\vs-env.cmd"],
+      no_console_window=true,
+    )
+    if cmd_code != 0 {
+      fail(cmd_err.text())
+    }
+    let envmap : Map[String, String] = Map([])
+    for line in cmd_out.text().split("\n") {
+      let item = line.trim_end(chars="\r")
+      match item.find("=") {
+        Some(i) => {
+          let key = item[:i].to_owned()
+          if key != "" {
+            envmap.set(key, item[i + 1:].to_owned())
+          }
+        }
+        None => ()
+      }
+    }
+    envmap.set("MOON_HOME", moon_home)
+    envmap.set("MOON_CC", "cl")
+    envmap.set("VSLANG", "1033")
+    let cargo = [
+      "+1.98.1", "build", "--manifest-path", "bridges/wgpu/Cargo.toml", "--locked",
+      "--release", "--target-dir", ".work/native-cargo",
+    ]
+    if @process.run("cargo", cargo, extra_env=envmap, no_console_window=true) !=
+      0 {
+      fail("cargo bridge build failed")
+    }
+    let package_name = if mode == "headless" {
+      "native_headless"
+    } else if mode == "window" {
+      "native_window"
+    } else {
+      "native_async"
+    }
+    if @process.run(
+        moon,
+        [
+          "build", "examples/p0/native_headless", "--target", "native", "--release",
+          "--deny-warn",
+        ],
+        extra_env=envmap,
+        no_console_window=true,
+      ) !=
+      0 {
+      fail("MoonBit headless build failed")
+    }
+    let dll = ".work/native-cargo/release/metonic_wgpu_probe.dll"
+    let headless_exe = "_build/native/release/build/examples/p0/native_headless/native_headless.exe"
+    if !@fs.exists(dll) || !@fs.exists(headless_exe) {
+      fail("native headless artifact missing")
+    }
+    if mode != "headless" {
+      // Included headers may not invalidate the cached C stub.
+      let stale = "_build/native/release/build/examples/p0/" +
+        package_name +
+        "/bridge.obj"
+      if @fs.exists(stale) {
+        @fs.remove(stale)
+      }
+      if @process.run(
+          moon,
+          [
+            "build",
+            "examples/p0/" + package_name,
+            "--target",
+            "native",
+            "--release",
+            "--deny-warn",
+          ],
+          extra_env=envmap,
+          no_console_window=true,
+        ) !=
+        0 {
+        fail("MoonBit native build failed")
+      }
+      let exe = "_build/native/release/build/examples/p0/" +
+        package_name +
+        "/" +
+        package_name +
+        ".exe"
+      if !@fs.exists(exe) {
+        fail("native build artifact missing")
+      }
+    }
+    println("NATIVE_BUILD_OK mode=" + mode)
+  })
+}
