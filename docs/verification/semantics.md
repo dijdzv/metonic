@@ -26,6 +26,14 @@ pixel comparison. Text/selection, focus exclusivity, disabled actions, generatio
 reuse, cross-window references, and stale semantic revisions also passed. Existing
 native headless and MCP regression checks passed with software DX12.
 
+The MoonBit verifier in `tools/verify_native_semantics` was also checked and built
+for the Wasm host runtime with `--deny-warn` on 2026-09-07. Its rebuilt artifact
+completed the same semantic and full-pixel checks on both adapters. It uses the
+MoonBit process client in `tools/native_control`; browser WasmGC is a separate
+runtime. Results include the reached checks and adapter diagnostics in
+`.work/native-semantics/{default,fallback}.json`. Temporary captures are removed
+after the child-process scope exits, including verification failures.
+
 The model's session/window numbers currently identify one process-local tree;
 they are not globally unique attach capabilities. The external client's launch
 UUID and process ownership are a separate boundary. This probe has no cross-process

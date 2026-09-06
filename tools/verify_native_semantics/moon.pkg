@@ -1,0 +1,11 @@
+import {
+  "local/p0/tools/native_control" @control,
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/core/json",
+  "moonbitlang/core/env",
+}
+
+pkgtype(kind: "executable")
+
+supported_targets = "+native+wasm"

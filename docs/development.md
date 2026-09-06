@@ -227,6 +227,13 @@ Run `mise run devtools:test`, `mise run native:control`, and
 `mise run native:mcp-test` for transport and real-renderer checks. See the
 [control verification record](verification/native-control.md) for scope and results.
 
+`mise run native:client-test` checks the MoonBit process client used by migrated
+verification tools. `mise run native:semantics` builds its MoonBit verifier for
+the Wasm host runtime before running it against the native renderer. The verifier
+checks semantic actions, UTF-16 selection boundaries, stale references and full
+capture pixels. Node remains the host for the existing CLI/MCP adapters. See the
+[semantic verification record](verification/semantics.md) for measured scope.
+
 ## Repository layout
 
 | Path | Purpose |
