@@ -52,6 +52,12 @@ clone with the default Git hooks directory; it replaces `.git/hooks/pre-commit`,
 so preserve any custom hook before running it. Git must be able to find `mise`
 and PowerShell 7 on PATH.
 
+The pinned formatter does not directly accept `.mbtx`. The local hook runs
+`scripts/format-scripts.mbtx`, which formats tracked scripts' import blocks as
+`moon.pkg` and their bodies as `.mbt` using the same pinned `moonfmt`. It writes
+back only after all formatter invocations succeed and rejects unsupported
+frontmatter instead of silently skipping it.
+
 `mise run pre-commit` runs the same local gate manually. The MoonBit `.mbtx`
 orchestrator rejects tracked unstaged edits, checks staged whitespace, runs
 MoonBit/Rust formatters and stops if formatting changes files. Review and stage

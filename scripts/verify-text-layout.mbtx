@@ -1,0 +1,247 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/encoding/utf8",
+  "Milky2018/moon_cosmic@0.3.3" @cosmic,
+}
+
+///|
+let asset_dir = ".work/text-assets"
+
+///|
+let font_path : String = asset_dir + "/NotoSansJP.ttf"
+
+///|
+let license_path : String = asset_dir + "/OFL.txt"
+
+///|
+let font_url = "https://raw.githubusercontent.com/google/fonts/66a36c8c94b1a5d992ee4e7f392fccfe4945767c/ofl/notosansjp/NotoSansJP%5Bwght%5D.ttf"
+
+///|
+let license_url = "https://raw.githubusercontent.com/google/fonts/66a36c8c94b1a5d992ee4e7f392fccfe4945767c/ofl/notosansjp/OFL.txt"
+
+///|
+let expected_hash = "c2f3b4d463500a2ddcd3849cded1fceeb9fd6d1c32e6cbecd568453ba50fc68f"
+
+///|
+fn fail(message : String) -> Unit {
+  println("TEXT_LAYOUT_FAILED: " + message)
+  abort(message)
+}
+
+///|
+async fn fetch(path : String, url : String) -> Unit {
+  let (code, _, _) = @process.collect_output("curl.exe", [
+    "-fL", "--output", path, url,
+  ])
+  if code != 0 {
+    fail("asset download failed: " + path)
+  }
+}
+
+///|
+fn assert_true(condition : Bool, message : String) -> Unit {
+  if !condition {
+    fail(message)
+  }
+}
+
+///|
+async fn main {
+  if !@fs.exists(asset_dir) {
+    @fs.mkdir(asset_dir, recursive=true)
+  }
+  if !@fs.exists(font_path) {
+    fetch(font_path, font_url)
+  }
+  if !@fs.exists(license_path) {
+    fetch(license_path, license_url)
+  }
+  let (hash_code, hash_stdout, _) = @process.collect_output("certutil.exe", [
+    "-hashfile", font_path, "SHA256",
+  ])
+  if hash_code != 0 {
+    fail("font hash failed")
+  }
+  let hash_lines = @utf8.decode_lossy(hash_stdout.binary()).split("\n")
+  let hash_ok = hash_lines.any(line => {
+    line.trim().to_owned() == expected_hash ||
+    line.trim().to_owned() ==
+    "C2F3B4D463500A2DDCD3849CDED1FCEEB9FD6D1C32E6CBECD568453BA50FC68F"
+  })
+  assert_true(hash_ok, "NotoSansJP SHA256 mismatch")
+  let font_bytes = @fs.read_file(font_path).binary()
+  let font_system = @cosmic.FontSystem::new_with_locale("ja-JP").load_font_data(
+    font_bytes,
+  )
+  assert_true(font_system.fonts().length() > 0, "font was not loaded")
+  let text = "日本語の描画を確認します ABC 123"
+  let metrics = @cosmic.Metrics::new(24.0F, 32.0F)
+  let attrs = @cosmic.AttrsList::new(
+    @cosmic.Attrs::new().family(@cosmic.Family::Name("Noto Sans JP")),
+  )
+  let mut wide = @cosmic.Buffer::new(metrics)
+  wide = wide.set_text(text, attrs, @cosmic.Shaping::Advanced)
+  wide = wide.set_size(Some(640.0F), Some(640.0F)).set_wrap(@cosmic.Wrap::Word)
+  wide = wide.layout_all_with_font_system(font_system)
+  let mut narrow = @cosmic.Buffer::new(metrics)
+  narrow = narrow.set_text(text, attrs, @cosmic.Shaping::Advanced)
+  narrow = narrow
+    .set_size(Some(96.0F), Some(640.0F))
+    .set_wrap(@cosmic.Wrap::Word)
+  narrow = narrow.layout_all_with_font_system(font_system)
+  assert_true(
+    wide.layout_runs().to_array().length() > 0 &&
+    narrow.layout_runs().to_array().length() > 0,
+    "empty layout",
+  )
+  let wide_glyphs = wide
+    .layout_runs()
+    .to_array()
+    .fold(init=0, (n, run) => n + run.glyphs.length())
+  let narrow_glyphs = narrow
+    .layout_runs()
+    .to_array()
+    .fold(init=0, (n, run) => n + run.glyphs.length())
+  assert_true(wide_glyphs > 0 && narrow_glyphs > 0, "empty glyph layout")
+  assert_true(
+    narrow.layout_runs().to_array().length() >
+    wide.layout_runs().to_array().length(),
+    "narrow layout did not wrap",
+  )
+  for run in wide.layout_runs() {
+    for glyph in run.glyphs {
+      assert_true(glyph.glyph_id > 0, "missing glyph")
+    }
+  }
+  for run in narrow.layout_runs() {
+    for glyph in run.glyphs {
+      assert_true(glyph.glyph_id > 0, "missing glyph")
+    }
+  }
+  let mut wide_again = @cosmic.Buffer::new(metrics)
+  wide_again = wide_again
+    .set_text(text, attrs, @cosmic.Shaping::Advanced)
+    .set_size(Some(640.0F), Some(640.0F))
+    .set_wrap(@cosmic.Wrap::Word)
+    .layout_all_with_font_system(font_system)
+  assert_true(
+    wide_again.layout_runs().length() == wide.layout_runs().length(),
+    "wide run count is unstable",
+  )
+  let wide_again_glyphs = wide_again
+    .layout_runs()
+    .to_array()
+    .fold(init=0, (n, run) => n + run.glyphs.length())
+  assert_true(wide_again_glyphs == wide_glyphs, "wide glyph count is unstable")
+  let wide_runs = wide.layout_runs().to_array()
+  let wide_again_runs = wide_again.layout_runs().to_array()
+  let wide_max = wide_runs.fold(init=0.0F, (n, run) => n.max(run.line_w))
+  println("wide_max_line_w=" + wide_max.to_string())
+  for i in 0..<text.length() {
+    if text.code_unit_at(i).to_int() != 32 {
+      let mut covered = false
+      for run in wide_runs {
+        for glyph in run.glyphs {
+          if glyph.start <= i && i < glyph.end {
+            covered = true
+          }
+        }
+      }
+      assert_true(covered, "uncovered text position")
+    }
+  }
+  for i in 0..<wide_runs.length() {
+    assert_eq(wide_runs[i].line_w, wide_again_runs[i].line_w)
+  }
+  let mut fit = @cosmic.Buffer::new(metrics)
+  fit = fit
+    .set_text(text, attrs, @cosmic.Shaping::Advanced)
+    .set_size(Some(96.0F), Some(640.0F))
+    .set_wrap(@cosmic.Wrap::WordOrGlyph)
+    .layout_all_with_font_system(font_system)
+  let fit_runs = fit.layout_runs().to_array()
+  assert_true(fit_runs.length() > 1, "fit layout did not wrap")
+  let narrow_max = narrow
+    .layout_runs()
+    .to_array()
+    .fold(init=0.0F, (n, run) => n.max(run.line_w))
+  let fit_max = fit_runs.fold(init=0.0F, (n, run) => n.max(run.line_w))
+  println(
+    "narrow_max_line_w=" +
+    narrow_max.to_string() +
+    " fit_runs=" +
+    fit_runs.length().to_string() +
+    " fit_max_line_w=" +
+    fit_max.to_string(),
+  )
+  for run in fit_runs {
+    assert_true(run.line_w <= 96.01F, "fit line exceeds width")
+    for glyph in run.glyphs {
+      assert_true(glyph.glyph_id > 0, "fit missing glyph")
+    }
+  }
+  for i in 0..<text.length() {
+    if text.code_unit_at(i).to_int() != 32 {
+      let mut covered = false
+      for run in fit_runs {
+        for glyph in run.glyphs {
+          if glyph.start <= i && i < glyph.end {
+            covered = true
+          }
+        }
+      }
+      assert_true(covered, "fit uncovered text position")
+    }
+  }
+  let cache = @cosmic.SwashCache::new()
+  let mut callbacks = 0
+  let mut area = 0
+  let color = @cosmic.Color::rgb(b'\x00', b'\x00', b'\x00')
+  let svg = StringBuilder()
+  svg.write_string(
+    "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"640\" height=\"96\" viewBox=\"0 0 640 96\"><rect width=\"640\" height=\"96\" fill=\"white\"/>",
+  )
+  let _ = wide.draw(font_system, cache, color, (
+    x : Int,
+    y : Int,
+    w : UInt,
+    h : UInt,
+    color : @cosmic.Color,
+  ) => {
+    if color.a().to_int() > 0 {
+      callbacks += 1
+      area += w.reinterpret_as_int() * h.reinterpret_as_int()
+      let opacity = color.a().to_int().to_double() / 255.0
+      svg.write_string(
+        "<rect x=\"" +
+        x.to_string() +
+        "\" y=\"" +
+        y.to_string() +
+        "\" width=\"" +
+        w.reinterpret_as_int().to_string() +
+        "\" height=\"" +
+        h.reinterpret_as_int().to_string() +
+        "\" fill=\"black\" opacity=\"" +
+        opacity.to_string() +
+        "\"/>",
+      )
+    }
+  })
+  svg.write_string("</svg>")
+  @fs.write_file(asset_dir + "/japanese-wide.svg", svg.to_string())
+  assert_true(callbacks > 0 && area > 0, "draw callback was empty")
+  println(
+    "wide_runs=" +
+    wide.layout_runs().to_array().length().to_string() +
+    " narrow_runs=" +
+    narrow.layout_runs().to_array().length().to_string() +
+    " wide_glyphs=" +
+    wide_glyphs.to_string() +
+    " narrow_glyphs=" +
+    narrow_glyphs.to_string() +
+    " callbacks=" +
+    callbacks.to_string(),
+  )
+}
