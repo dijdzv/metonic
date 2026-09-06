@@ -24,7 +24,7 @@ run = "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1 -Native"
 
 [tasks.pre-commit]
 description = "Run checks for staged changes"
-run = "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/pre-commit.ps1"
+run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/pre-commit.mbtx'
 
 [tasks."hooks:install"]
 description = "Install the mise-managed Git pre-commit hook"

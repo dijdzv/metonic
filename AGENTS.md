@@ -3,7 +3,10 @@
 - 設計は DESIGN.md、作業手順とGit運用は docs/development.md を参照する。
 - 実装・検証・未実施を区別し、再現可能な技術記録を docs/verification/ に残す。
 - 個人的な会話ログやエージェント間の引き継ぎメモはコミットしない。
-- mainはPR経由で更新する。force pushや保護設定の緩和を行わない。
+- mainはPR経由で更新する。force push・ブランチ削除・PR必須設定の解除を行わない。
+- 整形・静的検査・テストはpre-commitで実行し、成功前にpushしない。
+  初期開発ではPR/push CIで同じ検証を重複実行しない。CIは手動診断用とし、
+  ローカルで網羅できない検証が必要になった時点で用途を追加する。
 - miseタスクを使い、toolchain.jsonに固定した現行MoonBitで検証する。
 - 開発スクリプト・検証・CLIもMoonBitを基本とし、単独スクリプトには`.mbtx`を使う。
   既存のPowerShell/MJSは順次移行する。単に既存スクリプトを呼ぶだけで移行済みとしない。

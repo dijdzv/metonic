@@ -1,0 +1,49 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/process",
+}
+
+fn fail(message : String) -> Unit {
+  println(message)
+  abort(message)
+}
+
+let gpu_env : Map[String, String] = Map([
+  ("METONIC_GPU_FALLBACK", "1"),
+  ("METONIC_GPU_BACKEND", "swiftshader"),
+])
+
+async fn run(cmd : String, args : Array[String]) -> Unit {
+  println("pre-commit: " + cmd + " " + args.join(" "))
+  let code = @process.run(cmd, args, extra_env=gpu_env, no_console_window=true)
+  if code != 0 { fail("command failed (" + code.to_string() + "): " + cmd) }
+}
+
+async fn expect_clean(args : Array[String], label : String) -> Unit {
+  let (code, _stdout, _stderr) = @process.collect_output("git", args, no_console_window=true)
+  if code != 0 { fail(label) }
+}
+
+async fn main {
+  expect_clean(["diff", "--quiet"], "unstaged changes detected")
+  run("git", ["diff", "--cached", "--check"])
+  let moon = ".tools/moonbit/bin/moon.exe"
+  run(moon, ["fmt"])
+  run(moon, ["-C", "experiments/wgpu_binding", "fmt"])
+  run("cargo", ["fmt", "--manifest-path", "bridges/wgpu/Cargo.toml"])
+  expect_clean(["diff", "--exit-code"], "formatting changed files; review and stage explicitly")
+  run(moon, ["check", "--target", "js", "--deny-warn"])
+  run(moon, ["check", "--target", "wasm-gc", "--deny-warn"])
+  let gates = [
+    "verify", "verify-native", "browser:verify", "browser:server-test",
+    "browser:headless", "browser:async", "devtools:test", "native:headless",
+    "native:control", "native:mcp-test", "native:semantics", "native:window",
+    "native:async", "native:binding",
+  ]
+  for gate in gates {
+    println("pre-commit gate: mise run " + gate)
+    run("mise", ["run", gate])
+  }
+  println("pre-commit gate: docs")
+  run("pwsh", ["-NoProfile", "-File", "scripts/verify-docs.ps1"])
+}
