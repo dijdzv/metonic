@@ -57,7 +57,7 @@ run = "node scripts/verify-browser-async.mjs"
 
 [tasks."browser:server-test"]
 depends = ["browser:build"]
-run = "node scripts/verify-browser-server.mjs"
+run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-browser-server.mbtx'
 
 [tasks."native:build"]
 run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/build-native.mbtx'

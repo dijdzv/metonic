@@ -76,6 +76,11 @@ The server reads each allowed file into memory before sending it and limits
 concurrent connections to eight; it is a local development server, not a general
 file host. Browser UI execution still compares JS and WasmGC independently.
 
+`browser:server-test` uses `scripts/verify-browser-server.mbtx` to launch the
+server and verify asset MIME types, cache policy, GET/HEAD, method rejection and
+the path allowlist. It bounds readiness and the complete run separately and
+cancels the child process when verification finishes or fails.
+
 ## Local pre-commit checks
 
 Tracked Markdown links are checked by `moon run scripts/verify-docs.mbtx`.
