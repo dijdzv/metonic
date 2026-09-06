@@ -72,7 +72,11 @@ run = "node --test tools/devtools/native-client.test.mjs"
 
 [tasks."native:control"]
 depends = ["native:build"]
-run = "node scripts/verify-native-control.mjs"
+run = [
+  '.\\.tools\\moonbit\\bin\\moon.exe build tools/verify_native_control --target wasm --release --frozen --deny-warn',
+  '.\\.tools\\moonbit\\bin\\moon.exe test tools/verify_native_control --target wasm --frozen --deny-warn',
+  '.\\.tools\\moonbit\\bin\\moonrun.exe _build/wasm/release/build/tools/verify_native_control/verify_native_control.wasm',
+]
 
 [tasks."native:mcp-test"]
 depends = ["native:build"]

@@ -31,10 +31,10 @@ After the setup in the [development guide](../development.md):
 mise exec -- pnpm install --frozen-lockfile
 mise run native:build
 mise exec -- node --test tools/devtools/native-client.test.mjs
-mise exec -- node scripts/verify-native-control.mjs
+mise run native:control
 mise exec -- node scripts/verify-native-mcp.mjs
 $env:METONIC_GPU_FALLBACK = '1'
-mise exec -- node scripts/verify-native-control.mjs
+mise run native:control
 mise exec -- node scripts/verify-native-mcp.mjs
 Remove-Item Env:METONIC_GPU_FALLBACK
 ```
@@ -42,6 +42,20 @@ Remove-Item Env:METONIC_GPU_FALLBACK
 Images and JSON evidence are stored in `.work/native-control` and `.work/native-mcp`.
 The development processes use per-launch temporary capture directories and remove
 them on normal shutdown. No desktop input automation is involved.
+
+The MoonBit control verifier uses `mizchi/image@0.4.3` for PNG output, with
+`mizchi/zlib@0.4.8`. Its PNG contract tests cover 3x2 and 257x129 RGBA patterns
+with alpha 0/127/255, exact roundtrips, and invalid dimensions/data lengths.
+An independent pngjs decode of those patterns matched every original byte
+(24 and 132612 bytes respectively). This selects PNG encoding for development
+captures; it does not adopt the library's other image formats or replace the
+renderer. See the [published codec API](https://mooncakes.io/docs/mizchi/image).
+
+On 2026-09-07 the migrated verifier completed on both DX12 adapters. Independent
+pngjs decoding of each resulting 640x360 PNG matched all 230400 expected scene
+pixels: the active rectangle at (10, 20), its background and opaque alpha. The
+verifier also preserved stale mutation/capture rejection and the requirement that
+two simultaneous capture attempts produce one success and one busy rejection.
 
 ## Boundaries
 
