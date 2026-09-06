@@ -1,0 +1,157 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/async@0.21.2/http",
+  "moonbitlang/async@0.21.2/socket",
+  "moonbitlang/async@0.21.2/io",
+}
+
+///|
+suberror VerifyFailure {
+  VerifyFailure(String)
+}
+
+///|
+fn fail(message : String) -> Unit raise Error {
+  raise VerifyFailure(message)
+}
+
+///|
+async fn verify_server() -> Unit raise Error {
+  @async.with_timeout(30000, async fn() {
+    let artifact = @fs.realpath(
+      "_build/wasm/release/build/tools/browser_server/browser_server.wasm",
+    )
+    let moonrun = @fs.realpath(".tools/moonbit/bin/moonrun.exe")
+    @async.with_task_group(async fn(group) {
+      let (reader, stdout) = @process.read_from_process()
+      defer reader.close()
+      let proc = @process.spawn(
+        group,
+        moonrun,
+        [artifact],
+        stdout~,
+        no_console_window=true,
+        cancel_handler=@process.hard_cancel(),
+      )
+      defer proc.cancel()
+      let expected_ready = b"http://127.0.0.1:4173/\n"
+      let ready = @async.with_timeout(10000, async fn() {
+        reader.read_exactly(expected_ready.length())
+      })
+      if ready != expected_ready {
+        fail("invalid browser server readiness: " + ready.to_string())
+      }
+      let base = "http://127.0.0.1:4173"
+      let headers : Map[@http.CaseInsensitiveString, String] = Map([])
+      headers.set(
+        @http.CaseInsensitiveString("Content-Type"),
+        "application/json",
+      )
+      let body = ""
+      let (root, root_data) = @http.request(
+        base + "/",
+        @http.Get,
+        headers,
+        body,
+      )
+      if root.code != 200 || root_data.binary().length() == 0 {
+        fail("GET / failed")
+      }
+      let assets = [
+        ("/", "text/html; charset=utf-8"),
+        ("/index.html", "text/html; charset=utf-8"),
+        ("/style.css", "text/css; charset=utf-8"),
+        ("/host.mjs", "text/javascript; charset=utf-8"),
+        ("/loader.mjs", "text/javascript; charset=utf-8"),
+        ("/text-renderer.mjs", "text/javascript; charset=utf-8"),
+        ("/app.mjs", "text/javascript; charset=utf-8"),
+        ("/app.wasm", "application/wasm"),
+        ("/NotoSansJP.ttf", "font/ttf"),
+        ("/OFL.txt", "text/plain; charset=utf-8"),
+      ]
+      for asset in assets {
+        let (path, content_type) = asset
+        let (response, data) = @http.request(
+          base + path,
+          @http.Get,
+          headers,
+          body,
+        )
+        if response.code != 200 || data.binary().length() == 0 {
+          fail("GET failed: " + path)
+        }
+        if response.headers.get(@http.CaseInsensitiveString("Content-Type")) !=
+          Some(content_type) {
+          fail("MIME failed: " + path)
+        }
+        if response.headers.get(@http.CaseInsensitiveString("Cache-Control")) !=
+          Some("no-store") {
+          fail("cache header failed: " + path)
+        }
+      }
+      let (wasm, wasm_data) = @http.request(
+        base + "/app.wasm",
+        @http.Get,
+        headers,
+        body,
+      )
+      let (head, head_data) = @http.request(
+        base + "/app.wasm",
+        @http.Head,
+        headers,
+        body,
+      )
+      if wasm.code != 200 ||
+        head.code != 200 ||
+        head_data.binary().length() != 0 {
+        fail("HEAD failed")
+      }
+      if head.headers.get(@http.CaseInsensitiveString("Content-Length")) !=
+        Some(wasm_data.binary().length().to_string()) {
+        fail("HEAD content length failed")
+      }
+      let (post, _) = @http.request(base + "/", @http.Post, headers, body)
+      if post.code != 405 ||
+        post.headers.get(@http.CaseInsensitiveString("Allow")) !=
+        Some("GET, HEAD") {
+        fail("POST status failed")
+      }
+      for
+        path in [
+          "/package.json", "/.env", "/toolchain.json", "/../package.json", "/app.wasm/extra",
+          "/..%2fpackage.json",
+        ] {
+        let (response, _) = @http.request(base + path, @http.Get, headers, body)
+        if response.code != 404 {
+          fail("forbidden path failed: " + path)
+        }
+      }
+      let (query, _) = @http.request(
+        base + "/?target=js",
+        @http.Get,
+        headers,
+        body,
+      )
+      if query.code != 200 {
+        fail("query request failed")
+      }
+      println("browser server constraints verified")
+    })
+  })
+}
+
+///|
+async fn main {
+  verify_server() catch {
+    VerifyFailure(message) => {
+      println(message)
+      abort(message)
+    }
+    error => {
+      println("browser server verification failed: " + error.to_string())
+      abort("browser server verification failed")
+    }
+  }
+}
