@@ -30,11 +30,11 @@ package tests. Checkout version fields do not prove registry equivalence.
 
 | Area | Current implementation | Candidate/version | Required behavior | Native result | Browser result | Gap and decision | Evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| GPU | Custom Rust wgpu bridge | Published `Milky2018/wgpu_mbt@0.16.0` | DX12, pixels, surface lifetime | Four offscreen cases passed on RTX 3060 and Microsoft Basic Render Driver | Not a browser binding | Viable offscreen path; retain HWND baseline pending surface comparison | [GPU evaluation](wgpu-mbt.md) |
+| GPU | Custom Rust wgpu bridge | Published `Milky2018/wgpu_mbt@0.16.0` | DX12, pixels, surface lifetime | Four offscreen cases and hidden HWND resize/present passed on both local adapters | Not a browser binding | Viable rendering path; retain baseline pending failure and integration comparisons | [GPU evaluation](wgpu-mbt.md) |
 | Window | Direct Win32 C host | `wzzc-dev/window` checkout version `0.5.4-0.1.7` | Hidden HWND, events, resize, wakeup and cleanup | `moon check --target native` passed, one warning | Not run | No event-loop or IME execution claim; compare before replacement | [Pinned fork](https://github.com/wzzc-dev/window/tree/b33c9f0ac85002bca4a9cceccbbcd512d13b7ceb) |
 | Handles | HWND/HINSTANCE bridge arguments | Fork workspace `Milky2018/windowing@0.1.0` | Compatible handles and ownership | Included in window check | Not run | Matching version names do not prove fork/registry source equality | Same pinned fork |
 | Layout | No general engine selected | `Milky2018/chicle` checkout version `0.6.0` | Typed tree/style, measurement and invalidation | Native type check passed | Upstream tests: 80/80 JS and 80/80 WasmGC; no browser integration | Next: project-specific typed layout tests; no JSON UI DSL adoption | [Pinned source](https://github.com/moonbit-community/chicle/tree/d517dbfde05b42ad2f4b83242b4947043ec864cb) |
-| Text | Position validation; no shaper selected | `Milky2018/moon_cosmic` checkout version `0.3.3` | Japanese/emoji/fallback, shaping and editing positions | Native type check passed with 36 warnings | Not run | Font-based execution and target coverage required before selection | [Pinned source](https://github.com/moonbit-community/moon_cosmic/tree/c7c736d588aeaae129c534a354c7a6f3319fb5bd) |
+| Text | Position validation; no shaper selected | `Milky2018/moon_cosmic` checkout version `0.3.3` | Japanese/emoji/fallback, shaping and editing positions | Native type check passed with 36 warnings | Upstream tests: 294/294 JS and 294/294 WasmGC; no browser integration | Project-specific font/input tests and native execution required before selection | [Pinned source](https://github.com/moonbit-community/moon_cosmic/tree/c7c736d588aeaae129c534a354c7a6f3319fb5bd) |
 | Async scripts | Incremental PS/MJS migration | Published `moonbitlang/async@0.21.2` | Files, subprocesses and exit handling | Native UI integration not established | `.mbtx` default runtime executes toolchain and GPU orchestration on Windows | Script success does not establish UI event-loop integration | `scripts/doctor.mbtx`, `scripts/verify-wgpu-binding.mbtx` |
 
 The window fork default branch was `moui-support` at inspection. Its workspace
@@ -49,15 +49,15 @@ requirements before assuming a pure MoonBit dependency graph.
 
 Commands used with `MOON_HOME` and the explicit compiler from `toolchain.json`:
 `moon check --target native` in each pinned checkout; additionally
-`moon test --target js` and `moon test --target wasm-gc` in chicle.
+`moon test --target js` and `moon test --target wasm-gc` in chicle and moon_cosmic.
 The cloned sources were not patched. Warnings were retained, not treated as
 proof of incompatibility or silently disabled.
 
 ## Remaining comparisons
 
-- GPU: reuse the existing hidden HWND host to isolate surface behavior before
-  changing the event loop. Check resize, acquire/present, failure cleanup and
-  destruction order; then measure startup, transfers and distribution size.
+- GPU: the existing hidden HWND host now isolates surface behavior before changing
+  the event loop. Extend failure cleanup coverage and measure startup, transfers
+  and distribution size before replacing the baseline.
 - Layout/text: prioritize typed chicle usage and font-backed moon_cosmic tests.
   Evaluate moon_swash/moon_zeno through text dependencies before creating separate
   public APIs. Preserve UTF-16/UTF-8/scalar validity requirements.

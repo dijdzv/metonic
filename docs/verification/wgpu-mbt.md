@@ -47,9 +47,35 @@ the candidate's external CommonJS prebuild remains unchanged. The nested
 `package.json` establishes that CommonJS boundary.
 
 This proves the candidate can replace the custom bridge for this offscreen
-operation. It does not yet justify replacing the working HWND renderer or its
-command host. Interactive asynchronous completion, surface teardown/resize,
-distribution size, and comparative timing remain unverified.
+operation. The existing command host and Rust baseline remain intact while the
+broader lifetime, integration and distribution requirements are compared.
+
+## Hidden HWND comparison
+
+The same isolated module now includes the existing Win32 C host through a small
+test stub. Two getters expose HINSTANCE/HWND to the binding. The test never calls
+the host's Rust renderer loader: MoonBit creates the DX12 adapter, surface,
+pipeline, uniform buffer and render commands through wgpu_mbt instead.
+
+The test requires `METONIC_WINDOW_TEST=1` before creating the window; the `.mbtx`
+runner sets it explicitly. It presents an initial 640×360 frame, processes a
+right-arrow message, resizes to 317×193, clamps the rectangle to (197,121),
+activates it with a pointer message and processes close. It checks the expected
+event sequence and stable surface format. Each successful frame includes
+acquisition, command submission and successful presentation. Both local adapters
+passed, each reporting six frames and two passing tests including offscreen.
+
+Per-frame views/commands are released before the next frame. The cleanup order
+in the test releases render resources, unconfigures/releases the surface, releases
+GPU objects, then destroys the HWND. A passing run exercises normal cleanup;
+device-loss recovery and injected failure cleanup are not yet tested. The probe
+does not observe visible compositor pixels, real input, DPI, IME or accessibility.
+
+The runner cleans only the isolated module's build output before testing because
+the C stub includes files outside that module and stale native objects must not
+mask host changes. An async 120-second timeout bounds clean/test orchestration;
+CI also imposes its three-minute step limit. This is not proof that every possible
+descendant process is reclaimed on timeout.
 
 ## Build integration findings
 
@@ -69,8 +95,8 @@ warnings must be addressed or scoped before integrating strict project checks.
 
 ## Next acceptance
 
-Port the HWND lifetime probe to this binding, preserving adapter identification,
-resize and teardown checks. Retain the existing renderer as the comparison baseline.
+Extend failure cleanup and device-loss coverage, then compare integration and
+distribution costs. Retain the existing renderer as the comparison baseline.
 Record required C glue and toolchain dependencies. Prefer reusing the binding if
 it meets these requirements; retain custom code only for demonstrated gaps.
 Upstream's current JavaScript prebuild is an external dependency boundary, not

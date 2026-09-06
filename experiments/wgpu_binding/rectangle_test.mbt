@@ -32,6 +32,25 @@ fn expected_pixel(case_ : Case, x : UInt, y : UInt) -> Array[Int] {
 }
 
 ///|
+fn rectangle_shader() -> String {
+  (
+    #|struct Rect { rect: vec4<u32>, flags: vec4<u32> };
+    #|@group(0) @binding(0) var<uniform> u: Rect;
+    #|@vertex fn vs_main(@builtin(vertex_index) i: u32) -> @builtin(position) vec4<f32> {
+    #|  var p = array<vec2<f32>, 3>(vec2<f32>(-1.0,-1.0), vec2<f32>(3.0,-1.0), vec2<f32>(-1.0,3.0));
+    #|  return vec4<f32>(p[i], 0.0, 1.0);
+    #|}
+    #|@fragment fn fs_main(@builtin(position) p: vec4<f32>) -> @location(0) vec4<f32> {
+    #|  let x = u32(p.x); let y = u32(p.y);
+    #|  let inside = x >= u.rect.x && x < u.rect.x + u.rect.z && y >= u.rect.y && y < u.rect.y + u.rect.w;
+    #|  if (!inside) { return vec4<f32>(0.02,0.08,0.15,1.0); }
+    #|  if (u.flags.x == 1u) { return vec4<f32>(0.95,0.38,0.10,1.0); }
+    #|  return vec4<f32>(0.08,0.65,0.68,1.0);
+    #|}
+  )
+}
+
+///|
 test "wgpu rectangle rgba8 readback" {
   let instance = @wgpu.Instance::create()
   defer instance.release()
@@ -58,20 +77,7 @@ test "wgpu rectangle rgba8 readback" {
   defer bind_group.release()
   let pipeline_layout = device.create_pipeline_layout_1(layout)
   defer pipeline_layout.release()
-  let wgsl : String =
-    #|struct Rect { rect: vec4<u32>, flags: vec4<u32> };
-    #|@group(0) @binding(0) var<uniform> u: Rect;
-    #|@vertex fn vs_main(@builtin(vertex_index) i: u32) -> @builtin(position) vec4<f32> {
-    #|  var p = array<vec2<f32>, 3>(vec2<f32>(-1.0,-1.0), vec2<f32>(3.0,-1.0), vec2<f32>(-1.0,3.0));
-    #|  return vec4<f32>(p[i], 0.0, 1.0);
-    #|}
-    #|@fragment fn fs_main(@builtin(position) p: vec4<f32>) -> @location(0) vec4<f32> {
-    #|  let x = u32(p.x); let y = u32(p.y);
-    #|  let inside = x >= u.rect.x && x < u.rect.x + u.rect.z && y >= u.rect.y && y < u.rect.y + u.rect.w;
-    #|  if (!inside) { return vec4<f32>(0.02,0.08,0.15,1.0); }
-    #|  if (u.flags.x == 1u) { return vec4<f32>(0.95,0.38,0.10,1.0); }
-    #|  return vec4<f32>(0.08,0.65,0.68,1.0);
-    #|}
+  let wgsl = rectangle_shader()
   let shader = device.create_shader_module_wgsl(wgsl)
   defer shader.release()
   let pipeline = device.create_render_pipeline_rgba8_with_layout(

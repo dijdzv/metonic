@@ -68,7 +68,13 @@ async fn main {
   env_map["MOON_HOME"] = @fs.realpath(".tools/moonbit")
   env_map["MBT_WGPU_NATIVE_ROOT"] = @fs.realpath(assets)
   env_map["MBT_WGPU_LINK_MODE"] = "static"
+  env_map["METONIC_WINDOW_TEST"] = "1"
   let moon = @fs.realpath(".tools/moonbit/bin/moon.exe")
-  let code = @process.run(moon, ["-C", "experiments/wgpu_binding", "test", "--target", "native"], extra_env=env_map, no_console_window=true)
+  let code = @async.with_timeout(120000, async fn() {
+    // Clean the nested module so Moon incremental builds observe bridge/header changes.
+    let clean_code = @process.run(moon, ["-C", "experiments/wgpu_binding", "clean"], extra_env=env_map, no_console_window=true)
+    if clean_code != 0 { return clean_code }
+    @process.run(moon, ["-C", "experiments/wgpu_binding", "test", "--target", "native"], extra_env=env_map, no_console_window=true)
+  })
   if code != 0 { fail("wgpu binding tests failed: " + code.to_string()) }
 }
