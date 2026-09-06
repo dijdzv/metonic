@@ -8,4 +8,5 @@ preferred_target = "native"
 
 import {
   "Milky2018/wgpu_mbt@0.16.0",
+  "moonbitlang/x@0.4.45",
 }

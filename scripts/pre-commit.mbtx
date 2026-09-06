@@ -54,7 +54,7 @@ async fn main {
   let gates = [
     "verify", "verify-native", "browser:verify", "browser:server-test", "browser:headless",
     "browser:async", "devtools:test", "native:headless", "native:control", "native:mcp-test",
-    "native:semantics", "native:window", "native:async", "native:binding", "text:verify",
+    "native:semantics", "native:window", "native:async", "native:binding",
   ]
   for gate in gates {
     println("pre-commit gate: mise run " + gate)

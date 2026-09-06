@@ -200,6 +200,7 @@ async fn main {
   let mut area = 0
   let color = @cosmic.Color::rgb(b'\x00', b'\x00', b'\x00')
   let svg = StringBuilder()
+  let pixels : Array[Int] = Array::make(640 * 96, 255)
   svg.write_string(
     "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"640\" height=\"96\" viewBox=\"0 0 640 96\"><rect width=\"640\" height=\"96\" fill=\"white\"/>",
   )
@@ -212,6 +213,21 @@ async fn main {
   ) => {
     if color.a().to_int() > 0 {
       callbacks += 1
+      let alpha = color.a().to_int()
+      let x0 = x.max(0)
+      let y0 = y.max(0)
+      let x1 = (x + w.reinterpret_as_int()).min(640)
+      let y1 = (y + h.reinterpret_as_int()).min(96)
+      let mut py = y0
+      while py < y1 {
+        let mut px = x0
+        while px < x1 {
+          let index = py * 640 + px
+          pixels[index] = (pixels[index] * (255 - alpha) + 127) / 255
+          px += 1
+        }
+        py += 1
+      }
       area += w.reinterpret_as_int() * h.reinterpret_as_int()
       let opacity = color.a().to_int().to_double() / 255.0
       svg.write_string(
@@ -229,6 +245,27 @@ async fn main {
       )
     }
   })
+  let rgba = Bytes::makei(640 * 96 * 4, i => {
+    if i % 4 == 3 {
+      b'\xff'
+    } else {
+      pixels[i / 4].to_byte()
+    }
+  })
+  @fs.write_file(asset_dir + "/japanese-wide.rgba", rgba)
+  let mut nonwhite = 0
+  let mut white = 0
+  for pixel in pixels {
+    if pixel == 255 {
+      white += 1
+    } else {
+      nonwhite += 1
+    }
+  }
+  assert_true(
+    nonwhite > 0 && white > 0,
+    "raster callback produced blank or full image",
+  )
   svg.write_string("</svg>")
   @fs.write_file(asset_dir + "/japanese-wide.svg", svg.to_string())
   assert_true(callbacks > 0 && area > 0, "draw callback was empty")

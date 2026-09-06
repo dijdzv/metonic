@@ -2,7 +2,8 @@ import {
   "Milky2018/wgpu_mbt" @wgpu,
   "Milky2018/wgpu_mbt/c",
   "moonbitlang/core/env",
-}
+  "moonbitlang/x/fs",
+} for "test"
 
 supported_targets = "native"
 
