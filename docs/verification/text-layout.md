@@ -46,6 +46,27 @@ Chromium at 640×96. Visual inspection confirmed the Japanese and ASCII sentence
 was readable and complete. It is a CPU glyph raster artifact, not Browser WebGPU
 or native GPU presentation evidence. No desktop input automation was used.
 
+## Native GPU texture integration
+
+The font script also creates a 640×96 RGBA8 bitmap on a white background. Glyph
+callback rectangles are clipped to that canvas and composited in MoonBit using
+integer source-over alpha. Nonwhite and white pixels must both exist.
+
+`mise run native:binding` regenerates this bitmap before running the native tests.
+The isolated `text_test.mbt` reads it through `moonbitlang/x/fs@0.4.45`, validates
+its length and opaque alpha, uploads it through wgpu_mbt, and draws a fullscreen
+triangle with a texture-reading fragment shader into a separate RGBA8 texture.
+It then reads back and compares all 245,760 bytes against the source, allowing
+at most one channel value of rounding difference. It does not substitute a
+texture copy for the shader draw.
+
+NVIDIA GeForce RTX 3060 and Microsoft Basic Render Driver both passed this DX12
+test for all 61,440 pixels on 2026-09-06. The existing rectangle and hidden HWND
+tests also passed, for three tests total. GPU handles use scope-bound cleanup.
+No metonic Rust/C bridge code was added; file I/O uses the existing MoonBit library.
+The standalone `text:verify` task remains available, while pre-commit runs it
+through `native:binding` to avoid generating the same fixture twice.
+
 ## Boundaries and next integration
 
 The same `.mbtx` script does not compile with `--target js`: async's file/process
@@ -54,7 +75,8 @@ that moon_cosmic itself fails on JS; its separately recorded upstream JS tests
 passed. A browser integration should supply font bytes through the browser host
 and reuse pure text processing, without adding Node I/O to the product.
 
-Next gates are glyph texture upload in the existing renderer, mixed-script and
-emoji fallback, selection/hit-testing, and native/browser input normalization.
+This establishes an offscreen GPU texture path, not a glyph atlas/cache or text
+widgets in the interactive hosts. Next gates are interactive native/browser
+integration, mixed-script and emoji fallback, selection/hit-testing, and input normalization.
 Real IME composition and candidate positioning require separate OS integration.
 The existing [text-position contracts](text-positions.md) remain authoritative.

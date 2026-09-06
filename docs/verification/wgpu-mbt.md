@@ -79,6 +79,11 @@ descendant process is reclaimed on timeout.
 
 ## Build integration findings
 
+The binding probe additionally uploads the MoonBit font raster and draws it through
+a sampled-texture pipeline. Both adapters passed full readback comparisons; see
+the [font and GPU text evaluation](text-layout.md). The renderer baseline remains
+unchanged while interactive integration proceeds.
+
 The unchanged upstream checkout was evaluated outside metonic's ESM package
 directory. Inside that directory, its CommonJS `build.js` inherited the parent's
 `type: module` and failed before compilation. A package boundary is needed when
