@@ -75,6 +75,10 @@ run = "node scripts/verify-native-control.mjs"
 depends = ["native:build"]
 run = "node scripts/verify-native-mcp.mjs"
 
+[tasks."native:semantics"]
+depends = ["native:build"]
+run = "node scripts/verify-native-semantics.mjs"
+
 [tasks."native:cli"]
 depends = ["native:build"]
 run = "node tools/devtools/native-cli.mjs"
