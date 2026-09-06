@@ -1,1136 +1,282 @@
-# MoonBit GPU UI / Typed RPC 設計書
+# metonic Architecture
 
-**Windows最優先・ブラウザWebGPU第一級 / Codex実装引き継ぎ用**
+Design revision: 0.3 · 2026-09-06 · Status: technical validation
 
-| 項目 | 内容 |
+This document defines the intended architecture. Implemented behavior and test
+results are recorded separately in [P0 verification](docs/verification/p0.md).
+Examples of future APIs are design sketches, not supported interfaces.
+
+## 1. Goals and boundaries
+
+metonic is a MoonBit-first GPU UI framework and an independently usable typed
+RPC library. The first integrated milestone is one MoonBit application running
+on Windows and in a WebGPU browser, accepting Japanese input and calling a
+MoonBit backend through a typed contract.
+
+| Area | Policy |
 | --- | --- |
-| 文書バージョン | **0.2** |
-| 更新日 | 2026-09-06。外部資料の再確認範囲は18章に記載 |
-| 状態 | 実装前の設計ベースライン。動作・性能の検証済み仕様ではない |
-| 対象 | MoonBitによるGUIフレームワーク、および独立利用可能な型付きRPCライブラリ |
-| 主な利用環境 | Windowsネイティブ、Windows上のWebGPU対応ブラウザ |
-| 名称 | **未定**。Rune、Muneを含め、会話中の候補はどれも採用していない |
-| 併読資料 | `CODEX_HANDOFF.md`：開始指示、`CHANGELOG.md`：v0.1からの変更、`README.md`：引き継ぎ入口 |
+| Application language | MoonBit for UI, state, components, and backend business logic |
+| UI syntax | Existing MoonBit functions, methods, and closures; no JSX or compiler fork |
+| Native platform | Windows x64 first; additional platforms need separate verification |
+| Browser | WebGPU is a first-class target from the initial experiments |
+| Rendering | GPU-rendered standard UI on both platforms |
+| State | Fine-grained reactive state and persistent UI nodes |
+| RPC | Independent of UI; contract-first with typed input, output, and domain errors |
+| gRPC | High-priority optional transport; validated before the component library is complete |
+| Development tools | CLI/MCP automation is a first-class development capability |
+| Production | Excludes the development control endpoint and instrumentation; retains accessibility |
 
-この文書は、会話で決まった方針を実装可能な単位へ整理したもの。**「確定」は利用者が示した制約、「設計案」は実装に向けた提案、「要検証」は実測・ビルド・相互運用試験が必要な項目**を表す。設計案の細部は、確定事項を維持したうえでADR（設計判断記録）によって変更できる。
+Rust/C may provide OS, GPU, text, and layout primitives behind explicit bridges.
+GPUI, Solid, and Slint are design references, not mandatory runtimes.
 
-本文のAPI例はすべて**未実装APIの概念例**。既存のMoonBitライブラリにその名前の関数が存在すること、または掲載例をそのままコンパイルできることを意味しない。外部技術に関する事実は末尾の `[Sxx]` を参照する。
+Non-goals include React/Solid/Vue compatibility renderers, a DOM/CSS engine,
+a custom UI language, arbitrary npm execution, and a bundled Node/Bun/WebView
+runtime. External JS integrations and embedded web panels are deferred until a
+specific use case requires them. Necessary browser hosting, input DOM, and
+accessibility connections remain core functionality.
 
-**このv0.2を、v0.1に代わる設計の正本とする。** 追補だけでなく、既存の設計・実装順序・受け入れ条件を含めた統合版である。旧会話を別途読まなくても使える。
+## 2. Architecture and ownership
 
-名称の検討は実装とは切り離す。Codexは候補名を独断で採用したり、命名だけを理由に実装を止めたりしない。既存リポジトリ名は維持し、新規作成時も機能を表す仮パスだけを使う。
+```text
+MoonBit application
+  ├─ components → interaction/semantics → persistent UI nodes
+  │                ↑ reactive state          ↓
+  │                                    layout / text → scene
+  │                                                      ↓
+  │                                   Windows GPU / Browser WebGPU
+  └─ typed client → contract / codec / protocol → backend
 
----
+semantic model → native accessibility adapter / browser semantic DOM
+development host → command queue → normal UI input/action dispatch
+CLI / MCP adapter → development host (development builds only)
+```
 
-## 1. 設計の要約
+| Layer | Owns | Must not depend on |
+| --- | --- | --- |
+| Reactive core | Signals, dependency graph, scopes, scheduling | OS, GPU, DOM, RPC |
+| UI core | Persistent nodes, hierarchy, events, semantic state | Concrete Rust or JS object types |
+| Interaction base | Focus, keyboard behavior, selection, roles/actions | Product-specific styling |
+| Styled components | Theme and visual composition | Direct platform calls |
+| Layout/text facade | Measurement, shaping results, text-position conversions | Public native pointers |
+| Renderer | Scene order, clipping, GPU resources | Business state and RPC |
+| Platform host | Window, normalized input, clocks, wakeups | Application state ownership |
+| RPC core | Procedures, typed calls, errors, cancellation | UI, frame scheduling, GPU |
+| Resource adapter | Async results connected to reactive lifetimes | Transport implementation |
+| Development adapter | Inspection, queued operations, diagnostics | Production entry point |
 
-**アプリケーション・UIコンポーネント・リアクティブな状態管理はMoonBitで書く。WindowsではネイティブGPU描画、ブラウザではWebGPU描画を行い、両者でUIの意味と更新モデルを共有する。**
+Ports are responsibility boundaries, not a requirement to publish an empty
+package for every layer. Add modules when a working implementation needs them.
 
-状態管理はSolid/Slintを参考にしたSignal・Memo・Binding・Effect・Resource方式とする。コンポーネント関数はインスタンスの生成時に構築処理を行い、通常の値変更では依存するBindingと必要な描画工程だけを更新する。GPUIのEntityモデルをそのまま移植するのではない。
+## 3. Reactive state and lifetimes
 
-UIの操作基盤と見た目を分離し、GPUI / gpui-base / gpui-componentの設計を参考にする。ただし、Rust製コンポーネントを一つずつMoonBitへバインドする構成は採らない。OS、GPU、レイアウト計算、文字処理などの低レベル基盤には、Rust/Cライブラリを適切な境界で利用する。
+Signal stores state. Memo caches derived values. Binding connects derived values
+to node properties. Effect owns external side effects and cleanup. Resource
+connects asynchronous work to a scope. These are framework concepts rather than
+a language effect-system requirement.
 
-通信は描画から独立させる。MoonBitのBE側API契約をMoonBitのFEから参照し、tRPC/oRPCのような入力・出力・業務エラーの型安全性を目指す。gRPCは**初期から設計・検証する高優先度のオプション**とするが、UIコアやRPC契約をgRPC専用にはしない。
+Component construction creates persistent nodes once per instance. Subsequent
+state updates invalidate the affected bindings and necessary rendering stages.
+Tests must cover dynamic dependency changes, diamond graphs, equality suppression,
+batching, untracked reads, cycles, conditional child removal, and cleanup exactly once.
 
-**既存JS／Webエコシステムとの互換性は、中核の完成条件にしない。** 外部JSロジックは必要時のアダプター、既存Web UIは必要時の独立したWebパネルで利用する方向とし、いずれも低優先度・既定無効の拡張とする。React/Solid/Vue向けの互換レンダラーやDOM/CSS互換エンジンは作らない。一方、本プロジェクト自身のGPUレンダラー、最小JSホスト、入力・IME・アクセシビリティの接続は中核に残す。
+A scope owns subscriptions and tasks. Disposing it prevents subsequent writes.
+Async completions carry request identity/generation so superseded responses cannot
+overwrite newer state. Worker threads enqueue results; only the UI thread mutates
+UI state. Cancellation is an explicit outcome, not proof that external work stopped.
 
-### 1.1 確定事項
+Platform event loops own blocking waits. The host wakes the UI thread for input,
+task completion, and development commands. A second runtime must not block the
+same thread. Callbacks do not hold locks across reentrant UI work.
 
-| ID | 決定 |
+## 4. Scene, layout, and rendering
+
+Track style/paint, layout, text-shaping, and semantic invalidation separately.
+A color change must not require reshaping text. Layout invalidation propagates
+to ancestors only when their measurements depend on the changed child.
+
+The initial scene supports rectangles, clipping, colors, simple transforms, and
+ordered drawing. Extend it to glyphs and images with explicit resource ownership.
+Handle resizing, DPI/DPR, minimization, device loss, and resource release.
+
+Native and browser implementations consume the same scene meaning. The browser
+must not be an empty or simulated renderer. Prefer batched, explicitly defined
+numeric/byte transfers over per-node FFI. Copy counts and transfer costs are
+measured; zero-copy is not assumed.
+
+Performance claims require environment, build mode, workload, and measurements.
+First verify recomputation counts and correctness, then real rendering latency.
+
+## 5. Platform implementation choices
+
+### Windows
+
+Use MoonBit native plus a low-level C ABI bridge. Compare a Rust wgpu wrapper
+with wgpu-native before adopting one. winit is a window/event-loop candidate,
+not a renderer or a complete input framework.
+
+Verify the C ABI and event loop on Windows. Do not assume a compiler target name
+proves callback ownership or representation compatibility. Runtime and distribution
+dependencies must be recorded separately from build tools.
+
+### Browser
+
+Compare MoonBit WasmGC plus a small JS host with MoonBit JS output. State has one
+owner in the selected application target; the JS host owns browser resources,
+not a second reactive graph. A separate MoonBit-to-JS host build is optional.
+
+Compare initialization, async errors/callback lifetimes, transfer sizes, text
+integration, and deployment assets. Do not assume MoonBit and a separate Rust Wasm
+module share a heap or C ABI.
+
+The host handles secure-context/WebGPU availability and displays initialization
+failures. Request animation frames when work is dirty; avoid perpetual polling
+for a static screen. Input DOM and semantic DOM are permitted even though standard
+visible components are GPU-rendered.
+
+## 6. Text, input, and accessibility
+
+Text rendering and text editing share a coherent position model but have separate
+responsibilities. Compare suitable shaping/layout engines, font loading, fallback,
+glyph caching, and their native/browser bridges. Record font licenses.
+
+Every text offset states its unit: UTF-8 bytes, UTF-16 code units, Unicode scalars,
+grapheme boundaries, or glyph positions. Conversion tests include Japanese, emoji,
+surrogate pairs, and combining marks. Selection and composition ranges must not
+silently mix units.
+
+Windows input is an OS integration. Browser input compares EditContext with a
+textarea-based bridge. Test Japanese composition, commit/cancel, Enter during
+composition, selection, candidate placement, DPI changes, clipboard, and keyboard
+navigation. Synthetic text insertion does not count as a real IME test.
+
+The MoonBit interaction/semantic model is the source of truth for role, accessible
+name, value, enabled state, focus, actions, and hierarchy. It is shared by production
+accessibility and development inspection, without requiring identical wire formats.
+
+**AccessKit is a candidate, not an adopted dependency.** Compare a thin Rust
+AccessKit adapter with a direct Windows UI Automation provider. Browser semantics
+will use a DOM/accessibility adapter. Measure bridge complexity, text selection,
+action dispatch, focus events, tree updates, and lifetime behavior before selecting.
+See [ADR 023](docs/adr/023-development-automation.md).
+
+Accessibility remains enabled in production. Removing MCP support must never
+remove keyboard interaction, semantic nodes, or the OS accessibility provider.
+
+## 7. Components
+
+Separate interaction primitives from themed components. Start with Button,
+TextInput, Checkbox, Tabs, ScrollArea, Dialog/Overlay, and VirtualList.
+Each includes disabled/focus states, keyboard behavior, and semantics.
+
+Provide a consistent theme, examples, a working gallery, and extension rules.
+Changing style must not break input behavior. Virtualization must preserve focus
+and stable identity. Standard components must not require each application to
+reimplement IME, focus, or accessibility.
+
+## 8. Typed RPC
+
+Applications place public contracts in `backend/api`. Frontends import that
+package, never backend handlers, storage, secrets, or server startup code.
+UI/RPC libraries do not contain sample application business contracts.
+
+A procedure ties Input, Output, and DomainError to stable metadata. Begin with
+unary calls and explicit registration. Later stream APIs remain distinct rather
+than hiding stream shape behind string flags.
+
+Contracts contain data/schema information, not executable handlers or sessions.
+Server binding checks all three types. Network decoding and runtime validation
+remain necessary even when frontend and backend share source types.
+
+Start with HTTP/JSON while independently validating gRPC. Define protocol version,
+procedure ID, content type, size limits, deadlines, cancellation, and known/unknown
+error behavior. Distinguish domain errors, remote status, unavailable, timeout,
+cancelled, decode/protocol failure, and unsupported capabilities.
+
+Specify absent vs optional fields, unknown fields, integer range, enum evolution,
+dates, and bytes. Preserve 64-bit values without JavaScript Number rounding;
+string identifiers are the initial default.
+
+The Resource integration is a separate adapter. It must discard stale results
+without making RPC depend on the UI runtime.
+
+## 9. Protobuf and gRPC
+
+For gRPC endpoints, `.proto` is the wire-schema source of truth; generate DTOs
+rather than hand-maintaining field numbers twice. Test a fixed generator version
+and interoperation with an existing implementation.
+
+Keep contract, schema/codec, protocol, and network carrier distinct. Protobuf
+generation alone is not a working gRPC runtime. Validate method/service mapping,
+framing, status, metadata, deadlines, cancellation, and size limits.
+
+Compare a native implementation such as a tonic bridge and browser Connect or
+gRPC-Web. Record whether a server adapter or proxy is required. Prefer a generic
+byte/metadata bridge over a handwritten Rust FFI function for every application API.
+
+Unary interoperability is the first gate. If server streaming is added, test
+midstream errors, slow consumers, cancellation, and cleanup. Client/bidirectional
+streaming is not an initial release requirement. Builds without gRPC must remain valid.
+
+## 10. Development CLI/MCP
+
+Development automation is designed alongside the UI host rather than added after
+components are complete. The CLI and MCP process share a versioned command model.
+They inspect and act through the app's development adapter.
+
+The adapter exposes stable node references, snapshots, semantic actions, raw input,
+and screenshot/frame synchronization. Commands are applied through the normal UI
+dispatch path. It does not mutate business state directly.
+
+An OS accessibility client alone is insufficient as the complete automation API:
+rendered-frame capture, precise input, and diagnostic synchronization need an
+explicit host connection. Conversely, an internal action test does not prove
+that an OS accessibility provider works.
+
+Development integration requires an explicit build selection and an explicit
+session at launch. Production entry points must not import/link the listener,
+dev command queue, MCP adapter, test-ID registry, or diagnostic capture. The
+production gate checks dependency/build inputs as well as endpoint absence.
+Detailed protocol and security constraints are in ADR 023.
+
+## 11. Roadmap and acceptance gates
+
+| Stage | Acceptance |
 | --- | --- |
-| F-01 | 主言語はMoonBit。FEとBEのアプリケーションコードをMoonBitで書く |
-| F-02 | JSXは採用しない。JSX導入を前提とする将来計画も置かない |
-| F-03 | 当面はMoonBitの既存構文による関数・メソッド・クロージャでUIを書く |
-| F-04 | ネイティブGUIはWindowsを最優先とする。macOS/Linuxの独自対応を初期の完了条件にしない |
-| F-05 | 基盤ライブラリが持つマルチプラットフォーム性は活用する。ただし未試験OSを正式サポートとは呼ばない |
-| F-06 | ブラウザのWebGPU描画も第一級ターゲット。Windows版完成後に後付けする設計にはしない |
-| F-07 | 標準の可視UIはGPU描画。任意のWebパネルを将来追加しても、主方式をWebView/DOMへ置き換えない |
-| F-08 | Solid/Slint的な細粒度リアクティビティを中心に据える |
-| F-09 | UI操作・コンポーネント・テキスト入力の参考としてGPUI周辺を調べる |
-| F-10 | FE/BE間で必要なのはAPI契約の共有。雑多な汎用 `shared` パッケージは必須にしない |
-| F-11 | RPCはtRPC/oRPC的な型安全性を重視し、gRPCを高優先度のプラグインとして扱う |
-| F-12 | 実装はCodexへ引き継ぐ。この文書の作成時点では実装完了・動作確認を主張しない |
-| F-13 | 既存React/Solid/Vue UIを移植せず動かすための互換レンダラーは作らない |
-| F-14 | 外部JSロジック・既存Web UIの再利用は必要時の追加機能。優先度を下げる |
-| F-15 | Web UIを再利用するならWebView等での埋め込みを候補にする。具体API・実装は未確定 |
-| F-16 | 名称は未定。候補名の採用、公開namespaceの確定、ブランド名に合わせた一括改名は行わない |
-| F-17 | 操作基盤と標準コンポーネントを重視する。見た目・合成UIはカスタマイズ可能にする |
-
-### 1.2 初期設計案と未確定点
-
-| 項目 | 初期案 | 決定方法 |
-| --- | --- | --- |
-| Windowsの最小検証環境 | Windows 11 / x64 | 手元環境とツールチェーンをP0で確認。利用者の確定条件は「Windows」であり、細かなOS要件は暫定 |
-| ブラウザの初期検証対象 | Windows上のEdgeとChrome | バージョン、GPU、通常設定での対応状況を記録 |
-| ブラウザのMoonBit出力 | `wasm-gc`＋小さなJSホストを優先検証。`js`出力も比較 | 二重ビルドを必須にしない。P0で起動・非同期・転送・文字基盤を測り、一つの初期配布経路を選ぶ |
-| WindowsのGPU連携 | wgpu系の薄いC ABIブリッジ | `wgpu-native`利用とRust `wgpu`ラッパーを比較し一方に絞る |
-| ウィンドウ | Rust `winit`候補 | MoonBitランタイムとのイベントループ統合を検証 |
-| レイアウト・文字処理 | Taffy、cosmic-text等の低レベル基盤を候補にする | Native/Webの双方で同じ意味を実現できるか確認 |
-| RPC契約の場所 | アプリ側の `backend/api/` | このパッケージだけをターゲット非依存にする |
-| 最初の疎通用RPC | UnaryのHTTP/JSON | gRPCの調査と並行。gRPCを無期限延期する理由にはしない |
-| ブラウザのgRPC系経路 | ConnectまたはgRPC-Web | サーバー対応・相互運用・プロキシ要否からP0/N2で選択 |
-| ブラウザの入力 | EditContextを優先検証し、入力用DOMを代替案にする | P0-G/I1で日本語IME・選択・候補位置を検証。APIの存在確認だけで採用しない |
-| ホスト実装言語 | 最小限のJSを許容。ホストだけMoonBit→JSにする案も可 | アプリとリアクティブ状態を二重に持たない。生成物とビルド単位を記録 |
-| Webパネル | Windows=WebView2候補、Browser=DOM領域/iframe候補 | 低優先度。必要になるまで実装・依存追加・共通API固定をしない |
-
-MoonBitは `native`、`js`、`wasm`、`wasm-gc` を持つが、外部ライブラリと非同期I/Oの対応は同一ではない。ターゲットの存在だけを根拠に「同じコードがすべての環境でそのまま動く」とはしない。[S01][S02][S05]
-
-### 1.3 優先度の区別
-
-| 優先度 | 対象 | 初期の扱い |
-| --- | --- | --- |
-| 中核 | Windows/native、ブラウザWebGPU、Reactive Core、文字・入力・IME・アクセシビリティ、基本部品 | 両ターゲットで小さな実証を作る |
-| 高優先度・独立 | MoonBit typed RPC、gRPCとブラウザ用プロトコル | UIから独立して進める。gRPCを「任意だから後回し」の一言で棚上げしない |
-| 低優先度・任意 | 外部JSロジック、JSランタイム連携、Webパネル | 初期リリース条件・P0の必須成果物から外す |
-| 対象外 | JSX、React/Solid/Vue互換レンダラー、DOM/CSS互換エンジン | 中核の実装理由に持ち込まない |
-| 保留 | 正式名称・公開namespace | 実装を止める条件にしない |
-
-**「任意であること」と「優先度が低いこと」は同義ではない。gRPCは高優先度の任意パッケージ、JS/WebView拡張は低優先度の任意パッケージである。**
-
-## 2. 設計上の重要な補正
-
-### 2.1 性能を言語名やアーキテクチャ名だけで保証しない
-
-「MoonBitで全部書くほど速い」「Signal方式は常にGPUIより速い」「Wasmは必ずJSより速い」といった前提は置かない。本設計の狙いは、不要な再計算を減らし、MoonBitで扱いやすい一貫したAPIを提供すること。優劣は具体的な画面・データ量・機器で計測する。
-
-GPUの描画量、CPUのBinding評価量、レイアウト量、文字整形量は別々に扱う。CPU側で細粒度更新できても、GPU側が一文字だけ描画するとは限らない。逆に、毎フレーム全画面へ描画していても、文字整形やUI構築のキャッシュには価値がある。
-
-### 2.2 「GPUI風」と「GPUI依存」は異なる
-
-GPUIはAPI設計・操作モデル・入力処理の参考であり、GPUI本体を必須依存にはしない。既存レンダラーだけを簡単に取り出して利用できるとも仮定しない。GPUI公式の公開例はRustの `Render` とビルダー形式のUIを示している。本設計はその書き味を参考にしつつ、更新モデルを別途設計する。[S08][S09]
-
-MoUIや他のMoonBit GUI実装は調査対象になり得るが、本設計の基盤として採用済みではない。再利用する場合は、対応ターゲット、ライセンス、更新粒度、IME、実行ループを確認するADRが必要。
-
-### 2.3 GPU描画と最小限のDOMブリッジは両立する
-
-ブラウザの標準可視UIはWebGPUで描画する。一方、Canvasのホスト、テキスト入力、IME、支援技術との接続に必要なDOM/Web APIは利用する。これはHTML/CSSで標準コンポーネントを別実装することとも、8.6節の任意Webパネルとも区別する。
-
-**DOM完全排除は要件ではない。** 必要な入力・アクセシビリティまで排除して使えないUIにしない。JSX不採用も、ブラウザホスト用の少量のJSやDOM APIの禁止を意味しない。
-
-WindowsのネイティブIMEにDOMを使う方針ではない。GPUIから参考にするのは編集モデルとプラットフォーム入力の境界であり、ブラウザでは独自にEditContext等への接続を検証する。**JS/WebView拡張を無効化しても、標準TextInputのIMEとアクセシビリティは機能しなければならない。** [S09][S19]
-
-### 2.4 gRPCは単なるシリアライザー交換ではない
-
-gRPC対応には、Protobuf等のメッセージ定義だけでなく、サービス名、メソッド名、フレーミング、ステータス、メタデータ、ストリーム形状の対応が必要。`Procedure[I,O,E]` があるだけでgRPC互換にはならない。ブラウザ用プロトコルとサーバー側の対応も必要になる。[S24][S26][S27]
-
-型安全APIを保ちながら実装を切り替えることを目標にするが、対応するスキーマと能力が揃った範囲に限定する。
-
-### 2.5 用語と非目標の整理
-
-| 会話で混同しやすい語 | 本書での意味 |
-| --- | --- |
-| 自作GPUレンダラー | SceneをWebGPU/native GPUへ描く中核。引き続き実装する |
-| フロントエンドFWの独自レンダラー | React/Solid/Vueの要素を本UIへ接続する互換層。今回作らない |
-| `wasm-gc` / `wasm` / `js` | MoonBitの別々のコンパイルターゲット。「Wasm JS」という一つのターゲットは置かない |
-| JSバックエンド | コンパイラのJS出力先。業務サーバーとしてのBEとは別 |
-| JSホスト | ブラウザ内でWasm、WebGPU、入力API等をつなぐ小さな実行部分 |
-| JSロジック拡張 | 必要な外部ライブラリの処理を呼ぶ任意アダプター。標準ホストとは別 |
-| Webパネル | HTML/CSS/JSの可視UIを独立領域として埋め込む任意機能 |
-
-外部Web資産の優先度を下げたことを、ブラウザWebGPUやWasmGC候補の取り下げと解釈しない。同様に、Solid型の更新モデルを採ることは、SolidのJSランタイムを標準搭載する意味ではない。
-
-## 3. スコープとサポート方針
-
-### 3.1 初期リリースの対象
-
-| 対象 | 初期の扱い | 完了判定 |
-| --- | --- | --- |
-| WindowsネイティブGUI | 最優先の正式対象 | Windows実機で起動、描画、入力、IME、基本アクセシビリティを確認 |
-| Windows上のWebGPUブラウザ | 第一級の正式対象 | 共通アプリコードで描画、入力、RPCが動作。ブラウザ別の検証記録を残す |
-| macOS/LinuxのネイティブGUI | 初期は非保証 | 依存ライブラリの対応を妨げないが、独自開発・リリース試験は要求しない |
-| Windows ARM64等 | 後続候補 | 自動的に対応済みとは扱わない |
-| モバイルブラウザ・モバイルOS | 初期対象外 | ソフトキーボードやタッチの設計拡張を妨げない程度 |
-| BEの実行OS・クラウド | 別途選定 | Windows GUI優先という条件から、BEの本番OSまでWindowsに固定しない |
-
-WebGPUが利用できない環境には理由を表示する。初期版でWebGLやソフトウェア描画へのフォールバックを必須にしない。ブラウザのWebGPUは利用可否とセキュアコンテキストの確認が必要である。[S18]
-
-### 3.2 初期に作らないもの
-
-独自言語、JSX、専用UI構文、MoonBitコンパイラのフォークは作らない。HTML/CSS互換レイアウト一式、React/Solid/Vue互換レンダラー、GPUIの完全互換API、全コンポーネントの一括移植、IDE並みのエディタ、全OSサポートも初期対象外とする。
-
-任意のnpmパッケージを無修正で動かす仕組み、Node.js/Bunの標準同梱、WebViewの標準同梱、DOM/iframeをGPUテクスチャへ取り込む機構は作らない。任意拡張用の大きなプラグインローダーや未使用の空パッケージ群も先行実装しない。
-
-RPCのためにORMや認証サービス全体を実装しない。汎用的な分散トランザクション、オフライン同期、あらゆるストリーミング方式の透過変換も初期対象外。UIだけを利用するアプリがRPCパッケージを依存に持つ必要はない。
-
-## 4. 全体アーキテクチャ
-
-```text
-                      Application / MoonBit
-                      ┌────────┴──────────┐
-                      │                   │
-                 UI Components       API Client
-                      │                   │
-                 Headless Base       Typed Procedure
-                      │                   │
-          Reactive Runtime ← Resource → RPC Core
-                      │                   │
-               Persistent UI Tree    Protocol Adapter
-                      │                   │
-              Layout / Text Model    Codec + HTTP/Stream
-                      │                   │
-                 Retained Scene      Network Platform
-                      │
-                 GPU Renderer
-                      │
-             Graphics / Platform Ports
-                 ┌────┴───────────────┐
-                 │                    │
-              Windows               Browser
-         C ABI / Rust bridge    JS host / Wasm bridge
-           wgpu系 → D3D12        Browser WebGPU
-           native input          EditContext / DOM input
-           OS accessibility      semantic DOM bridge
-```
-
-図のRPC右側のネットワークは、別プロセスのMoonBit BEへ接続する。デスクトップアプリがBEを必ず内蔵するという意味ではない。ホスト用RustコードもBEの業務実装とは区別する。
-
-この図は**任意拡張を一つも入れない標準構成**を表す。Webパネルと外部JSロジックは必要時に外側へ追加し、Reactive Core、Scene、標準コンポーネント、RPC Coreの必須依存にしない。
-
-### 4.1 責務の配置
-
-| 層 | 所有するもの | 所有しないもの |
-| --- | --- | --- |
-| Reactive Runtime / MoonBit | Signal、依存グラフ、スケジュール、Scope | GPU、OS、HTTP、コンポーネントの見た目 |
-| UI Core / MoonBit | UIノード、階層、プロパティ、イベント配信 | Windowsハンドル、JSのDOM要素 |
-| Headless Base / MoonBit | フォーカス、操作規約、制御状態、セマンティクス | 製品固有の色・角丸・装飾 |
-| Components / MoonBit | 見た目、テーマ、UIの組み立て | OSとの直接通信 |
-| Layout / Text facade | 計測条件、文字モデル、レイアウト結果の扱い | 特定エンジンの生ポインタを公開すること |
-| Scene / Renderer | 描画プリミティブ、順序、クリップ、GPU資源管理 | RPC、認証、業務状態 |
-| Platform adapters | ウィンドウ、入力、時間、GPU、OS連携 | アプリケーションの状態管理方針 |
-| RPC Core | Procedure契約、呼び出し、共通エラー、キャンセル | UIツリー、フレーム、GPU |
-| Resource adapter | 非同期結果とリアクティブ状態の接続 | HTTP/2実装、全業務データの正規化ストア |
-
-これらは責務の区分であって、最初からすべてを独立配布する要求ではない。少数のモジュールから始め、依存方向がテストできる単位でパッケージを分ける。
-
-### 4.2 プラットフォーム境界
-
-次のPortを概念上分離する。MoonBitでの具体的な表現は、trait、関数テーブル、ターゲット別パッケージのうち、実際にビルド・テストできる単純な方法を選ぶ。
-
-| Port | 主な操作 |
-| --- | --- |
-| `PlatformHost` | 起動、終了、イベント受信、再描画要求、ウィンドウサイズ |
-| `GraphicsDevice` | リソース作成、バッファ更新、コマンド送信、デバイス喪失通知 |
-| `LayoutEngine` | ノード変更、制約入力、計測、レイアウト結果取得 |
-| `TextEngine` | フォント登録、整形、計測、グリフ取得、文字境界処理 |
-| `TextInputBridge` | 入力開始・終了、選択・変換範囲、キャレット位置の通知 |
-| `AccessibilityBridge` | セマンティックツリー更新、支援技術からの操作受信 |
-| `TaskHost` | タスク起動、完了通知、タイマー、キャンセル、UIスレッドへの復帰 |
-| `NetworkHost` | HTTPリクエスト、レスポンス、利用可能なストリーム、通信中断 |
-
-Portを巨大な一枚のinterfaceにまとめない。例えばCLIでRPCだけを使う場合に、GPU関連のダミー実装を要求しない。
-
-## 5. リアクティブランタイム
-
-Solidの依存追跡と、SlintのBindingのdirty化・遅延再評価を設計の参考にする。ただし、それらのランタイムを直接導入するのではなく、MoonBit向けの小さな実装を作る。[S06][S07]
-
-### 5.1 公開プリミティブの意味
-
-| 概念API | 意味 |
-| --- | --- |
-| `Signal[T]` | 書き込み可能な値。追跡中の読み取りを依存として登録 |
-| `ReadSignal[T]` | 読み取り専用の公開面。子へ更新権限を渡さずに購読可能 |
-| `Memo[T]` | 純粋な派生計算。キャッシュとdirty状態を持つ |
-| `Binding[T]` | Signal/Memoを読み、特定のUIプロパティへ反映する処理 |
-| `Effect` | 外部処理を伴う実行単位。依存とcleanupをScopeに結び付ける |
-| `Resource[T,E]` | 非同期の読み込み状態と結果。古い応答の破棄を含む |
-| `Scope` | 子Scope、購読、Effect、タスク、ノードの寿命を管理 |
-| `batch` | 複数の書き込みをまとめ、途中状態をBindingへ露出させない |
-| `untrack` | 読み取りを依存として登録しない明示的な範囲 |
-
-ここでいうEffectは**フレームワークレベルでの副作用実行管理**であり、新しい言語エフェクトシステムや代数的エフェクトの導入ではない。中央の `Msg → update` を全アプリに強制するElm Architectureでもない。
-
-### 5.2 依存追跡と更新規約
-
-Signalの読み取りは、同期的に実行中の追跡Scopeにだけ依存を登録する。条件分岐が変わったときは、前回の依存を外し、新しい実行で読んだ依存へ差し替える。
-
-Signalへの同値書き込みは、設定された比較方法で抑制する。`Eq`を使う標準方式と、比較方法を明示する方式を用意する。深い比較を無条件に行わない。
-
-Memoは副作用を起こさない。Memo/Bindingの評価中にSignalを書き換えることは原則禁止し、開発モードで検出する。イベントハンドラーは原則として追跡外で実行する。
-
-**構造体全体を一つのSignalに入れても、フィールド単位の依存追跡が自動で生まれるわけではない。** 初期版では明示的なSignal分割、またはselector/Memoの比較で更新範囲を制御する。JavaScriptのProxyに相当する仕組みを暗黙の前提にしない。
-
-### 5.3 スケジューリング
-
-UI状態への書き込みと依存グラフの操作は、初期版ではUIスレッドに限定する。非同期処理の完了はイベントとしてUIスレッドへ戻す。
-
-```text
-入力イベント / タスク完了
-    → Signalを書き換える
-    → 依存するMemo・Bindingをdirtyにする
-    → batch境界で整合した状態まで派生値を解決
-    → Bindingがノードへ反映
-    → 必要なレイアウト・描画・セマンティクスを更新
-    → 一回のフレーム送信
-```
-
-Memoは必要時に再評価できるが、Bindingへ渡す値は依存関係が整合した状態にする。diamond dependencyで新旧の値が混ざらないテストを必須にする。
-
-Effectは更新の安定化後にキューから実行する。Effectが書き込んだSignalは次の安定化処理へ送る。無限再評価を検知する上限と診断情報を持たせる。ネットワークや重い文字処理でUIのフレーム処理を同期的に待たせない。
-
-### 5.4 非同期とResource
-
-Resourceは、最低限 `Idle / Pending / Ready / Failed` を表現する。既存データを保持して再読み込みする場合は、データの有無とfetch状態を分ける設計に拡張する。
-
-入力キーの変更ごとに世代番号を進める。古いリクエストが新しいリクエストより後に完了しても、表示状態を上書きしない。キャンセル要求と古い結果の破棄は別々に実装する。
-
-`await`を越えた自動依存追跡を仮定しない。Resourceへ渡す入力キーは、非同期処理開始前に同期的に取得する。Resource、通信リクエスト、UI Scopeの寿命を接続する。
-
-共通キャッシュ、楽観的更新、重複リクエスト抑制は後続機能。Resource自体は任意の非同期関数を扱い、RPC専用にはしない。
-
-### 5.5 寿命管理
-
-Scope破棄では、子Scope、購読、タイマー、入力購読、Effectのcleanup、未完了タスクを決めた順序で解除する。cleanupは一度だけ実行する。破棄済みScope宛ての完了イベントは無視する。
-
-Node、Scope、Task、GPU資源には世代付きIDを検討する。OSハンドルやGPU資源の解放を、言語ランタイムの最終化タイミングだけに依存させない。クロージャと購読が相互参照した場合の解放も検証する。
-
-## 6. UIツリー・レイアウト・描画
-
-### 6.1 持続するノードと描画シーン
-
-UIノードはインスタンスの寿命にわたって維持する。コンポーネント関数は通常のSignal変更のたびに再実行しない。条件分岐、key付きリスト、明示的な再生成では必要な範囲だけを生成・破棄する。
-
-UIツリーは意味とイベント配信を持ち、Sceneは描画順序とプリミティブを持つ。一つのUIノードから複数の描画要素が生まれることを許容する。この二つを分ける一方、全ツリーを毎フレーム複製する設計にはしない。
-
-### 6.2 無効化フラグ
-
-| 変更 | 最低限の無効化 | 注意 |
-| --- | --- | --- |
-| 背景色・文字色 | Paint | 文字色だけなら文字整形・サイズ計測は不要にする |
-| テキスト内容 | Text、必要なLayout、Paint、Semantics | 折り返しや親のサイズに影響し得る |
-| フォント・文字サイズ | Text、Layout、Paint | フォントキャッシュキーの更新が必要 |
-| 幅・高さ・余白 | Layout、Paint、HitTest | 兄弟や祖先へ影響が伝播する可能性がある |
-| 描画専用transform | Composite/Paint、HitTest | レイアウト位置との意味をAPIで区別する |
-| opacity | Composite/Paint | グループ合成が必要なら単純なuniform更新で済まない |
-| 子の追加・削除・移動 | Tree、Layout、Paint、HitTest、Semantics | key、フォーカス、Scopeの寿命を守る |
-| フォーカス・選択 | Paint、Semantics、必要ならスクロール | キャレットとIME位置の更新も考慮 |
-| role・読み上げラベル | Semantics | 描画を伴わない更新を可能にする |
-
-「Composite」は設計上の分類名であり、専用コンポジタを最初から実装するという意味ではない。初期RendererがPaintとして処理してもよい。dirtyフラグの粒度と、GPUの実際の再描画領域は別に計測する。
-
-### 6.3 最初のレンダラー
-
-角丸矩形、境界線、クリップ、テキスト、基本画像を段階的に実装する。共通シェーダー言語はWGSLを初期案とし、ブラウザのWebGPUで利用可能な機能を共通基準にする。wgpuはWebGPUを基にしたAPIとネイティブGPUバックエンドを提供するが、追加機能もあるため、native-only機能を共通経路へ混入させない。[S11]
-
-初期版では全画面へのGPU描画を許容する。その一方で、変更のないUI構築・文字整形・レイアウトを繰り返さない。部分再描画や高度なGPUシーングラフ最適化は計測後に追加する。
-
-描画順序、透明度、クリップの意味を保持する範囲でバッチ化する。ドローコール削減のために半透明要素の順序を破壊しない。デバイス喪失時には、UI状態を保ったままGPU資源を再作成できる境界を設ける。
-
-### 6.4 FFIとコマンド転送
-
-アプリケーションからRustの個別コンポーネントを呼ばない。GPUハンドルや文字エンジンは、型付きMoonBit facadeから低レベルPortとして利用する。
-
-毎フレームの変更をまとめて転送し、プロパティ一つ・グリフ一つごとの言語境界往復を減らす。転送バッファにはバージョン、サイズ、ハンドル世代、必要なアラインメントを定義する。実メモリ配置の異なるWasmGC、JS、native間でゼロコピーを保証しない。
-
-初期は安全なコピーを優先してもよい。バッファ再利用・範囲更新・コピー回数の削減は計測に基づいて行う。
-
-## 7. UI記述APIとコンポーネント
-
-### 7.1 構文
-
-関数呼び出し、メソッドチェーン、名前付き引数、クロージャを利用する。UI専用の構文変換器やコンパイラ拡張は不要とする。
-
-以下は**MoonBit風の概念例で、API名は仮**である。
-
-```text
-fn counter(scope) {
-  let count = signal(scope, 0)
-
-  column(children=[
-    text(value=dynamic(fn() { count.get().to_string() })),
-    button(
-      label="増やす",
-      on_click=fn() { count.set(count.get() + 1) },
-    ),
-  ])
-}
-```
-
-`text(value=count.get().to_string())` のように初期化時に値を渡すだけでは、更新可能なBindingにはならない。初期APIは `Static(value)` と `Dynamic(getter)`、または `text` と `text_dynamic` のように、静的値と動的値を明確に区別する。
-
-構造変更には `when`、`for_each_keyed` 等の通常関数を用意する。リスト再構成でもkeyが同じ子のScope、入力状態、フォーカスを維持する。
-
-### 7.2 Headless BaseとStyled Components
-
-GPUI Component周辺では操作・状態・基盤と見た目の分離が公開されている。本設計はこの責務分離を参考にするが、そのRustコンポーネントをそのまま使えるわけではない。[S10]
-
-| 層 | 例 |
-| --- | --- |
-| 基本要素 | Box、Row、Column、Text、Image、Clip |
-| Headless Base | Focus、Press、Selection、Overlay、Scroll、VirtualList、TextEdit |
-| Styled Components | Button、TextInput、Checkbox、Tabs、Menu、Dialog |
-| Design Tokens | 色、文字、余白、角丸、境界線、フォーカスリング、動き |
-
-状態の正本を一つにする。制御コンポーネントは値の読み取りと変更通知を受け、内部の別Signalへ勝手に複製しない。非制御モードが必要なら、明示的に内部Scopeへ状態を作る。
-
-### 7.3 初期コンポーネントの範囲
-
-最小デモはButton、Text、単一行TextInput、ScrollArea、基本レイアウトから始める。続いてCheckbox、Tabs、Dialog/Overlay、key付きのVirtualListを実装する。
-
-Table、Tree、Dock、複雑なSelect、Markdown、チャート、コードエディタは後続とする。見た目だけのButtonを多数増やすより、TextInput・フォーカス・キーボード操作の完成度を優先する。
-
-「洗練された見た目」はトークンと状態表現によって実現する。hover、pressed、disabled、focus-visible、error状態を一貫させる。既存製品の画像、フォント、アイコン、コードを流用する場合は、個別のライセンスを確認する。
-
-### 7.4 最小部品に含める品質とカスタマイズ
-
-「最低限」は矩形・文字・クリック検出だけを意味しない。最低限の部品でも、状態遷移、フォーカス、入力、読み上げの意味を部品の公開契約にする。見た目を変更しただけでこれらが失われない設計にする。
-
-| 部品/基盤 | 外観とは別に守る振る舞い | カスタマイズするもの |
-| --- | --- | --- |
-| Button/Press | ポインタとEnter/Spaceの同一アクション経路、disabled、focus-visible | 色、角丸、余白、アイコン、サイズ |
-| TextInput/TextEdit | 選択、削除、clipboard、IME、編集履歴、エラーの意味付け | 外枠、ラベル、補助文、文字スタイル |
-| Dialog/Overlay | フォーカスの入退場、復帰、Esc等の規約、背景操作の制御 | パネル外観、配置、アニメーション |
-| Scroll/VirtualList | スクロール状態、key、仮想化、フォーカス対象の保持 | 行の組み立て、区切り、スクロールバー |
-
-最初から大量の部品を揃えるより、少数の標準部品を共通のDesign Tokensで仕上げる。無装飾のBaseだけでなく、一つの統一された標準テーマと、組み替え可能なStyled層を提供する。テーマ変更が操作契約を壊していないことを試験する。GPUI KitのBase/Styled分離は設計参考であり、本書の各振る舞いが依存導入だけで完成するわけではない。[S10][S29]
-
-### 7.5 AIと利用者が拡張しやすい成果物
-
-基盤の不備を「AIにその都度作らせる」で代替しない。共通基盤を使い、製品固有の画面、合成コンポーネント、テーマ、見た目のバリエーションを実装しやすくする。
-
-C1には、少なくとも以下の成果物を含める。
-
-- 動くコンポーネントギャラリー。主要状態、キーボード操作、テーマ変更を確認できる。
-- 通常のMoonBit構文による小さな使用例と、独自コンポーネント一つの作成例。
-- 制御状態、Scopeの寿命、イベント、セマンティクス、dirty分類を説明した拡張規約。
-- 外観の回帰試験と、入力・フォーカス・選択の振る舞いを確認する自動/手動テスト。
-
-見た目だけのスクリーンショットを、IME・アクセシビリティ・キーボード操作の合格証拠にはしない。
-
-## 8. Windowsとブラウザのホスト
-
-### 8.1 Windowsネイティブ
-
-Windows用アプリはMoonBitのnativeターゲットを使う。Rust/C層はウィンドウ、GPU、OS入力、文字エンジン等を担当する。**Node.js、Bun、WebViewをネイティブ版の必須ランタイムにはしない。**
-
-`native`というターゲット名だけで、全コンパイラ経路のFFI互換性を仮定しない。WindowsでC ABIが利用できるビルド経路をP0で固定し、コンパイラの実験的経路への自動切り替えを前提にしない。[S02]
-
-winitはウィンドウとイベントループを提供するが、描画自体は提供しない。イベントループ統合は独立した検証課題である。[S13]
-
-初期案は、OS側イベントループを一つの責任主体が所有し、MoonBit側へ正規化イベントを渡す方式。MoonBitの非同期ライブラリもイベントループを持つため、両者を同じスレッドで二重にブロックして動かさない。[S05][S13]
-
-P0で、起動、イベント受信、タスク完了の復帰、停止、cleanupを通して確認する。低レベルライブラリからのコールバック中に、借用・ロックを保持したまま相互再入することを避ける。重い処理をバックグラウンドへ出す場合も、UI状態を他スレッドから直接操作しない。
-
-Windows固有の不足機能はアダプター内で補う。OS依存分岐をSignalやコンポーネントへ広げない。DPI変更、ウィンドウリサイズ、最小化・復帰、デバイス喪失を試験する。
-
-### 8.2 ブラウザ
-
-ブラウザはCanvas、WebGPU初期化、入力イベント、通信、最小限のJSホストを持つ。MoonBitの出力をWasmGCにするかJSにするかは、アプリケーションのUI APIから隠す。
-
-**WebGPU描画とMoonBitのコンパイル先は別の選択である。** MoonBitから生成したJSでWebGPUを呼ぶ方式も、MoonBitのWasmからJSホスト経由で呼ぶ方式も検証対象にする。どちらもアプリケーション言語がMoonBitである点は変わらない。[S01][S02][S18]
-
-UIに変更があるときだけ `requestAnimationFrame` を要求する。継続アニメーションやキャレット点滅がない静止画面で、無条件のフレームループを回さない。バックグラウンドタブ、表示サイズ、DPR変更に対応する。
-
-WebGPUの機能・上限は起動時に確認する。利用不能時には、空白画面ではなく説明を返す。開発用の起動方法、HTTPS/安全なローカル環境、必要なアセット配信を文書化する。[S18]
-
-#### 8.2.1 ビルド方式の選択肢
-
-| 方式 | 生成物・ホスト | 判定 |
-| --- | --- | --- |
-| A：MoonBit UI → `wasm-gc` | アプリWasm＋小さなJSホスト。ホストは手書きJSでもよい | 優先検証案 |
-| A'：AのホストもMoonBitで記述 | UI用`wasm-gc`ビルド＋ホスト用`js`ビルド | 任意の実装方法。二重ビルドを要件にしない |
-| B：MoonBit UI → `js` | アプリJS＋同じ役割のWeb API接続 | P0の比較候補。WebGPU第一級という条件は維持 |
-
-MoonBitはWasm出力をJSホストから読み込み、関数を呼び出す構成を説明している。UIをWasmGCにする場合でも、ホスト用JSをさらにMoonBitから生成することは必須ではない。[S03][S30]
-
-UI状態とReactive Runtimeの正本は、選んだアプリ側に一つだけ置く。ホスト層はGPUオブジェクト、DOM入力等のホスト資源を所有し、別のアプリ状態や別のSignalグラフを暗黙に複製しない。JS出力案でもアプリ層とホスト層の責務は分ける。方式A/Bを同時に製品サポートする義務は置かず、P0で一つを選び、比較結果と再検討条件をADRへ残す。
-
-WasmGC→JS、JS→Wasmの呼び出しはブラウザ内のホスト連携であり、FE/BE間のRPCではない。ブラウザで動くJSにNode.js/Bunを追加する必要はない。ただし、特定の外部ライブラリがブラウザで動くかは別途確認する。
-
-#### 8.2.2 ホスト境界の契約と検証
-
-以下は本フレームワークで満たす設計要件であり、MoonBitコンパイラが自動提供する機能の列挙ではない。
-
-| 境界の項目 | 本設計で決めること |
-| --- | --- |
-| 初期化 | ホストとWasmの初期化順、GPU作成完了、機能検出、失敗時の表示 |
-| 引数・結果 | 数値、文字列、バイト列、ハンドルの明示的な境界表現と変換 |
-| 非同期 | 完了イベント、request ID、エラーの正規化、UIスレッドへの復帰 |
-| 寿命 | Scope破棄時のcallback解除、ホストオブジェクト解放、遅延結果の破棄 |
-| 再入 | コールバック中の再入を許す範囲、更新batch、ロック/借用を持ち越さない規約 |
-| 転送 | 一括化、コピー量の計測、バッファ再利用。ゼロコピーを前提にしない |
-| 配布 | 必要なWasm/JS/WGSL/フォント/画像とロード順を一覧化 |
-
-外部参照を扱えることと、任意のMoonBitの型が全ターゲット間で同一のABIになることは異なる。FFIで規定された表現を使い、業務DTOの変換はアダプターで明示する。[S02]
-
-高頻度の描画・入力経路を、汎用JSONラウンドトリップで安易に統一しない。一方、低頻度の任意外部サービス呼び出しでは、単純なメッセージ形式を選択肢にしてよい。性能の根拠は実測で残す。
-
-### 8.3 ブラウザ側のRust再利用
-
-文字処理やレイアウトでRustライブラリを使う場合、nativeのC ABIがそのままブラウザで使えるわけではない。Rust側のWasmモジュールとJSホストを用意するか、対応済みのMoonBit実装を選ぶ必要がある。
-
-別WasmモジュールとMoonBit WasmGCのヒープを直接共有できると仮定しない。転送表現、所有権、フォントデータ、初期化コストを試験する。既存のwasm-bindgen生成物との接続も「自動的にできる」とは扱わない。
-
-### 8.4 標準ホストと任意エコシステム拡張
-
-| 項目 | 必須/任意 | 所属 |
-| --- | --- | --- |
-| Canvas、WebGPUへの到達、ブラウザイベント | 中核 | Browser platform/host |
-| 標準TextInputのIME、入力・semanticブリッジ | 中核 | TextInputBridge / AccessibilityBridge |
-| 選定した文字・レイアウト基盤との低レベルFFI | 中核の依存選定次第 | Text/Layout facade。外部Web UIの互換機能ではない |
-| 特定JSライブラリのロジック呼び出し | 低優先度・任意 | ライブラリ別integration |
-| 既存React/Solid/Vue等で書かれたWebパネル | 低優先度・任意 | WebPanel integration |
-| JSランタイム埋め込み/sidecar | 低優先度・任意 | Native JS integration |
-
-ここでいう任意拡張はパッケージ/ビルド設定で選ぶ機能を基本とする。拡張マーケット、動的コードローダー、DLLプラグインABIは今回の要求に含めない。ブラウザの最小JSホストを含むことと、アプリがJSライブラリに依存することを同一視しない。
-
-### 8.5 外部JSロジックアダプター（後続・未実装案）
-
-外部ライブラリを使う具体的な要件が発生した時点で検討する。公開面は小さなMoonBit APIとし、型変換、失敗、非同期完了、取消、資源寿命をアダプターの責任とする。JSの任意オブジェクトを標準コンポーネントへ漏らさない。
-
-ブラウザでアプリをWasmGCにする場合の案：
-
-```text
-MoonBit UI / Resource
-    ↕ 明示的な引数・結果 / request ID
-ブラウザJSホスト内のライブラリアダプター
-    ↕
-対象の外部JSライブラリ
-```
-
-JS出力を採った場合は、Wasm境界を必須にせず直接JS連携する。対象ライブラリがDOMやNode固有APIへ依存するかは、採用時に確認する。UIを持たないライブラリでも、実行環境非依存とは限らない。
-
-Windows nativeではJSを実行する仕組みが別途必要になる。候補は、同一プロセスへのJSエンジン/Node埋め込み、Node/Bun等の別プロセス、既存Webパネル内での処理である。いずれも採用済みではない。Nodeは埋め込みAPIを公開しているが、Bunの単一実行ファイル化を同じ埋め込みAPIと見なさない。[S31][S32]
-
-採用時には、起動・終了、同梱サイズ、IPCコスト、キャンセル、クラッシュ時の挙動、配布・更新、権限をADRで比較する。別プロセスのIPCとネットワーク越しのRPCは別の境界であり、同じ型付きモデルを参考にしても同一実装を強制しない。
-
-未対応ターゲットで黙って別の意味へ置き換えない。プラットフォーム限定機能なら、その能力と非対応時のエラーを明示する。標準デモはこの拡張なしで動作すること。
-
-### 8.6 WebPanel（後続・未実装案）
-
-既存Web UIを再利用する場合は、本UIへのコンポーネント変換ではなく、**独立したWebコンテンツ領域**として扱う。`WebPanel`は説明用の仮名であり、今すぐ公開型を実装する要求ではない。
-
-```text
-共通アプリがWebPanel拡張を明示的に利用
-    ├─ Windows → WebView2等のホスト領域
-    └─ Browser → DOM領域 または iframe
-
-標準MoonBit UI → 引き続き自分のGPUレンダラー
-```
-
-WebView2はネイティブアプリへWebコンテンツをホストする仕組みであり、iframeはブラウザ内へ別文書を埋め込む仕組みである。上図は両者のアダプターを用意する設計案であり、WebViewのコードがブラウザで自動変換されるという説明ではない。[S33][S34]
-
-#### 描画と合成
-
-本設計では、Webパネルを自分のWebGPUシーンへ画像化して取り込まない。ブラウザではCanvasとDOM/iframeをブラウザに合成させ、Windowsでは選択したWebViewホスト方式とOS側の合成に従う。WebViewの内部がGPUを使うことと、自作Rendererがその描画を所有することは別である。
-
-WebView2はウィンドウ/Visual等のホスティング方式を持つ。WebGPUの外部画像コピーも、任意DOMやiframeを直接扱うAPIとは捉えない。これらを理由に、Webパネルが通常のGPUノードと完全互換になると約束しない。[S33][S35]
-
-初期のWebPanelを実装するなら、独立した矩形パネルに制約する。任意のGPU要素との交互の重なり順、3D変形、半透明合成、複雑なクリップ、Scene内へのキャプチャは保証しない。サポートできない配置を黙って崩すより、配置制限または明示的エラーを返す。
-
-#### 実装開始時に定義すべき契約
-
-| 項目 | 定義すること |
-| --- | --- |
-| 配置 | ホスト領域、矩形サイズ、DPI/DPRとスクロールの座標変換、表示/非表示 |
-| 寿命 | 作成、ロード、準備完了、ナビゲーション、失敗、破棄 |
-| 入力 | フォーカスの入退場、Tab移動、ショートカット、ポインタ入力の所有者 |
-| 状態 | Web側UIは独自状態を持つ。MoonBit側と共有するDTO/イベントだけを明示 |
-| 通信 | メッセージのschema/version/ID、エラー、サイズ制限、破棄後の受信処理 |
-| 権限 | 読込元、ナビゲーション、ホストAPI、ファイルアクセス等の能力制限 |
-| 失敗 | 読込拒否、ランタイム不足、別プロセス停止、対応外ターゲットの扱い |
-
-DOM直下のマウントは同じページの信頼境界を共有する。分離が必要ならiframe等の境界を検討するが、任意の第三者サイトを必ず埋め込めるとは想定しない。Webパネル内の入力とアクセシビリティを、標準Canvas UIのsemanticツリーへ二重登録しない。
-
-メッセージ受信元、ナビゲーション先、payloadを検証する。nativeホストAPIを無制限に公開しない。ブラウザ側のorigin/source確認、必要最小限のiframe権限、WebView側の公開能力削減を、拡張を実装する時の必須条件にする。[S34][S36]
-
-**WebPanelを実装しなくてもP0〜A1は完了できる。** 拡張のためにReactive CoreへDOM型を追加したり、標準TextInputをWebViewへ置き換えたりしない。
-
-## 9. 文字・入力・IME・アクセシビリティ
-
-### 9.1 文字描画と文字編集を分ける
-
-文字エンジンは整形、フォント選択、計測、グリフ処理を担当する。UI側のTextEditモデルは、テキスト、選択、キャレット、変換中範囲、編集操作、undo/redoの責任を持つ。
-
-キャッシュには文字列だけでなく、フォント、サイズ、幅、言語・方向、行設定等の計測条件を含める。必要に応じてDPIや描画条件を別のラスタライズキャッシュキーへ含める。文字色だけの変更で整形結果を捨てない。
-
-NativeとWebで同一のフォント・エンジンを使える範囲を確認する。異なるOSフォントやラスタライザーを使う場合、完全なピクセル一致を保証しない。
-
-### 9.2 インデックスと入力イベント
-
-プラットフォーム間で、文字位置を表す単位を混同しない。内部編集位置は明示的な `TextOffset` 型で表し、UTF-8バイト、UTF-16コード単位、グリフ番号を区別する。初期案は編集モデル内でUTF-8境界を管理し、各ブリッジで変換する方式。実際のMoonBit文字列表現とのコストをT1で検証する。
-
-winitのIME preeditのカーソル位置はバイト単位であり、候補ウィンドウ配置にはカーソル領域の通知が必要。ブラウザの編集APIにも独自の選択位置・範囲の扱いがある。[S14][S19]
-
-GPUIの入力例を参考に、最低限次を抽象化する。ただし、実際の型名やメソッド名のコピーは要求しない。[S09]
-
-| 入力モデルの機能 | 必要な意味 |
-| --- | --- |
-| 選択範囲取得・変更 | 範囲、向き、キャレット位置を保持 |
-| テキスト置換 | 選択置換、通常挿入、削除を統一 |
-| 変換中テキストの設定・解除 | 確定文字とpreeditを混同しない |
-| 範囲の画面座標取得 | IME候補位置と選択表示に利用 |
-| 座標から文字位置を取得 | クリック、ドラッグによる選択 |
-| 周辺文字列の取得 | IMEや編集連携に必要な範囲だけ提供 |
-| commit/cancel | 確定、取消、フォーカス移動時の扱いを定義 |
-
-IME変換中のEnterを送信ボタンの操作として二重処理しない。サーバー応答や他のSignal更新が届いても、編集中の未確定文字や選択を勝手に消さない。再変換への対応可否は、単純なpreedit表示とは別に記録する。
-
-### 9.3 ブラウザの入力ブリッジ
-
-**初期案はEditContextを優先検証し、入力用DOMを代替経路として評価する方式。採用確定ではない。** EditContextはCanvas等の独自描画とテキスト入力の接続を扱う。仕様、ブラウザ実装、利用するAPIの差を確認し、機能検出だけでなく実際の日本語IME操作で評価する。[S19][S20][S37]
-
-P0-Gでは小さな入力実験を作り、I1で選定経路を標準TextInputへ統合する。未対応または必要な操作を満たせない場合は、textarea等の入力可能なDOMを使う。フォールバックを提供するなら、開発時に強制選択できるようにして両経路を試験する。初期サポート環境を狭める場合は、代替経路なしで使えない条件を明示する。
-
-CanvasにEditContextを関連付けても、キャレット移動、選択、描画、編集履歴がすべて自動実装されるわけではない。ブラウザと共通TextEditモデルの責任分界を検証し、現在の実装で受け取るイベントと範囲単位を固定する。[S19]
-
-入力用DOMを `display:none` にしてIMEやフォーカスが機能することを期待しない。実際に入力可能な要素を適切な位置に置き、Canvas上の編集モデルと同期する。正規の入力イベントとcompositionイベントの二重適用を避ける。
-
-「GPUIを参考にするだけでWebのIMEも完成する」とはしない。WindowsはOS側の入力機構、ブラウザはWeb API側の入力機構へ別々に接続する。この入力ブリッジにWebViewや外部JSライブラリは要求しない。
-
-入力経路ごとに、二重挿入の有無、変換中Enter/Esc、選択の保持、候補の座標、スクロール/DPI変更、blur中の変換、clipboard、破棄後イベントを記録する。入力用要素、EditContext、イベントリスナーの解除までScopeの破棄に含める。
-
-### 9.4 アクセシビリティ
-
-セマンティックツリーを描画ツリーとは別に持つ。最低限、role、ラベル、値、disabled、checked/selected、フォーカス、実行可能な操作を表す。
-
-WindowsではAccessKit等を候補にする。AccessKitは自前描画UI向けにアクセシビリティのデータと操作を抽象化する基盤であり、導入だけで各コンポーネントの意味が自動的に完成するわけではない。[S17]
-
-ブラウザではセマンティックDOMとの同期を初期案とする。フォーカス可能な入力ブリッジと読み上げ用要素を二重に露出させない。支援技術からの操作はUIのイベント経路に戻す。仮想リストでは可視領域だけでなく、フォーカス対象・読み上げ対象の扱いを設計する。
-
-Tab移動、Shift+Tab、ボタンのEnter/Space、Dialogのフォーカス制御を共通の操作規約にする。Windows実機で日本語IMEとスクリーンリーダーを試すことを初期リリースの条件に含める。
-
-## 10. MoonBit-native Typed RPC
-
-### 10.1 目的と参考モデル
-
-目的は、MoonBitのAPI定義からFE/BE双方の入力・出力・業務エラーを型で接続すること。tRPC/oRPCのTypeScript実装を必須ランタイムとして導入することではない。
-
-tRPCはサーバールーターの型をクライアントへ `import type` する利用方法を示している。oRPCは、サーバーコードを含まない契約とその実装を分けるContract-firstを提供し、契約には型付きエラーやmetadataも含められる。本設計は、前者の「BEのAPIを参照する使い勝手」と、後者の「契約だけを取り出せる境界」を組み合わせる。[S21][S22][S23]
-
-**tRPCを上位互換・下位互換と評価することは本設計の根拠にしない。** 必要なのは、MoonBitで実現できる小さな型付き契約と実行基盤である。
-
-### 10.2 API契約の所有場所
-
-アプリケーション側の初期配置は次のとおり。
-
-```text
-backend/
-  api/                 FEから参照可能な契約専用パッケージ群
-    users/
-    projects/
-  handlers/            MoonBitのAPI実装
-  domain/              BE内部の業務モデル
-  infrastructure/      DB、サーバーI/O、秘密情報を扱う部分
-  main/
-frontend/
-  app/                 共通のUIとアプリ状態
-  windows/             nativeの起動
-  browser/             Webの起動
-```
-
-依存方向は以下に限定する。
-
-```text
-frontend/app ───────────────→ backend/api
-backend/handlers ──────────→ backend/api
-backend/handlers ──────────→ backend/domain・infrastructure
-backend/api ───────────────→ rpc/core・ターゲット非依存codec
-```
-
-`backend/api` はディレクトリ名としてBE配下にあるだけで、native専用サーバー実装を含まない。FEから `backend/handlers` やサーバー起動パッケージを参照しない。
-
-MoonBitではターゲットをパッケージごとに区分できる。公式のフルスタック例もターゲット非依存の共通パッケージを使っている。本設計ではその役割を「汎用shared」ではなく「API契約」に絞る。[S03][S04]
-
-TypeScriptの `import type` と同じ消去・推論機構をMoonBitにも仮定しない。FEが契約を読み込めること、サーバー専用依存を引き込まないことを実際のビルドで確認する。
-
-### 10.3 Procedure
-
-概念的には次の契約を持つ。これは型設計の説明であり、実際のMoonBit宣言ではない。
-
-```text
-Procedure[Input, Output, DomainError]
-    id                 安定した識別子
-    api_version        通信契約のバージョン
-    call_kind          Unary / ServerStream / ClientStream / Bidi
-    operation          Query / Mutation
-    idempotency        再試行可能性の明示
-    input_contract     入力DTOと実行時検証
-    output_contract    出力DTOと検証・エンコード
-    error_contract     通信可能な業務エラー
-    metadata           ログ用名、公開区分等の非機密情報
-```
-
-最初はUnaryだけを実装してよいが、ストリーム形状を後から文字列フラグとして誤魔化さない。UnaryとStreamの公開呼び出しAPIは分ける。
-
-契約にDB、サーバーの秘密情報、認証済みセッション実体、処理クロージャを格納しない。コンパイル時型チェックとは別に、受信データのデコードと実行時検証を行う。公開されるDTOとBE内部のDomain Modelを同一にすることも強制しない。
-
-### 10.4 呼び出しとハンドラー登録
-
-利用方法の概念例：
-
-```text
-// 契約側
-get_user : Procedure[GetUserRequest, UserResponse, GetUserError]
-
-// FE側：Clientには接続先・認証情報・プロトコル等を注入する
-result = client.call(get_user, request, options)
-
-// BE側：server.registerが型を照合してハンドラーを登録する
-server.register(get_user, handler)
-```
-
-`.call()` や `.handle()` をProcedure自体のメソッドにすることは必須ではない。契約にネットワークやサーバーランタイムを持ち込まない方が重要である。
-
-`api.users.get(...)` のような薄いfacadeは後で提供できるが、任意のサーバー実装からルーター型・全クライアント関数を自動推論できると約束しない。初期は明示的なProcedure定義を正本とする。利便性のためのcodegenを追加する場合も、独自構文の導入とは分けて判断する。
-
-サーバーの登録時には `Input / Output / DomainError` とハンドラー型を一致させる。内部レジストリで異なる型のProcedureを扱う必要がある場合は、登録境界で型チェックしたアダプターへ型消去する。公開APIを無制限な `Any` や型キャスト中心にしない。
-
-### 10.5 エラーの分類
-
-通信できるエラーはDTOとして定義する。MoonBitの例外オブジェクトや `suberror` が自動的に安全なwire表現になるとは仮定しない。
-
-```text
-RpcError[DomainError]
-    Domain(DomainError)
-    RemoteStatus(code, safe_message)
-    Unavailable
-    Timeout
-    Cancelled
-    DecodeFailure
-    ProtocolFailure
-    UnsupportedCapability
-    UnknownRemoteError(code, safe_message)
-```
-
-分類の意味は、業務上予想される失敗、認証等を含む共通のリモートステータス、ネットワーク・プロトコル上の失敗を区別すること。実装では重複した表現を整理してよい。
-
-未知の業務エラーが新しいBEから返る可能性を扱う。FE/BEが同じソースの型を共有していても、配布済みクライアントと稼働中サーバーのバージョンが同じとは限らない。
-
-### 10.6 HTTP/JSONの最小経路
-
-最初の疎通にはUnaryのHTTP/JSONを使えるようにする。安定したProcedure ID、プロトコルバージョン、成功・業務エラー・共通失敗の区別をwire仕様へ記載する。
-
-MoonBitのJSON変換機構を利用する場合も、未知フィールド、必須値欠落、Option、整数範囲、enum、日時、バイト列の扱いを決める。特に64bit整数やIDをJavaScriptのNumberへ不用意に丸めない。IDは初期契約では文字列を推奨する。
-
-HTTPステータス、レスポンス形式、Content-Type、メタデータ、最大サイズをテストする。型共有だけでサーバー側の入力検証や認可が不要になるわけではない。
-
-### 10.7 Resourceとの接続
-
-```text
-入力Signal
-    → Resourceのキー
-    → 型付きAPI呼び出し
-    → MoonBit BE
-    → 結果のデコード・型付きエラー
-    → Resource状態
-    → Memo / Binding
-    → UIノード
-    → WebGPUまたはnative GPU
-```
-
-この接続は専用の `resource-rpc` アダプターへ置く。RPC CoreからReactive Runtimeを参照しない。Mutationは自動的に再実行されるResourceと区別し、明示的な操作として呼ぶ。
-
-## 11. gRPCプラグインと通信層
-
-### 11.1 高優先度で独立実装する
-
-gRPCは「いつか可能にする」と書くだけの拡張点にしない。P0で生成・エンコード・疎通のリスクを調べ、N2で利用可能なプラグインにする。基本RPCが固まったらUIコンポーネント追加と並行して進める。
-
-ただしgRPCを使わないアプリにも、ProtobufやHTTP/2ランタイムを必須依存として配布しない。プラグインはパッケージ・ビルド時の選択を基本とし、動的DLLプラグイン機構を最初から作る意味ではない。
-
-### 11.2 4つの層を区別する
-
-| 層 | 例 | 役割 |
-| --- | --- | --- |
-| API契約 | `Procedure[I,O,E]` | 呼び出しの意味、入力・出力・失敗 |
-| Codec / Wire schema | JSON、Protobuf | データをバイト列へ変換する規則 |
-| RPC protocol | 独自の小さなHTTP RPC、Connect、gRPC、gRPC-Web | パス、メッセージ境界、エラー、メタデータ、ストリーム |
-| Network carrier / Host | Browser fetch、native HTTP/2等 | 実際の送受信とプラットフォーム制約 |
-
-`WebSocket`をJSON/Protobufと同じ「シリアライザー」の列に置かない。gRPCを単なるHTTP接続先変更として扱わない。これらを分けたうえで、利用者向けには対応済みの組み合わせを選べるClient設定にまとめる。
-
-### 11.3 対応能力
-
-| 機能 | Windows/native | Browser/WebGPU |
-| --- | --- | --- |
-| HTTP/JSON Unary | 初期対応 | 初期対応 |
-| gRPC系Unary | gRPCプラグインで対応 | ConnectまたはgRPC-Web経由で対応 |
-| Server streaming | 次の優先候補 | 選択したクライアント・プロトコル・配信経路で確認 |
-| Client/Bidi streaming | 後続のnative能力として設計可能 | 共通APIで無条件対応を約束しない |
-| キャンセル・期限 | 共通APIを持つ | 下位の対応に加え、結果無視による論理キャンセルを保証 |
-
-公式gRPC-WebのJSクライアントはUnaryと一定条件でのserver streamingを説明し、client/bidi streamingは未対応としている。ConnectのWebクライアントはConnect/gRPC-Web用のtransportを提供する。これらはブラウザ制約の話で、WebGPU描画が原因ではない。[S26][S27]
-
-未対応能力は早期のエラーにする。Bidiを黙ってポーリングに変えるなど、意味の異なる通信へ自動変換しない。
-
-### 11.4 Protobufスキーマの正本
-
-Protobufはフィールド番号やpresenceを含むwire契約を持つ。MoonBitの型名とフィールド名だけではその契約を復元できない。フィールド番号を宣言順から毎回振り直す実装は禁止する。[S24]
-
-初期の現実的な方式は次のとおり。
-
-**通常のHTTP/JSON API**では、MoonBitのAPI契約を正本とする。
-
-**gRPCを有効にしたAPI**では、wireメッセージの正本を `.proto` に置き、生成したMoonBit DTOを `backend/api` から公開する。ProcedureはそのDTOを参照する。既存の公開DTOを維持する必要がある場合だけ、明示的な変換層を置く。同じwire DTOを `.proto` とMoonBitで二重に手書きしない。
-
-これによりgRPC対象ではcodegenを許容するが、UI全体やHTTP/JSON APIに `.proto` を強制しない。将来的な「MoonBit契約からschema生成」は独立した後続案であり、最初から実現済みとはしない。
-
-MoonBitの `protoc-gen-mbt` はProtobufジェネレーターとランタイムを持つが、確認時点のREADMEは未公開の配布状態を説明している。また、ジェネレーターの存在はgRPCクライアント・サーバー全体の完成を意味しない。対応機能とターゲットを実際に調べる。[S25]
-
-### 11.5 プラグインが用意する対応付け
-
-| 項目 | 必要な定義 |
-| --- | --- |
-| Procedure ID | Protobuf package、service、methodとの対応 |
-| Input/Output | DTOとProtobuf型、codec、フィールドpresence |
-| DomainError | 既知の業務エラーのwire表現 |
-| Common failure | gRPC statusとフレームワーク共通失敗の対応 |
-| Call options | deadline、cancel、認証メタデータ、サイズ制限 |
-| Streaming | 呼び出し形状とフロー制御・終了条件 |
-| Browser route | 対応サーバーかプロキシか、CORS等の構成 |
-
-期待される業務エラーは、初期案ではレスポンスの `outcome` / `oneof` に明示的に載せる。この場合、gRPC呼び出し自体は成功ステータスで、内容が業務失敗になる。認証・権限・内部エラー等の共通失敗は適切なステータスへ割り当てる。この方針をclient/server両方で同じ仕様にする。
-
-標準の詳細エラーモデルへ移行する場合も、必要なcodecと型情報を用意する。すべての例外を文字列化して型安全と呼ばない。
-
-### 11.6 nativeの実装候補
-
-MoonBit側で十分なgRPC実装が得られない場合、Rustのtonic等を低レベル通信エンジンとして包む案を検証する。tonicはHTTP/2のgRPC実装とクライアント・サーバー基盤を提供する。[S28]
-
-この場合も、BEの業務ハンドラーはMoonBit側に残す。RustワーカースレッドからMoonBitのUIや非対応のランタイム状態へ直接コールバックしない。リクエストID付きのキューや明示的な実行コンテキストで、要求・完了・キャンセルを受け渡す。
-
-ブリッジは可能な限りProcedureの識別子・メタデータ・バイト列を扱う汎用経路にする。APIを追加するたびにRustの手書きFFIを増やす構成を避ける。型付き境界はMoonBitのClient/handler登録側で維持し、必要なRustコードはスキーマから生成するか、汎用codec/dispatchで扱えるかをN2で検証する。
-
-ブラウザがConnect/gRPC-Webを話しても、任意の通常gRPCサーバーがそのまま受理するわけではない。サーバー側の対応アダプターまたは明示的なプロキシ構成を用意する。追加プロセス、配信設定、タイムアウトの運用コストも文書化する。[S26][S27]
-
-### 11.7 バッチ・再試行・バージョン差
-
-HTTP/2による多重化、複数RPCのバッチ化、DBトランザクションは別物である。複数APIを一つの通信にまとめても、全操作が原子的になるわけではない。
-
-初期版は、接続再利用、不要な再要求の抑制、キャンセル、適切なキャッシュキーを優先する。バッチ化は後続の任意機能とし、各呼び出しのID、個別エラー、サイズ上限を持たせる。
-
-再試行は既定で無条件には行わない。Mutationは明示的な冪等性またはidempotency keyがある場合だけ自動再試行を検討する。キャンセル済みの呼び出しを自動で復活させない。
-
-配布済みデスクトップと新しいBEの共存を想定し、互換変更と破壊的変更をテストする。未知フィールド・未知enum・省略フィールドの扱いを記録し、削除したProtobufフィールド番号を再利用しない。[S24]
-
-## 12. リポジトリと依存境界
-
-### 12.1 初期配置案
-
-以下は論理的な配置例。MoonBitのmodule/workspace設定は利用するツールチェーンの仕様に合わせる。パス名から配布単位を自動的に決めない。
-
-```text
-repo/
-  docs/
-    DESIGN.md
-    CODEX_HANDOFF.md
-    adr/
-    verification/
-    manual-tests/
-  ui/
-    reactive/
-    core/
-    scene/
-    render/
-    base/
-    components/
-    platform/
-      windows/
-      web/
-      test/
-  rpc/
-    core/
-    client/
-    server/
-    codec-json/
-    protocol-http-json/
-    protocol-grpc/
-    protocol-browser-rpc/
-  integrations/
-    resource-rpc/              必要な時点で作る。UI/RPCコアから独立
-  native-bridge/              Rust/C。UI/通信をfeature等で分離
-  web-host/                  JSまたはMoonBit→JSのホスト。入力/Web API接続
-  examples/
-    showcase/
-      backend/api/
-      backend/handlers/
-      backend/main/
-      frontend/app/
-      frontend/windows/
-      frontend/browser/
-  tests/
-    conformance/
-    interop/
-    fixtures/
-  scripts/
-```
-
-ライブラリにサンプルアプリの業務APIを埋め込まない。アプリ側の `backend/api` と、フレームワーク側の `rpc/core` を区別する。
-
-将来の `integrations/js-*` や `integrations/web-panel` は必要時に追加する。現在の雛形には空ディレクトリ・公開API・Node/WebView依存を先回りで作らない。既存名称やnamespaceを勝手にRune/Mune等へ変更しない。
-
-### 12.2 CIで守る境界
-
-| 境界 | 検証 |
-| --- | --- |
-| Pure core → Platformなし | GPU、DOM、OSなしで単体試験可能 |
-| Components → Rust具体型なし | public APIにRustハンドルやJSオブジェクトが出ない |
-| API contract → Server実装なし | ブラウザ向けに契約だけをビルドできる |
-| RPC → UIなし | CLI/テストから独立して使える |
-| Native/Web facadeの一貫性 | 同じ共通アプリを両ターゲットへビルド |
-| gRPCはoptional | 無効化したビルドにgRPCランタイムが入らない |
-| JS/WebPanel拡張はoptional | 標準ビルドに実行時Node/Bun/WebView依存が入らない |
-| 標準入力は拡張と独立 | 拡張なしのWindows/Web版でIMEと基本アクセシビリティが動く |
-| Browserの状態所有 | Wasm側/JS側に二重のUI状態・購読グラフを作っていない |
-| 名称保留 | 作業用パスをブランド採用と扱わず、不要な改名をしない |
-
-ターゲット独立性は推測ではなくコンパイル試験で守る。MoonBitパッケージ設定やFFIの挙動は、固定したツールチェーンの公式仕様で確認する。[S02][S03]
-
-## 13. 外部ライブラリ候補
-
-**ここは採用済み依存一覧ではなく、中核についてP0で実証する候補一覧である。** ドキュメントが説明する役割と、MoonBitへの統合成功を区別する。Node/Bun/WebView2等の任意拡張はこのP0採用対象へ加えない。
-
-| 領域 | 候補 | 採用前に確認すること |
-| --- | --- | --- |
-| Windowsウィンドウ・イベント | winit [S13][S14] | MoonBitランタイム統合、日本語IME、DPI、終了処理 |
-| Windows GPU | wgpu-native [S12] またはRust wgpuの薄いラッパー [S11] | C ABI、資源寿命、D3D12動作、配布物、Webとの対応 |
-| Browser GPU | Browser WebGPU [S18] | secure context、adapter、limits、device lost、転送方式 |
-| レイアウト | Taffy [S15] | native/Web双方での利用経路、計測コールバック、キャッシュ |
-| 文字処理 | cosmic-text等 [S16] | 日本語、フォント、Wasm経路、編集モデルとの分離 |
-| nativeアクセシビリティ | AccessKit [S17] | Windowsアダプター、入力・選択、actions、C ABI境界 |
-| native gRPC | tonic等 [S28] | executor境界、TLS、deadline/cancel、MoonBitハンドラーへの接続 |
-| Protobuf生成 | protoc-gen-mbt [S25] | 固定コミット、対応型、ターゲット、生成コードとランタイムの導入 |
-| UI操作・見た目の参考 | GPUI、GPUI Kitのgpui-base/gpui-component [S08][S09][S10][S29] | 参考範囲、ライセンス、必要な振る舞いの切り出し。直接bindingは前提にしない |
-
-Taffyはレイアウトエンジン、cosmic-textは文字処理の基盤として位置付ける。これらがButtonやDialogまで提供してくれる前提にはしない。[S15][S16]
-
-依存を選んだら、バージョンまたはコミット、ソース、ライセンス、ビルド条件、native/Webでの確認結果を `docs/verification/dependencies.md` に記録する。「最新」を無指定で追従し続けない。
-
-## 14. 性能・信頼性・安全性
-
-### 14.1 性能の合否を二段階にする
-
-最初はハードウェアに依存しない更新回数を合否基準にし、その後、基準機で時間とメモリを測る。
-
-| シナリオ | 構造的な合格条件 |
-| --- | --- |
-| 一つのラベル値を変更 | 無関係なコンポーネント関数が再実行されない |
-| 背景色だけを変更 | 文字整形回数・レイアウト実行回数が増えない |
-| 同値Signal書き込み | 比較設定に従い下流Bindingが再実行されない |
-| 一つのbatch内で100回変更 | 最終状態を反映し、無関係な中間フレームを生成しない |
-| 10,000件の仮想リスト | 生成する行ノード数が可視行＋overscan等の上限に収まる |
-| 静止画面 | タイマー・アニメーション等がない状態で、自発的な連続描画をしない |
-| mount/unmountの反復 | 購読、Scope、Task、GPU handleが単調増加しない |
-| 古いRPCが遅れて完了 | 最新のResource結果を上書きしない |
-
-基準機では、CPUフレーム時間、文字整形時間、レイアウト時間、GPU送信時間、入力から表示までの遅延、メモリ、転送バイト数を測る。NativeとWebを別々に報告する。
-
-60Hzなら1フレーム全体の時間枠は約16.7msである。初期の目標値はP0で基準機を定めた後に設定する。計測していないFPSや、GPUI/Solid/他言語に対する速度優位は記載しない。
-
-### 14.2 可観測性
-
-開発モードでは、Signal ID → Binding ID → Node ID → dirty理由 → 実行工程を追跡できるようにする。フレームごとのBinding数、layout数、shape数、draw call、upload bytes、ライブScope/handle数を取得する。
-
-RPCではProcedure ID、request ID、所要時間、結果種別を追えるようにする。入力本文、認証トークン、秘密情報を既定ログへ出さない。バックエンド起因の遅延と、UI反映の遅延を分ける。
-
-### 14.3 通信とFFIの安全性
-
-通信は入力サイズ・深さ・タイムアウト・同時実行数を制限する。BEで認証・認可・検証を行い、FEの型チェックを信用境界にしない。ブラウザのCORS、Cookie利用時のCSRF対策、nativeでの認証情報保存はアプリの配置に合わせて設計する。
-
-TLS、暗号、HTTP/2を独自に再実装しない。既存基盤を使い、公開APIには必要な設定だけを露出させる。
-
-FFIでは所有権、スレッド、保持期間、文字列のエンコード、解放関数を明示する。Rustのpanic等をABI境界越しに伝播させない。受信した描画コマンドやハンドルIDを無検証で参照しない。
-
-## 15. 実装計画と受け入れ条件
-
-### 15.1 最初に完走させる垂直スライス
-
-**同じMoonBitのアプリケーションを、Windows nativeとWebGPUブラウザで起動する。ButtonでSignalを更新でき、TextInputで日本語を入力でき、MoonBit BEへ型付きリクエストを送り、成功・業務エラー・通信失敗をUIへ表示できる。**
-
-このスライスを作るまで、コンポーネント数を増やすことを優先しない。RPCは単体でも試験し、Renderer完成を待たない。
-
-### 15.2 タスク依存関係
-
-```text
-P0 技術検証・選定
- │
- ├─ UI系：R1 Reactive Core + G1 Native/Web GPU
- │           → T1 Layout/Text → I1 Input/IME/A11y → C1 Components
- │
- └─ RPC系：N1 Typed RPC/JSON
-             → N2 gRPC plugin / Browser protocol
-
-UI系 + RPC系 → A1 共通アプリへの統合・両ターゲットの配布
-```
-
-上図のN1とUI系は独立して進められる。N2はC1の完了待ちにしない。文字を出すだけの試作はT1以前でも行えるが、製品レベルの入力完了とは数えない。
-
-### P0 — 実現性と依存の検証
-
-| 検証 | 作るもの | 合格条件・記録 |
-| --- | --- | --- |
-| P0-A / Native | MoonBit native → Rust/C → Windowsウィンドウの最小例 | 描画、入力、再描画、終了が動く。UIとasyncのイベントループ所有者を説明できる |
-| P0-B / Browser | MoonBit → WebGPUの最小例 | 矩形・入力イベント・resizeが動く。WasmGC＋JSホストとJS出力を比較し、ビルド単位・初期化・転送・初期採用経路を記録 |
-| P0-C / Async | タイマーと模擬非同期応答 | UIを止めずに完了を受け取り、キャンセル・破棄後の結果を処理できる |
-| P0-D / API | 型付きProcedureと契約パッケージの最小例 | FEが契約だけを参照可能。誤ったInput/Output/handler型でコンパイルが失敗 |
-| P0-E / Protobuf | 最小メッセージの生成・相互デコード | MoonBitと既存実装で同じメッセージを扱える。gRPCの実装経路とブラウザ経路を選べる |
-| P0-F / Text | 日本語・英数字の整形と表示の試作 | Native/Webの文字エンジン経路、フォント取得、主なABI課題を把握 |
-| P0-G / Browser input | EditContextと代替入力DOMの小さな比較試作 | 選定候補で日本語変換・選択・候補位置を確認し、利用可能性と不足を記録。完成したTextInputはまだ不要 |
-
-各検証は、ソース、実行コマンド、ツールチェーン、ログ、実行した環境を保存する。GUIを実行できない環境でのビルド成功は「実機動作済み」にしない。
-
-P0は小さな検証を順に積む段階であり、完全なGUI製品を要求しない。JSライブラリ互換、WebView、命名調査をP0へ追加しない。環境不足で一項目を実行できない場合は、その依存先だけ保留にし、独立した検証やヘッドレスな実装を進める。
-
-P0-Eでジェネレーター等が使えない場合、gRPCを削除せず、固定コミットの利用、小さな不足修正、別codec基盤の比較をADRへ残す。RPCとUIの独立性を使い、別の検証を進める。
-
-### R1 — ヘッドレスReactive Core
-
-Signal、Memo、Binding、Scope、batch、untrackを実装する。Resourceは模擬TaskHostで試験する。動的依存の付け替え、diamond dependency、同値更新、循環検出、二重cleanup、dispose後の完了通知、条件付き子の破棄をテストする。
-
-**合格条件：GPUもOSもネットワークも使わない決定的な単体試験で、更新と寿命の規約が成立する。**
-
-### G1 — Windows/Web両方の描画経路
-
-共通のScene入力から、両ターゲットで矩形、クリップ、色、基本transformを描く。GPU資源の作成・破棄、resize、DPI/DPR、device lostを設計に沿って扱う。低レベルGPUコマンドの差異を上位へ露出させない。
-
-**合格条件：一つの共通デモが両方で動き、描画順序が正しい。Webを空実装や疑似Rendererで代用しない。**
-
-### T1 — レイアウトと文字
-
-基本のRow/Column/Box、文字整形、行幅、折り返し、グリフキャッシュを実装する。TextOffset変換を単体試験する。色のみの変更ではshape/layoutを呼ばない。祖先へのlayout伝播が必要な場合は正しく伝播する。
-
-**合格条件：日本語と英数字を混在表示でき、両ターゲットで計測と入力用の文字位置が矛盾しない。**
-
-### I1 — 入力、IME、アクセシビリティ
-
-Windowsの日本語IME、ブラウザの入力ブリッジ、単一行TextInput、選択・削除・コピー/貼り付け、フォーカス移動を実装する。Narrator等でButton/TextInputの役割と値を確認する。基本的なundo/redoの責任を定める。
-
-**合格条件：日本語変換の確定・取消、変換中のEnter、候補位置、emoji/結合文字、DPI変更時の入力、キーボードのみの操作を実機で確認。未対応の再変換などは別項目として記録する。**
-
-### C1 — 最小コンポーネント群
-
-Button、TextInput、Checkbox、Tabs、ScrollArea、Dialog/Overlay、VirtualListを、BaseとStyled層に分ける。共通テーマ、disabled、focus-visible等を揃える。
-
-**合格条件：アプリが色やレイアウトを変更しても、基本的なキーボード操作やセマンティクスが失われない。仮想化してもフォーカスが壊れない。動くギャラリー・使用例・拡張規約・操作テストが揃う。**
-
-### N1 — Typed RPCとHTTP/JSON
-
-Procedure定義、型付きClient、handler登録、DTO codec、実行時検証、共通失敗、キャンセル・期限を実装する。MoonBit BEとWindows/Web FEの双方で疎通する。最初のBEストレージはメモリ上でよく、DB導入は不要。
-
-**合格条件：成功、既知業務エラー、未知エラー、入力不正、サーバー停止、遅延、取消を試験し、古い応答が新しい画面を上書きしない。契約の破壊でFEまたはhandlerの型チェックが失敗する。**
-
-### N2 — gRPCプラグイン
-
-Protobufスキーマ・生成DTOとProcedureを結び付け、native gRPCとブラウザ用の選択経路を実装する。必要なserver adapterまたはproxyもサンプル構成へ含める。
-
-**合格条件：自作client/server同士だけでなく、既存のgRPC実装とのUnary相互運用に成功する。deadline、cancel、メタデータ、業務エラー、未知フィールド、サイズ制限を検証する。gRPCを無効にしたビルドも成功する。**
-
-Server streamingを追加する場合は、途中エラー、キャンセル、遅い受信者、終了時の資源解放も試験する。Client/Bidi streamingはこの段階の必須条件にしない。
-
-### A1 — 統合と配布
-
-同じ共通MoonBitアプリをWindowsとブラウザへビルドし、垂直スライスを完了する。Windowsの実行ファイルと必要なアセット/DLL、ブラウザの静的配布物、起動手順を用意する。
-
-署名、自動更新、インストーラー、ストア配布は別タスクとしてよい。ただし「開発環境だけで動く」配布漏れを避けるため、依存物を明記して別環境からの起動を試す。
-
-標準配布物はNode/Bun/WebViewの実行時依存なしで動くことを確認する。ビルド時ツールとしてNode等を使うことまで禁止する意味ではなく、開発依存・配布アセット・実行時依存を分けて記録する。WebGPU初期化に失敗した場合の最低限の説明表示を、HTML/CSSによる標準UIへの代替と混同しない。
-
-**合格条件：検証環境、実行コマンド、既知の制限、未実行試験が記録されている。機能が揃っていても、Windows実機でのIME試験を省略して正式サポートとはしない。**
-
-### 15.3 後続拡張の着手条件
-
-| 項目 | 着手条件 | 実装する場合の完了条件 |
-| --- | --- | --- |
-| E1：外部JSロジック | 利用したい具体的なライブラリ・用途・対象環境が決まった | 型変換、成功/失敗、非同期、cancel/dispose、能力差、標準ビルドからの分離を試験 |
-| E2：WebPanel | 既存Web UIの利用が製品要件になった | Windows/Browserの対応範囲、矩形配置、focus、通信、ナビゲーション、破棄、権限制限を試験 |
-| 名称決定 | ユーザーが候補を選んだ | 重複調査・namespace整理はその別タスクで行う |
-
-E1/E2はP0〜A1の合格条件ではない。gRPCのN2より前へ繰り上げる根拠にしない。拡張の着手を許容しても、標準UIを外部Web部品へ置き換える方針変更とは扱わない。
-
-## 16. 設計判断記録（ADR）の初期一覧
-
-| ADR | 判断 | 状態・理由 |
-| --- | --- | --- |
-| 001 | MoonBitをアプリとUIの主言語にする | 確定。FE/BEの一貫性を重視 |
-| 002 | JSX・独自UI構文を導入しない | 確定。既存の言語・ツールを利用 |
-| 003 | Windows優先＋WebGPU第一級 | 確定。macOS/Linux GUI対応で初期開発を止めない |
-| 004 | 細粒度リアクティブ＋持続ノード | 採用方針。性能優位は計測する |
-| 005 | GPUI等は主に設計参考にする | 設計案。直接依存・大量コンポーネントbindingは避ける |
-| 006 | 入力・semanticブリッジを中核に含める | 設計方針。EditContext/入力DOMは比較し、任意WebPanelから分離 |
-| 007 | API契約をBE側の独立パッケージに置く | 設計案。汎用sharedは作らない |
-| 008 | RPC CoreをUIから独立させる | 採用方針。CLIや別UIからも利用可能 |
-| 009 | gRPCは高優先度のoptional package | 採用方針。protocol/schema/capabilityを分離 |
-| 010 | gRPC対象のwire DTOはproto正本＋生成を初期案にする | 要P0検証。型とスキーマの二重手書きを避ける |
-| 011 | BrowserのMoonBitターゲットをP0で確定する | 未確定。WasmGCへの希望と実装可能性を区別 |
-| 012 | wgpu-native対Rust wgpuラッパーをP0で選ぶ | 未確定。両方を無目的に保守しない |
-| 013 | Scope寿命とTaskのキャンセルを共通規約にする | 設計案。UI破棄後の更新を防止 |
-| 014 | まず更新回数、次に実機性能を評価する | 設計案。「最速」を前提にしない |
-| 015 | React/Solid/Vue互換レンダラーを作らない | 確定。自作GPUレンダラー自体は中核に残す |
-| 016 | 外部JSロジックは低優先度・任意アダプター | 採用方針。Node/Bun等を標準ランタイムにしない |
-| 017 | 既存Web UIは任意WebPanelで扱う | 方向性。WebView2/DOM/iframeの具体方式は必要時に検証 |
-| 018 | WebPanelのGPUテクスチャ化を狙わない | 設計案。OS/ブラウザの合成と矩形領域に限定する |
-| 019 | MoonBit→WasmGC＋最小JSホストを優先検証 | 設計案。MoonBit→JSとの比較、ホストの二重ビルドは任意 |
-| 020 | 少数の標準部品＋テーマ＋ギャラリーを作る | 設計方針。操作基盤をAI/利用者による毎回の再実装へ押し付けない |
-| 021 | 名称を保留する | 確定。Rune/Muneその他は現時点で未採用。命名で作業は止めない |
-
-ADRを更新するときは、背景、選択肢、選んだ理由、棄却理由、互換性への影響、検証証拠を残す。利用者の確定事項を変更する場合は、単なる実装上の都合として黙って変更しない。
-
-## 17. Codexへ引き継ぐ作業規約
-
-既存リポジトリがある場合、最初に構成と規約を読み、この文書のパッケージ名を機械的に押し付けない。未検証のAPIやバージョン番号を推測で実装しない。公式資料と小さなコンパイル試験で確認する。
-
-最初の作業単位はP0である。P0の検証と選定結果を残してから、R1/G1/N1へ進む。全コンポーネントを一度に作らない。原則として、一つの小さな実装単位ごとにテストと記録を残す。
-
-WindowsのGUI実機がない環境では、可能なビルド・ヘッドレス試験を行い、実機試験を「未実施」と記録する。ブラウザのGPUやIMEを確認できない場合も同様。スタブが通ったことを機能完成と数えない。
-
-MoonBitの非同期・FFI・Protobuf等で制約が見つかったら、根拠と代替案をADRに残す。勝手に主要UIをRust、TypeScript、React、Slint DSL、WebViewへ置き換えない。低レベル部品の再利用と、アプリケーション方式の変更を区別する。
-
-v0.2から合流する場合は、既存のv0.1実装を全削除して作り直さない。まず `CHANGELOG.md` と実装を照合し、優先度・入力境界・JSホスト・任意依存に関係する差分だけを反映する。すでに完了した検証は環境と設計差分を確認して再利用できる。
-
-名称候補を決定事項へ昇格させない。任意拡張の説明を「全部実装する指示」と読み替えない。新規ライブラリを追加するときは、標準構成に必要な低レベル基盤なのか、任意のWeb/JS資産連携なのかを明記する。
-
-各段階の報告には、実装した範囲、変更ファイル、実行したコマンド、結果、未実行試験、既知の制限、次の一単位を含める。性能値には機器、ビルドモード、ブラウザ/GPU情報を添える。
-
-**全体の完了とは、フォルダとinterfaceが揃うことではない。両ターゲットで同じアプリの描画・入力・型付き通信が動き、その根拠が残ることである。**
-
-## 18. 参考資料と検証範囲
-
-v0.1の参考資料一覧を継承し、v0.2で変更した境界に関する資料を2026-09-06に再確認した。今回の再確認はS02、S03、S09、S10/S29、S19、S25、S30〜S37。その他の項目を一括して今回再検証したという意味ではない。`latest` や `main` の内容は変わり得るため、依存採用時にはバージョン/コミットを固定する。
-
-一次資料から確認した事実と、本フレームワークへの設計提案は区別する。例えば「WebView2/iframeが存在する」は外部事実、「共通WebPanelとして矩形領域だけを扱う」は未実装の設計案である。
-
-本書で確認したのは公開資料の記載であり、MoonBitからこれらを組み合わせたWindows/Webアプリの実行ではない。パフォーマンス測定、ライブラリ統合試験、IME実機試験、gRPC相互運用試験はCodex側の作業として残っている。
-
-| ID | 資料 | この文書での用途 |
-| --- | --- | --- |
-| S01 | MoonBit Documentation — `https://docs.moonbitlang.com/` | 言語のターゲット |
-| S02 | MoonBit FFI — `https://docs.moonbitlang.com/en/latest/language/ffi.html` | ターゲット別の外部呼び出し・callback |
-| S03 | MoonBit Package Configuration — `https://docs.moonbitlang.com/en/latest/toolchain/moon/package.html` | パッケージとターゲット境界 |
-| S04 | Fullstack in One MoonBit Project — `https://docs.moonbitlang.com/en/latest/tutorial/fullstack-one-project.html` | FE/BEと共通型のパッケージ分離 |
-| S05 | MoonBit Async programming support — `https://docs.moonbitlang.com/en/latest/language/async-experimental.html` | asyncランタイム、native/JSの差 |
-| S06 | Solid Fine-grained reactivity — `https://docs.solidjs.com/advanced-concepts/fine-grained-reactivity` | Signalと局所更新の参考 |
-| S07 | Slint Reactivity — `https://docs.slint.dev/latest/docs/slint/guide/language/concepts/reactivity/` | Binding依存と遅延再評価 |
-| S08 | GPUI — `https://gpui.rs/` | RustのUI構築APIと公式例 |
-| S09 | GPUI input example — `https://github.com/zed-industries/zed/blob/main/crates/gpui/examples/input.rs` | テキスト入力モデルの参考 |
-| S10 | GPUI Kit / gpui-component — `https://github.com/longbridge/gpui-kit` | foundationとstyled componentの分離。旧URLはリダイレクトされる |
-| S11 | wgpu API docs — `https://docs.rs/wgpu/latest/wgpu/` | native/WebのGPU基盤 |
-| S12 | wgpu-native — `https://github.com/gfx-rs/wgpu-native` | native側のC API候補 |
-| S13 | winit API docs — `https://docs.rs/winit/latest/winit/` | ウィンドウ、イベントループ、DPI |
-| S14 | winit Ime — `https://docs.rs/winit/latest/winit/event/enum.Ime.html` | preedit、commit、IME位置 |
-| S15 | Taffy — `https://github.com/DioxusLabs/taffy` | レイアウト基盤候補 |
-| S16 | cosmic-text — `https://github.com/pop-os/cosmic-text` | 文字処理基盤候補 |
-| S17 | AccessKit — `https://accesskit.dev/how-it-works/` | セマンティックツリーと支援技術の操作 |
-| S18 | MDN WebGPU API — `https://developer.mozilla.org/en-US/docs/Web/API/WebGPU_API` | GPU API、secure context、利用可否 |
-| S19 | W3C EditContext — `https://www.w3.org/TR/2026/WD-edit-context-20260616/` | 再確認時のWorking Draft。Canvasと編集・入力の契約。全ブラウザでの完成仕様とは扱わない |
-| S20 | MDN EditContext API — `https://developer.mozilla.org/en-US/docs/Web/API/EditContext_API` | ブラウザ側の対応制限 |
-| S21 | tRPC Client setup — `https://trpc.io/docs/client/vanilla/setup` | サーバーのルーター型を参照する方式 |
-| S22 | oRPC Contract-first — `https://orpc.dev/docs/contract-first` | 契約とサーバー実装の分離 |
-| S23 | oRPC Procedure Contract — `https://orpc.dev/docs/contract/procedure` | 型付きエラー・metadataの参考 |
-| S24 | Protocol Buffers Language Guide — `https://protobuf.dev/programming-guides/proto3/` | wire schema、フィールド番号、互換性 |
-| S25 | protoc-gen-mbt — `https://github.com/moonbitlang/protoc-gen-mbt` | MoonBit Protobuf生成候補と導入状態 |
-| S26 | Connect Choosing a protocol — `https://connectrpc.com/docs/web/choosing-a-protocol/` | ブラウザのConnect/gRPC-Web経路 |
-| S27 | gRPC-Web — `https://github.com/grpc/grpc-web` | 対応RPC形状とproxy/server連携 |
-| S28 | tonic API docs — `https://docs.rs/tonic/latest/tonic/` | native gRPCエンジン候補 |
-| S29 | GPUI Kit base README — `https://github.com/longbridge/gpui-kit/blob/main/crates/base/README.md` | 操作・状態・セマンティクスと見た目の責任分離 |
-| S30 | MoonBit: Calling Wasm from JavaScript — `https://www.moonbitlang.com/blog/call-wasm-from-js` | WasmをJSホストからロードして呼ぶ構成 |
-| S31 | Node.js C++ embedder API — `https://nodejs.org/api/embedding.html` | JS実行環境をnativeへ組み込む場合の候補。採用は保留 |
-| S32 | Bun single-file executable — `https://bun.com/docs/bundler/executables` | 単一実行ファイル化と同一プロセス埋め込みを区別 |
-| S33 | Microsoft: WebView2 hosting — `https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/windowed-vs-visual-hosting` | Windows/WebViewの合成・ホスティング方式 |
-| S34 | WHATWG HTML: iframe — `https://html.spec.whatwg.org/multipage/iframe-embed-object.html#the-iframe-element` | ブラウザで別文書を埋め込む領域と境界 |
-| S35 | MDN: copyExternalImageToTexture — `https://developer.mozilla.org/en-US/docs/Web/API/GPUQueue/copyExternalImageToTexture` | 外部画像等の取り込みと任意DOM/iframeの互換描画を区別 |
-| S36 | Microsoft: WebView2 security — `https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/security` | 送信元確認、ナビゲーション、ホスト能力の限定 |
-| S37 | Chrome: Introducing EditContext — `https://developer.chrome.com/blog/introducing-editcontext-api` | 独自描画UIの入力連携に関する実装側の説明 |
-
----
-
-**最初の到達点：MoonBitで書いた同一の小さなUIがWindowsとWebGPUブラウザで動き、日本語を入力し、MoonBit BEへ型安全に通信できる。その実証を中心に、フレームワークを小さく積み上げる。**
+| P0-A Native GPU | Window, rectangle, input, resize, shutdown through the chosen bridge |
+| P0-B Browser GPU | Real WebGPU path and WasmGC/JS comparison |
+| P0-C Async | Non-blocking completion, cancellation, stale/disposed result handling |
+| P0-D Contract | Contract-only FE build; wrong input/output/error rejected |
+| P0-E Protobuf/gRPC | Generated DTO interop; native/browser protocol decision |
+| P0-F Text | Japanese/Latin shaping and rendering with explicit position units |
+| P0-G IME | Browser composition, selection, candidate position on real systems |
+| P0-H Semantics/devtools | Accessibility bridge comparison; dev control and production exclusion experiment |
+| R1 Reactive core | Deterministic dependency/lifetime tests without GPU or OS |
+| G1 Renderer | Shared scene rendered correctly on Windows and browser |
+| T1 Text/layout | Mixed-script layout and editing-position consistency |
+| I1 Input/a11y | Real Japanese IME, keyboard navigation, Narrator/browser checks |
+| C1 Components | Theme/gallery/extensions with interaction tests |
+| N1 HTTP/JSON | Typed calls across processes including failure/cancel scenarios |
+| N2 gRPC | Existing-client/server unary interoperability and optional build |
+| A1 Distribution | One app on both platforms, complete assets, clean-environment launch |
+
+P0-H begins before the renderer/interaction interfaces are fixed. It does not
+block independent RPC work. N2 does not wait for C1. GUI tests that cannot run
+are recorded as unexecuted, never passed.
+
+## 12. Evidence and decisions
+
+Record toolchain versions/commits, dependencies and licenses, commands, results,
+unexecuted tests, and next acceptance criteria. ADRs contain context, alternatives,
+decision status, consequences, and evidence.
+
+The current implementation is smaller than this architecture. Refer to
+[verification](docs/verification/p0.md) and [issues](https://github.com/dijdzv/metonic/issues)
+for actual progress. Architecture revisions are not product release versions.
+
+Technical references: [MoonBit](https://docs.moonbitlang.com/),
+[wgpu](https://github.com/gfx-rs/wgpu),
+[wgpu-native](https://github.com/gfx-rs/wgpu-native),
+[AccessKit](https://accesskit.dev/how-it-works/),
+[EditContext](https://www.w3.org/TR/edit-context/),
+[Protocol Buffers](https://protobuf.dev/programming-guides/proto3/),
+[Connect](https://connectrpc.com/docs/web/choosing-a-protocol/).

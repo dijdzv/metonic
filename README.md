@@ -1,58 +1,64 @@
-# MoonBit GPU UI / Typed RPC — Codex引き継ぎ資料
+# metonic
 
-**設計 v0.2 / 2026-09-06 / 正式名称は未定**
+GPU-rendered UI and typed RPC for MoonBit.
 
-この資料は、MoonBit中心のGPU UIフレームワークと独立した型付きRPC基盤を、Codexで実装するための設計・作業指示である。実装済みライブラリや動作確認済みサンプルの配布ではない。
+metonic aims to let one MoonBit application run as a native Windows UI and in a
+WebGPU browser. The UI runtime and RPC libraries are independent, so either can
+be used without the other.
 
-## 同梱ファイル
+**Status: early technical validation.** There is no usable GUI framework or
+network RPC transport yet. Public APIs may change.
 
-| ファイル | 用途 |
-| --- | --- |
-| [DESIGN.md](DESIGN.md) | 設計の正本。確定事項、設計案、要検証点、アーキテクチャ、実装順序、合格条件、外部資料 |
-| [CODEX_HANDOFF.md](CODEX_HANDOFF.md) | Codexへ渡す開始指示。新規着手/既存実装の更新、P0の具体作業、報告規約 |
-| [CHANGELOG.md](CHANGELOG.md) | v0.1以降に追加・明確化した点と、変更していない方針 |
+## Direction
 
-v0.2は全文を含む統合版なので、旧版の設計書や会話ログを別途渡す必要はない。v0.1で実装済みのコードがある場合は、削除して作り直さず差分を適用する。
+- MoonBit application code, fine-grained reactive state, and persistent UI nodes.
+- Windows native and browser WebGPU rendering.
+- Japanese text input, IME, keyboard navigation, and accessibility.
+- A typed API contract shared by frontend and backend.
+- First-class development automation through a CLI and MCP, excluded from production builds.
+- MIT OR Apache-2.0.
 
-## Codexへの渡し方
+AccessKit is under evaluation for the native accessibility adapter; it is not
+an adopted dependency. Development automation and production accessibility have
+separate responsibilities.
 
-同梱ファイルを対象リポジトリのドキュメント領域へ置くか、Codexが参照できる形で添付する。既存のファイルがある場合は差分を確認して更新し、`DESIGN.md`の旧版と新版を同じ正本として混在させない。
+## Try the current prototype
 
-以下の指示を、配置したファイルと一緒に渡す。
+The current prototype checks typed procedure contracts on native, JavaScript,
+and WasmGC. It binds handlers in-process; it does not make network requests.
 
-```text
-同梱のCODEX_HANDOFF.mdとDESIGN.md v0.2を読み、リポジトリの規約と
-現在の実装・検証状況を確認してから作業してください。
+On Windows x64, install [mise](https://mise.jdx.dev/), PowerShell 7 (`pwsh`), and
+Visual Studio C++ build tools with the Windows SDK, then run:
 
-新規ならP0の最小検証から始めてください。v0.1ベースの実装がある場合は
-CHANGELOG.mdの差分を反映し、未完了の小さな作業単位から続けてください。
-
-Windows nativeを最優先、ブラウザWebGPUも第一級とします。
-主言語はMoonBit、JSXは使いません。
-名称は未定なので、候補名の採用やリポジトリの改名はしないでください。
-
-外部JSライブラリ連携とWebPanelは低優先度の任意拡張なので、
-今は実装・依存追加・公開API固定をしないでください。
-ただし、ブラウザのJSホスト、IME/入力、アクセシビリティは中核です。
-gRPCは別扱いで、高優先度の独立プラグインとして検証を進めてください。
-
-計画だけで終わらせず、実行可能な最小検証を作り、実行したコマンドと結果、
-未実施の試験、判断した内容、次の一単位を記録してください。
+```powershell
+mise trust
+mise install
+mise run bootstrap
+mise run verify
+mise run verify-native
 ```
 
-## 今回の優先度
+The bootstrap installs the pinned MoonBit toolchain into `.tools/moonbit`,
+verifies download hashes, and bundles the standard library. It does not depend
+on an older global MoonBit installation. The baseline is **MoonBit 0.10.11**,
+checked against the current non-dev distribution on 2026-09-06.
 
-| 区分 | 対象 |
-| --- | --- |
-| 中核 | MoonBitのReactive Core・持続UIノード・GPU描画・文字/入力/IME・操作基盤・標準部品 |
-| 正式対象の優先順 | Windowsネイティブを最優先、ブラウザWebGPUも最初から検証 |
-| 高優先度・独立 | MoonBit typed RPC、gRPCとブラウザ用プロトコル |
-| 必要時のみ | 外部JSロジック、JSランタイム連携、WebView2/DOM/iframeによるWebパネル |
-| 作らない | JSX、React/Solid/Vue互換レンダラー、DOM/CSS互換エンジン |
-| 保留 | 名前。Rune/Muneその他の候補はどれも未採用 |
+Node is used to run generated JavaScript during verification. There are no npm
+dependencies. If JavaScript packages become necessary, pnpm will manage them;
+neither Node nor pnpm is a native application runtime requirement.
 
-## 最初の統合目標
+## Documentation
 
-**同じMoonBitアプリがWindowsとWebGPUブラウザで動き、日本語を入力し、MoonBit BEへ型安全に通信する。** 外部JSライブラリやWebViewの実行時依存なしで成立させる。
+- [Architecture and scope](DESIGN.md)
+- [Development guide](docs/development.md)
+- [Development automation and accessibility](docs/adr/023-development-automation.md)
+- [Verification results](docs/verification/p0.md)
+- [Contribution and release workflow](CONTRIBUTING.md)
+- [Changelog](CHANGELOG.md)
+- [Open tasks](https://github.com/dijdzv/metonic/issues)
 
-ブラウザのコンパイル先、GPUブリッジ、文字基盤、EditContext/入力DOMの採用、gRPCの具体実装は、小さな検証とADRで決める。ドキュメント中の仮APIを実在APIとして扱わず、未実施の実機試験を成功扱いにしない。
+## License
+
+Copyright (c) 2026 dijdzv and contributors.
+
+Licensed under either [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option.

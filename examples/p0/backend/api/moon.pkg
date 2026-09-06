@@ -1,0 +1,3 @@
+import {
+  "local/p0/rpc/core" @rpc,
+}

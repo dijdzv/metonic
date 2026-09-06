@@ -1,0 +1,11 @@
+{
+  "checkedAt": "2026-09-06",
+  "channel": "latest (non-dev)",
+  "compiler": "v0.10.11+6ff76a5f9",
+  "moon": "0.1.20260827",
+  "platform": "windows-x86_64",
+  "archiveUrl": "https://cli.moonbitlang.com/binaries/0.10.11%2B6ff76a5f9/moonbit-windows-x86_64.zip",
+  "archiveSha256": "f08e1d54efff3a99319f686b11ceb1a1454288e460e7f20a77219f8d4e08f538",
+  "coreUrl": "https://cli.moonbitlang.com/cores/core-0.10.11%2B6ff76a5f9.zip",
+  "coreSha256": "f8dfefe34cf7b6826e9b9dd62b6141572bb111910f07c29d53fe650f285f77df"
+}

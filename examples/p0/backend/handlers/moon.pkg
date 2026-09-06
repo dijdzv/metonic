@@ -1,0 +1,4 @@
+import {
+  "local/p0/rpc/core" @rpc,
+  "local/p0/examples/p0/backend/api",
+}

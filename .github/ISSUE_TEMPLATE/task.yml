@@ -1,0 +1,20 @@
+name: Task / Spike
+description: 小さな実装・調査・検証タスク
+body:
+  - type: textarea
+    id: purpose
+    attributes:
+      label: 目的
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 完了条件
+      value: "- [ ] "
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: 根拠・依存・未確定事項
