@@ -1,0 +1,74 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/async@0.21.2/io",
+  "moonbitlang/core/env",
+  "moonbitlang/core/encoding/utf8",
+}
+
+fn fail(message : String) -> Unit {
+  println(message)
+  abort(message)
+}
+
+fn require_success(code : Int, stderr : String, command : String) -> Unit {
+  if code != 0 {
+    fail(command + " failed (" + code.to_string() + "): " + stderr)
+  }
+}
+
+fn stderr_text(data : &@io.Data) -> String {
+  @utf8.decode_lossy(data.binary())
+}
+
+async fn main {
+  let assets = ".work/wgpu-assets"
+  if !@fs.exists(assets) { @fs.mkdir(assets, recursive=true) }
+  let archive = assets + "/wgpu-windows-x86_64-msvc-release.zip"
+  if !@fs.exists(archive) {
+    let (code, _stdout, stderr) = @process.collect_output("gh", ["release", "download", "v29.0.1.1", "-R", "gfx-rs/wgpu-native", "-p", "wgpu-windows-x86_64-msvc-release.zip", "-D", assets, "--skip-existing"], no_console_window=true)
+    require_success(code, stderr_text(stderr), "gh release download")
+  }
+  let (hash_code, hash_stdout, hash_stderr) = @process.collect_output("certutil", ["-hashfile", archive, "SHA256"], no_console_window=true)
+  require_success(hash_code, stderr_text(hash_stderr), "certutil")
+  let mut hash = ""
+  for line in @utf8.decode_lossy(hash_stdout.binary()).split("\n") {
+    let candidate = line.trim().to_owned()
+    if candidate.length() == 64 { hash = candidate }
+  }
+  if hash != "7e67d7445c42aeb85e30f88930fd8d7d83ee769e3390aeb1ada75ebf3cf78132" && hash != "7E67D7445C42AEB85E30F88930FD8D7D83EE769E3390AEB1ADA75EBF3CF78132" {
+    fail("wgpu asset SHA256 mismatch: " + hash)
+  }
+  let (extract_code, _extract_stdout, extract_stderr) = @process.collect_output("tar", ["-xf", archive, "-C", assets], no_console_window=true)
+  require_success(extract_code, stderr_text(extract_stderr), "tar extract")
+  let program_files = @env.get_env_var("ProgramFiles(x86)").unwrap_or("C:/Program Files (x86)")
+  let vswhere = program_files + "/Microsoft Visual Studio/Installer/vswhere.exe"
+  let (vs_code, vs_stdout, vs_stderr) = @process.collect_output(vswhere, ["-utf8", "-latest", "-products", "*", "-requires", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64", "-property", "installationPath"], no_console_window=true)
+  require_success(vs_code, stderr_text(vs_stderr), "vswhere")
+  let install = vs_stdout.text().trim().to_owned()
+  if install == "" || install.contains("\n") || install.contains("\r") || install.contains("\"") {
+    fail("invalid Visual Studio installation path")
+  }
+  let env_script = "@echo off\r\nchcp 65001 >nul\r\ncall \"" + install + "/Common7/Tools/VsDevCmd.bat\" -no_logo -arch=x64 -host_arch=x64\r\nif errorlevel 1 exit /b 1\r\nset\r\n"
+  @fs.write_file(assets + "/vs-env.cmd", env_script)
+  let (env_code, env_stdout, env_stderr) = @process.collect_output("cmd.exe", ["/d", "/c", ".work\\wgpu-assets\\vs-env.cmd"], no_console_window=true)
+  require_success(env_code, stderr_text(env_stderr), "VsDevCmd")
+  let env_map : Map[String, String] = Map([])
+  for line in env_stdout.text().to_string().split("\n") {
+    match line.split_once("=") {
+      Some((key_view, value_view)) => {
+        let key = key_view.to_owned()
+        if key != "" { env_map[key] = value_view.trim_end(chars="\r").to_owned() }
+      }
+      None => ()
+    }
+  }
+  env_map["MOON_CC"] = "cl"
+  env_map["MOON_HOME"] = @fs.realpath(".tools/moonbit")
+  env_map["MBT_WGPU_NATIVE_ROOT"] = @fs.realpath(assets)
+  env_map["MBT_WGPU_LINK_MODE"] = "static"
+  let moon = @fs.realpath(".tools/moonbit/bin/moon.exe")
+  let code = @process.run(moon, ["-C", "experiments/wgpu_binding", "test", "--target", "native"], extra_env=env_map, no_console_window=true)
+  if code != 0 { fail("wgpu binding tests failed: " + code.to_string()) }
+}

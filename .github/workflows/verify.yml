@@ -189,3 +189,10 @@ jobs:
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 7
+      - name: Verify existing MoonBit GPU binding
+        if: github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true'
+        timeout-minutes: 3
+        env:
+          METONIC_GPU_FALLBACK: '1'
+          GH_TOKEN: ${{ github.token }}
+        run: mise run native:binding
