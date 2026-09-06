@@ -91,12 +91,45 @@ jobs:
         env:
           METONIC_GPU_FALLBACK: '1'
         run: mise run native:headless
+      - name: Verify native client transport
+        if: github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true'
+        env:
+          METONIC_GPU_FALLBACK: '1'
+        run: node --test tools/devtools/native-client.test.mjs
+      - name: Verify native control
+        if: github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true'
+        env:
+          METONIC_GPU_FALLBACK: '1'
+        run: node scripts/verify-native-control.mjs
+      - name: Verify native MCP
+        if: github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true'
+        env:
+          METONIC_GPU_FALLBACK: '1'
+        run: node scripts/verify-native-mcp.mjs
       - name: Save native headless fallback
         if: always() && (github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true')
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: native-headless-fallback
           path: .work/native-headless/fallback
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Save native control artifacts
+        if: always() && (github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true')
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: native-control
+          path: .work/native-control
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Save native MCP artifacts
+        if: always() && (github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true')
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: native-mcp
+          path: .work/native-mcp
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 7

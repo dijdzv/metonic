@@ -59,3 +59,22 @@ run = "pwsh -NoProfile -File scripts/build-native-probe.ps1"
 [tasks."native:headless"]
 depends = ["native:build"]
 run = "node scripts/verify-native-headless.mjs"
+
+[tasks."devtools:test"]
+run = "node --test tools/devtools/native-client.test.mjs"
+
+[tasks."native:control"]
+depends = ["native:build"]
+run = "node scripts/verify-native-control.mjs"
+
+[tasks."native:mcp-test"]
+depends = ["native:build"]
+run = "node scripts/verify-native-mcp.mjs"
+
+[tasks."native:cli"]
+depends = ["native:build"]
+run = "node tools/devtools/native-cli.mjs"
+
+[tasks."native:mcp"]
+depends = ["native:build"]
+run = "node tools/devtools/native-mcp.mjs"
