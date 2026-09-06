@@ -9,6 +9,9 @@ try {
     & (Join-Path $repoRoot 'scripts/build-native-probe.ps1')
     if ($LASTEXITCODE -ne 0) { throw "native probe build failed with exit code $LASTEXITCODE" }
     . (Join-Path $repoRoot 'scripts/activate-toolchain.ps1')
+    # Remove only the package stub object so included C/header updates are reflected.
+    $stubObject = Join-Path $repoRoot '_build/native/release/build/examples/p0/native_window/bridge.obj'
+    if (Test-Path -LiteralPath $stubObject -PathType Leaf) { Remove-Item -LiteralPath $stubObject -Force }
     & moon build examples/p0/native_window --target native --release --deny-warn
     if ($LASTEXITCODE -ne 0) { throw "native window build failed with exit code $LASTEXITCODE" }
     $dll = Join-Path $repoRoot '.work/native-cargo/release/metonic_wgpu_probe.dll'

@@ -86,6 +86,13 @@ run = "pwsh -NoProfile -File scripts/build-native-window.ps1"
 depends = ["native:window-build"]
 run = "node scripts/verify-native-window.mjs"
 
+[tasks."native:async-build"]
+run = "pwsh -NoProfile -File scripts/build-native-async.ps1"
+
+[tasks."native:async"]
+depends = ["native:async-build"]
+run = "node scripts/verify-native-async.mjs"
+
 [tasks."native:cli"]
 depends = ["native:build"]
 run = "node tools/devtools/native-cli.mjs"
