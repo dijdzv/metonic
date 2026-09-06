@@ -37,4 +37,6 @@ PNG images, raw RGBA, adapter diagnostics, and JSON results are written below
 This verifies offscreen rendering and command transport. It does not verify
 window presentation, OS input, IME, accessibility, an MCP server, asynchronous
 UI scheduling, or exclusion of development controls from a production build.
-No desktop input automation was used. CI results are not yet established.
+No desktop input automation was used. The software-DX12 run also passed on
+Windows Server 2022 in [PR 15 CI](https://github.com/dijdzv/metonic/actions/runs/34028039826).
+The implementation was integrated through [PR 15](https://github.com/dijdzv/metonic/pull/15).
