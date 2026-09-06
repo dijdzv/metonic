@@ -1,4 +1,5 @@
 import {
+  "local/p0/examples/p0/task_scope",
   "local/p0/examples/p0/scene",
 }
 

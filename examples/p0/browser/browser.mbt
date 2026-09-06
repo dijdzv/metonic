@@ -4,7 +4,65 @@ let state : Ref[@scene.State] = { val: @scene.create(), }
 ///|
 #export_name("init")
 pub fn reset_state() -> Unit {
+  ignore(@task_scope.dispose(taskScope.val))
+  taskScope.val = @task_scope.create()
   state.val = @scene.create()
+}
+
+///|
+let taskScope : Ref[@task_scope.Scope] = { val: @task_scope.create(), }
+
+///|
+#export_name("task_begin")
+pub fn task_begin() -> Int {
+  @task_scope.begin(taskScope.val)
+}
+
+///|
+#export_name("task_complete")
+pub fn task_complete(id : Int, value : Int) -> Int {
+  if @task_scope.complete(taskScope.val, id, value) {
+    ignore(@scene.move_to(state.val, value, @scene.field(state.val, 1)))
+    1
+  } else {
+    0
+  }
+}
+
+///|
+#export_name("task_fail")
+pub fn task_fail(id : Int, code : Int) -> Int {
+  if @task_scope.fail(taskScope.val, id, code) {
+    1
+  } else {
+    0
+  }
+}
+
+///|
+#export_name("task_cancel")
+pub fn task_cancel() -> Int {
+  if @task_scope.cancel(taskScope.val) {
+    1
+  } else {
+    0
+  }
+}
+
+///|
+#export_name("task_dispose")
+pub fn task_dispose() -> Int {
+  if @task_scope.dispose(taskScope.val) {
+    1
+  } else {
+    0
+  }
+}
+
+///|
+#export_name("task_field")
+pub fn task_field(index : Int) -> Int {
+  @task_scope.field(taskScope.val, index)
 }
 
 ///|

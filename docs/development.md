@@ -106,6 +106,12 @@ For direct inspection, `mise run browser:serve` serves the diagnostic harness at
 distribution file list is served. These commands are prototype development tools,
 not a production UI, semantic adapter, or MCP server.
 
+`mise run browser:async` checks delayed completion while input remains responsive,
+superseded results, cancellation, failure, reset, and stop on both JS and WasmGC.
+The same harness includes Move after delay, Fail, and Cancel controls. See the
+[async verification record](verification/browser-async.md) for the boundary between
+this timer experiment and a general asynchronous runtime.
+
 ## Native development control
 
 Build with `mise run native:build` first. `mise run native:cli` reads one JSON
