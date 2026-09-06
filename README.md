@@ -1,58 +1,42 @@
-# MoonBit GPU UI / Typed RPC — Codex引き継ぎ資料
+# metonic
 
-**設計 v0.2 / 2026-09-06 / 正式名称は未定**
+MoonBitを主言語とするGPU UIと、UIから独立した型付きRPCの実験プロジェクト。
+Windows nativeを優先し、ブラウザWebGPUも第一級ターゲットとします。
 
-この資料は、MoonBit中心のGPU UIフレームワークと独立した型付きRPC基盤を、Codexで実装するための設計・作業指示である。実装済みライブラリや動作確認済みサンプルの配布ではない。
+現在はP0の技術検証段階です。GPU UIフレームワークや通信ライブラリとしてはまだ使えません。
 
-## 同梱ファイル
+## 動かせるもの
 
-| ファイル | 用途 |
-| --- | --- |
-| [DESIGN.md](DESIGN.md) | 設計の正本。確定事項、設計案、要検証点、アーキテクチャ、実装順序、合格条件、外部資料 |
-| [CODEX_HANDOFF.md](CODEX_HANDOFF.md) | Codexへ渡す開始指示。新規着手/既存実装の更新、P0の具体作業、報告規約 |
-| [CHANGELOG.md](CHANGELOG.md) | v0.1以降に追加・明確化した点と、変更していない方針 |
+`Procedure[Input, Output, DomainError]`、契約専用パッケージ、プロセス内の型付きhandler binding。
+native / JS / WasmGCで成功・業務エラーと型不一致の拒否を検証しています。
+HTTP・gRPC・GPU描画・IMEは未実装です。
 
-v0.2は全文を含む統合版なので、旧版の設計書や会話ログを別途渡す必要はない。v0.1で実装済みのコードがある場合は、削除して作り直さず差分を適用する。
-
-## Codexへの渡し方
-
-同梱ファイルを対象リポジトリのドキュメント領域へ置くか、Codexが参照できる形で添付する。既存のファイルがある場合は差分を確認して更新し、`DESIGN.md`の旧版と新版を同じ正本として混在させない。
-
-以下の指示を、配置したファイルと一緒に渡す。
-
-```text
-同梱のCODEX_HANDOFF.mdとDESIGN.md v0.2を読み、リポジトリの規約と
-現在の実装・検証状況を確認してから作業してください。
-
-新規ならP0の最小検証から始めてください。v0.1ベースの実装がある場合は
-CHANGELOG.mdの差分を反映し、未完了の小さな作業単位から続けてください。
-
-Windows nativeを最優先、ブラウザWebGPUも第一級とします。
-主言語はMoonBit、JSXは使いません。
-名称は未定なので、候補名の採用やリポジトリの改名はしないでください。
-
-外部JSライブラリ連携とWebPanelは低優先度の任意拡張なので、
-今は実装・依存追加・公開API固定をしないでください。
-ただし、ブラウザのJSホスト、IME/入力、アクセシビリティは中核です。
-gRPCは別扱いで、高優先度の独立プラグインとして検証を進めてください。
-
-計画だけで終わらせず、実行可能な最小検証を作り、実行したコマンドと結果、
-未実施の試験、判断した内容、次の一単位を記録してください。
+```powershell
+mise trust
+mise install
+mise run doctor
+mise run verify
+mise run verify-native
 ```
 
-## 今回の優先度
+現時点でmiseがインストールするのはNodeのみです。MoonBitとWindowsのC++ビルド環境は
+[環境記録とセットアップ](docs/verification/environment.md)を参照してください。
 
-| 区分 | 対象 |
-| --- | --- |
-| 中核 | MoonBitのReactive Core・持続UIノード・GPU描画・文字/入力/IME・操作基盤・標準部品 |
-| 正式対象の優先順 | Windowsネイティブを最優先、ブラウザWebGPUも最初から検証 |
-| 高優先度・独立 | MoonBit typed RPC、gRPCとブラウザ用プロトコル |
-| 必要時のみ | 外部JSロジック、JSランタイム連携、WebView2/DOM/iframeによるWebパネル |
-| 作らない | JSX、React/Solid/Vue互換レンダラー、DOM/CSS互換エンジン |
-| 保留 | 名前。Rune/Muneその他の候補はどれも未採用 |
+## 作業の入口
 
-## 最初の統合目標
+- [開発・Issue・PR・リリース運用](CONTRIBUTING.md)
+- [P0検証結果と残作業](docs/verification/p0.md)
+- [設計ベースライン v0.2](DESIGN.md)
+- [引き継ぎ資料](CODEX_HANDOFF.md) / [元のZIPのREADME](HANDOFF_README.md)
+- [名称・運用・環境の決定](docs/adr/022-bootstrap.md)
 
-**同じMoonBitアプリがWindowsとWebGPUブラウザで動き、日本語を入力し、MoonBit BEへ型安全に通信する。** 外部JSライブラリやWebViewの実行時依存なしで成立させる。
+設計書中の「名称未定」は引き継ぎ時点の記録です。2026-09-06にユーザーが
+`metonic` / `dijdzv/metonic` を指定しました。MoonBitの `local/p0` は検証専用の内部module名で、
+公開Mooncakesパッケージ名はまだ設定していません。
 
-ブラウザのコンパイル先、GPUブリッジ、文字基盤、EditContext/入力DOMの採用、gRPCの具体実装は、小さな検証とADRで決める。ドキュメント中の仮APIを実在APIとして扱わず、未実施の実機試験を成功扱いにしない。
+## ライセンス
+
+Copyright (c) 2026 dijdzv and contributors.
+
+MIT OR Apache-2.0。利用者はいずれかを選択できます。
+[MIT](LICENSE-MIT) / [Apache-2.0](LICENSE-APACHE)

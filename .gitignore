@@ -1,0 +1,7 @@
+target/
+_build/
+.moon/
+.work/
+.env
+.env.*
+!.env.example

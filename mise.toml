@@ -1,0 +1,17 @@
+[tools]
+node = "24.19.0"
+
+[tasks.doctor]
+description = "Check the recorded P0 toolchain"
+run = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/doctor.ps1"
+
+[tasks.verify]
+description = "Verify JS/WasmGC contracts and compile-fail fixtures"
+run = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1"
+
+[tasks.verify-native]
+description = "Verify contracts with Windows MSVC"
+run = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1 -Native"
+
+[tasks.fmt]
+run = "moon fmt"
