@@ -20,8 +20,9 @@ remain comparison baselines until equivalent requirements pass.
 Shared prototype packages currently live there so each experiment can reuse the
 same contracts. Promote reusable implementations to library packages when their
 responsibility and tests are established; keep demonstration hosts in examples.
-Dependency experiments use isolated modules under `experiments` to avoid changing
-the root module's target and dependency requirements during comparison.
+Dependency experiments use isolated modules under `experiments` during comparison.
+The font-backed browser integration now uses a root `text_raster` package and pins
+moon_cosmic in the root module. Demonstration hosts remain under `examples/p0`.
 
 ## Initial results
 
@@ -34,7 +35,7 @@ package tests. Checkout version fields do not prove registry equivalence.
 | Window | Direct Win32 C host | `wzzc-dev/window` checkout version `0.5.4-0.1.7` | Hidden HWND, events, resize, wakeup and cleanup | `moon check --target native` passed, one warning | Not run | No event-loop or IME execution claim; compare before replacement | [Pinned fork](https://github.com/wzzc-dev/window/tree/b33c9f0ac85002bca4a9cceccbbcd512d13b7ceb) |
 | Handles | HWND/HINSTANCE bridge arguments | Fork workspace `Milky2018/windowing@0.1.0` | Compatible handles and ownership | Included in window check | Not run | Matching version names do not prove fork/registry source equality | Same pinned fork |
 | Layout | No general engine selected | `Milky2018/chicle` checkout version `0.6.0` | Typed tree/style, measurement and invalidation | Native type check passed | Upstream tests: 80/80 JS and 80/80 WasmGC; no browser integration | Next: project-specific typed layout tests; no JSON UI DSL adoption | [Pinned source](https://github.com/moonbit-community/chicle/tree/d517dbfde05b42ad2f4b83242b4947043ec864cb) |
-| Text | Position validation; no shaper selected | Published `Milky2018/moon_cosmic@0.3.3` plus pinned source comparison | Japanese/emoji/fallback, shaping and editing positions | Japanese layout, CPU glyph output and DX12 texture drawing/readback passed | Layout probe passed in WasmGC; upstream tests 294/294 JS and WasmGC; no browser integration | Interactive hosts, fallback and input integration still required | [Font-backed evaluation](text-layout.md) |
+| Text | Shared MoonBit raster package and position validation | Published `Milky2018/moon_cosmic@0.3.3` plus pinned source comparison | Japanese/emoji/fallback, shaping and editing positions | Japanese layout, CPU glyph output and DX12 texture drawing/readback passed | JS/WasmGC editable-input GPU images agree; JS DPR-2 and font failure checks pass | Adopted for this bounded browser raster path; native interactive text, fallback and editing still required | [Font-backed evaluation](text-layout.md) |
 | Async scripts | Incremental PS/MJS migration | Published `moonbitlang/async@0.21.2` | Files, subprocesses and exit handling | Native UI integration not established | `.mbtx` default runtime executes toolchain and GPU orchestration on Windows | Script success does not establish UI event-loop integration | `scripts/doctor.mbtx`, `scripts/verify-wgpu-binding.mbtx` |
 
 The window fork default branch was `moui-support` at inspection. Its workspace
@@ -58,7 +59,7 @@ proof of incompatibility or silently disabled.
 - GPU: the existing hidden HWND host now isolates surface behavior before changing
   the event loop. Extend failure cleanup coverage and measure startup, transfers
   and distribution size before replacing the baseline.
-- Layout/text: prioritize typed chicle usage and font-backed moon_cosmic tests.
+- Layout/text: extend typed chicle and interactive text integration tests.
   Evaluate moon_swash/moon_zeno through text dependencies before creating separate
   public APIs. Preserve UTF-16/UTF-8/scalar validity requirements.
 - Accessibility: compare `Milky2018/moon_accesskit` data model and updates with

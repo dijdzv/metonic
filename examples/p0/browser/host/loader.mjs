@@ -1,4 +1,15 @@
-const REQUIRED = ['init', 'resize', 'move_to', 'activate', 'field', 'task_begin', 'task_complete', 'task_fail', 'task_cancel', 'task_dispose', 'task_field'];
+const REQUIRED = ['init', 'resize', 'move_to', 'activate', 'field', 'task_begin', 'task_complete', 'task_fail', 'task_cancel', 'task_dispose', 'task_field', 'font_begin', 'font_put', 'font_commit', 'text_begin', 'text_put', 'text_commit', 'text_width', 'text_pixel', 'text_dispose'];
+
+export function wasmImports() {
+  let buffer = '';
+  return { spectest: { print_char(codepoint) {
+    buffer += String.fromCodePoint(Number(codepoint));
+    if (buffer.includes('\n') || buffer.length >= 1024) {
+      console.warn(buffer);
+      buffer = '';
+    }
+  } } };
+}
 
 function validateExports(exports, target) {
   for (const name of REQUIRED) {
@@ -25,7 +36,7 @@ export async function loadApp(target) {
     if (!response.ok) throw new Error(`Unable to fetch app.wasm (${response.status})`);
     const bytes = await response.arrayBuffer();
     const started = performance.now();
-    const result = await WebAssembly.instantiate(bytes, {});
+    const result = await WebAssembly.instantiate(bytes, wasmImports());
     const app = validateExports(result.instance.exports, target);
     app.init();
     return { app, loadMs: performance.now() - started, artifactBytes: bytes.byteLength };

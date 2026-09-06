@@ -1,7 +1,7 @@
-## 変更
+## Change
 
-<!-- 問題と変更後の動作。関連Issue: Closes #N または Refs #N -->
+<!-- Explain the problem, why this change is needed, and the resulting behavior. Closes #N or Refs #N. -->
 
-## 検証
+## Verification
 
-<!-- 実行コマンドと結果。未実施試験・制限も記載 -->
+<!-- Commands and results, including untested behavior and remaining limits. -->

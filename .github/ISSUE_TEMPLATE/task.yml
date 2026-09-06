@@ -1,20 +1,20 @@
 name: Task / Spike
-description: 小さな実装・調査・検証タスク
+description: A scoped implementation, investigation, or verification task
 body:
   - type: textarea
     id: purpose
     attributes:
-      label: 目的
+      label: Purpose
     validations:
       required: true
   - type: textarea
     id: acceptance
     attributes:
-      label: 完了条件
+      label: Acceptance criteria
       value: "- [ ] "
     validations:
       required: true
   - type: textarea
     id: context
     attributes:
-      label: 根拠・依存・未確定事項
+      label: Evidence, dependencies, and open questions

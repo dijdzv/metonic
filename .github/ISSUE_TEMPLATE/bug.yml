@@ -1,14 +1,14 @@
 name: Bug
-description: 再現する不具合
+description: A reproducible defect
 labels: ["type:bug"]
 body:
   - type: textarea
     id: reproduction
     attributes:
-      label: 再現手順・期待した結果・実際の結果
+      label: Steps to reproduce, expected behavior, and actual behavior
     validations:
       required: true
   - type: textarea
     id: environment
     attributes:
-      label: OS・ツールバージョン・ログ
+      label: OS, tool versions, and logs

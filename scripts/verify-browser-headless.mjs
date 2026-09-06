@@ -280,7 +280,133 @@ try {
   await fs.writeFile(path.join(outputDir, 'gpu-info.json'), JSON.stringify(gpuInfo, null, 2))
   const results = []
   for (const target of targets) results.push(await runTarget(browser, target))
-  const output = { backend, browser: browser.version(), node: process.version, targets: results, negative: await negativeTests(browser) }
+  async function textTests(browser) {
+    const summaries = []
+    let cropIndex = 0
+    let reference
+    for (const target of ['js', 'wasm-gc']) {
+      const page = await browser.newPage({ viewport: { width: 1000, height: 800 }, deviceScaleFactor: 1 })
+      try {
+        await page.goto(`${baseUrl}/?target=${target}`)
+        await page.waitForFunction((expected) => document.querySelector('#status')?.textContent?.trim() === expected, `Ready: ${target}`, { timeout: 60000 })
+        const input = page.locator('#text-input')
+        const canvas = page.locator('canvas')
+        const original = await input.inputValue()
+        const crop = async () => {
+          // Fractional locator clipping can add a row; align layout origin only for pixel comparison.
+          const rect = await canvas.evaluate((element) => { element.style.transform = ''; element.style.position = 'relative'; element.style.left = '0px'; element.style.top = '0px'; const before = element.getBoundingClientRect(); element.style.left = `${Math.ceil(before.x) - before.x}px`; element.style.top = `${Math.ceil(before.y) - before.y}px`; const after = element.getBoundingClientRect(); return { x: after.x, y: after.y, width: after.width, height: after.height } })
+          const buffer = await canvas.screenshot()
+          await fs.writeFile(path.join(outputDir, `${target}-text-${cropIndex}.png`), buffer)
+          cropIndex += 1
+          const full = PNG.sync.read(buffer)
+          const width = Math.min(640, Number(await page.locator('#text-width').innerText()))
+          const pixels = Buffer.alloc(width * 96 * 4)
+          for (let y = 0; y < 96; y += 1) full.data.copy(pixels, y * width * 4, ((y + 8) * full.width + 8) * 4, ((y + 8) * full.width + 8 + width) * 4)
+          return { width, fullWidth: full.width, rect, data: pixels }
+        }
+        const initial = await crop()
+        const initialWidth = Number(await page.locator('#text-width').innerText())
+        assert.ok(initialWidth > 0)
+        assert.ok(initial.data.some((value, index) => index % 4 === 0 && value < 32))
+        assert.ok(initial.data.some((value, index) => index % 4 === 0 && value > 240))
+        const initialRenders = Number(await page.locator('#text-renders').innerText())
+        const initialUploaded = Number(await page.locator('#text-uploaded').innerText())
+        const submitted = Number(await page.locator('#submitted').innerText())
+        await input.fill('ABC 123')
+        await page.waitForFunction((old) => Number(document.querySelector('#submitted')?.textContent) > old, submitted)
+        const changed = await crop()
+        assert.equal(changed.data.equals(initial.data), false)
+        await input.fill('')
+        await page.waitForTimeout(200)
+        const blank = await crop()
+        for (let i = 0; i < blank.data.length; i += 4) {
+          const x = (i / 4) % blank.width; const y = Math.floor(i / 4 / blank.width)
+          assert.ok(blank.data[i] >= 254 && blank.data[i + 1] >= 254 && blank.data[i + 2] >= 254, `blank pixel index=${i} x=${x} y=${y} rgb=${blank.data[i]},${blank.data[i + 1]},${blank.data[i + 2]} fullWidth=${blank.fullWidth} cropWidth=${blank.width} rect=${JSON.stringify(blank.rect)}`)
+          assert.equal(blank.data[i + 3], 255, `blank alpha index=${i} x=${x} y=${y}`)
+        }
+        const renders = Number(await page.locator('#text-renders').innerText())
+        const uploaded = Number(await page.locator('#text-uploaded').innerText())
+        await input.fill(original)
+        const restored = await crop()
+        assert.ok(restored.data.equals(initial.data), 'restored text crop differs')
+        const restoredRenders = Number(await page.locator('#text-renders').innerText())
+        const restoredUploaded = Number(await page.locator('#text-uploaded').innerText())
+        assert.ok(restoredRenders > renders)
+        assert.ok(restoredUploaded > uploaded)
+        await canvas.focus()
+        await canvas.press('ArrowRight')
+        await page.waitForTimeout(100)
+        assert.equal(Number(await page.locator('#text-renders').innerText()), restoredRenders)
+        assert.equal(Number(await page.locator('#text-uploaded').innerText()), restoredUploaded)
+        assert.equal(initialRenders, 1)
+        assert.equal(initialUploaded, initial.width * 96 * 4)
+        await page.setViewportSize({ width: 400, height: 800 })
+        await page.waitForFunction((old) => Number(document.querySelector('#text-width')?.textContent) !== old, initialWidth)
+        await page.setViewportSize({ width: 1000, height: 800 })
+        summaries.push({ target, width: initialWidth, renders, pixels: initial.data.length })
+        if (!reference) reference = initial.data
+        else assert.ok(initial.data.equals(reference), `${target} initial text crop differs`)
+      } finally { await page.close() }
+    }
+    const dpr = await browser.newPage({ viewport: { width: 1000, height: 800 }, deviceScaleFactor: 2 })
+    try {
+      await dpr.goto(`${baseUrl}/?target=js`)
+      await dpr.waitForFunction(() => document.querySelector('#status')?.textContent?.startsWith('Ready:'), null, { timeout: 60000 })
+      await dpr.locator('canvas').evaluate((element) => { element.style.transform = ''; element.style.position = 'relative'; element.style.left = '0px'; element.style.top = '0px'; const rect = element.getBoundingClientRect(); element.style.left = `${Math.ceil(rect.x) - rect.x}px`; element.style.top = `${Math.ceil(rect.y) - rect.y}px` })
+      const image = PNG.sync.read(await dpr.locator('canvas').screenshot())
+      assert.ok(image.width >= 2 * 640)
+      assert.ok(image.height >= 2 * 360)
+      const referencePixels = reference
+      for (let y = 16; y < 16 + 192; y += 1) for (let x = 16; x < 16 + 1280; x += 1) {
+        const actual = (y * image.width + x) * 4
+        const expected = ((Math.floor((y - 16) / 2) * 640 + Math.floor((x - 16) / 2))) * 4
+        for (let channel = 0; channel < 4; channel += 1) assert.equal(image.data[actual + channel], referencePixels[expected + channel], `DPR2 mismatch x=${x} y=${y} channel=${channel}`)
+      }
+    } finally { await dpr.close() }
+    return { targets: summaries, dpr2: true }
+  }
+  async function textFontFailures(browser) {
+    const page = await browser.newPage({ viewport: { width: 1000, height: 800 }, deviceScaleFactor: 1 })
+    let releaseFont
+    try {
+      const pageErrors = []
+      page.on('pageerror', (error) => pageErrors.push(String(error)))
+      await page.route('**/NotoSansJP.ttf', (route) => route.fulfill({ status: 503, body: 'font unavailable' }))
+      await page.goto(`${baseUrl}/?target=js`)
+      await page.waitForFunction(() => !document.querySelector('#status')?.textContent?.startsWith('Loading'), null, { timeout: 60000 })
+      assert.match(await page.locator('#status').innerText(), /Unable to fetch.*503/)
+      assert.equal(Number(await page.locator('#submitted').innerText()), 0)
+      assert.equal(await page.locator('#text-input').isDisabled(), true)
+      assert.deepEqual(pageErrors, [])
+      await page.unroute('**/NotoSansJP.ttf')
+      await page.route('**/NotoSansJP.ttf', (route) => route.fulfill({ status: 200, body: 'invalid font' }))
+      await page.reload()
+      await page.waitForFunction(() => !document.querySelector('#status')?.textContent?.startsWith('Loading'), null, { timeout: 60000 })
+      assert.match(await page.locator('#status').innerText(), /SHA-256 mismatch/)
+      assert.equal(Number(await page.locator('#submitted').innerText()), 0)
+      assert.equal(await page.locator('#text-input').isDisabled(), true)
+      assert.deepEqual(pageErrors, [])
+      await page.unroute('**/NotoSansJP.ttf')
+      const fontGate = new Promise((resolve) => { releaseFont = resolve })
+      const requestSeen = page.waitForRequest('**/NotoSansJP.ttf')
+      await page.route('**/NotoSansJP.ttf', async (route) => { await fontGate; await route.continue() })
+      await page.reload()
+      await requestSeen
+      const beforeStop = Number(await page.locator('#submitted').innerText())
+      await page.locator('#stop').click()
+      releaseFont()
+      await page.waitForLoadState('networkidle', { timeout: 5000 })
+      await page.waitForTimeout(500)
+      assert.equal(beforeStop, 0)
+      assert.equal(Number(await page.locator('#submitted').innerText()), beforeStop)
+      assert.equal(await page.locator('#text-input').isDisabled(), true)
+      assert.equal(await page.locator('#stop').isDisabled(), true)
+      assert.equal(await page.locator('#status').innerText(), 'Stopped.')
+      assert.deepEqual(pageErrors, [])
+      return { font503: true, hashBad: true, delayedStop: true }
+    } finally { releaseFont?.(); await page.close() }
+  }
+  const output = { backend, browser: browser.version(), node: process.version, targets: results, negative: await negativeTests(browser), text: await textTests(browser), textFailures: await textFontFailures(browser) }
   await fs.writeFile(path.join(outputDir, 'results.json'), JSON.stringify(output, null, 2))
   console.log(JSON.stringify({ backend, gpu: gpuInfo }, null, 2))
 } catch (error) {

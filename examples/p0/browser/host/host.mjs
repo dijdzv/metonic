@@ -1,4 +1,5 @@
 import { loadApp } from './loader.mjs';
+import { createTextRenderer } from './text-renderer.mjs';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('canvas');
@@ -7,6 +8,9 @@ const target = new URLSearchParams(location.search).get('target') || 'js';
 const els = { target: $('target'), bytes: $('artifact-bytes'), load: $('load-ms'), adapter: $('adapter'), dimensions: $('dimensions'), revision: $('revision'), submitted: $('submitted'), transferred: $('transferred') };
 let app, device, context, pipeline, uniform, bindGroup, observer, raf = 0, disposed = false, dirty = false;
 let cssW = 0, cssH = 0, backingW = 0, backingH = 0, submitted = 0, transferred = 0, format;
+const textInput = $('text-input');
+const DEFAULT_TEXT = textInput.value;
+let textRenderer;
 const taskButtons = [$('task-start'), $('task-fail'), $('task-cancel')];
 const taskTimers = new Map();
 let taskEpoch = 0;
@@ -63,6 +67,12 @@ function renderStats() {
   els.revision.textContent = String(field(5));
   els.submitted.textContent = String(submitted);
   els.transferred.textContent = `${transferred} bytes`;
+  if (textRenderer) {
+    const stats = textRenderer.stats();
+    $('text-width').textContent = String(stats.width);
+    $('text-renders').textContent = String(stats.renders);
+    $('text-uploaded').textContent = String(stats.uploaded);
+  }
 }
 
 function schedule() {
@@ -82,6 +92,7 @@ function draw() {
     pass.setPipeline(pipeline);
     pass.setBindGroup(0, bindGroup);
     pass.draw(6);
+    textRenderer?.record(pass, cssW, cssH);
     pass.end();
     device.queue.submit([encoder.finish()]);
     submitted += 1;
@@ -109,6 +120,7 @@ function resize(force = false) {
   canvas.height = backingH;
   context.configure({ device, format, alphaMode: 'opaque' });
   app.resize(cssW, cssH);
+  textRenderer?.rasterText(textInput.value, cssW);
   els.dimensions.textContent = `${cssW} × ${cssH} CSS / ${backingW} × ${backingH} backing`;
   dirty = true;
   schedule();
@@ -159,14 +171,36 @@ function onReset() {
   if (disposed || !app) return;
   resetTasks();
   app.init();
+  textInput.value = DEFAULT_TEXT;
+  textRenderer?.rasterText(DEFAULT_TEXT, cssW);
   updateTaskDiagnostics();
   resize(true);
   dirty = true;
   schedule();
 }
+
+function onTextInput() {
+  if (disposed || !textRenderer) return;
+  try {
+    textRenderer.rasterText(textInput.value, cssW);
+    const stats = textRenderer.stats();
+    $('text-width').textContent = String(stats.width);
+    $('text-renders').textContent = String(stats.renders);
+    $('text-uploaded').textContent = String(stats.uploaded);
+    dirty = true;
+    schedule();
+  } catch (error) {
+    stop(error?.message || String(error), true);
+  }
+}
 function stop(reason = 'Stopped.', error = false) {
   if (disposed) return;
   disposed = true;
+  textRenderer?.dispose();
+  textRenderer = undefined;
+  try { app?.text_dispose?.(); } catch {}
+  textInput.disabled = true;
+  textInput.removeEventListener('input', onTextInput);
   for (const timer of taskTimers.values()) clearTimeout(timer);
   taskTimers.clear();
   taskEpoch += 1;
@@ -251,6 +285,8 @@ struct U { rect: vec4f, viewport: vec2f, enabled: f32, pad: f32 };
   const loaded = await loadApp(target);
   if (disposed) return;
   app = loaded.app;
+  textRenderer = await createTextRenderer({ app, device, format, disposed: () => disposed });
+  if (disposed) return;
   els.target.textContent = target;
   els.bytes.textContent = String(loaded.artifactBytes);
   els.load.textContent = loaded.loadMs.toFixed(2);
@@ -263,6 +299,8 @@ struct U { rect: vec4f, viewport: vec2f, enabled: f32, pad: f32 };
   canvas.addEventListener('pointerdown', onPointer);
   canvas.addEventListener('keydown', onKey);
   $('reset').addEventListener('click', onReset);
+  textInput.addEventListener('input', onTextInput);
+  textInput.disabled = false;
   $('task-start').addEventListener('click', onTaskStart);
   $('task-fail').addEventListener('click', onTaskFail);
   $('task-cancel').addEventListener('click', onTaskCancel);
