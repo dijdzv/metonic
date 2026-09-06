@@ -1,6 +1,11 @@
 import {
   "Milky2018/wgpu_mbt" @wgpu,
+  "Milky2018/wgpu_mbt/c",
   "moonbitlang/core/env",
 }
 
 supported_targets = "native"
+
+options(
+  "native-stub": [ "window_bridge.c" ],
+)
