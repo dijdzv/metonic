@@ -9,6 +9,7 @@ hardware specification.
 | GPU | NVIDIA GeForce RTX 3060 |
 | GPU driver | 32.0.16.1047 |
 | mise | 2026.8.5 windows-x64 |
+| PowerShell | 7.6.5 (local); PowerShell 7 on hosted CI |
 | Node | 24.19.0 |
 | MoonBit compiler/core | 0.10.11+6ff76a5f9 |
 | moon / moonrun | 0.1.20260827, d0aaa07 |

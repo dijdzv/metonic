@@ -16,7 +16,8 @@
 - CIが整った段階で安定したチェックだけを必須にする。未実施のGUI試験をCI成功と同一視しない。
 
 GitHub側もmainへのPR必須、approve人数0、会話解決必須、線形履歴、
-force push/削除禁止、管理者にも適用を設定済み。現段階のrequired status checksは未設定。
+force push/削除禁止、管理者にも適用を設定済み。
+`Windows verification` を必須チェックとし、mainの最新状態に対する成功をマージ条件とする。
 
 ## Issue
 

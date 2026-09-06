@@ -13,6 +13,7 @@ Use main as the integration branch, short-lived branches, and squash-merged PRs.
 Use version tags for releases. Introduce maintenance branches only when parallel
 supported versions require them. Main requires a PR, disallows force pushes and
 deletion, and applies protection to administrators. External approval is optional.
+The `Windows verification` CI check must pass against the current base branch.
 
 Use mise as the command entry point and to pin Node for generated-JS verification.
 Pin MoonBit archives and their hashes in `toolchain.json`; install them into
