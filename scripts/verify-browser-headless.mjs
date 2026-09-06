@@ -14,6 +14,7 @@ const baseUrl = `http://${host}:${port}`
 const outputDir = path.resolve('.work/browser-headless', backend)
 const targets = ['js', 'wasm-gc']
 let activePage
+let gpuSession
 
 function waitForReady(child) {
   return new Promise((resolve, reject) => {
@@ -265,16 +266,28 @@ let browser
 try {
   await fs.mkdir(outputDir, { recursive: true })
   await waitForReady(server)
-  browser = await chromium.launch({ headless: true, channel: 'chromium', ...(backend === 'swiftshader' ? { args: ['--use-webgpu-adapter=swiftshader', '--enable-unsafe-webgpu'] } : {}) })
+  const swiftshaderFlags = [
+    '--use-webgpu-adapter=swiftshader',
+    '--enable-unsafe-webgpu',
+    process.platform === 'win32' ? '--use-angle=d3d11-warp' : '--use-angle=swiftshader',
+    '--enable-unsafe-swiftshader',
+  ]
+  browser = await chromium.launch({ headless: true, channel: 'chromium', ...(backend === 'swiftshader' ? { args: swiftshaderFlags } : {}) })
+  gpuSession = await browser.newBrowserCDPSession()
+  const systemInfo = await gpuSession.send('SystemInfo.getInfo')
+  const gpu = systemInfo.gpu ?? {}
+  const gpuInfo = { devices: gpu.devices, featureStatus: gpu.featureStatus, auxAttributes: { glRenderer: gpu.auxAttributes?.glRenderer, glVendor: gpu.auxAttributes?.glVendor } }
+  await fs.writeFile(path.join(outputDir, 'gpu-info.json'), JSON.stringify(gpuInfo, null, 2))
   const results = []
   for (const target of targets) results.push(await runTarget(browser, target))
   const output = { backend, browser: browser.version(), node: process.version, targets: results, negative: await negativeTests(browser) }
   await fs.writeFile(path.join(outputDir, 'results.json'), JSON.stringify(output, null, 2))
-  console.log(JSON.stringify(output, null, 2))
+  console.log(JSON.stringify({ backend, gpu: gpuInfo }, null, 2))
 } catch (error) {
   console.error(error)
   process.exitCode = 1
 } finally {
+  await gpuSession?.detach().catch(() => {})
   await browser?.close().catch(() => {})
   if (!server.killed) server.kill('SIGTERM')
 }
