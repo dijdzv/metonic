@@ -261,7 +261,7 @@ async function runTarget(browser, target) {
   }
 }
 
-const server = spawn(process.execPath, ['scripts/serve-browser.mjs'], { stdio: ['ignore', 'pipe', 'pipe'] })
+const server = spawn('.tools/moonbit/bin/moonrun.exe', ['_build/wasm/release/build/tools/browser_server/browser_server.wasm'], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] })
 let browser
 try {
   await fs.mkdir(outputDir, { recursive: true })

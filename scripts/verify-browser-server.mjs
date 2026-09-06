@@ -5,8 +5,9 @@ import { fileURLToPath } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, '..');
-const serverScript = path.join(here, 'serve-browser.mjs');
-const child = spawn(process.execPath, [serverScript], {
+const serverScript = path.join(repoRoot, '_build', 'wasm', 'release', 'build', 'tools', 'browser_server', 'browser_server.wasm');
+const child = spawn(path.join(repoRoot, '.tools/moonbit/bin/moonrun.exe'), [serverScript], {
+  windowsHide: true,
   cwd: repoRoot,
   stdio: ['ignore', 'pipe', 'pipe'],
 });

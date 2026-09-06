@@ -39,7 +39,7 @@ run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/build-browser.mbtx'
 
 [tasks."browser:serve"]
 depends = ["browser:build"]
-run = "node scripts/serve-browser.mjs"
+run = ".\\.tools\\moonbit\\bin\\moonrun.exe _build/wasm/release/build/tools/browser_server/browser_server.wasm"
 
 [tasks."browser:verify"]
 depends = ["browser:build"]

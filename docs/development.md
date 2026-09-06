@@ -68,6 +68,14 @@ OFL license into the ignored browser distribution. The browser checks the font
 hash again before passing bytes to MoonBit. DOM, WebGPU and Playwright calls
 remain in their host adapters.
 
+`browser:build` also builds the MoonBit development HTTP server in
+`tools/browser_server` for the Wasm runtime. `browser:serve` and browser verifiers
+launch that artifact directly through the pinned `moonrun`. It binds loopback
+port 4173 and serves only a fixed asset list with GET/HEAD and `no-store`.
+The server reads each allowed file into memory before sending it and limits
+concurrent connections to eight; it is a local development server, not a general
+file host. Browser UI execution still compares JS and WasmGC independently.
+
 ## Local pre-commit checks
 
 Tracked Markdown links are checked by `moon run scripts/verify-docs.mbtx`.
