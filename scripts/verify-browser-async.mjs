@@ -9,7 +9,7 @@ import { PNG } from 'pngjs';
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const out = path.join(repo, '.work/browser-async', process.env.METONIC_GPU_BACKEND ?? 'default');
 await mkdir(out, { recursive: true });
-const server = spawn(process.execPath, [path.join(repo, 'scripts/serve-browser.mjs')], { cwd: repo, stdio: ['ignore', 'pipe', 'pipe'] });
+const server = spawn(path.join(repo, '.tools/moonbit/bin/moonrun.exe'), [path.join(repo, '_build/wasm/release/build/tools/browser_server/browser_server.wasm')], { cwd: repo, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
 let serverError = '';
 server.stderr.setEncoding('utf8');
 server.stderr.on('data', (value) => { serverError += value; });

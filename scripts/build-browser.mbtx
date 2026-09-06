@@ -14,6 +14,16 @@ fn fail(message : String) -> Unit {
 ///|
 async fn main {
   let moon = @fs.realpath(".tools/moonbit/bin/moon.exe")
+  let server_code = @process.run(
+    moon,
+    [
+      "build", "tools/browser_server", "--target", "wasm", "--release", "--deny-warn",
+    ],
+    no_console_window=true,
+  )
+  if server_code != 0 {
+    fail("browser server wasm build failed")
+  }
   let (js_code, js_out, js_err) = @process.collect_output(
     moon,
     [
