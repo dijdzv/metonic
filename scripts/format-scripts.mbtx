@@ -1,0 +1,83 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+}
+
+///|
+fn fail(message : String) -> Unit {
+  println(message)
+  abort(message)
+}
+
+///|
+async fn main {
+  let (list_code, list_stdout, list_stderr) = @process.collect_output(
+    "git",
+    ["ls-files", "*.mbtx"],
+    no_console_window=true,
+  )
+  if list_code != 0 {
+    fail("git ls-files failed: " + list_stderr.text())
+  }
+  let files : Array[String] = []
+  for line in list_stdout.text().split("\n") {
+    let name = line.trim().to_owned()
+    if name != "" {
+      files.push(name)
+    }
+  }
+  let work = ".work/format-scripts"
+  if !@fs.exists(work) {
+    @fs.mkdir(work, recursive=true)
+  }
+  let moonfmt = ".tools/moonbit/bin/moonfmt.exe"
+  let outputs : Array[(String, String)] = []
+  for file in files {
+    let original = @fs.read_file(file).text()
+    let normalized = original.replace_all(old="\r\n", new="\n")
+    let (header_left, body_right) = match normalized.split_once("\n}") {
+      Some(value) => value
+      None => {
+        fail("unsupported mbtx frontmatter: " + file)
+        return
+      }
+    }
+    if !header_left.has_prefix("import {\n") {
+      fail("unsupported mbtx frontmatter: " + file)
+    }
+    let header = header_left.to_owned() + "\n}\n"
+    let body = body_right.trim_start().to_owned()
+    let package_path = work + "/moon.pkg"
+    let body_path = work + "/body.mbt"
+    @fs.write_file(package_path, header)
+    @fs.write_file(body_path, body)
+    let (pkg_code, _pkg_out, pkg_err) = @process.collect_output(
+      moonfmt,
+      ["-w", package_path],
+      no_console_window=true,
+    )
+    if pkg_code != 0 {
+      fail("moonfmt frontmatter failed for " + file + ": " + pkg_err.text())
+    }
+    let (body_code, _body_out, body_err) = @process.collect_output(
+      moonfmt,
+      ["-w", body_path],
+      no_console_window=true,
+    )
+    if body_code != 0 {
+      fail("moonfmt body failed for " + file + ": " + body_err.text())
+    }
+    let formatted_header = @fs.read_file(package_path).text()
+    let formatted_body = @fs.read_file(body_path).text()
+    outputs.push((file, formatted_header + "\n" + formatted_body))
+  }
+  for entry in outputs {
+    let (file, formatted) = entry
+    let original = @fs.read_file(file).text()
+    if original != formatted {
+      @fs.write_file(file, formatted)
+      println("formatted " + file)
+    }
+  }
+}

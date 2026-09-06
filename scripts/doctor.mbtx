@@ -5,26 +5,47 @@ import {
   "moonbitlang/core/json",
 }
 
+///|
 struct Toolchain {
   compiler : String
   moon : String
 } derive(FromJson)
 
-fn fail(message : String) -> Unit { abort(message) }
+///|
+fn fail(message : String) -> Unit {
+  abort(message)
+}
 
+///|
 async fn main {
   let toolchain = @fs.read_file("toolchain.json").text()
   let config : Toolchain = @json.from_json(@json.parse(toolchain))
   let compiler = config.compiler
   let moon = config.moon
-  let (moon_code, moon_out, moon_err) = @process.collect_output(".tools/moonbit/bin/moon.exe", ["version", "--all"], no_console_window=true)
+  let (moon_code, moon_out, moon_err) = @process.collect_output(
+    ".tools/moonbit/bin/moon.exe",
+    ["version", "--all"],
+    no_console_window=true,
+  )
   println(moon_out.text())
   println(moon_err.text())
-  if moon_code != 0 { fail("moon version failed") }
-  if !moon_out.text().contains("moonc " + compiler) { fail("compiler version mismatch") }
-  if !moon_out.text().contains("moon " + moon) { fail("moon version mismatch") }
-  let (node_code, node_out, node_err) = @process.collect_output("node", ["--version"], no_console_window=true)
+  if moon_code != 0 {
+    fail("moon version failed")
+  }
+  if !moon_out.text().contains("moonc " + compiler) {
+    fail("compiler version mismatch")
+  }
+  if !moon_out.text().contains("moon " + moon) {
+    fail("moon version mismatch")
+  }
+  let (node_code, node_out, node_err) = @process.collect_output(
+    "node",
+    ["--version"],
+    no_console_window=true,
+  )
   println(node_out.text())
   println(node_err.text())
-  if node_code != 0 { fail("node version failed") }
+  if node_code != 0 {
+    fail("node version failed")
+  }
 }
