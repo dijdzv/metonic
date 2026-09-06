@@ -96,6 +96,9 @@ run = "node scripts/verify-native-async.mjs"
 [tasks."native:binding"]
 run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-wgpu-binding.mbtx'
 
+[tasks."text:verify"]
+run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-text-layout.mbtx'
+
 [tasks."native:cli"]
 depends = ["native:build"]
 run = "node tools/devtools/native-cli.mjs"

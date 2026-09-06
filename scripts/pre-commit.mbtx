@@ -29,6 +29,7 @@ async fn main {
   run("git", ["diff", "--cached", "--check"])
   let moon = ".tools/moonbit/bin/moon.exe"
   run(moon, ["fmt"])
+  run(moon, ["fmt", "scripts/verify-text-layout.mbtx"])
   run(moon, ["-C", "experiments/wgpu_binding", "fmt"])
   run("cargo", ["fmt", "--manifest-path", "bridges/wgpu/Cargo.toml"])
   expect_clean(["diff", "--exit-code"], "formatting changed files; review and stage explicitly")
@@ -38,7 +39,7 @@ async fn main {
     "verify", "verify-native", "browser:verify", "browser:server-test",
     "browser:headless", "browser:async", "devtools:test", "native:headless",
     "native:control", "native:mcp-test", "native:semantics", "native:window",
-    "native:async", "native:binding",
+    "native:async", "native:binding", "text:verify",
   ]
   for gate in gates {
     println("pre-commit gate: mise run " + gate)
