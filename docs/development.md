@@ -29,6 +29,22 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/moon.ps1 check --target js
 This explicit wrapper avoids falling back to an older global executable when
 Windows PATH entries are ordered differently by a parent shell.
 
+## MoonBit scripts
+
+Development scripts, verification and CLI logic use MoonBit by default. Standalone
+tools use `.mbtx`; `scripts/doctor.mbtx` is the first migrated tool and runs through
+`mise run doctor`. It pins `moonbitlang/async@0.21.2` (Apache-2.0) for file/process
+access. Bootstrap refreshes the registry index so a fresh installation can resolve
+that fixed version. Use the project-pinned executable rather than an older global
+`moon` installation.
+
+The remaining PowerShell and MJS scripts are migration work, not an adopted
+long-term scripting stack. Compiler acquisition and MSVC environment activation
+still use the Windows bootstrap boundary. Browser WebGPU/Playwright and external
+MCP SDK calls require small host adapters; orchestration and assertions should
+move to MoonBit where supported. Wrapping an unchanged script does not constitute
+a completed migration.
+
 ## Local pre-commit checks
 
 `mise run hooks:install` uses mise's built-in Git hook generator. Run it once per
