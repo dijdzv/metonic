@@ -1,0 +1,116 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/env",
+}
+
+///|
+fn fail(message : String) -> Unit {
+  println(message)
+  abort(message)
+}
+
+///|
+async fn main {
+  let target = match @env.get_env_var("METONIC_VERIFY_TARGET") {
+    Some(value) => value
+    None => "wasm-gc"
+  }
+  if target != "native" && target != "js" && target != "wasm-gc" {
+    fail("invalid typecheck target: " + target)
+  }
+  let prefix = ".work/typecheck-mbtx-" + target + "-"
+  let mut counter = 0
+  let mut scratch = prefix + "0"
+  while @fs.exists(scratch) {
+    counter = counter + 1
+    scratch = prefix + counter.to_string()
+  }
+  @fs.mkdir(scratch, recursive=true)
+  let moon = @fs.realpath(".tools/moonbit/bin/moon.exe")
+  let (list_code, list_out, list_err) = @process.collect_output(
+    "git",
+    ["ls-files", "rpc/core", "examples/p0/backend/api"],
+    no_console_window=true,
+  )
+  if list_code != 0 {
+    fail(list_err.text())
+  }
+  let cases : Array[(String, String)] = [
+    (
+      "valid", "fn main { let b = @rpc.bind(@api.get_user(), fn(_input) { Ok(@api.User::{ name: \"ok\" }) }); let r : Result[@api.User, @api.GetUserError] = b.call(@api.GetUserInput::{ id: \"1\" }); debug(r) }",
+    ),
+    (
+      "wrong-input", "fn main { let b = @rpc.bind(@api.get_user(), fn(_input) { Ok(@api.User::{ name: \"ok\" }) }); ignore(b.call(42)) }",
+    ),
+    (
+      "wrong-handler-output", "fn main { ignore(@rpc.bind(@api.get_user(), fn(_input) { Ok(42) })) }",
+    ),
+    (
+      "wrong-handler-error", "fn main { ignore(@rpc.bind(@api.get_user(), fn(_input) { Err(42) })) }",
+    ),
+    (
+      "wrong-client-output", "fn main { let b = @rpc.bind(@api.get_user(), fn(_input) { Ok(@api.User::{ name: \"ok\" }) }); let r : Result[Int, @api.GetUserError] = b.call(@api.GetUserInput::{ id: \"1\" }); debug(r) }",
+    ),
+  ]
+  for entry in cases {
+    let (name, source) = entry
+    let case_root = scratch + "/" + name
+    @fs.mkdir(case_root, recursive=true)
+    for line in list_out.text().split("\n") {
+      let source_path = line.trim().to_owned()
+      if source_path != "" {
+        let destination = case_root + "/" + source_path
+        match destination.rev_find("/") {
+          Some(slash) => {
+            let parent = destination[:slash].to_owned()
+            if !@fs.exists(parent) {
+              @fs.mkdir(parent, recursive=true)
+            }
+          }
+          None => ()
+        }
+        @fs.write_file(destination, @fs.read_file(source_path))
+      }
+    }
+    @fs.write_file(case_root + "/moon.mod", @fs.read_file("moon.mod"))
+    let probe = case_root + "/probe"
+    @fs.mkdir(probe, recursive=true)
+    @fs.write_file(probe + "/main.mbt", source)
+    @fs.write_file(
+      probe + "/moon.pkg",
+      "import {\n  \"local/p0/rpc/core\" @rpc,\n  \"local/p0/examples/p0/backend/api\" @api,\n}\noptions(\"is-main\": true)\n",
+    )
+    let args = [
+      "-C", case_root, "check", "--target", target, "--deny-warn", "--output-json",
+    ]
+    let (check_code, check_out, check_err) = @process.collect_output(
+      moon,
+      args,
+      no_console_window=true,
+    )
+    @fs.write_file(probe + "/check.stdout", check_out.text())
+    @fs.write_file(probe + "/check.stderr", check_err.text())
+    let diagnostics = (check_out.text() + "\n" + check_err.text()).to_lower()
+    if name == "valid" {
+      if check_code != 0 {
+        fail("valid check failed: " + diagnostics)
+      }
+      let (build_code, _, build_err) = @process.collect_output(
+        moon,
+        [
+          "-C", case_root, "build", "--target", target, "--deny-warn", "--output-json",
+        ],
+        no_console_window=true,
+      )
+      if build_code != 0 {
+        fail("valid build failed: " + build_err.text())
+      }
+    } else if check_code == 0 || !diagnostics.contains("type mismatch") {
+      fail(name + " expected type mismatch: " + diagnostics)
+    }
+    println("PASS " + target + "/" + name)
+  }
+  println("typecheck logs: " + scratch)
+}

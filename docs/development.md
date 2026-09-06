@@ -1,5 +1,22 @@
 # Development guide
 
+## Work tracking
+
+Use Issues for current status, intermediate investigation results, blockers and
+next steps. Update them when meaningful evidence or a linked PR changes the state
+of the work. Distinguish local experiments from merged behavior and keep acceptance
+criteria open until their full scope is verified. Keep design decisions in ADRs
+and reproducible verification records in docs; do not use them as running task logs.
+
+Before starting a new workstream, create or identify its Issue with scope,
+acceptance criteria, priority and dependencies. Track requested migrations and
+deferred investigations explicitly; do not leave them only in prose documents.
+An explicit user priority takes precedence over opportunistic feature work.
+Record priority changes and their reasons in the tracking Issue. At meaningful
+validation results and PR integration, update the affected Issues with evidence,
+remaining work and the next action. Use comments for intermediate results and
+edit the body for the current scope or acceptance criteria.
+
 ## Windows x64 setup
 
 Install mise, PowerShell 7 (`pwsh`), and Visual Studio C++ x64 build tools with the Windows SDK.
@@ -52,6 +69,25 @@ hash again before passing bytes to MoonBit. DOM, WebGPU and Playwright calls
 remain in their host adapters.
 
 ## Local pre-commit checks
+
+Tracked Markdown links are checked by `moon run scripts/verify-docs.mbtx`.
+The check resolves relative file targets and ignores external URLs and fragments;
+it does not validate heading anchors or implement a complete Markdown parser.
+
+Contract compile-failure checks use `scripts/verify-types.mbtx`. Set
+`METONIC_VERIFY_TARGET` to `js`, `wasm-gc` (default), or `native`; native builds
+require the MSVC environment. Each case copies only the tracked RPC core and API
+contract into a fresh module under `.work`. The positive control must check and
+build; negative cases must report a type mismatch. Diagnostics remain in each
+case's `probe/check.stdout` and `probe/check.stderr` files.
+
+`mise run verify` and `mise run verify-native` use `scripts/verify.mbtx` for
+toolchain checks, formatting checks, tests, the contract-only frontend and
+compile-failure fixtures. Native mode obtains the MSVC environment through
+Microsoft's `vswhere` and `VsDevCmd.bat`; a temporary batch file captures that
+environment for child processes. Validation logic runs in MoonBit, and the
+parent shell's environment is not modified. Toolchain installation remains a
+separate bootstrap step.
 
 `mise run hooks:install` uses mise's built-in Git hook generator. Run it once per
 clone with the default Git hooks directory; it replaces `.git/hooks/pre-commit`,

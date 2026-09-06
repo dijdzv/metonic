@@ -8,4 +8,5 @@ preferred_target = "wasm-gc"
 
 import {
   "Milky2018/moon_cosmic@0.3.3",
+  "moonbitlang/async@0.21.2",
 }

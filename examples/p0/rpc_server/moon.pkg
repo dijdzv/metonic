@@ -1,0 +1,13 @@
+import {
+  "local/p0/rpc/json" @wire,
+  "local/p0/examples/p0/backend/handlers",
+  "moonbitlang/async",
+  "moonbitlang/async/http",
+  "moonbitlang/async/socket",
+  "moonbitlang/async/io",
+  "moonbitlang/core/encoding/utf8",
+}
+
+pkgtype(kind: "executable")
+
+supported_targets = "+native+wasm"

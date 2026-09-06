@@ -1,0 +1,105 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/env",
+}
+
+///|
+fn fail(message : String) -> Unit {
+  println(message)
+  abort(message)
+}
+
+///|
+async fn run_checked(
+  command : String,
+  args : Array[String],
+  extra_env : Map[String, String],
+) -> Unit {
+  let code = @process.run(command, args, extra_env~, no_console_window=true)
+  if code != 0 {
+    fail(command + " failed")
+  }
+}
+
+///|
+async fn main {
+  @async.with_timeout(120000, async fn() {
+    let moon = @fs.realpath(".tools/moonbit/bin/moon.exe")
+    let moon_home = @fs.realpath(".tools/moonbit")
+    let native = @env.get_env_var("METONIC_VERIFY_NATIVE") == Some("1")
+    let envmap : Map[String, String] = Map([])
+    envmap.set("MOON_HOME", moon_home)
+    if native {
+      let program_files = @env.get_env_var("ProgramFiles(x86)").unwrap_or(
+        "C:/Program Files (x86)",
+      )
+      let vswhere = program_files +
+        "/Microsoft Visual Studio/Installer/vswhere.exe"
+      let (where_code, where_out, where_err) = @process.collect_output(
+        vswhere,
+        [
+          "-utf8", "-latest", "-products", "*", "-requires", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+          "-property", "installationPath",
+        ],
+        no_console_window=true,
+      )
+      if where_code != 0 {
+        fail(where_err.text())
+      }
+      let install = where_out.text().trim().to_owned()
+      if install == "" ||
+        install.contains("\r") ||
+        install.contains("\n") ||
+        install.contains("\"") {
+        fail("invalid Visual Studio installation path")
+      }
+      let dir = ".work/verify-env"
+      if !@fs.exists(dir) {
+        @fs.mkdir(dir, recursive=true)
+      }
+      let script = dir + "/vs-env.cmd"
+      let content = "@echo off\r\nchcp 65001>nul\r\ncall \"" +
+        install +
+        "/Common7/Tools/VsDevCmd.bat\" -no_logo -arch=x64 -host_arch=x64\r\nif errorlevel 1 exit /b 1\r\nset\r\n"
+      @fs.write_file(script, content)
+      let (cmd_code, cmd_out, cmd_err) = @process.collect_output(
+        "cmd.exe",
+        ["/d", "/c", ".work\\verify-env\\vs-env.cmd"],
+        no_console_window=true,
+      )
+      if cmd_code != 0 {
+        fail(cmd_err.text())
+      }
+      for line in cmd_out.text().split("\n") {
+        let item = line.trim_end(chars="\r")
+        match item.find("=") {
+          Some(i) => {
+            let key = item[:i].to_owned()
+            if key != "" {
+              envmap.set(key, item[i + 1:].to_owned())
+            }
+          }
+          None => ()
+        }
+      }
+      envmap.set("MOON_CC", "cl")
+      envmap.set("VSLANG", "1033")
+      envmap.set("MOON_HOME", moon_home)
+    }
+    run_checked(moon, ["run", "scripts/doctor.mbtx"], envmap)
+    run_checked(moon, ["fmt", "--check"], envmap)
+    let targets = if native { ["native"] } else { ["wasm-gc", "js"] }
+    for target in targets {
+      run_checked(moon, ["test", "--target", target, "--deny-warn"], envmap)
+      run_checked(
+        moon,
+        ["run", "examples/p0/frontend/app", "--target", target],
+        envmap,
+      )
+      envmap.set("METONIC_VERIFY_TARGET", target)
+      run_checked(moon, ["run", "scripts/verify-types.mbtx"], envmap)
+    }
+  })
+}

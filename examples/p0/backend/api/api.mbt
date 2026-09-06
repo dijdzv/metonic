@@ -1,12 +1,12 @@
 ///|
 pub(all) struct GetUserInput {
   id : String
-} derive(Eq, Debug)
+} derive(Eq, Debug, ToJson, FromJson)
 
 ///|
 pub(all) struct User {
   name : String
-} derive(Eq, Debug)
+} derive(Eq, Debug, ToJson, FromJson)
 
 ///|
 pub(all) enum GetUserError {

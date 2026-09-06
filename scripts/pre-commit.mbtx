@@ -54,12 +54,12 @@ async fn main {
   let gates = [
     "verify", "verify-native", "browser:verify", "browser:server-test", "browser:headless",
     "browser:async", "devtools:test", "native:headless", "native:control", "native:mcp-test",
-    "native:semantics", "native:window", "native:async", "native:binding",
+    "native:semantics", "native:window", "native:async", "native:binding", "rpc:verify",
   ]
   for gate in gates {
     println("pre-commit gate: mise run " + gate)
     run("mise", ["run", gate])
   }
   println("pre-commit gate: docs")
-  run("pwsh", ["-NoProfile", "-File", "scripts/verify-docs.ps1"])
+  run(moon, ["run", "scripts/verify-docs.mbtx"])
 }

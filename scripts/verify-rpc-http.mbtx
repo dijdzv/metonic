@@ -1,0 +1,157 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/async@0.21.2/http",
+  "moonbitlang/async@0.21.2/socket",
+  "moonbitlang/async@0.21.2/io",
+  "moonbitlang/core/json",
+}
+
+///|
+fn fail(message : String) -> Unit {
+  println(message)
+  abort(message)
+}
+
+///|
+async fn main {
+  let moon = @fs.realpath(".tools/moonbit/bin/moon.exe")
+  let build = @process.run(
+    moon,
+    [
+      "build", "examples/p0/rpc_server", "--target", "wasm", "--release", "--deny-warn",
+    ],
+    no_console_window=true,
+  )
+  if build != 0 {
+    fail("rpc server build failed")
+  }
+  let artifact = @fs.realpath(
+    "_build/wasm/release/build/examples/p0/rpc_server/rpc_server.wasm",
+  )
+  let moonrun = @fs.realpath(".tools/moonbit/bin/moonrun.exe")
+  @async.with_timeout(30000, async fn() {
+    @async.with_task_group(async fn(group) {
+      let (reader, stdout) = @process.read_from_process()
+      defer reader.close()
+      let proc = @process.spawn(
+        group,
+        moonrun,
+        [artifact],
+        stdout~,
+        no_console_window=true,
+        cancel_handler=@process.hard_cancel(),
+      )
+      defer proc.cancel()
+      let ready = reader.read_until("\n").unwrap().trim().to_owned()
+      if !ready.has_prefix("RPC_READY 127.0.0.1:") {
+        fail("invalid RPC_READY line")
+      }
+      let base = "http://" + ready[10:].to_owned()
+      let headers : Map[@http.CaseInsensitiveString, String] = Map([])
+      headers.set(
+        @http.CaseInsensitiveString("Content-Type"),
+        "application/json",
+      )
+      let body = "{\"version\":1,\"procedure\":\"users.get.v1\",\"input\":{\"id\":\"1\"}}"
+      let expected = @json.parse(
+        "{\"version\":1,\"ok\":true,\"output\":{\"name\":\"月兎\"}}",
+      )
+      let (normal, normal_body) = @http.request(
+        base + "/rpc",
+        @http.Post,
+        headers,
+        body,
+      )
+      if normal.code != 200 || normal_body.json() != expected {
+        fail("normal RPC failed")
+      }
+      let (curl_code, curl_out, curl_err) = @process.collect_output(
+        "curl.exe",
+        [
+          "-sS",
+          "--max-time",
+          "5",
+          "-H",
+          "Content-Type: application/json",
+          "--data-binary",
+          body,
+          base + "/rpc",
+        ],
+        no_console_window=true,
+      )
+      println(curl_err.text())
+      if curl_code != 0 || @json.parse(curl_out.text()) != expected {
+        fail("curl RPC failed")
+      }
+      let cases : Array[(String, Int, String)] = [
+        (
+          "{\"version\":1,\"procedure\":\"users.get.v1\",\"input\":{\"id\":\"2\"}}",
+          200, "not_found",
+        ),
+        (
+          "{\"version\":1,\"procedure\":\"users.get.v1\",\"input\":{\"id\":1}}",
+          400, "invalid_input",
+        ),
+        ("{", 400, "invalid_json"),
+        (
+          "{\"version\":2,\"procedure\":\"users.get.v1\",\"input\":{\"id\":\"1\"}}",
+          400, "invalid_request",
+        ),
+        (
+          "{\"version\":1,\"procedure\":\"unknown.v1\",\"input\":{\"id\":\"1\"}}",
+          404, "unknown_procedure",
+        ),
+        (String::from_array(Array::make(65537, 'x')), 413, "request_too_large"),
+        ("", 405, "method_not_allowed"),
+        ("{\"version\":1}", 404, "not_found"),
+        ("{\"version\":1}", 415, "unsupported_media_type"),
+      ]
+      for entry in cases {
+        let (payload, status, code) = entry
+        let url = if code == "not_found" && payload == "{\"version\":1}" {
+          base + "/other"
+        } else {
+          base + "/rpc"
+        }
+        let request_method = if code == "method_not_allowed" {
+          @http.Get
+        } else {
+          @http.Post
+        }
+        let request_headers = if code == "unsupported_media_type" {
+          let h : Map[@http.CaseInsensitiveString, String] = Map([])
+          h.set(@http.CaseInsensitiveString("Content-Type"), "text/plain")
+          h
+        } else {
+          headers
+        }
+        let (response, data) = @http.request(
+          url, request_method, request_headers, payload,
+        )
+        let kind = if status == 200 { "domain" } else { "protocol" }
+        let expected_error = @json.parse(
+          "{\"version\":1,\"ok\":false,\"error\":{\"kind\":\"" +
+          kind +
+          "\",\"code\":\"" +
+          code +
+          "\"}}",
+        )
+        if response.code != status || data.json() != expected_error {
+          fail("RPC negative case failed: " + code)
+        }
+      }
+      let (recovery, recovery_body) = @http.request(
+        base + "/rpc",
+        @http.Post,
+        headers,
+        body,
+      )
+      if recovery.code != 200 || recovery_body.json() != expected {
+        fail("RPC recovery failed")
+      }
+      println("RPC_HTTP_OK success_clients=2 rejected_cases=9 recovery=1")
+    })
+  })
+}
