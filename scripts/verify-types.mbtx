@@ -74,7 +74,8 @@ async fn main {
         @fs.write_file(destination, @fs.read_file(source_path))
       }
     }
-    @fs.write_file(case_root + "/moon.mod", @fs.read_file("moon.mod"))
+    // Copying the application manifest pulls unrelated GPU/text dependencies into every isolated contract fixture.
+    @fs.write_file(case_root + "/moon.mod", "name = \"local/p0\"\n")
     let probe = case_root + "/probe"
     @fs.mkdir(probe, recursive=true)
     @fs.write_file(probe + "/main.mbt", source)

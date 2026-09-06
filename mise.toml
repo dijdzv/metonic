@@ -60,7 +60,8 @@ depends = ["browser:build"]
 run = "node scripts/verify-browser-server.mjs"
 
 [tasks."native:build"]
-run = "pwsh -NoProfile -File scripts/build-native-probe.ps1"
+run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/build-native.mbtx'
+env = { METONIC_NATIVE_BUILD = "headless" }
 
 [tasks."native:headless"]
 depends = ["native:build"]
@@ -82,14 +83,16 @@ depends = ["native:build"]
 run = "node scripts/verify-native-semantics.mjs"
 
 [tasks."native:window-build"]
-run = "pwsh -NoProfile -File scripts/build-native-window.ps1"
+run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/build-native.mbtx'
+env = { METONIC_NATIVE_BUILD = "window" }
 
 [tasks."native:window"]
 depends = ["native:window-build"]
 run = "node scripts/verify-native-window.mjs"
 
 [tasks."native:async-build"]
-run = "pwsh -NoProfile -File scripts/build-native-async.ps1"
+run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/build-native.mbtx'
+env = { METONIC_NATIVE_BUILD = "async" }
 
 [tasks."native:async"]
 depends = ["native:async-build"]
