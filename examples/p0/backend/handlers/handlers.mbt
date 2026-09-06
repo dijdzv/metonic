@@ -3,7 +3,7 @@ pub fn get_user(
   input : @api.GetUserInput,
 ) -> Result[@api.User, @api.GetUserError] {
   if input.id == "1" {
-    Ok({ name: "月兎" })
+    Ok({ name: "月兎", })
   } else {
     Err(@api.NotFound)
   }

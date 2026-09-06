@@ -2,6 +2,7 @@ target/
 _build/
 .moon/
 .work/
+.tools/
 .env
 .env.*
 !.env.example

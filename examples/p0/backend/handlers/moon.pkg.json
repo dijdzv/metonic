@@ -1,1 +1,0 @@
-{"import": [{"path": "local/p0/rpc/core", "alias": "rpc"}, {"path": "local/p0/examples/p0/backend/api", "alias": "api"}]}

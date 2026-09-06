@@ -8,7 +8,7 @@ pub struct Procedure[I, O, E] {
 
 ///|
 pub fn[I, O, E] Procedure::new(id : String) -> Procedure[I, O, E] {
-  { id, type_witness: None }
+  { id, type_witness: None, }
 }
 
 ///|
@@ -23,7 +23,7 @@ pub fn[I, O, E] bind(
   procedure : Procedure[I, O, E],
   handler : (I) -> Result[O, E],
 ) -> Binding[I, O, E] {
-  { procedure, handler }
+  { procedure, handler, }
 }
 
 ///|

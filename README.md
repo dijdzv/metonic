@@ -1,42 +1,64 @@
 # metonic
 
-MoonBitを主言語とするGPU UIと、UIから独立した型付きRPCの実験プロジェクト。
-Windows nativeを優先し、ブラウザWebGPUも第一級ターゲットとします。
+GPU-rendered UI and typed RPC for MoonBit.
 
-現在はP0の技術検証段階です。GPU UIフレームワークや通信ライブラリとしてはまだ使えません。
+metonic aims to let one MoonBit application run as a native Windows UI and in a
+WebGPU browser. The UI runtime and RPC libraries are independent, so either can
+be used without the other.
 
-## 動かせるもの
+**Status: early technical validation.** There is no usable GUI framework or
+network RPC transport yet. Public APIs may change.
 
-`Procedure[Input, Output, DomainError]`、契約専用パッケージ、プロセス内の型付きhandler binding。
-native / JS / WasmGCで成功・業務エラーと型不一致の拒否を検証しています。
-HTTP・gRPC・GPU描画・IMEは未実装です。
+## Direction
+
+- MoonBit application code, fine-grained reactive state, and persistent UI nodes.
+- Windows native and browser WebGPU rendering.
+- Japanese text input, IME, keyboard navigation, and accessibility.
+- A typed API contract shared by frontend and backend.
+- First-class development automation through a CLI and MCP, excluded from production builds.
+- MIT OR Apache-2.0.
+
+AccessKit is under evaluation for the native accessibility adapter; it is not
+an adopted dependency. Development automation and production accessibility have
+separate responsibilities.
+
+## Try the current prototype
+
+The current prototype checks typed procedure contracts on native, JavaScript,
+and WasmGC. It binds handlers in-process; it does not make network requests.
+
+On Windows x64, install [mise](https://mise.jdx.dev/) and Visual Studio C++ build
+tools with the Windows SDK, then run:
 
 ```powershell
 mise trust
 mise install
-mise run doctor
+mise run bootstrap
 mise run verify
 mise run verify-native
 ```
 
-現時点でmiseがインストールするのはNodeのみです。MoonBitとWindowsのC++ビルド環境は
-[環境記録とセットアップ](docs/verification/environment.md)を参照してください。
+The bootstrap installs the pinned MoonBit toolchain into `.tools/moonbit`,
+verifies download hashes, and bundles the standard library. It does not depend
+on an older global MoonBit installation. The baseline is **MoonBit 0.10.11**,
+checked against the current non-dev distribution on 2026-09-06.
 
-## 作業の入口
+Node is used to run generated JavaScript during verification. There are no npm
+dependencies. If JavaScript packages become necessary, pnpm will manage them;
+neither Node nor pnpm is a native application runtime requirement.
 
-- [開発・Issue・PR・リリース運用](CONTRIBUTING.md)
-- [P0検証結果と残作業](docs/verification/p0.md)
-- [設計ベースライン v0.2](DESIGN.md)
-- [引き継ぎ資料](CODEX_HANDOFF.md) / [元のZIPのREADME](HANDOFF_README.md)
-- [名称・運用・環境の決定](docs/adr/022-bootstrap.md)
+## Documentation
 
-設計書中の「名称未定」は引き継ぎ時点の記録です。2026-09-06にユーザーが
-`metonic` / `dijdzv/metonic` を指定しました。MoonBitの `local/p0` は検証専用の内部module名で、
-公開Mooncakesパッケージ名はまだ設定していません。
+- [Architecture and scope](DESIGN.md)
+- [Development guide](docs/development.md)
+- [Development automation and accessibility](docs/adr/023-development-automation.md)
+- [Verification results](docs/verification/p0.md)
+- [Contribution and release workflow](CONTRIBUTING.md)
+- [Changelog](CHANGELOG.md)
+- [Open tasks](https://github.com/dijdzv/metonic/issues)
 
-## ライセンス
+## License
 
 Copyright (c) 2026 dijdzv and contributors.
 
-MIT OR Apache-2.0。利用者はいずれかを選択できます。
-[MIT](LICENSE-MIT) / [Apache-2.0](LICENSE-APACHE)
+Licensed under either [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option.

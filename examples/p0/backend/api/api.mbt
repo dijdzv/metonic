@@ -1,17 +1,17 @@
 ///|
 pub(all) struct GetUserInput {
   id : String
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 pub(all) struct User {
   name : String
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 pub(all) enum GetUserError {
   NotFound
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 pub fn get_user() -> @rpc.Procedure[GetUserInput, User, GetUserError] {

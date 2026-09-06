@@ -7,19 +7,19 @@ $utf8 = New-Object System.Text.UTF8Encoding($false)
 
 # Each fixture is a fresh module: no source mutation and no backend implementation in FE.
 $cases = [ordered]@{
-    'valid' = 'fn main { let b = @rpc.bind(@api.get_user(), fn(_input) { Ok(@api.User::{ name: "ok" }) }); let r : Result[@api.User, @api.GetUserError] = b.call(@api.GetUserInput::{ id: "1" }); println(r) }'
+    'valid' = 'fn main { let b = @rpc.bind(@api.get_user(), fn(_input) { Ok(@api.User::{ name: "ok" }) }); let r : Result[@api.User, @api.GetUserError] = b.call(@api.GetUserInput::{ id: "1" }); debug(r) }'
     'wrong-input' = 'fn main { let b = @rpc.bind(@api.get_user(), fn(_input) { Ok(@api.User::{ name: "ok" }) }); ignore(b.call(42)) }'
     'wrong-handler-output' = 'fn main { ignore(@rpc.bind(@api.get_user(), fn(_input) { Ok(42) })) }'
     'wrong-handler-error' = 'fn main { ignore(@rpc.bind(@api.get_user(), fn(_input) { Err(42) })) }'
-    'wrong-client-output' = 'fn main { let b = @rpc.bind(@api.get_user(), fn(_input) { Ok(@api.User::{ name: "ok" }) }); let r : Result[Int, @api.GetUserError] = b.call(@api.GetUserInput::{ id: "1" }); println(r) }'
+    'wrong-client-output' = 'fn main { let b = @rpc.bind(@api.get_user(), fn(_input) { Ok(@api.User::{ name: "ok" }) }); let r : Result[Int, @api.GetUserError] = b.call(@api.GetUserInput::{ id: "1" }); debug(r) }'
 }
 foreach ($entry in $cases.GetEnumerator()) {
     $caseRoot = Join-Path $scratchRoot $entry.Key
     New-Item -ItemType Directory -Path "$caseRoot/rpc", "$caseRoot/examples/p0/backend", "$caseRoot/probe" -Force | Out-Null
-    Copy-Item -LiteralPath "$repoRoot/moon.mod.json" -Destination $caseRoot
+    Copy-Item -LiteralPath "$repoRoot/moon.mod" -Destination $caseRoot
     Copy-Item -LiteralPath "$repoRoot/rpc/core" -Destination "$caseRoot/rpc/core" -Recurse
     Copy-Item -LiteralPath "$repoRoot/examples/p0/backend/api" -Destination "$caseRoot/examples/p0/backend/api" -Recurse
-    [IO.File]::WriteAllText("$caseRoot/probe/moon.pkg.json", '{"is-main":true,"import":[{"path":"local/p0/rpc/core","alias":"rpc"},{"path":"local/p0/examples/p0/backend/api","alias":"api"}]}', $utf8)
+    [IO.File]::WriteAllText("$caseRoot/probe/moon.pkg", "import {`n  `"local/p0/rpc/core`" @rpc,`n  `"local/p0/examples/p0/backend/api`" @api,`n}`npkgtype(kind: `"executable`")`n", $utf8)
     [IO.File]::WriteAllText("$caseRoot/probe/main.mbt", $entry.Value, $utf8)
     # Windows PowerShell wraps stderr in NativeCommandError, even on successful commands.
     $ErrorActionPreference = 'Continue'

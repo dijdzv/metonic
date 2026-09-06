@@ -37,7 +37,7 @@ force push/削除禁止、管理者にも適用を設定済み。現段階のreq
 
 ## ローカル検証
 
-セットアップは docs/verification/environment.md を参照。
+セットアップは docs/development.md を参照。
 `mise run verify` がフォーマット・型付き契約試験・コンパイル失敗試験の入口。
 Windows SDKとMSVCがある環境では `mise run verify-native` も実行する。
 

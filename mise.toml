@@ -1,8 +1,16 @@
 [tools]
 node = "24.19.0"
 
+[env]
+MOON_HOME = "{{config_root}}/.tools/moonbit"
+_.path = ["{{config_root}}/.tools/moonbit/bin"]
+
+[tasks.bootstrap]
+description = "Install the pinned current MoonBit toolchain with SHA256 verification"
+run = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap.ps1"
+
 [tasks.doctor]
-description = "Check the recorded P0 toolchain"
+description = "Check the project toolchain"
 run = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/doctor.ps1"
 
 [tasks.verify]
@@ -14,4 +22,4 @@ description = "Verify contracts with Windows MSVC"
 run = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1 -Native"
 
 [tasks.fmt]
-run = "moon fmt"
+run = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/moon.ps1 fmt"

@@ -1,38 +1,47 @@
-# ADR 022: 初期運用と環境
+# ADR 022: Development workflow and toolchain
 
-日付: 2026-09-06。状態: 採用（初期運用）。
+Date: 2026-09-06 · Status: accepted
 
-## 背景
+## Context
 
-入力ZIPは設計資料4ファイルだけで、既存実装はない。
-ユーザーは小さなIssue・ブランチ・PRを積極的に使う運用を許可し、
-リポジトリを `dijdzv/metonic`、公開で作成するよう指定した。
-名称についてはDESIGN.md F-16/ADR 021の保留をこの直接指示で更新する。
+The project needs small reviewable changes, reproducible technical experiments,
+and a low-overhead release process during early development.
 
-## 決定
+## Decision
 
-mainを統合先とし、短命ブランチとsquash PRを使う。通常リリースはタグのみ。
-Git Flowのdevelopや常設releaseブランチは、並行保守の必要がない現段階では増やさない。
-承認人数は0を基本とし、一人でも作業を止めない。詳細はCONTRIBUTING.md。
+Use main as the integration branch, short-lived branches, and squash-merged PRs.
+Use version tags for releases. Introduce maintenance branches only when parallel
+supported versions require them. Main requires a PR, disallows force pushes and
+deletion, and applies protection to administrators. External approval is optional.
 
-ライセンスはユーザーのMIT/Apache希望から `MIT OR Apache-2.0` とする。
+Use mise as the command entry point and to pin Node for generated-JS verification.
+Pin MoonBit archives and their hashes in `toolchain.json`; install them into
+`.tools/moonbit`. The bootstrap builds the matching standard library and preserves
+a previous local installation when replacing it.
 
-miseをタスクの入口とNodeのバージョン固定に使う。
-インストール済みmiseのregistryにMoonBitがないため、未検証プラグインは追加しない。
-MoonBitは既存0.7.2の実測を初期ベースラインとし、doctorで不一致を拒否する。
-Rustは今回のコードに不要なので、実装を導入するPRでrust-toolchain.tomlとCargo.lockを追加する。
+The current baseline is MoonBit 0.10.11 from the non-dev distribution. Version
+updates must recheck official distribution metadata, update the pin, and rerun
+verification. Do not use a floating latest download in CI.
 
-CIは、MoonBitの固定バージョンをクリーン環境へ取得する方法を検証してから導入する。
-既存ローカル環境の成功だけではクリーンCIの再現を保証できないため、別Issueで追う。
-CDは配布物と配布先が決まってから導入する。
+There are no JavaScript package dependencies yet. Node is a test runtime; pnpm
+will be used if package management is needed. Bun is not required by the current
+workload. Native product builds do not depend on these development tools.
 
-## 影響と証拠
+## Alternatives
 
-新規ユーザー向けのMoonBit自動セットアップはまだない。
-古いローカルコンパイラーと現在のドキュメントには差があるため、公開APIは固定しない。
-P0-Dは、ローカルのnative/JS/WasmGCで正負のコンパイル試験を実行した。
-GPUブリッジ、ブラウザターゲット、gRPC経路の採用判断はまだ行わない。
+- Git Flow adds long-lived branches without a current maintenance need.
+- A global MoonBit install can silently differ between contributors.
+- A third-party installer plugin adds a dependency while official fixed archives are available.
+- Automatic latest-on-every-build updates make compiler regressions hard to reproduce.
 
-公式参照: [mise tasks](https://mise.jdx.dev/tasks/)、
-[MoonBit package configuration](https://docs.moonbitlang.com/en/latest/toolchain/moon/package.html)。
-新しい資料の記載を旧コンパイラーで検証済みとは扱わない。
+## Consequences
+
+The current bootstrap supports Windows x64. Other hosts need separately verified
+artifacts and setup scripts. MSVC/Windows SDK remain prerequisites.
+CLI/CI verification cannot substitute for real GPU, IME, or accessibility tests.
+
+## Evidence
+
+See [environment](../verification/environment.md) and [P0 results](../verification/p0.md).
+The installation and checksum format follow the
+[official MoonBit distribution](https://www.moonbitlang.com/download/).
