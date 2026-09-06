@@ -6,8 +6,9 @@ metonic aims to let one MoonBit application run as a native Windows UI and in a
 WebGPU browser. The UI runtime and RPC libraries are independent, so either can
 be used without the other.
 
-**Status: early technical validation.** There is no usable GUI framework or
-network RPC transport yet. Public APIs may change.
+**Work in progress — not ready for use.** The current code is limited to technical
+prototypes; a usable GPU UI framework and network RPC transport are not implemented
+yet. Public APIs may change substantially.
 
 ## Direction
 
@@ -53,12 +54,10 @@ neither Node nor pnpm is a native application runtime requirement.
 - [Development guide](docs/development.md)
 - [Development automation and accessibility](docs/adr/023-development-automation.md)
 - [Verification results](docs/verification/p0.md)
-- [Contribution and release workflow](CONTRIBUTING.md)
-- [Changelog](CHANGELOG.md)
 - [Open tasks](https://github.com/dijdzv/metonic/issues)
 
 ## License
 
-Copyright (c) 2026 dijdzv and contributors.
+Copyright (c) 2026 dijdzv.
 
 Licensed under either [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option.

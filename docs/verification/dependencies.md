@@ -6,7 +6,7 @@ Recorded: 2026-09-06.
 | --- | --- | --- | --- |
 | MoonBit toolchain | toolchain.json | Build and test tools; Windows x64 bootstrap | Downloaded from official distribution; not shipped with the application |
 | MoonBit core | 0.10.11+6ff76a5f9 | Standard library; native/JS/WasmGC tested | Bundled module declares Apache-2.0; review distribution notices before shipping |
-| Node | 24.19.0 | Run generated JS in tests | Development only; not redistributed |
+| Node | 26.8.1 | Run generated JS in tests | Development only; not redistributed |
 | MSVC / Windows SDK | environment.md | Native build prerequisites | Not redistributed by this repository |
 
 No external Mooncakes modules, npm packages, or Rust crates are used by the current

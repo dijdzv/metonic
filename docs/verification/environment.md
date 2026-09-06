@@ -10,7 +10,7 @@ hardware specification.
 | GPU driver | 32.0.16.1047 |
 | mise | 2026.8.5 windows-x64 |
 | PowerShell | 7.6.5 (local); PowerShell 7 on hosted CI |
-| Node | 24.19.0 |
+| Node | 26.8.1 |
 | MoonBit compiler/core | 0.10.11+6ff76a5f9 |
 | moon / moonrun | 0.1.20260827, d0aaa07 |
 | Visual Studio | 2022 Community; DevShell 17.5.3 |

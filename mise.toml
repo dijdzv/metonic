@@ -1,5 +1,5 @@
 [tools]
-node = "24.19.0"
+node = "26.8.1"
 
 [env]
 MOON_HOME = "{{config_root}}/.tools/moonbit"
@@ -20,6 +20,14 @@ run = "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1"
 [tasks.verify-native]
 description = "Verify contracts with Windows MSVC"
 run = "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1 -Native"
+
+[tasks.pre-commit]
+description = "Run checks for staged changes"
+run = "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/pre-commit.ps1"
+
+[tasks."hooks:install"]
+description = "Install the mise-managed Git pre-commit hook"
+run = "mise generate git-pre-commit --write --task pre-commit"
 
 [tasks.fmt]
 run = "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/moon.ps1 fmt"
