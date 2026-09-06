@@ -1,4 +1,4 @@
-const REQUIRED = ['init', 'resize', 'move_to', 'activate', 'field'];
+const REQUIRED = ['init', 'resize', 'move_to', 'activate', 'field', 'task_begin', 'task_complete', 'task_fail', 'task_cancel', 'task_dispose', 'task_field'];
 
 function validateExports(exports, target) {
   for (const name of REQUIRED) {

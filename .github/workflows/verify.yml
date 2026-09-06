@@ -67,6 +67,20 @@ jobs:
         env:
           METONIC_GPU_BACKEND: swiftshader
         run: mise run browser:headless
+      - name: Verify browser async behavior
+        if: github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true'
+        env:
+          METONIC_GPU_BACKEND: swiftshader
+        run: node scripts/verify-browser-async.mjs
+      - name: Save browser async artifacts
+        if: always() && (github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true')
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: browser-async-swiftshader
+          path: .work/browser-async/swiftshader
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Save headless verification images
         if: always() && (github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true')
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

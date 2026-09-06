@@ -49,6 +49,10 @@ run = "pnpm exec playwright install chromium"
 depends = ["browser:build"]
 run = "node scripts/verify-browser-headless.mjs"
 
+[tasks."browser:async"]
+depends = ["browser:build"]
+run = "node scripts/verify-browser-async.mjs"
+
 [tasks."browser:server-test"]
 depends = ["browser:build"]
 run = "node scripts/verify-browser-server.mjs"

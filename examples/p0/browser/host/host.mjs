@@ -7,6 +7,48 @@ const target = new URLSearchParams(location.search).get('target') || 'js';
 const els = { target: $('target'), bytes: $('artifact-bytes'), load: $('load-ms'), adapter: $('adapter'), dimensions: $('dimensions'), revision: $('revision'), submitted: $('submitted'), transferred: $('transferred') };
 let app, device, context, pipeline, uniform, bindGroup, observer, raf = 0, disposed = false, dirty = false;
 let cssW = 0, cssH = 0, backingW = 0, backingH = 0, submitted = 0, transferred = 0, format;
+const taskButtons = [$('task-start'), $('task-fail'), $('task-cancel')];
+const taskTimers = new Map();
+let taskEpoch = 0;
+let rejectedCallbacks = 0;
+
+function taskField(index) { return Number(app.task_field(index)); }
+function updateTaskDiagnostics() {
+  const values = [];
+  for (let index = 0; index < 6; index += 1) values.push(taskField(index));
+  $('task-state').textContent = JSON.stringify(values);
+  $('task-pending').textContent = String(taskTimers.size);
+  $('task-rejected').textContent = String(rejectedCallbacks);
+}
+function dispatchTask(delayMs, value, fail = false) {
+  if (disposed || !app || !Number.isInteger(delayMs) || delayMs < 0 || delayMs > 5000
+    || !Number.isInteger(value) || value < 0 || value > 2048 || typeof fail !== 'boolean'
+    || taskTimers.size >= 16) return false;
+  const id = app.task_begin();
+  if (Number(id) < 0) return false;
+  const epoch = taskEpoch;
+  const timer = setTimeout(() => {
+    taskTimers.delete(id);
+    if (disposed || epoch !== taskEpoch) return;
+    const accepted = fail ? app.task_fail(id, 7) : app.task_complete(id, value);
+    if (Number(accepted) === 1 && !fail) { dirty = true; schedule(); }
+    else if (Number(accepted) !== 1) rejectedCallbacks += 1;
+    updateTaskDiagnostics();
+  }, delayMs);
+  taskTimers.set(id, timer);
+  updateTaskDiagnostics();
+  return true;
+}
+function cancelTask() { if (!disposed && app) { app.task_cancel(); updateTaskDiagnostics(); } }
+function resetTasks() {
+  for (const timer of taskTimers.values()) clearTimeout(timer);
+  taskTimers.clear();
+  taskEpoch += 1;
+  if (app) updateTaskDiagnostics();
+}
+function onTaskStart() { dispatchTask(250, 40); }
+function onTaskFail() { dispatchTask(250, 0, true); }
+function onTaskCancel() { cancelTask(); }
 
 function setStatus(message, error = false) {
   status.textContent = message;
@@ -115,7 +157,9 @@ function onKey(event) {
 }
 function onReset() {
   if (disposed || !app) return;
+  resetTasks();
   app.init();
+  updateTaskDiagnostics();
   resize(true);
   dirty = true;
   schedule();
@@ -123,6 +167,11 @@ function onReset() {
 function stop(reason = 'Stopped.', error = false) {
   if (disposed) return;
   disposed = true;
+  for (const timer of taskTimers.values()) clearTimeout(timer);
+  taskTimers.clear();
+  taskEpoch += 1;
+  try { app?.task_dispose?.(); } catch {}
+  if (app) updateTaskDiagnostics();
   if (raf) cancelAnimationFrame(raf);
   raf = 0;
   observer?.disconnect();
@@ -135,6 +184,10 @@ function stop(reason = 'Stopped.', error = false) {
   $('stop').removeEventListener('click', onStop);
   $('stop').disabled = true;
   $('reset').disabled = true;
+  for (const button of taskButtons) button.disabled = true;
+  $('task-start').removeEventListener('click', onTaskStart);
+  $('task-fail').removeEventListener('click', onTaskFail);
+  $('task-cancel').removeEventListener('click', onTaskCancel);
   try { context?.unconfigure?.(); } catch {}
   try { uniform?.destroy(); } catch {}
   try { device?.destroy(); } catch {}
@@ -210,6 +263,16 @@ struct U { rect: vec4f, viewport: vec2f, enabled: f32, pad: f32 };
   canvas.addEventListener('pointerdown', onPointer);
   canvas.addEventListener('keydown', onKey);
   $('reset').addEventListener('click', onReset);
+  $('task-start').addEventListener('click', onTaskStart);
+  $('task-fail').addEventListener('click', onTaskFail);
+  $('task-cancel').addEventListener('click', onTaskCancel);
+  for (const button of taskButtons) button.disabled = false;
+  updateTaskDiagnostics();
+  window.metonicAsyncProbe = {
+    start: (delayMs, value, fail = false) => dispatchTask(delayMs, value, fail),
+    cancel: cancelTask,
+    snapshot: () => ({ task: Array.from({ length: 6 }, (_, index) => taskField(index)), pending: taskTimers.size, rejected: rejectedCallbacks, disposed }),
+  };
   setStatus(`Ready: ${target}`);
 }
 const onStop = () => stop();
