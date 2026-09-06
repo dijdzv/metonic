@@ -55,7 +55,29 @@ verification tasks. CI must use the same committed pin.
 Node 26.8.1 runs generated JavaScript; it is not a native product dependency.
 pnpm 12.3.4 manages the pinned Playwright and PNG inspection tools used by browser
 verification. Commit `pnpm-lock.yaml` and use `pnpm install --frozen-lockfile` in CI.
-Rust toolchain/lockfile selection belongs to the first native bridge implementation.
+The native GPU probe uses Rust 1.98.1 from `rust-toolchain.toml` and exact wgpu
+dependencies in `bridges/wgpu/Cargo.lock`. Install this toolchain through rustup;
+the build uses `--locked` and does not change the global default toolchain.
+
+## Native headless GPU probe
+
+```powershell
+rustup toolchain install 1.98.1 --profile minimal --component rustfmt
+mise exec -- pnpm install --frozen-lockfile
+mise run native:headless
+$env:METONIC_GPU_FALLBACK = '1'
+mise run native:headless
+Remove-Item Env:METONIC_GPU_FALLBACK
+```
+
+This builds the MoonBit executable and Rust/wgpu DLL, then drives the executable
+through JSON lines. MoonBit owns scene state; the DLL owns offscreen DX12
+rendering and readback. PNG captures, adapter diagnostics, and results stay in
+`.work/native-headless/default` or `fallback`. The verifier checks complete pixel
+colors/bounds, stale requests, malformed input, capture failure, and shutdown.
+It opens no window. Window input, IME, accessibility, MCP integration, and
+production exclusion require separate verification. See the
+[native verification record](verification/native-headless.md).
 
 ## Browser GPU probe
 
@@ -127,7 +149,7 @@ that development tooling was excluded from a production binary.
 | Event / change | Work performed |
 | --- | --- |
 | PR: documentation or license text only | Scope-classifier checks and local Markdown link validation |
-| PR: source, toolchain, scripts, workflow, or any unrecognized path | The lightweight checks plus pinned bootstrap, native/JS/WasmGC, browser ABI/server, and headless SwiftShader verification |
+| PR: source, toolchain, scripts, workflow, or any unrecognized path | The lightweight checks plus pinned bootstrap, native/JS/WasmGC, browser ABI/server, headless SwiftShader, and native software-DX12 verification |
 | Manual dispatch | All checks, regardless of changed paths |
 | Ordinary branch or main push | No duplicate verification run |
 

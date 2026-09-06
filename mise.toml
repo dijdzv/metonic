@@ -52,3 +52,10 @@ run = "node scripts/verify-browser-headless.mjs"
 [tasks."browser:server-test"]
 depends = ["browser:build"]
 run = "node scripts/verify-browser-server.mjs"
+
+[tasks."native:build"]
+run = "pwsh -NoProfile -File scripts/build-native-probe.ps1"
+
+[tasks."native:headless"]
+depends = ["native:build"]
+run = "node scripts/verify-native-headless.mjs"

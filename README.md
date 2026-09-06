@@ -27,7 +27,9 @@ separate responsibilities.
 
 The current prototypes check typed procedure contracts on native, JavaScript,
 and WasmGC, and render an interactive rectangle through browser WebGPU with
-MoonBit-owned state. RPC handlers bind in-process; there are no network requests.
+MoonBit-owned state. A native headless probe renders the same scene through
+DX12 and exposes JSON-line operations for automated verification. RPC handlers
+bind in-process; there are no network requests.
 
 On Windows x64, install [mise](https://mise.jdx.dev/), PowerShell 7 (`pwsh`), and
 Visual Studio C++ build tools with the Windows SDK, then run:
@@ -52,6 +54,10 @@ mise exec -- pnpm install --frozen-lockfile
 mise run browser:install
 mise run browser:headless
 ```
+
+For native offscreen rendering, also install Rust through rustup, then run
+`mise run native:headless`. The pinned Rust toolchain and full setup are described
+in the development guide. This probe does not yet present a native window.
 
 Node and pnpm run development verification, including Playwright and screenshot
 inspection; neither is a native application runtime requirement. See the
