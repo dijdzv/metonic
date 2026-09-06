@@ -14,6 +14,10 @@ Use version tags for releases. Introduce maintenance branches only when parallel
 supported versions require them. Main requires a PR, disallows force pushes and
 deletion, and applies protection to administrators. External approval is optional.
 The `Windows verification` CI check must pass against the current base branch.
+It validates documentation on every PR and adds compiler/runtime verification
+for implementation, configuration, or unknown changes. Manual dispatch runs all
+checks. Ordinary pushes do not repeat the PR checks; future release-tag tasks
+will package or publish artifacts separately.
 
 Use mise as the command entry point and to pin Node for generated-JS verification.
 Pin MoonBit archives and their hashes in `toolchain.json`; install them into
@@ -24,14 +28,14 @@ The current baseline is MoonBit 0.10.11 from the non-dev distribution. Version
 updates must recheck official distribution metadata, update the pin, and rerun
 verification. Do not use a floating latest download in CI.
 
-There are no JavaScript package dependencies yet. Node is a test runtime; pnpm
+There are no JavaScript package dependencies yet. Node 26.8.1 is a test runtime; pnpm
 will be used if package management is needed. Bun is not required by the current
 workload. Native product builds do not depend on these development tools.
 
 ## Alternatives
 
 - Git Flow adds long-lived branches without a current maintenance need.
-- A global MoonBit install can silently differ between contributors.
+- A global MoonBit install can silently differ between development environments.
 - A third-party installer plugin adds a dependency while official fixed archives are available.
 - Automatic latest-on-every-build updates make compiler regressions hard to reproduce.
 

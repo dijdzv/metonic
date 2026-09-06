@@ -2,15 +2,13 @@ name: Verify
 
 on:
   pull_request:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: verify-${{ github.ref }}
+  group: verify-${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -21,14 +19,37 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
+      - name: Test CI scope classification
+        shell: pwsh
+        run: ./scripts/ci-scope.Tests.ps1
+      - name: Determine verification scope
+        id: scope
+        shell: pwsh
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch') {
+            ./scripts/ci-scope.ps1 -Full -WriteGitHubOutput
+          } else {
+            ./scripts/ci-scope.ps1 -BaseSha "$env:BASE_SHA" -HeadSha "$env:HEAD_SHA" -WriteGitHubOutput
+          }
+      - name: Verify tracked Markdown links
+        shell: pwsh
+        run: ./scripts/verify-docs.ps1
       - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+        if: github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true'
         with:
           version: 2026.8.5
           cache: false
       - name: Bootstrap pinned MoonBit
+        if: github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true'
         run: mise run bootstrap
       - name: Verify WasmGC and JavaScript
+        if: github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true'
         run: mise run verify
       - name: Verify Windows native
+        if: github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true'
         run: mise run verify-native
