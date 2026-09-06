@@ -34,8 +34,11 @@ static int enqueue(int32_t type, int32_t x, int32_t y) {
   return 1;
 }
 
+#include "async_workers.h"
+
 static LRESULT CALLBACK window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam) {
   switch (message) {
+    case WM_APP + 1: async_deliver((int32_t)wparam); return 0;
     case WM_PAINT: {
       PAINTSTRUCT paint; BeginPaint(hwnd, &paint); EndPaint(hwnd, &paint); enqueue(1, 0, 0); return 0;
     }
@@ -97,6 +100,8 @@ __declspec(dllexport) int32_t metonic_window_render(int32_t width, int32_t heigh
   if (!load_gpu()) return -1; return gpu_present(gpu_surface, width, height, x, y, w, h, active);
 }
 __declspec(dllexport) void metonic_window_destroy(void) {
+  metonic_async_shutdown();
+  if (metonic_async_pending() != 0) { fatal("worker join failed; retaining HWND and GPU resources"); return; }
   if (gpu_surface && gpu_destroy) gpu_destroy(gpu_surface); gpu_surface = NULL;
   if (gpu_module) FreeLibrary(gpu_module); gpu_module = NULL; gpu_create = NULL; gpu_present = NULL; gpu_destroy = NULL;
   if (window_handle) DestroyWindow(window_handle); window_handle = NULL;
