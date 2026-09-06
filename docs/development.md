@@ -2,7 +2,7 @@
 
 ## Windows x64 setup
 
-Install mise and Visual Studio C++ x64 build tools with the Windows SDK.
+Install mise, PowerShell 7 (`pwsh`), and Visual Studio C++ x64 build tools with the Windows SDK.
 From the repository root:
 
 ```powershell
@@ -21,8 +21,8 @@ temporary diagnostics stay under ignored `.tools`, `_build`, and `.work` paths.
 Run `mise run fmt` to format. For other MoonBit commands, use the project wrapper:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/moon.ps1 version --all
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/moon.ps1 check --target js
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/moon.ps1 version --all
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/moon.ps1 check --target js
 ```
 
 This explicit wrapper avoids falling back to an older global executable when

@@ -27,8 +27,8 @@ separate responsibilities.
 The current prototype checks typed procedure contracts on native, JavaScript,
 and WasmGC. It binds handlers in-process; it does not make network requests.
 
-On Windows x64, install [mise](https://mise.jdx.dev/) and Visual Studio C++ build
-tools with the Windows SDK, then run:
+On Windows x64, install [mise](https://mise.jdx.dev/), PowerShell 7 (`pwsh`), and
+Visual Studio C++ build tools with the Windows SDK, then run:
 
 ```powershell
 mise trust
