@@ -16,11 +16,13 @@ run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/doctor.mbtx'
 
 [tasks.verify]
 description = "Verify JS/WasmGC contracts and compile-fail fixtures"
-run = "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1"
+run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify.mbtx'
+env = { METONIC_VERIFY_NATIVE = "0" }
 
 [tasks.verify-native]
 description = "Verify contracts with Windows MSVC"
-run = "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1 -Native"
+run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify.mbtx'
+env = { METONIC_VERIFY_NATIVE = "1" }
 
 [tasks.pre-commit]
 description = "Run checks for staged changes"
@@ -95,6 +97,9 @@ run = "node scripts/verify-native-async.mjs"
 
 [tasks."native:binding"]
 run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-wgpu-binding.mbtx'
+
+[tasks."rpc:verify"]
+run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-rpc-http.mbtx'
 
 [tasks."text:verify"]
 run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-text-layout.mbtx'

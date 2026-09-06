@@ -1,0 +1,99 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/string",
+}
+
+///|
+fn parent(path : String) -> String {
+  let mut i = path.length() - 1
+  while i >= 0 {
+    if path[i] == (47).to_uint16() {
+      return if i == 0 { "." } else { path[:i].to_owned() }
+    }
+    i = i - 1
+  }
+  "."
+}
+
+///|
+fn skip_target(target : String) -> Bool {
+  let lower = target.to_lower()
+  target == "" ||
+  lower.has_prefix("http://") ||
+  lower.has_prefix("https://") ||
+  lower.has_prefix("mailto:") ||
+  target.has_prefix("#")
+}
+
+///|
+async fn check_file(path : String) -> Array[String] {
+  let text = @fs.read_file(path).text()
+  let missing : Array[String] = []
+  let mut cursor = 0
+  while cursor + 1 < text.length() {
+    if text[cursor] == (93).to_uint16() && text[cursor + 1] == (40).to_uint16() {
+      let start = cursor + 2
+      let mut end = start
+      while end < text.length() && text[end] != (41).to_uint16() {
+        end = end + 1
+      }
+      if end < text.length() {
+        let raw = text[start:end].to_owned().trim().to_owned()
+        let target = if raw.has_prefix("<") && raw.has_suffix(">") {
+          raw[1:raw.length() - 1].to_owned()
+        } else {
+          raw
+        }
+        if !skip_target(target) {
+          let fragment = match target.find("#") {
+            Some(i) => target[:i].to_owned()
+            None => target
+          }
+          let resolved = if fragment.has_prefix("/") {
+            fragment[1:].to_owned()
+          } else {
+            parent(path) + "/" + fragment
+          }
+          if !@fs.exists(resolved) {
+            missing.push(path + ": missing link " + target)
+          }
+        }
+      }
+      cursor = end + 1
+    } else {
+      cursor = cursor + 1
+    }
+  }
+  missing
+}
+
+///|
+async fn main {
+  let (code, out, err) = @process.collect_output(
+    "git",
+    ["ls-files", "*.md"],
+    no_console_window=true,
+  )
+  println(err.text())
+  if code != 0 {
+    abort("git ls-files failed")
+  }
+  let missing : Array[String] = []
+  for line in out.text().split("\n") {
+    let path = line.trim().to_owned()
+    if path != "" {
+      for item in check_file(path) {
+        missing.push(item)
+      }
+    }
+  }
+  if missing.length() > 0 {
+    for item in missing {
+      println(item)
+    }
+    abort("missing documentation links")
+  }
+  println("Markdown links verified")
+}

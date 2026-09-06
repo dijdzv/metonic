@@ -1,0 +1,5 @@
+import {
+  "local/p0/rpc/core" @rpc,
+  "moonbitlang/core/json" @codec,
+  "moonbitlang/core/encoding/utf8",
+}

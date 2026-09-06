@@ -1,3 +1,4 @@
 import {
   "local/p0/rpc/core" @rpc,
+  "moonbitlang/core/json",
 }

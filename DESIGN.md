@@ -193,7 +193,9 @@ Contracts contain data/schema information, not executable handlers or sessions.
 Server binding checks all three types. Network decoding and runtime validation
 remain necessary even when frontend and backend share source types.
 
-Start with HTTP/JSON while independently validating gRPC. Define protocol version,
+Start with HTTP/JSON; gRPC and its Protobuf schema/code generation remain optional.
+The comparison, tradeoffs and reconsideration criteria are in
+[ADR 028](docs/adr/028-rpc-wire-formats.md). Define protocol version,
 procedure ID, content type, size limits, deadlines, cancellation, and known/unknown
 error behavior. Distinguish domain errors, remote status, unavailable, timeout,
 cancelled, decode/protocol failure, and unsupported capabilities.
