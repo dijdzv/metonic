@@ -10,8 +10,11 @@ const files = new Map([
   ['/style.css', ['style.css', 'text/css; charset=utf-8']],
   ['/host.mjs', ['host.mjs', 'text/javascript; charset=utf-8']],
   ['/loader.mjs', ['loader.mjs', 'text/javascript; charset=utf-8']],
+  ['/text-renderer.mjs', ['text-renderer.mjs', 'text/javascript; charset=utf-8']],
   ['/app.mjs', ['app.mjs', 'text/javascript; charset=utf-8']],
   ['/app.wasm', ['app.wasm', 'application/wasm']],
+  ['/NotoSansJP.ttf', ['NotoSansJP.ttf', 'font/ttf']],
+  ['/OFL.txt', ['OFL.txt', 'text/plain; charset=utf-8']],
 ]);
 
 const server = http.createServer((req, res) => {

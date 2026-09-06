@@ -33,7 +33,7 @@ run = "mise generate git-pre-commit --write --task pre-commit"
 [tasks.fmt]
 run = "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/moon.ps1 fmt"
 [tasks."browser:build"]
-run = "pwsh -NoProfile -File scripts/build-browser.ps1"
+run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/build-browser.mbtx'
 
 [tasks."browser:serve"]
 depends = ["browser:build"]

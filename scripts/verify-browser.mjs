@@ -2,9 +2,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const js = await import('../.work/browser-dist/app.mjs');
+const { wasmImports } = await import('../examples/p0/browser/host/loader.mjs');
 const wasm = await WebAssembly.instantiate(
   fs.readFileSync(new URL('../.work/browser-dist/app.wasm', import.meta.url)),
-  {},
+  wasmImports(),
 );
 const wasmExports = wasm.instance.exports;
 

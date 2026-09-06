@@ -45,6 +45,12 @@ MCP SDK calls require small host adapters; orchestration and assertions should
 move to MoonBit where supported. Wrapping an unchanged script does not constitute
 a completed migration.
 
+`mise run browser:build` now uses `scripts/build-browser.mbtx` for compilation,
+asset verification and staging. It copies the pinned Noto Sans JP font and its
+OFL license into the ignored browser distribution. The browser checks the font
+hash again before passing bytes to MoonBit. DOM, WebGPU and Playwright calls
+remain in their host adapters.
+
 ## Local pre-commit checks
 
 `mise run hooks:install` uses mise's built-in Git hook generator. Run it once per
