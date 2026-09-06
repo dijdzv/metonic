@@ -3,7 +3,9 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path $PSScriptRoot -Parent
 Push-Location $repoRoot
 try {
-    & "$PSScriptRoot/doctor.ps1"
+    . "$PSScriptRoot/activate-toolchain.ps1"
+    & moon run "$PSScriptRoot/doctor.mbtx"
+    if ($LASTEXITCODE -ne 0) { throw 'Toolchain verification failed' }
     if ($Native) {
         $vswhere = "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe"
         $installation = (& $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath)

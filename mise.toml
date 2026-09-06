@@ -8,11 +8,11 @@ _.path = ["{{config_root}}/.tools/moonbit/bin"]
 
 [tasks.bootstrap]
 description = "Install the pinned current MoonBit toolchain with SHA256 verification"
-run = "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap.ps1"
+run = ["pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap.ps1", '.\\.tools\\moonbit\\bin\\moon.exe update']
 
 [tasks.doctor]
 description = "Check the project toolchain"
-run = "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/doctor.ps1"
+run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/doctor.mbtx'
 
 [tasks.verify]
 description = "Verify JS/WasmGC contracts and compile-fail fixtures"

@@ -4,6 +4,11 @@ Date: 2026-09-06.
 
 Status: proposed experiment; window and accessibility adapter choices remain open.
 
+Review update: the initial comparison omitted `wgpu-mbt`. Its Windows compute
+and surface-contract tests now pass locally; see the
+[existing binding evaluation](../verification/wgpu-mbt.md). The custom wrapper
+remains an experimental baseline while equivalent rendering is evaluated.
+
 ## Context and comparison
 
 The next native experiment must be operable through a command interface without
