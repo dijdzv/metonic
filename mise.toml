@@ -1,4 +1,5 @@
 [tools]
+pnpm = "12.3.4"
 node = "26.8.1"
 
 [env]
@@ -31,3 +32,23 @@ run = "mise generate git-pre-commit --write --task pre-commit"
 
 [tasks.fmt]
 run = "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/moon.ps1 fmt"
+[tasks."browser:build"]
+run = "pwsh -NoProfile -File scripts/build-browser.ps1"
+
+[tasks."browser:serve"]
+depends = ["browser:build"]
+run = "node scripts/serve-browser.mjs"
+
+[tasks."browser:verify"]
+depends = ["browser:build"]
+run = "node scripts/verify-browser.mjs"
+[tasks."browser:install"]
+run = "pnpm exec playwright install chromium"
+
+[tasks."browser:headless"]
+depends = ["browser:build"]
+run = "node scripts/verify-browser-headless.mjs"
+
+[tasks."browser:server-test"]
+depends = ["browser:build"]
+run = "node scripts/verify-browser-server.mjs"

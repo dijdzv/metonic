@@ -28,8 +28,8 @@ The current baseline is MoonBit 0.10.11 from the non-dev distribution. Version
 updates must recheck official distribution metadata, update the pin, and rerun
 verification. Do not use a floating latest download in CI.
 
-There are no JavaScript package dependencies yet. Node 26.8.1 is a test runtime; pnpm
-will be used if package management is needed. Bun is not required by the current
+Node 26.8.1 is a test runtime; pnpm 12.3.4 manages locked browser-verification
+dependencies. Bun is not required by the current
 workload. Native product builds do not depend on these development tools.
 
 ## Alternatives

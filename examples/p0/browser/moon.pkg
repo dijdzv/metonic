@@ -1,0 +1,11 @@
+import {
+  "local/p0/examples/p0/scene",
+}
+
+pkgtype(kind: "foreign_library")
+
+supported_targets = "+js+wasm-gc"
+
+options(
+  link: { "js": { "format": "esm" } },
+)
