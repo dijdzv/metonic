@@ -52,13 +52,19 @@ clone with the default Git hooks directory; it replaces `.git/hooks/pre-commit`,
 so preserve any custom hook before running it. Git must be able to find `mise`
 and PowerShell 7 on PATH.
 
-`mise run pre-commit` can also run the checks manually. It checks staged changes
-for whitespace errors. Staged Markdown changes trigger local link checks;
-staged MoonBit source or package changes trigger `moon fmt --check`.
-Formatting and link checks inspect the current working tree, including unstaged
-edits. The hook never rewrites, stages, or stashes files, so partial staging is
-preserved; it is not verification of an isolated staged snapshot. Full contract
-tests remain in the verification tasks and PR CI.
+`mise run pre-commit` runs the same local gate manually. The MoonBit `.mbtx`
+orchestrator rejects tracked unstaged edits, checks staged whitespace, runs
+MoonBit/Rust formatters and stops if formatting changes files. Review and stage
+those changes before retrying; the hook never stages or stashes them for you.
+It then runs MoonBit static checks, the native/JS/WasmGC contract tests, browser
+artifact/server/GPU/async checks, and native GPU/control/MCP/semantics/window/async
+tests, including the existing-binding comparison. Markdown links are also checked.
+Dependencies and headless Chromium must already be installed.
+
+All of these checks are required before a commit and push. The existing PS/MJS
+test implementations remain temporarily behind the MoonBit orchestration; this
+does not count as migrating their implementation. Untracked experiments are not
+validated by this gate until explicitly integrated into its checks.
 
 ## Toolchain updates
 
@@ -185,8 +191,9 @@ that development tooling was excluded from a production binary.
 ## Work and release flow
 
 - Use short-lived branches and small PRs. Squash merge after review and required checks.
-- Main requires a PR, resolved review conversations, and `Windows verification`
-  against the current base. Force pushes and deletion are prohibited, including for administrators.
+- Main requires a PR and resolved review conversations. Force pushes and deletion
+  are prohibited, including for administrators. Automated PR status checks are
+  not required during this initial local-verification phase.
 - Use issues for task tracking with a purpose and completion criteria. Use `Closes #N`
   only for a completed task; use `Refs #N` for partial progress.
 - Release from verified main commits with immutable `v0.x.y` tags. Add a maintenance
@@ -196,14 +203,12 @@ that development tooling was excluded from a production binary.
 
 | Event / change | Work performed |
 | --- | --- |
-| PR: documentation or license text only | Scope-classifier checks and local Markdown link validation |
-| PR: source, toolchain, scripts, workflow, or any unrecognized path | The lightweight checks plus pinned bootstrap, native/JS/WasmGC, browser ABI/server, headless SwiftShader, and native software-DX12 verification |
+| Pull request | No automatic duplicate verification |
 | Manual dispatch | All checks, regardless of changed paths |
 | Ordinary branch or main push | No duplicate verification run |
 
-The required job always runs for PRs; only its expensive steps are conditional.
-Unknown or empty change sets select full verification. Renames include both old
-and new paths. A failing classifier or link check fails the job.
+Local pre-commit is the normal verification gate. Manual dispatch is available
+for explicit hosted-environment diagnosis, not a requirement for every PR.
 Headless verification images and JSON are retained as CI artifacts for seven days,
 including failure images when available. Hosted software-GPU tests are distinct
 from the local physical-GPU verification record.
