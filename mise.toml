@@ -79,6 +79,13 @@ run = "node scripts/verify-native-mcp.mjs"
 depends = ["native:build"]
 run = "node scripts/verify-native-semantics.mjs"
 
+[tasks."native:window-build"]
+run = "pwsh -NoProfile -File scripts/build-native-window.ps1"
+
+[tasks."native:window"]
+depends = ["native:window-build"]
+run = "node scripts/verify-native-window.mjs"
+
 [tasks."native:cli"]
 depends = ["native:build"]
 run = "node tools/devtools/native-cli.mjs"

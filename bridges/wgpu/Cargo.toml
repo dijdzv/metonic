@@ -9,5 +9,6 @@ publish = false
 crate-type = ["cdylib"]
 
 [dependencies]
+raw-window-handle = "=0.6.2"
 wgpu = { version = "=30.0.1", default-features = false, features = ["dx12", "wgsl"] }
 pollster = "=1.0.1"
