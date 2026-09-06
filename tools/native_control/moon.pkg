@@ -1,0 +1,12 @@
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/process",
+  "moonbitlang/async/cond_var",
+  "local/p0/tools/native_wire" @wire,
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/debug",
+  "moonbitlang/core/json",
+}
+
+supported_targets = "+native+wasm"

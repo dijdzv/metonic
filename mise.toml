@@ -80,7 +80,13 @@ run = "node scripts/verify-native-mcp.mjs"
 
 [tasks."native:semantics"]
 depends = ["native:build"]
-run = "node scripts/verify-native-semantics.mjs"
+run = [
+  '.\\.tools\\moonbit\\bin\\moon.exe build tools/verify_native_semantics --target wasm --release --frozen --deny-warn',
+  '.\\.tools\\moonbit\\bin\\moonrun.exe _build/wasm/release/build/tools/verify_native_semantics/verify_native_semantics.wasm',
+]
+
+[tasks."native:client-test"]
+run = '.\\.tools\\moonbit\\bin\\moon.exe test tools/native_control --target wasm --frozen --deny-warn'
 
 [tasks."native:window-build"]
 run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/build-native.mbtx'

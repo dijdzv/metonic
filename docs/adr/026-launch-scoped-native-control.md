@@ -13,6 +13,13 @@ directory. The client selects absolute executable, DLL, and capture paths. There
 is no attach discovery or listening TCP endpoint. This inherited-stdio experiment
 does not settle the Windows named-pipe ACL and discovery requirements.
 
+The MoonBit client in `tools/native_control` provides the same launch-scoped
+transport for migrated development verification. Its pure JSON envelope and
+bounded line framing live in `tools/native_wire`; process scheduling and pipe
+ownership use the existing MoonBit async library on native/Wasm host runtimes.
+The Node client remains for CLI/MCP consumers until their behavior is migrated
+and verified. This host runtime choice does not establish browser WasmGC support.
+
 MoonBit remains the scene-state owner. The client correlates bounded JSON-line
 requests, limits outstanding operations, and translates completed RGBA captures
 to PNG. MCP types and dependencies exist only under the development tool root;
