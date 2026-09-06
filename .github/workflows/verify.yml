@@ -120,6 +120,11 @@ jobs:
         env:
           METONIC_GPU_FALLBACK: '1'
         run: node scripts/verify-native-mcp.mjs
+      - name: Verify native semantics
+        if: github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true'
+        env:
+          METONIC_GPU_FALLBACK: '1'
+        run: node scripts/verify-native-semantics.mjs
       - name: Save native headless fallback
         if: always() && (github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true')
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -144,6 +149,15 @@ jobs:
         with:
           name: native-mcp
           path: .work/native-mcp
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Save native semantics artifacts
+        if: always() && (github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true')
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: native-semantics
+          path: .work/native-semantics
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 7

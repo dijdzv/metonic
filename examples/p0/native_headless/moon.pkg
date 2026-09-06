@@ -1,6 +1,7 @@
 import {
   "local/p0/examples/p0/scene",
   "moonbitlang/core/json",
+  "local/p0/examples/p0/semantics",
 }
 
 pkgtype(kind: "executable")
