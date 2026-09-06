@@ -50,6 +50,32 @@ jobs:
       - name: Verify WasmGC and JavaScript
         if: github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true'
         run: mise run verify
+      - name: Verify browser artifacts
+        if: github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true'
+        run: mise run browser:verify
+      - name: Verify browser server
+        if: github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true'
+        run: mise run browser:server-test
+      - name: Install browser test dependencies
+        if: github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true'
+        run: pnpm install --frozen-lockfile
+      - name: Install headless Chromium
+        if: github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true'
+        run: mise run browser:install
+      - name: Verify headless WebGPU (software adapter)
+        if: github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true'
+        env:
+          METONIC_GPU_BACKEND: swiftshader
+        run: mise run browser:headless
+      - name: Save headless verification images
+        if: always() && (github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true')
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: browser-headless-swiftshader
+          path: .work/browser-headless/swiftshader
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Verify Windows native
         if: github.event_name == 'workflow_dispatch' || steps.scope.outputs.full == 'true'
         run: mise run verify-native

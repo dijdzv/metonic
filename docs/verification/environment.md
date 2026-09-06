@@ -15,7 +15,9 @@ hardware specification.
 | moon / moonrun | 0.1.20260827, d0aaa07 |
 | Visual Studio | 2022 Community; DevShell 17.5.3 |
 | Windows SDK include | 10.0.22000.0 |
-| Browser/GPU/IME execution | Not yet tested |
+| Headless browser | Chrome for Testing 153.0.8010.12, Playwright 1.63.0 |
+| Browser WebGPU | JS/WasmGC rectangle, input, resize, idle, stop verified headlessly |
+| Native GPU / IME execution | Not yet tested |
 
 ## Toolchain provenance
 
@@ -44,6 +46,7 @@ Compiler diagnostics use `VSLANG=1033`.
 
 ## Interpretation
 
-Native results are console contract tests, JS runs in Node, and WasmGC runs in
-moonrun. None demonstrates a working GPU UI, browser deployment, IME, or OS
-accessibility provider. GPU identification alone is not a rendering test.
+Native results remain console tests. The shared scene and RPC tests also run in
+Node and moonrun. The separate browser probe verifies an actual WebGPU rectangle
+through headless Chromium; it does not demonstrate a full UI framework, IME, or an
+OS accessibility provider. GPU identification alone is not a rendering test.

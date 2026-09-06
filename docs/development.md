@@ -52,9 +52,37 @@ SHA256, and record both archive hashes in `toolchain.json`. Update that pin in a
 run `bootstrap`, migrate source/configuration where necessary, then run both
 verification tasks. CI must use the same committed pin.
 
-Node 26.8.1 runs generated JavaScript; it is not a native product dependency. There are
-no JS packages to install yet. Use pnpm with a committed lockfile if they are added.
+Node 26.8.1 runs generated JavaScript; it is not a native product dependency.
+pnpm 12.3.4 manages the pinned Playwright and PNG inspection tools used by browser
+verification. Commit `pnpm-lock.yaml` and use `pnpm install --frozen-lockfile` in CI.
 Rust toolchain/lockfile selection belongs to the first native bridge implementation.
+
+## Browser GPU probe
+
+```powershell
+mise install
+mise exec -- pnpm install --frozen-lockfile
+mise run browser:install
+mise run browser:verify
+mise run browser:headless
+```
+
+`browser:verify` builds release JS/WasmGC artifacts and compares their exported
+state transitions in Node. `browser:headless` launches an isolated headless
+Chromium and a loopback-only server, drives input, and checks the resulting GPU
+pixels, resize, idle scheduling, and stop behavior. Screenshots and JSON results
+are local files under ignored `.work/browser-headless`. Both processes close at
+the end of verification. GPU unavailability is a failure, not a passed render test.
+The default backend uses normal browser adapter selection. For software-GPU CI,
+set `METONIC_GPU_BACKEND=swiftshader`; results identify the actual adapter and are
+stored separately under `.work/browser-headless/<backend>`. The software mode is
+an explicit test-browser configuration, not a fallback silently used in place of
+a physical GPU result. `browser:server-test` checks the local server's asset boundary.
+
+For direct inspection, `mise run browser:serve` serves the diagnostic harness at
+`http://127.0.0.1:4173/`; choose `?target=js` or `?target=wasm-gc`. Only the explicit
+distribution file list is served. These commands are prototype development tools,
+not a production UI, semantic adapter, or MCP server.
 
 ## Repository layout
 
@@ -99,13 +127,16 @@ that development tooling was excluded from a production binary.
 | Event / change | Work performed |
 | --- | --- |
 | PR: documentation or license text only | Scope-classifier checks and local Markdown link validation |
-| PR: source, toolchain, scripts, workflow, or any unrecognized path | The lightweight checks plus pinned bootstrap and native/JS/WasmGC verification |
+| PR: source, toolchain, scripts, workflow, or any unrecognized path | The lightweight checks plus pinned bootstrap, native/JS/WasmGC, browser ABI/server, and headless SwiftShader verification |
 | Manual dispatch | All checks, regardless of changed paths |
 | Ordinary branch or main push | No duplicate verification run |
 
 The required job always runs for PRs; only its expensive steps are conditional.
 Unknown or empty change sets select full verification. Renames include both old
 and new paths. A failing classifier or link check fails the job.
+Headless verification images and JSON are retained as CI artifacts for seven days,
+including failure images when available. Hosted software-GPU tests are distinct
+from the local physical-GPU verification record.
 
 There is no push-only task yet. Artifact packaging or publishing will use a
 separate release-tag workflow when distribution exists, rather than rerunning

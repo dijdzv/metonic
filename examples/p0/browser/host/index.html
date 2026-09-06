@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>metonic / Browser GPU probe</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<main>
+  <h1>metonic / Browser GPU probe</h1>
+  <p class="prototype">Early prototype: a real WebGPU probe for the MoonBit state model.</p>
+  <nav aria-label="Probe target"><a data-target="js" href="?target=js">JS prototype</a><a data-target="wasm-gc" href="?target=wasm-gc">WasmGC build</a></nav>
+  <section class="stage" aria-labelledby="stage-title">
+    <h2 id="stage-title">Interactive rectangle</h2>
+    <p>Click the rectangle to activate it. Use arrow keys to move by 10px; Space or Enter toggles active state.</p>
+    <canvas id="canvas" tabindex="0" aria-label="MoonBit rectangle canvas"></canvas>
+    <div class="controls"><button id="reset" type="button">Reset</button><button id="stop" type="button">Stop</button></div>
+    <p id="status" role="status" aria-live="polite">Loading…</p>
+    <details open><summary>Performance result</summary><dl>
+      <dt>Target</dt><dd id="target">—</dd><dt>Artifact bytes</dt><dd id="artifact-bytes">—</dd><dt>Load ms</dt><dd id="load-ms">—</dd>
+      <dt>GPU adapter</dt><dd id="adapter">—</dd><dt>CSS / backing dimensions</dt><dd id="dimensions">—</dd><dt>MoonBit revision</dt><dd id="revision">—</dd>
+      <dt>Submitted frames</dt><dd id="submitted">0</dd><dt>Transferred bytes</dt><dd id="transferred">0</dd>
+    </dl></details>
+  </section>
+</main>
+<script type="module" src="./host.mjs"></script>
+</body>
+</html>

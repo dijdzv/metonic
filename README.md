@@ -25,8 +25,9 @@ separate responsibilities.
 
 ## Try the current prototype
 
-The current prototype checks typed procedure contracts on native, JavaScript,
-and WasmGC. It binds handlers in-process; it does not make network requests.
+The current prototypes check typed procedure contracts on native, JavaScript,
+and WasmGC, and render an interactive rectangle through browser WebGPU with
+MoonBit-owned state. RPC handlers bind in-process; there are no network requests.
 
 On Windows x64, install [mise](https://mise.jdx.dev/), PowerShell 7 (`pwsh`), and
 Visual Studio C++ build tools with the Windows SDK, then run:
@@ -44,9 +45,17 @@ verifies download hashes, and bundles the standard library. It does not depend
 on an older global MoonBit installation. The baseline is **MoonBit 0.10.11**,
 checked against the current non-dev distribution on 2026-09-06.
 
-Node is used to run generated JavaScript during verification. There are no npm
-dependencies. If JavaScript packages become necessary, pnpm will manage them;
-neither Node nor pnpm is a native application runtime requirement.
+For the browser probe and automated headless GPU checks:
+
+```powershell
+mise exec -- pnpm install --frozen-lockfile
+mise run browser:install
+mise run browser:headless
+```
+
+Node and pnpm run development verification, including Playwright and screenshot
+inspection; neither is a native application runtime requirement. See the
+[development guide](docs/development.md) for commands and test boundaries.
 
 ## Documentation
 
