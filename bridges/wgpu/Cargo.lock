@@ -212,6 +212,7 @@ name = "metonic-wgpu-probe"
 version = "0.0.0"
 dependencies = [
  "pollster",
+ "raw-window-handle",
  "wgpu",
 ]
 

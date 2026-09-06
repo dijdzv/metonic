@@ -367,3 +367,7 @@ pub extern "C" fn metonic_gpu_destroy(ctx: *mut Context) {
         drop(Box::from_raw(ctx));
     }));
 }
+mod window;
+pub use window::{
+    WindowContext, metonic_surface_create, metonic_surface_destroy, metonic_surface_present,
+};

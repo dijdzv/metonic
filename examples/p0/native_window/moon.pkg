@@ -1,0 +1,11 @@
+import {
+  "local/p0/examples/p0/scene",
+}
+
+pkgtype(kind: "executable")
+
+supported_targets = "native"
+
+options(
+  "native-stub": [ "bridge.c" ],
+)
