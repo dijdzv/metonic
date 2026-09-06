@@ -85,3 +85,25 @@ test "selection uses UTF16 boundaries" {
   assert_eq(set_selection(tree, input, 2, 2), "invalid_selection")
   assert_eq(set_selection(tree, input, 0, 5), "invalid_selection")
 }
+
+///|
+test "invalid UTF16 text is rejected without mutation" {
+  let tree = create(1, 1)
+  let input = snapshot(tree)[1].reference
+  assert_eq(set_text(tree, input, "A😀e\u{0301}"), "")
+  assert_eq(revision(tree), 1)
+  assert_eq(set_selection(tree, input, 4, 5), "")
+  let before_revision = revision(tree)
+  let before = snapshot(tree)[1]
+  let high : String = String::from_array(['A', (0xD800).unsafe_to_char()])
+  let low : String = String::from_array(['A', (0xDC00).unsafe_to_char()])
+  assert_eq(set_text(tree, input, high), "invalid_text")
+  assert_eq(set_text(tree, input, low), "invalid_text")
+  assert_eq(revision(tree), before_revision)
+  let after = snapshot(tree)[1]
+  assert_eq(after.value, before.value)
+  assert_eq(after.selection_start, 4)
+  assert_eq(after.selection_end, 5)
+  assert_eq(set_selection(tree, input, 2, 2), "invalid_selection")
+  assert_eq(set_selection(tree, input, 4, 4), "")
+}

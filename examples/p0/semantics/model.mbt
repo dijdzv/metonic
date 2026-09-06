@@ -173,6 +173,8 @@ pub fn set_text(tree : Tree, reference : NodeRef, value : String) -> String {
       Some(node) =>
         if !node.enabled {
           "disabled"
+        } else if @text_position.utf16_to_scalar(value, 0) is None {
+          "invalid_text"
         } else if node.value == value {
           ""
         } else {
@@ -193,13 +195,7 @@ pub fn set_text(tree : Tree, reference : NodeRef, value : String) -> String {
 
 ///|
 fn selection_boundary(value : String, index : Int) -> Bool {
-  if index <= 0 || index >= value.length() {
-    true
-  } else {
-    let before = value.at(index - 1).to_int()
-    let after = value.at(index).to_int()
-    !(before >= 0xD800 && before <= 0xDBFF && after >= 0xDC00 && after <= 0xDFFF)
-  }
+  @text_position.utf16_to_scalar(value, index) is Some(_)
 }
 
 ///|
