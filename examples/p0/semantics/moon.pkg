@@ -1,1 +1,4 @@
 // Platform-independent semantic model.
+import {
+  "local/p0/examples/p0/text_position",
+}
