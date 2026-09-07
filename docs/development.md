@@ -89,7 +89,8 @@ Run `mise run native:window-rpc` for real HTTP success/domain-error checks
 through the development protocol, or `mise run native:window-mcp` for the same
 checks through the MCP SDK. Each verifier owns a loopback server and hidden
 native window. These checks establish result state and preservation of editor
-text; they do not yet establish the full HTTP failure matrix or browser parity.
+text. `native:window-rpc` also runs real-HTTP failure/recovery and pending-close
+scenarios described in [UI HTTP failures](verification/ui-rpc-failures.md).
 
 ## MoonBit scripts
 
@@ -388,9 +389,11 @@ bounds responses to 64 KiB and uses a three-second timeout.
 `browser:headless` checks real same-origin success and domain errors, editor
 preservation, and cancellation/replacement with an intercepted pending request
 on both targets. MoonBit tests separately deliver late responses after task
-replacement, cancellation and disposal. These checks do not yet establish the
-complete real-network timeout/disconnect/size-limit matrix or native/browser
-editing, IME and accessibility parity.
+replacement, cancellation and disposal. The packaged-UI scenario additionally
+uses real loopback HTTP for timeout, disconnect, size/depth/content failures,
+recovery, cancellation/replacement and stop with a pending request. See
+[UI HTTP failures](verification/ui-rpc-failures.md) for the fixture boundary.
+These checks do not establish physical IME or accessibility parity.
 
 `mise run browser:async` checks delayed completion while input remains responsive,
 superseded results, cancellation, failure, reset, and stop on both JS and WasmGC.

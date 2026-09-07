@@ -82,9 +82,10 @@ It also checks absence of the global and rejects requests for comparison assets.
 
 Screenshots use the actual canvas. The pinned Noto Sans JP font covers the tested
 Japanese/Latin text; the supplementary-character case does not establish emoji
-glyph coverage. Physical IME, full accessibility, device loss and the full RPC
-failure matrix remain separate requirements. Package exclusion does not make
-those unverified requirements complete.
+glyph coverage. Physical IME, full accessibility and device loss remain separate
+requirements. Additional [HTTP failure verification](ui-rpc-failures.md) covers
+real loopback failures, recovery and cancellation on this package. Package
+exclusion does not complete the remaining unverified requirements.
 
 ## Reproduction
 

@@ -100,13 +100,12 @@ fn rpc_apply(id : Int, result : Result[String, String]) -> Int {
 
 ///|
 #export_name("rpc_response")
-#warnings("-deprecated")
 pub fn rpc_response(id : Int, status : Int) -> Int {
   let text = match rpc_decode() {
     Some(value) => value
     None => return rpc_apply(id, Err("invalid_json"))
   }
-  let json = @json.parse(text, max_nesting_depth=32) catch {
+  let json = @wire.parse_bounded(text) catch {
     _ => return rpc_apply(id, Err("invalid_json"))
   }
   let result = match

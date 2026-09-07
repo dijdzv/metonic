@@ -72,6 +72,7 @@ async fn run_release(host : BrowserHost) -> String {
       "text": "Canceled",
     }),
   )
+  verify_rpc_failures(host)
   let before_width = command(host, { "op": "width" })
   ignore(command(host, { "op": "viewport", "width": 740 }))
   require(
@@ -97,6 +98,16 @@ async fn run_release(host : BrowserHost) -> String {
     }),
   )
   ignore(command(host, { "op": "click", "selector": "#task-start" }))
+  ignore(command(host, { "op": "fault-route" }))
+  ignore(
+    command(host, {
+      "op": "fill",
+      "selector": "#rpc-user",
+      "value": "slow-body",
+    }),
+  )
+  ignore(command(host, { "op": "click", "selector": "#rpc-load" }))
+  fixture_activity(host, false)
   ignore(command(host, { "op": "click", "selector": "#stop" }))
   ignore(
     command(host, {
@@ -111,6 +122,8 @@ async fn run_release(host : BrowserHost) -> String {
     "release input remains enabled after stop",
   )
   let stopped = command(host, { "op": "image", "name": "stopped" })
+  fixture_activity(host, true)
+  ignore(command(host, { "op": "fault-route-off" }))
   ignore(command(host, { "op": "late-input" }))
   require(
     command(host, { "op": "image", "name": "late" }) == stopped,
@@ -128,7 +141,7 @@ async fn run_release(host : BrowserHost) -> String {
     command(host, { "op": "errors" }) == Json::array([]),
     "release page errors",
   )
-  return "{\"ordinary_ui\":true,\"rendered_edit_and_rpc\":true,\"resize\":true,\"stop\":true,\"development_excluded\":true}"
+  return "{\"ordinary_ui\":true,\"rendered_edit_and_rpc\":true,\"resize\":true,\"stop\":true,\"development_excluded\":true,\"rpc_failures\":8,\"rpc_recovery\":8,\"rpc_cancel_replace\":2}"
 }
 
 ///|

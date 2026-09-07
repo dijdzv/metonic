@@ -30,7 +30,7 @@ pub async fn get_user(base : String, id : String) -> Result[@api.User, String] {
           bytes.push(byte)
         }
       }
-      let json = @json.parse(@utf8.decode(Bytes::from_array(bytes))) catch {
+      let json = @wire.parse_bounded(@utf8.decode(Bytes::from_array(bytes))) catch {
         _ => return Err("invalid_json")
       }
       match

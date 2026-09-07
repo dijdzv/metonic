@@ -1,0 +1,156 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/async@0.21.2/http",
+  "moonbitlang/core/json",
+}
+
+///|
+struct Reply {
+  id : Int
+  error : String
+  task_status : Int
+  rpc_result : String
+  text : String
+} derive(FromJson)
+
+///|
+struct Session {
+  reader : @process.ReadFromProcess
+  writer : @process.WriteToProcess
+  mut id : Int
+}
+
+///|
+async fn call(session : Session, value : Json) -> Reply {
+  let fields = match value {
+    Object(fields) => fields
+    _ => abort("request object")
+  }
+  session.id += 1
+  fields.set("id", session.id.to_json())
+  session.writer.write(Json::object(fields).stringify() + "\n")
+  let reply : Reply = @json.from_json(
+    @json.parse(session.reader.read_until("\n").unwrap()),
+  )
+  assert_eq(reply.id, session.id)
+  assert_eq(reply.error, "")
+  reply
+}
+
+///|
+async fn completed(session : Session) -> Reply {
+  for _ in 0..<250 {
+    let reply = call(session, { "op": "snapshot" })
+    if reply.task_status != 1 {
+      return reply
+    }
+    @async.sleep(20)
+  }
+  abort("UI request did not complete")
+}
+
+///|
+async fn activity(base : String, idle : Bool) -> Unit {
+  for _ in 0..<300 {
+    let (_, response) = @http.request(base + "/active", @http.Get, Map([]), "")
+    if (response.text() == "0") == idle {
+      return
+    }
+    @async.sleep(20)
+  }
+  abort("fixture activity did not settle")
+}
+
+///|
+async fn main {
+  @async.with_timeout(60000, () => {
+    @async.with_task_group(group => {
+      let (ready_reader, ready_stdout) = @process.read_from_process()
+      defer ready_reader.close()
+      let fixture = @process.spawn(
+        group,
+        ".tools/moonbit/bin/moonrun.exe",
+        [
+          "_build/wasm/release/build/tools/rpc_fault_server/rpc_fault_server.wasm",
+        ],
+        stdout=ready_stdout,
+        no_console_window=true,
+        cancel_handler=@process.hard_cancel(),
+      )
+      defer fixture.cancel()
+      let ready = ready_reader.read_until("\n").unwrap().trim().to_owned()
+      assert_true(ready.has_prefix("RPC_FAULT_READY 127.0.0.1:"))
+      let base = "http://" + ready[16:].to_owned()
+      let (stdin, writer) = @process.write_to_process()
+      defer writer.close()
+      let (reader, stdout) = @process.read_from_process()
+      defer reader.close()
+      let ui = @process.spawn(
+        group,
+        ".work/native-host-build/native/debug/build/local/native_host/window_dev/window_dev.exe",
+        [],
+        stdin~,
+        stdout~,
+        no_console_window=true,
+        extra_env=Map([("METONIC_DEV_HIDDEN", "1"), ("METONIC_RPC_BASE", base)]),
+      )
+      defer ui.cancel()
+      let session = Session::{ reader, writer, id: 0, }
+      let initial = call(session, { "op": "snapshot" })
+      let mut expected = initial.text
+      for
+        scenario in [
+          ("timeout", "timeout"),
+          ("slow-body", "timeout"),
+          ("disconnect", "transport_error"),
+          ("oversize", "response_too_large"),
+          ("invalid-json", "invalid_json"),
+          ("deep-json", "invalid_json"),
+          ("content-type", "invalid_content_type"),
+          ("protocol", "protocol:invalid_input"),
+        ] {
+        let (mode, error) = scenario
+        ignore(call(session, { "op": "load_user", "user_id": mode }))
+        let failed = completed(session)
+        assert_eq(failed.task_status, 3)
+        assert_eq(failed.rpc_result, "\nRPC: " + error, msg=mode)
+        assert_eq(failed.text, expected)
+        expected += "x"
+        assert_eq(call(session, { "op": "insert", "text": "x" }).text, expected)
+        ignore(call(session, { "op": "load_user", "user_id": "1" }))
+        let recovered = completed(session)
+        assert_eq(recovered.task_status, 2)
+        assert_eq(recovered.rpc_result, "\n月兎")
+        assert_eq(recovered.text, expected)
+      }
+      ignore(call(session, { "op": "load_user", "user_id": "limit" }))
+      let boundary = completed(session)
+      assert_eq(boundary.task_status, 2)
+      assert_eq(boundary.rpc_result, "\n月兎")
+      activity(base, true)
+      for mode in ["cancel", "replace"] {
+        ignore(call(session, { "op": "load_user", "user_id": "slow-body" }))
+        activity(base, false)
+        if mode == "cancel" {
+          assert_eq(call(session, { "op": "cancel_update" }).task_status, 4)
+        }
+        ignore(call(session, { "op": "load_user", "user_id": "1" }))
+        assert_eq(completed(session).rpc_result, "\n月兎")
+        activity(base, true)
+        let settled = call(session, { "op": "snapshot" })
+        assert_eq(settled.task_status, 2)
+        assert_eq(settled.rpc_result, "\n月兎")
+        assert_eq(settled.text, expected)
+      }
+      ignore(call(session, { "op": "load_user", "user_id": "slow-body" }))
+      activity(base, false)
+      writer.close()
+      assert_eq(@async.with_timeout(2000, () => ui.wait()), 0)
+      activity(base, true)
+      println(
+        "WINDOW_RPC_FAILURES_OK failures=8 recovery=8 cancel_replace=2 close_pending=true active=0",
+      )
+    })
+  })
+}

@@ -87,6 +87,7 @@ run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/report-browser-comparison.m
 [tasks."browser:headless"]
 depends = ["browser:package"]
 run = [
+  '.\\.tools\\moonbit\\bin\\moon.exe build tools/rpc_fault_server --target wasm --release --frozen --deny-warn',
   '.\\.tools\\moonbit\\bin\\moon.exe build tools/verify_browser_pixels --target js --release --frozen --deny-warn',
   '.\\.tools\\moonbit\\bin\\moon.exe test tools/verify_browser_pixels --target js --release --frozen --deny-warn',
   '.\\.tools\\moonbit\\bin\\moon.exe build tools/browser_supervisor --target wasm --release --frozen --deny-warn',
@@ -217,8 +218,10 @@ run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-window-control.mbtx'
 [tasks."native:window-rpc"]
 depends = ["native:window-dev-build"]
 run = [
+  '.\\.tools\\moonbit\\bin\\moon.exe build tools/rpc_fault_server --target wasm --release --frozen --deny-warn',
   '.\\.tools\\moonbit\\bin\\moon.exe build examples/p0/rpc_server --target wasm --release --frozen --deny-warn',
   '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-window-rpc.mbtx',
+  '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-window-rpc-failures.mbtx',
 ]
 
 [tasks."native:window-mcp"]
