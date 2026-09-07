@@ -1,4 +1,6 @@
 import {
+  "local/p0/examples/p0/semantics",
+  "local/p0/examples/p0/text_position",
   "local/p0/rpc/json" @wire,
   "local/p0/examples/p0/backend/api",
   "moonbitlang/core/json",

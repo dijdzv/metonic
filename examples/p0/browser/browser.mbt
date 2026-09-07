@@ -4,6 +4,7 @@ let state : Ref[@scene.State] = { val: @scene.create(), }
 ///|
 #export_name("init")
 pub fn reset_state() -> Unit {
+  reset_editor()
   ignore(@task_scope.dispose(taskScope.val))
   taskScope.val = @task_scope.create()
   state.val = @scene.create()

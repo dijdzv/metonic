@@ -316,6 +316,19 @@ distribution file list and sample `/rpc` endpoint are served. These commands are
 not a production UI, semantic adapter, or MCP server.
 
 Use **Load user** to request user `1`, or another ID to observe the domain error.
+The browser input adapter sends committed text and UTF-16 selection to the same
+MoonBit semantic model used by the native window. GPU text reads that state;
+HTTP completion and resize do not import editor contents from the DOM.
+Composition updates use the shared preview model without mutating committed text.
+On composition end the adapter accepts the browser's final value and selection,
+including cancellation, rather than interpreting empty composition data as deletion.
+Reset replaces the editor and stop disposes it.
+
+The headless editor flow checks synthetic composition over a supplementary
+character, HTTP completion, resize, reset and events after stop on JS and WasmGC.
+It does not establish physical IME candidate placement or browser/IME-specific
+composition event ordering. Those still require the browser IME evaluation.
+
 The MoonBit JSON contract encodes and decodes requests on both JS and WasmGC;
 fetch owns browser HTTP I/O and abort signals. Responses update the shared task
 scope and append result text to the GPU text layer without replacing the editor.
