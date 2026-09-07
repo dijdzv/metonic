@@ -1,0 +1,119 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/debug",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/env",
+}
+
+///|
+fn absolute(path : String) -> Bool {
+  let chars = path.to_array()
+  let drive = chars.length() >= 3 &&
+    (
+      (chars[0] >= 'A' && chars[0] <= 'Z') ||
+      (chars[0] >= 'a' && chars[0] <= 'z')
+    ) &&
+    chars[1] == ':' &&
+    (chars[2] == '\\' || chars[2] == '/')
+  let unc = chars.length() >= 2 && chars[0] == '\\' && chars[1] == '\\'
+  let unix = chars.length() > 0 && chars[0] == '/'
+  drive || unc || unix
+}
+
+///|
+async fn run_mode(executable : String, mode : String) -> Bool {
+  let started = @async.now()
+  let mut timed_out = false
+  let mut result : (Int, String, String)? = None
+  let mut other_error : Error? = None
+  try {
+    result = Some(
+      @async.with_timeout(5000, async fn() {
+        @async.with_task_group() <| group => {
+          let (stdout_reader, stdout_output) = @process.read_from_process()
+          let (stderr_reader, stderr_output) = @process.read_from_process()
+          group.add_defer(fn() {
+            stdout_reader.close()
+            stderr_reader.close()
+          })
+          let child = @process.spawn(
+            group,
+            executable,
+            [mode],
+            stdout=stdout_output,
+            stderr=stderr_output,
+            no_console_window=true,
+            no_wait=true,
+            cancel_handler=@process.hard_cancel(),
+          )
+          let stdout_task = group.spawn() <| () => {
+            @utf8.decode_lossy(stdout_reader.read_all().binary())
+          }
+          let stderr_task = group.spawn() <| () => {
+            @utf8.decode_lossy(stderr_reader.read_all().binary())
+          }
+          let exit_code = child.wait()
+          (exit_code, stdout_task.wait(), stderr_task.wait())
+        }
+      }),
+    )
+  } catch {
+    @async.TimeoutError as error => {
+      timed_out = true
+      other_error = Some(error)
+    }
+    error => other_error = Some(error)
+  }
+  let elapsed = (@async.now() - started).to_int()
+  match result {
+    Some((exit_code, stdout, stderr)) => {
+      println(
+        "mode=" +
+        mode +
+        " timeout=false exit=" +
+        exit_code.to_string() +
+        " elapsed_ms=" +
+        elapsed.to_string(),
+      )
+      println("mode=" + mode + " stdout=" + stdout)
+      println("mode=" + mode + " stderr=" + stderr)
+      exit_code == 0
+    }
+    None if timed_out => {
+      println(
+        "mode=" + mode + " timeout=true elapsed_ms=" + elapsed.to_string(),
+      )
+      false
+    }
+    None => {
+      match other_error {
+        Some(error) =>
+          println(
+            "mode=" + mode + " timeout=false error=" + @debug.to_string(error),
+          )
+        None => println("mode=" + mode + " timeout=false error=unknown")
+      }
+      false
+    }
+  }
+}
+
+///|
+async fn main {
+  let args = @env.args()
+  if args.length() < 2 || !absolute(args[1]) {
+    println("usage: observe-window-pump <absolute-executable>")
+    abort("invalid executable argument")
+  }
+  let executable = args[1]
+  let mut all_ok = true
+  for mode in ["wait", "poll", "wait-until", "proxy"] {
+    if !run_mode(executable, mode) {
+      all_ok = false
+    }
+  }
+  if !all_ok {
+    abort("window pump observation failed")
+  }
+}

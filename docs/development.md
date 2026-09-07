@@ -109,6 +109,10 @@ script checks output artifacts and rejects unsupported modes before building.
 Headless rendering uses the existing wgpu binding; the window/worker Rust and C
 implementation remains under comparison.
 
+The opt-in [Windows event-pump evaluation](verification/windows-event-pump.md)
+records the candidate window library's wakeup and pumping behavior. It does not
+replace the normal window/worker verification gate.
+
 Bootstrap, verification, pre-commit and native builds run
 `scripts/prepare-wgpu.mbtx` before using the root module's wgpu binding.
 It downloads the pinned Windows x64 MSVC
