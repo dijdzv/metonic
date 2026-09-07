@@ -65,7 +65,10 @@ env = { METONIC_NATIVE_BUILD = "headless" }
 
 [tasks."native:headless"]
 depends = ["native:build"]
-run = "node scripts/verify-native-headless.mjs"
+run = [
+  '.\\.tools\\moonbit\\bin\\moon.exe build tools/verify_native_headless --target wasm --release --frozen --deny-warn',
+  '.\\.tools\\moonbit\\bin\\moonrun.exe _build/wasm/release/build/tools/verify_native_headless/verify_native_headless.wasm',
+]
 
 [tasks."devtools:test"]
 run = "node --test tools/devtools/native-client.test.mjs"
