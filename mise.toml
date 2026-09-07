@@ -119,7 +119,19 @@ run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-text-layout.mbtx'
 
 [tasks."native:cli"]
 depends = ["native:build"]
-run = "node tools/devtools/native-cli.mjs"
+run = [
+  '.\\.tools\\moonbit\\bin\\moon.exe build tools/native_cli --target wasm --release --frozen --deny-warn',
+  '.\\.tools\\moonbit\\bin\\moonrun.exe _build/wasm/release/build/tools/native_cli/native_cli.wasm',
+]
+
+[tasks."native:cli-test"]
+depends = ["native:build"]
+run = [
+  '.\\.tools\\moonbit\\bin\\moon.exe build tools/native_cli --target wasm --release --frozen --deny-warn',
+  '.\\.tools\\moonbit\\bin\\moon.exe build tools/verify_native_cli --target wasm --release --frozen --deny-warn',
+  '.\\.tools\\moonbit\\bin\\moon.exe test tools/cli_lines --target wasm --frozen --deny-warn',
+  '.\\.tools\\moonbit\\bin\\moonrun.exe _build/wasm/release/build/tools/verify_native_cli/verify_native_cli.wasm',
+]
 
 [tasks."native:mcp"]
 depends = ["native:build"]
