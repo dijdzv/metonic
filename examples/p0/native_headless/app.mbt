@@ -221,6 +221,7 @@ async fn handle_line(
   tree : @semantics.Tree,
   frame : Ref[Int],
   renderer : Ref[@gpu.Renderer?],
+  initialization : @gpu.Initialization,
 ) -> Bool {
   let result : Bool = match line {
     @lines.InputLine::TooLong => emit_error(state, tree, frame, "line_too_long")
@@ -298,6 +299,7 @@ async fn handle_line(
                       @scene.field(state, 2),
                       @scene.field(state, 3),
                       @scene.field(state, 4),
+                      initialization,
                     )
                     if result == 0 {
                       frame.val += 1
@@ -323,7 +325,10 @@ async fn handle_line(
                 Some(value) => value.is_poisoned()
                 None => false
               }
-              emitted && !shutdown && !poisoned
+              emitted &&
+              !shutdown &&
+              !poisoned &&
+              initialization.pending_count() == 0
             }
           }
         }
@@ -339,6 +344,7 @@ async fn main {
   let tree = @semantics.create(1, 1)
   let frame : Ref[Int] = { val: 0, }
   let renderer : Ref[@gpu.Renderer?] = { val: None, }
+  let initialization = @gpu.Initialization::new()
   defer {
     ignore(@semantics.dispose(tree))
     match renderer.val {
@@ -351,14 +357,18 @@ async fn main {
   while running && @stdio.stdin.read_some(max_len=4096) is Some(chunk) {
     for line in lines.feed(chunk) {
       if running {
-        running = handle_line(line, state, tree, frame, renderer)
+        running = handle_line(
+          line, state, tree, frame, renderer, initialization,
+        )
       }
     }
   }
   if running {
     for line in lines.finish() {
       if running {
-        running = handle_line(line, state, tree, frame, renderer)
+        running = handle_line(
+          line, state, tree, frame, renderer, initialization,
+        )
       }
     }
   }

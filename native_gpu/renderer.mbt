@@ -48,18 +48,22 @@ priv suberror RendererError {
   RendererInvalidDimensions
   RendererInvalidRectangle
   RendererPendingReadback
+  RendererPendingInitialization
 }
 
 ///|
-pub fn Renderer::new(force_fallback : Bool) -> Renderer raise Error {
+pub async fn Renderer::new(
+  force_fallback : Bool,
+  initialization : Initialization,
+) -> Renderer raise Error {
+  if initialization.pending_count() != 0 {
+    raise RendererPendingInitialization
+  }
   let instance = @wgpu.Instance::create()
   errdefer instance.release()
-  let adapter = instance.request_adapter_sync_options_u32(
-    backend_type_u32=@wgpu.BACKEND_TYPE_D3_D12,
-    force_fallback_adapter=force_fallback,
-  )
+  let adapter = initialize_adapter(initialization, instance, force_fallback)
   errdefer adapter.release()
-  let device = adapter.request_device_sync(instance)
+  let device = initialize_device(initialization, instance, adapter)
   let queue = device.queue()
   let pool = @wgpu.AutoReleasePool::new()
   let layout = pool.track_bind_group_layout(

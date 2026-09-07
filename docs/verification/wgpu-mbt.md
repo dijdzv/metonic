@@ -186,8 +186,26 @@ Reproduce with `mise run native:binding`, and repeat with
 10,000-iteration cap. A request that remains pending aborts the test process
 instead of clearing its callback slot. This does not demonstrate in-process
 timeout recovery, actual task cancellation, a driver stall, or responsive GUI
-event processing. The application renderer still uses synchronous initialization
-until those ownership and integration requirements are met.
+event processing.
+
+The root renderer now uses retained asynchronous adapter/device requests.
+On 2026-09-07 the native module suite passed 81 tests on both default and fallback
+DX12. The new initialization tests cover terminal success/error, timeout,
+permanently pending ownership, late-result reclamation, duplicate IDs, result
+transfer failure, and actual task cancellation. Separate tests leave terminal
+results to the active task and protected cleanup task when `reap()` is called
+before those tasks resume. Fake callbacks check exactly-once discard and clear;
+these are ownership fixtures, not simulated driver stalls.
+
+Real adapter and device requests also pass forced zero-primary-poll-budget
+timeouts, bounded terminal cleanup, and subsequent initialization with the same
+owner, including queue access. Reproduce after toolchain and native build
+environment setup with `moon test --target native --deny-warn --frozen`, repeating
+with `METONIC_GPU_FALLBACK=1`. The default initialization budget is ten seconds
+and cleanup has a separate one-second budget; polling also has iteration limits.
+The headless command/capture verifier passed on both adapters after integration
+(`mise run native:headless`). Actual driver hangs, device loss and interactive
+Windows event-loop responsiveness remain unverified.
 
 The candidate also exposes asynchronous submit/map, status, read and clear APIs.
 In upstream commit `5b0608223bc491688a6f0f41492f23682717bc3b`,

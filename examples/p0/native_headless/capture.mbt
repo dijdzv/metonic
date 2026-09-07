@@ -23,6 +23,7 @@ async fn capture(
   w : Int,
   h : Int,
   active : Int,
+  initialization : @gpu.Initialization,
 ) -> Int raise Error {
   let path = match @env.get_env_var("METONIC_CAPTURE_PATH") {
     Some(value) if absolute_capture_path(value) => value
@@ -33,6 +34,7 @@ async fn capture(
     None => {
       let value = @gpu.Renderer::new(
         @env.get_env_var("METONIC_GPU_FALLBACK") == Some("1"),
+        initialization,
       ) catch {
         error => {
           if @async.is_cancellation_error(error) {
