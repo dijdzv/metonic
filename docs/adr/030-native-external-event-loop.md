@@ -48,6 +48,23 @@ termination and rethrow after cleanup; a cleanup result cannot hide main failure
 The [resource experiment](../verification/native-resource-cleanup.md) records
 the local patches, handle-count comparison and untested failure paths.
 
+For the next GPU integration comparison, reuse the existing `native_gpu`
+renderer and initialization owner unchanged. Obtain HWND and HINSTANCE from the
+candidate's public window API and convert them through the published wgpu binding;
+do not add another handle or renderer bridge. Finish initial presentation before
+starting application I/O/tasks. Derive surface dimensions from window events and
+verify requested client dimensions rather than substituting outer-window sizes.
+On termination, require no pending initialization, then release renderer, surface
+and instance before destroying the application and message windows. Track this
+adoption prerequisite in [Issue 75](https://github.com/dijdzv/metonic/issues/75).
+
+Explicit redraw requests use the candidate's existing MoonBit queue so hidden
+development windows do not depend on OS paint delivery. Pending redraws suppress
+OS waiting for that pump. Client-size requests use Windows style/DPI adjustment
+through borrowed-buffer FFI, preserving the requested client dimensions. The
+[GPU integration record](../verification/windows-gpu-external-loop.md) describes
+the direct ABI inspection and measured boundaries.
+
 ## Consequences
 
 The existing worker probe stays intact during comparison. Passing this experiment

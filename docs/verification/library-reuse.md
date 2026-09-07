@@ -23,6 +23,9 @@ responsibility and tests are established; keep demonstration hosts in examples.
 Dependency experiments use isolated modules under `experiments` during comparison.
 The Windows candidate now has a locally evaluated bounded-pump correction and
 positive/negative contract comparison; see [event-pump results](windows-event-pump.md).
+The [GPU external-loop comparison](windows-gpu-external-loop.md) reuses the
+unchanged renderer in an isolated workspace; it does not yet replace the product
+window/worker host.
 The initial checkout checks below remain historical results, not adoption claims.
 The font-backed browser integration now uses a root `text_raster` package and pins
 moon_cosmic in the root module. Demonstration hosts remain under `examples/p0`.
