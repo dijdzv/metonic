@@ -103,7 +103,10 @@ run = [
 
 [tasks."native:mcp-test"]
 depends = ["native:build", "native:session-build"]
-run = "node scripts/verify-native-mcp.mjs"
+run = [
+  '.\\.tools\\moonbit\\bin\\moon.exe build tools/verify_native_mcp --target js --release --frozen --deny-warn',
+  'node scripts/verify-native-mcp.mjs',
+]
 
 [tasks."native:semantics"]
 depends = ["native:build"]
