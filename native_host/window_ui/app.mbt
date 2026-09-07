@@ -56,6 +56,7 @@ struct App {
   mut shift_pressed : Bool
   mut raster : @raster.Engine?
   mut rendered_text : String?
+  mut rendered_result : String
   mut rendered_selection : (Int, Int)
   mut rendered_caret : Int?
   mut text_width : Int
@@ -221,7 +222,7 @@ fn App::draw(self : App) -> Unit raise Error {
         Some(composition) => composition.preview(self.preedit)
         None => None
       }
-      let text = preview.unwrap_or(node.value) + self.rpc_result
+      let text = preview.unwrap_or(node.value)
       let selection = if preview is Some(_) {
         (node.selection_start, node.selection_start + self.preedit.length())
       } else {
@@ -240,10 +241,22 @@ fn App::draw(self : App) -> Unit raise Error {
       }
       let width = (@scene.field(self.state, 6) - 16).max(1).min(640)
       if self.rendered_text != Some(text) ||
+        self.rendered_result != self.rpc_result ||
         self.text_width != width ||
         self.rendered_selection != selection ||
         self.rendered_caret != visible_caret {
-        let pixels = @raster.render(
+        // Rendering the result last would replace the editor layout used by IME and hit testing.
+        let status = if self.rpc_result == "" {
+          b""
+        } else {
+          @raster.render(
+            self.raster.unwrap(),
+            self.rpc_result.trim().to_owned(),
+            width,
+            32,
+          )
+        }
+        let editor_pixels = @raster.render(
           self.raster.unwrap(),
           text,
           width,
@@ -251,8 +264,24 @@ fn App::draw(self : App) -> Unit raise Error {
           selection~,
           caret=visible_caret,
         )
-        renderer.set_text_pixels(width, 96, pixels)
+        let pixels = Bytes::makei(editor_pixels.length() + status.length(), index => {
+          if index < editor_pixels.length() {
+            editor_pixels[index]
+          } else {
+            status[index - editor_pixels.length()]
+          }
+        })
+        renderer.set_text_pixels(
+          width,
+          if status.length() == 0 {
+            96
+          } else {
+            128
+          },
+          pixels,
+        )
         self.rendered_text = Some(text)
+        self.rendered_result = self.rpc_result
         self.rendered_selection = selection
         self.rendered_caret = visible_caret
         self.text_width = width
@@ -356,6 +385,7 @@ async fn run_loop(
     shift_pressed: false,
     raster: None,
     rendered_text: None,
+    rendered_result: "",
     rendered_selection: (-1, -1),
     rendered_caret: None,
     text_width: 0,

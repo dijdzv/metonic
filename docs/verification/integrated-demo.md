@@ -31,6 +31,9 @@ editing session. Perform the sequence separately in each UI.
 
 For a domain error, the browser can request `missing`. The native shortcut uses
 user `1`; arbitrary IDs are available through the separate development CLI/MCP.
+Native HTTP results use a dedicated row below the editor, so multiline editor
+contents do not push the result out of its viewport. The editor itself remains
+a fixed-height viewport without scrolling.
 Native left/right keys edit while text is focused; Tab switches between text and
 the scene, and clicking the scene returns its keyboard focus. Scene focus enables
 Up/down movement and Enter/Space activation. Those keys do not operate the scene
