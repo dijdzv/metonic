@@ -22,9 +22,21 @@ Retain each pending readback ticket and its native references until terminal
 completion. A timeout starts a separate bounded cancellation drain. If that
 drain leaves a pending ticket, stop the headless command loop after its failure
 response and terminate the owning process instead of accepting more GPU work.
-Do not describe a pending callback as reclaimed. Synchronous adapter/device
-initialization remains contained by the parent process deadline; it is not
-approved for the interactive UI thread.
+Do not describe a pending callback as reclaimed.
+
+Adapter/device initialization uses the binding's asynchronous request API. An
+`Initialization` owner retains each request and its native references. Timeout
+or task cancellation starts a separate bounded drain; a still-pending request
+remains owned and becomes eligible for later reclamation. `reap()` only consumes
+terminal abandoned requests and returns the number still retained. Active
+requests, including those in the protected drain, remain under their task's
+ownership. Transfer a successful handle only after the cancellation checkpoint,
+and clear callback storage only after terminal completion.
+
+The headless host stops accepting commands after an initialization failure that
+leaves a pending request. The parent process deadline remains the containment
+boundary for native calls that do not return. Interactive event-loop integration
+and actual driver-stall recovery require separate verification.
 
 Static linking removes runtime custom-DLL selection from this host. Captures
 still require an absolute launch-selected output path. Only successful GPU

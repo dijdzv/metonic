@@ -40,7 +40,7 @@ fn assert_frame(
 ///|
 async test "persistent renderer whitebox lifecycle" {
   let fallback = @env.get_env_var("METONIC_GPU_FALLBACK") == Some("1")
-  let renderer = Renderer::new(fallback)
+  let renderer = Renderer::new(fallback, Initialization::new())
   defer renderer.close()
   let adapter_name = renderer.adapter_name()
   assert_true(adapter_name.length() > 0, msg="missing adapter name")
