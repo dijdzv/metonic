@@ -1,0 +1,23 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+}
+
+///|
+async fn main {
+  let root = ".work/native-host-build/native/debug/build/local/native_host/"
+  for extension in ["c", "c.rsp"] {
+    let ordinary = @fs.read_file(root + "window_app/window_app." + extension).text()
+    let probe = @fs.read_file(root + "window_probe/window_probe." + extension).text()
+    guard ordinary.contains("window_app") else {
+      abort("ordinary artifact input is missing")
+    }
+    guard probe.contains("window_probe") else {
+      abort("verification positive control is missing")
+    }
+    guard !ordinary.contains("window_probe") else {
+      abort("ordinary artifact includes verification fixture")
+    }
+  }
+  println("WINDOW_FIXTURE_EXCLUSION_OK generated_c_and_link_inputs")
+}
