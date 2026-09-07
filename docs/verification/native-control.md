@@ -6,9 +6,17 @@ The launch-scoped control experiment uses a MoonBit client from both the JSON-li
 CLI and the MCP session host. Node retains the official MCP SDK boundary. See
 [ADR 026](../adr/026-launch-scoped-native-control.md).
 
+The shared headless client requires an executable, its arguments, an absolute
+capture path and positive timeout/pending limits. It no longer accepts or injects
+a custom GPU DLL path: the headless executable links the native binding
+statically. The separate window/worker launcher still selects its required DLL.
+
 ## Local evidence
 
-The current native-control suite has twelve tests using a MoonBit fixture process.
+The current native-control suite has thirteen tests, including a configuration
+contract and twelve tests using a MoonBit fixture process. The configuration test
+accepts a bridge-free launch and checks exact errors for relative executable or
+capture paths and nonpositive timeout or pending limits.
 It covers the earlier Node suite's response, capture rejection, timeout, pre-cancel,
 queue, malformed/unknown/oversized output, early-exit, diagnostics and close
 contracts. Snapshot and echo assertions also check identifiers, protocol version,

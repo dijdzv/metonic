@@ -8,7 +8,7 @@ remain comparison baselines until equivalent requirements pass.
 
 | Existing code | Responsibility | Reuse comparison |
 | --- | --- | --- |
-| `bridges/wgpu/src/lib.rs`, `window.rs` | wgpu 30.0.1 DX12 resources, offscreen readback and HWND presentation | `Milky2018/wgpu_mbt` over pinned wgpu-native |
+| `bridges/wgpu/src/lib.rs`, `window.rs` | wgpu 30.0.1 HWND presentation; unused custom offscreen exports removed | `Milky2018/wgpu_mbt` over pinned wgpu-native; window integration remains to be compared |
 | `examples/p0/native_window/bridge.c` | HWND, bounded event queue and lifetime | `wzzc-dev/window/windows`, raw handle compatibility |
 | `examples/p0/native_window/async_workers.h` | Worker completion, cancellation and UI wakeup | `moonbitlang/async`; event-loop integration still needed |
 | `native_gpu`, `examples/p0/native_headless` | Persistent offscreen GPU resources, readback and capture | Adopted `Milky2018/wgpu_mbt@0.16.0`; headless C stub removed, stdio and file writing use MoonBit async |
@@ -31,7 +31,7 @@ package tests. Checkout version fields do not prove registry equivalence.
 
 | Area | Current implementation | Candidate/version | Required behavior | Native result | Browser result | Gap and decision | Evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| GPU | Custom Rust wgpu bridge | Published `Milky2018/wgpu_mbt@0.16.0` | DX12, pixels, surface lifetime | Four offscreen cases and hidden HWND resize/present passed on both local adapters | Not a browser binding | Viable rendering path; retain baseline pending failure and integration comparisons | [GPU evaluation](wgpu-mbt.md) |
+| GPU | MoonBit offscreen renderer; Rust window bridge | Published `Milky2018/wgpu_mbt@0.16.0` | DX12, pixels, surface lifetime | Headless integration and bounded readback passed on both local adapters; hidden HWND probe passed separately | Not a browser binding | Adopted for headless; retain the window bridge until event-loop/lifetime integration passes | [GPU evaluation](wgpu-mbt.md) |
 | Window | Direct Win32 C host | `wzzc-dev/window` checkout version `0.5.4-0.1.7` | Hidden HWND, events, resize, wakeup and cleanup | `moon check --target native` passed, one warning | Not run | No event-loop or IME execution claim; compare before replacement | [Pinned fork](https://github.com/wzzc-dev/window/tree/b33c9f0ac85002bca4a9cceccbbcd512d13b7ceb) |
 | Handles | HWND/HINSTANCE bridge arguments | Fork workspace `Milky2018/windowing@0.1.0` | Compatible handles and ownership | Included in window check | Not run | Matching version names do not prove fork/registry source equality | Same pinned fork |
 | Layout | No general engine selected | `Milky2018/chicle` checkout version `0.6.0` | Typed tree/style, measurement and invalidation | Native type check passed | Upstream tests: 80/80 JS and 80/80 WasmGC; no browser integration | Next: project-specific typed layout tests; no JSON UI DSL adoption | [Pinned source](https://github.com/moonbit-community/chicle/tree/d517dbfde05b42ad2f4b83242b4947043ec864cb) |

@@ -208,7 +208,6 @@ async fn main {
     root +
     "/_build/native/release/build/examples/p0/native_headless/native_headless.exe",
     [],
-    root + "/.work/native-cargo/release/metonic_wgpu_probe.dll",
     capture,
     15000,
     16,

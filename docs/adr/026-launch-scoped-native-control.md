@@ -10,7 +10,8 @@ gates in [ADR 023](023-development-automation.md) remain open.
 The CLI and MCP session host use the MoonBit native-control client. The external
 MCP stdio adapter retains the official Node SDK. Each
 launch owns one dedicated native headless process and a private temporary capture
-directory. The client selects absolute executable, DLL, and capture paths. There
+directory. The client selects absolute executable and capture paths. The headless
+renderer links its GPU binding statically and needs no custom DLL selection. There
 is no attach discovery or listening TCP endpoint. This inherited-stdio experiment
 does not settle the Windows named-pipe ACL and discovery requirements.
 

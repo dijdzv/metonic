@@ -138,8 +138,7 @@ async fn main {
   let result_path = result_dir + "/" + mode + ".json"
   let exe = root +
     "/_build/native/release/build/examples/p0/native_headless/native_headless.exe"
-  let bridge = root + "/.work/native-cargo/release/metonic_wgpu_probe.dll"
-  let config = @control.Config::new(exe, [], bridge, capture_path, 15000, 16)
+  let config = @control.Config::new(exe, [], capture_path, 15000, 16)
   let checks : Array[Json] = []
   let mut adapter = Json::object({})
   let mut failure : String? = None
