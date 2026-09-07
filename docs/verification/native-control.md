@@ -2,11 +2,19 @@
 
 Date: 2026-09-06.
 
-The launch-scoped control experiment uses a MoonBit client from the JSON-line
-CLI and a Node client from the MCP adapter. See
+The launch-scoped control experiment uses a MoonBit client from both the JSON-line
+CLI and the MCP session host. Node retains the official MCP SDK boundary. See
 [ADR 026](../adr/026-launch-scoped-native-control.md).
 
 ## Local evidence
+
+The current native-control suite has twelve tests using a MoonBit fixture process.
+It covers the earlier Node suite's response, capture rejection, timeout, pre-cancel,
+queue, malformed/unknown/oversized output, early-exit, diagnostics and close
+contracts. Snapshot and echo assertions also check identifiers, protocol version,
+state and payload. The out-of-order test requires the slow request to remain
+unfinished when the fast request returns. The fixture runs in the pinned Wasm
+host; its explicit exit-code injection uses the existing async runtime export.
 
 - Five transport test groups passed: response correlation, failed capture,
   pending request timeout, cancellation, queue limits, malformed/unknown replies,
@@ -31,14 +39,15 @@ After the setup in the [development guide](../development.md):
 ```powershell
 mise exec -- pnpm install --frozen-lockfile
 mise run native:build
-mise exec -- node --test tools/devtools/native-client.test.mjs
+mise run native:client-test
+mise run devtools:test
 mise run native:control
 mise run native:cli-test
-mise exec -- node scripts/verify-native-mcp.mjs
+mise run native:mcp-test
 $env:METONIC_GPU_FALLBACK = '1'
 mise run native:control
 mise run native:cli-test
-mise exec -- node scripts/verify-native-mcp.mjs
+mise run native:mcp-test
 Remove-Item Env:METONIC_GPU_FALLBACK
 ```
 

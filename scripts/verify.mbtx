@@ -89,6 +89,14 @@ async fn main {
       envmap.set("MOON_HOME", moon_home)
     }
     run_checked(moon, ["run", "scripts/doctor.mbtx"], envmap)
+    run_checked(
+      moon,
+      [
+        "build", "tools/control_fixture", "--target", "wasm", "--release", "--frozen",
+        "--deny-warn",
+      ],
+      envmap,
+    )
     run_checked(moon, ["fmt", "--check"], envmap)
     let targets = if native { ["native"] } else { ["wasm-gc", "js"] }
     for target in targets {

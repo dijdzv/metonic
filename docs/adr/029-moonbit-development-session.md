@@ -41,8 +41,8 @@ fallback and must not be presented as proof that temporary files were cleaned.
 
 The change must preserve real GPU capture pixels, stale revisions, strict SDK
 argument rejection, request correlation, capture exclusion, cancellation and EOF
-cleanup. The existing CLI and native-client fixture coverage remain until their
-replacement coverage is demonstrated. A successful MCP connection alone does
+cleanup. The existing CLI checks and MoonBit native-client fixture coverage remain
+separate from SDK adapter tests. A successful MCP connection alone does
 not prove those properties.
 
 This is still launch-scoped development control. It does not establish attachment

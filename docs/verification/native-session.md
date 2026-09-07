@@ -42,8 +42,8 @@ the internal session protocol.
 ## Limits
 
 The session wire is an internal development boundary, not a stable public API.
-The old native-client fixture suite remains while its remaining coverage is
-migrated. Forced termination cannot establish cleanup; successful adapter close
+The MoonBit native-client fixture suite covers the renderer protocol separately
+from the SDK adapter. Forced termination cannot establish cleanup; successful adapter close
 must report a normal host exit. Input-flood, malformed-host-output and process
 startup-failure cases need dedicated adapter fixtures beyond the renderer checks.
 
