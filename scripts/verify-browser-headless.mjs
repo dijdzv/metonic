@@ -1,10 +1,11 @@
-import { spawn } from 'node:child_process'
 import process from 'node:process'
 import assert from 'node:assert/strict'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { chromium } from 'playwright'
 import { PNG } from 'pngjs'
+
+if (process.env.METONIC_BROWSER_SUPERVISED !== '1') throw new Error('Run mise run browser:async/headless')
 
 const host = '127.0.0.1'
 const port = 4173
@@ -15,36 +16,6 @@ const outputDir = path.resolve('.work/browser-headless', backend)
 const targets = ['js', 'wasm-gc']
 let activePage
 let gpuSession
-
-function waitForReady(child) {
-  return new Promise((resolve, reject) => {
-    let output = ''
-    let timer
-    const onData = (chunk) => {
-      output += chunk.toString()
-      if (output.includes(`http://${host}:${port}/\n`)) {
-        cleanup()
-        resolve()
-      }
-    }
-    const onExit = (code) => {
-      cleanup()
-      reject(new Error(`browser server exited before ready (${code}): ${output}`))
-    }
-    const onError = (error) => { cleanup(); reject(error) }
-    const cleanup = () => {
-      clearTimeout(timer)
-      child.stdout?.off('data', onData)
-      child.off('exit', onExit)
-      child.off('error', onError)
-    }
-    child.stdout?.on('data', onData)
-    child.stderr?.on('data', (chunk) => { output += chunk.toString() })
-    child.on('exit', onExit)
-    child.on('error', onError)
-    timer = setTimeout(() => { cleanup(); reject(new Error(`browser server ready timeout: ${output}`)) }, 10_000)
-  })
-}
 
 async function readPng(file) {
   const data = await fs.readFile(file)
@@ -261,11 +232,9 @@ async function runTarget(browser, target) {
   }
 }
 
-const server = spawn('.tools/moonbit/bin/moonrun.exe', ['_build/wasm/release/build/tools/browser_server/browser_server.wasm'], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] })
 let browser
 try {
   await fs.mkdir(outputDir, { recursive: true })
-  await waitForReady(server)
   const swiftshaderFlags = [
     '--use-webgpu-adapter=swiftshader',
     '--enable-unsafe-webgpu',
@@ -415,5 +384,4 @@ try {
 } finally {
   await gpuSession?.detach().catch(() => {})
   await browser?.close().catch(() => {})
-  if (!server.killed) server.kill('SIGTERM')
 }

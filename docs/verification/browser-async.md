@@ -38,9 +38,11 @@ This uses the same pinned MoonBit and Chromium versions as the browser GPU probe
 
 The verification sequence, snapshot checks, polling conditions and PNG decoding
 run in `tools/verify_browser_async`, compiled to JavaScript. Direct Playwright
-operations cross small foreign-function adapters. The entry point retains
-server/browser lifecycle, page readiness, page-error collection and artifact
+operations cross small foreign-function adapters. The JavaScript entry point retains
+browser lifecycle, page readiness, page-error collection and artifact
 writing; this is not yet a complete migration of browser verification tooling.
+The MoonBit browser supervisor owns server startup and verifier process lifetime;
+`mise run browser:async` is the supported entry point for the combined check.
 Polling uses 25-millisecond delays and a three-second condition deadline. That
 deadline does not establish a hard bound on every external Playwright call.
 The verifier runs in Node as JavaScript while Chromium loads each application

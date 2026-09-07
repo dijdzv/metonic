@@ -45,7 +45,7 @@ jobs:
       - name: Verify browser async behavior
         env:
           METONIC_GPU_BACKEND: swiftshader
-        run: node scripts/verify-browser-async.mjs
+        run: mise run browser:async
       - name: Save browser async artifacts
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -73,19 +73,19 @@ jobs:
       - name: Verify native client transport
         env:
           METONIC_GPU_FALLBACK: '1'
-        run: node --test tools/devtools/native-client.test.mjs
+        run: mise run native:client-test
       - name: Verify native control
         env:
           METONIC_GPU_FALLBACK: '1'
-        run: node scripts/verify-native-control.mjs
+        run: mise run native:control
       - name: Verify native MCP
         env:
           METONIC_GPU_FALLBACK: '1'
-        run: node scripts/verify-native-mcp.mjs
+        run: mise run native:mcp-test
       - name: Verify native semantics
         env:
           METONIC_GPU_FALLBACK: '1'
-        run: node scripts/verify-native-semantics.mjs
+        run: mise run native:semantics
       - name: Save native headless fallback
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

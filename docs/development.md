@@ -85,6 +85,16 @@ server and verify asset MIME types, cache policy, GET/HEAD, method rejection and
 the path allowlist. It bounds readiness and the complete run separately and
 cancels the child process when verification finishes or fails.
 
+`browser:async` and `browser:headless` use `tools/browser_supervisor` to own the
+server and Node verifier processes. Run these mise tasks rather than invoking
+their JavaScript adapters directly. Playwright browser creation and normal
+`browser.close()` remain in the JavaScript boundary. Process diagnostics are
+written under `.work/browser-supervisor/<mode>/<backend>`, separate from browser
+screenshots and assertion results. `browser:supervisor-test` builds the dedicated
+process fixture before testing the supervisor; it is included in pre-commit.
+See [process ownership and limits](verification/browser-supervisor.md) for its
+failure contract and reproduction commands.
+
 ## Local pre-commit checks
 
 Tracked Markdown links are checked by `moon run scripts/verify-docs.mbtx`.

@@ -54,10 +54,11 @@ async fn main {
   run(moon, ["check", "--target", "js", "--deny-warn"])
   run(moon, ["check", "--target", "wasm-gc", "--deny-warn"])
   let gates = [
-    "verify", "verify-native", "browser:verify", "browser:server-test", "browser:headless",
-    "browser:async", "devtools:test", "native:headless", "native:control", "native:mcp-test",
-    "native:session-test", "native:semantics", "native:client-test", "native:cli-test",
-    "native:window", "native:async", "native:surface", "native:binding", "rpc:verify",
+    "verify", "verify-native", "browser:verify", "browser:server-test", "browser:supervisor-test",
+    "browser:headless", "browser:async", "devtools:test", "native:headless", "native:control",
+    "native:mcp-test", "native:session-test", "native:semantics", "native:client-test",
+    "native:cli-test", "native:window", "native:async", "native:surface", "native:binding",
+    "rpc:verify",
   ]
   for gate in gates {
     println("pre-commit gate: mise run " + gate)
