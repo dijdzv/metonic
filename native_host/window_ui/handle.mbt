@@ -31,6 +31,7 @@ pub struct Handle {
   inspect : () -> Snapshot
   apply : async (Action) -> Unit
   edit : async (String?, Int?) -> String
+  select : async (Int, Int, Int?) -> String
   capture : async () -> Captured
 }
 
@@ -45,6 +46,17 @@ pub struct Captured {
 ///|
 fn App::handle(self : App) -> Handle {
   {
+    select: (start, end, expected) => {
+      if self.closed {
+        return "closed"
+      }
+      let result : Ref[String?] = Ref(None)
+      self.events.put(Select(start, end, expected, result))
+      while result.val is None && !self.closed {
+        @async.sleep(1)
+      }
+      result.val.unwrap_or("closed")
+    },
     capture: () => {
       require(!self.closed, "window closed")
       let result : Ref[Result[Captured, Error]?] = Ref(None)

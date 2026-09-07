@@ -36,6 +36,9 @@ priv enum Event {
   Barrier(Ref[Bool])
   Capture(Ref[Result[Captured, Error]?])
   Edit(String?, Int?, Ref[String?])
+  Select(Int, Int, Int?, Ref[String?])
+  SelectBoundary(Int)
+  TextPointer(Int, Int, Bool)
   Close
 }
 
@@ -48,8 +51,11 @@ struct App {
   scope : @task_scope.Scope
   mut rejected_updates : Int
   mut rpc_result : String
+  mut control_pressed : Bool
+  mut shift_pressed : Bool
   mut raster : @raster.Engine?
   mut rendered_text : String?
+  mut rendered_selection : (Int, Int)
   mut text_width : Int
   is_test : Bool
   hidden : Bool
@@ -118,13 +124,26 @@ pub impl @windows.ApplicationHandler for App with fn window_event(
     @core.WindowEvent::RedrawRequested => self.queue(Redraw)
     @core.WindowEvent::SurfaceResized(size) => self.queue(Resize(size))
     @core.WindowEvent::CloseRequested => self.queue(Close)
+    @core.WindowEvent::ModifiersChanged(modifiers) => {
+      self.control_pressed = modifiers.control_key()
+      self.shift_pressed = modifiers.shift_key()
+    }
+    @core.WindowEvent::Focused(false) => {
+      self.control_pressed = false
+      self.shift_pressed = false
+    }
     @core.WindowEvent::Ime(@core.Ime::Commit(value)) =>
-      if value != "\u{0008}" && value != "\r" && value != "\n" && value != "\t" {
+      if !(value.length() == 1 && value[0].to_int() < 32) {
         self.queue(Commit(value))
       }
     @core.WindowEvent::KeyboardInput(_, key, false) =>
       if key.state() is @core.ElementState::Pressed {
         match key.logical_key() {
+          @core.Key::Character("a" | "A") if self.control_pressed =>
+            self.queue(SelectBoundary(0))
+          @core.Key::Named(@core.NamedKey::Home) =>
+            self.queue(SelectBoundary(1))
+          @core.Key::Named(@core.NamedKey::End) => self.queue(SelectBoundary(2))
           @core.Key::Named(@core.NamedKey::F5) => self.queue(StartUpdate)
           @core.Key::Named(@core.NamedKey::F7) => self.queue(LoadUser("1"))
           @core.Key::Named(@core.NamedKey::F6) => self.queue(CancelUpdate)
@@ -148,7 +167,14 @@ pub impl @windows.ApplicationHandler for App with fn window_event(
       position,
       _,
       @core.ButtonSource::Mouse(@core.MouseButton::Left)
-    ) => self.queue(Input(Click(position.x().to_int(), position.y().to_int())))
+    ) =>
+      self.queue(
+        TextPointer(
+          position.x().to_int(),
+          position.y().to_int(),
+          self.shift_pressed,
+        ),
+      )
     _ => ()
   }
 }
@@ -157,12 +183,23 @@ pub impl @windows.ApplicationHandler for App with fn window_event(
 fn App::draw(self : App) -> Unit raise Error {
   match self.renderer {
     Some(renderer) => {
-      let text = @semantics.snapshot(self.editor)[1].value + self.rpc_result
+      let node = @semantics.snapshot(self.editor)[1]
+      let text = node.value + self.rpc_result
+      let selection = (node.selection_start, node.selection_end)
       let width = (@scene.field(self.state, 6) - 16).max(1).min(640)
-      if self.rendered_text != Some(text) || self.text_width != width {
-        let pixels = @raster.render(self.raster.unwrap(), text, width, 96)
+      if self.rendered_text != Some(text) ||
+        self.text_width != width ||
+        self.rendered_selection != selection {
+        let pixels = @raster.render(
+          self.raster.unwrap(),
+          text,
+          width,
+          96,
+          selection~,
+        )
         renderer.set_text_pixels(width, 96, pixels)
         self.rendered_text = Some(text)
+        self.rendered_selection = selection
         self.text_width = width
       }
       renderer.present(
@@ -259,8 +296,11 @@ pub async fn run(
     scope: @task_scope.create(),
     rejected_updates: 0,
     rpc_result: "",
+    control_pressed: false,
+    shift_pressed: false,
     raster: None,
     rendered_text: None,
+    rendered_selection: (-1, -1),
     text_width: 0,
     is_test: @env.get_env_var("METONIC_WINDOW_TEST") == Some("1"),
     hidden,
@@ -384,6 +424,32 @@ pub async fn run(
                 }
                 result.val = Some(error)
               }
+            SelectBoundary(kind) => {
+              let node = @semantics.snapshot(app.editor)[1]
+              let start = if kind == 2 { node.value.length() } else { 0 }
+              let end = if kind == 1 { 0 } else { node.value.length() }
+              ignore(
+                @semantics.set_selection(app.editor, node.reference, start, end),
+              )
+              app.draw()
+            }
+            Select(start, end, expected, result) =>
+              if expected is Some(revision) &&
+                revision != @semantics.revision(app.editor) {
+                result.val = Some("stale_revision")
+              } else {
+                let reference = @semantics.snapshot(app.editor)[1].reference
+                let error = @semantics.set_selection(
+                  app.editor,
+                  reference,
+                  start,
+                  end,
+                )
+                if error == "" {
+                  app.draw()
+                }
+                result.val = Some(error)
+              }
             StartUpdate | LoadUser(_) => {
               let user_id = match event {
                 LoadUser(value) => Some(value)
@@ -477,6 +543,31 @@ pub async fn run(
               )
               app.draw()
             }
+            TextPointer(x, y, extend_selection) =>
+              if x >= 8 && x < 8 + app.text_width && y >= 8 && y < 104 {
+                if app.raster is Some(engine) {
+                  if @raster.hit(engine, x - 8, y - 8) is Some(offset) {
+                    let node = @semantics.snapshot(app.editor)[1]
+                    let caret = offset.min(node.value.length())
+                    let anchor = if extend_selection {
+                      node.selection_start
+                    } else {
+                      caret
+                    }
+                    ignore(
+                      @semantics.set_selection(
+                        app.editor,
+                        node.reference,
+                        anchor.min(caret),
+                        anchor.max(caret),
+                      ),
+                    )
+                    app.draw()
+                  }
+                }
+              } else if @scene.dispatch(app.state, Click(x, y)) {
+                app.draw()
+              }
             Input(action) =>
               if @scene.dispatch(app.state, action) {
                 app.draw()
@@ -536,6 +627,25 @@ pub async fn run(
               (@scene.field(app.state, 0) + 1)
             app.post(0x0201U, 1UL, packed.to_int64())
           } else if stage == 2 && @scene.field(app.state, 4) == 1 {
+            stage = 20
+            app.post(0x0102U, 1UL, 0L)
+            app.post(0x0100U, 0x24UL, 0L)
+          } else if stage == 20 &&
+            @semantics.snapshot(app.editor)[1].selection_start == 0 {
+            require(
+              @semantics.snapshot(app.editor)[1].value ==
+              "日本語の描画を確認します ABC 123",
+              "control character entered editor",
+            )
+            stage = 21
+            app.post(0x0100U, 0x23UL, 0L)
+          } else if stage == 21 &&
+            @semantics.snapshot(app.editor)[1].selection_start ==
+            @semantics.snapshot(app.editor)[1].value.length() {
+            stage = 22
+            app.post(0x0201U, 1UL, ((16 << 16) | 8).to_int64())
+          } else if stage == 22 &&
+            @semantics.snapshot(app.editor)[1].selection_start == 0 {
             stage = 3
             let reference = @semantics.snapshot(app.editor)[1].reference
             require(

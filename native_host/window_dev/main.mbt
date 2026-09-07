@@ -4,6 +4,8 @@ struct Request {
   op : String
   text : String?
   user_id : String?
+  selection_start : Int?
+  selection_end : Int?
   expected_semantic_revision : Int?
 } derive(FromJson)
 
@@ -56,6 +58,16 @@ async fn respond(
         }
       "backspace" =>
         error = (handle.edit)(None, request.expected_semantic_revision)
+      "select" =>
+        match (request.selection_start, request.selection_end) {
+          (Some(start), Some(end)) =>
+            error = (handle.select)(
+              start,
+              end,
+              request.expected_semantic_revision,
+            )
+          _ => error = "missing_selection"
+        }
       "start_update" => (handle.apply)(@ui.Action::StartUpdate)
       "load_user" =>
         (handle.apply)(@ui.Action::LoadUser(request.user_id.unwrap_or("1")))

@@ -339,6 +339,25 @@ this timer experiment and a general asynchronous runtime.
 
 ### Integrated window
 
+The native editor supports Ctrl+A (select all), Home/End (start/end of the
+document), text click (place the insertion position), and Shift+click (select
+from the current range start). Typing replaces the selected range; Backspace
+deletes the selection or preceding Unicode scalar. Arrow keys still move the
+sample rectangle. Selection background uses the text library's layout highlights;
+pointer placement uses the same saved layout. A visible caret, drag selection,
+full directional selection and grapheme-aware navigation remain unfinished.
+
+CLI `select` and MCP `window_select` accept `selection_start`, `selection_end`
+and optional `expected_semantic_revision`. Offsets are UTF-16 boundaries; splitting
+a surrogate pair is rejected. Selection is applied on the UI event path before
+its response is returned, like editing.
+
+`native:window-mcp` verifies selection/replacement and the appearance/removal of
+selection-colored pixels through the shared offscreen pass. `native:window`
+checks Home/End, pointer placement and control-character filtering using messages
+posted to the application's own HWND. These are not physical-input or real-IME
+checks; Ctrl+A and Shift+click still require direct input verification.
+
 `mise run native:window-dev-build` builds the dedicated `window_dev` entry point
 under `.work/native-host-build/native/debug/build/local/native_host/window_dev/`.
 Launch `window_dev.exe` from the repository root with stdin/stdout pipes to control

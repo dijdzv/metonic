@@ -19,6 +19,7 @@ function factory() {
     ['capture', 'Capture the integrated UI through its shared offscreen GPU pass.', z.object({}).strict(), true],
     ['insert', 'Insert text into the integrated window editor.', z.object({ text: z.string(), expected_semantic_revision: revision }).strict(), false],
     ['backspace', 'Delete the selection or preceding Unicode scalar.', z.object({ expected_semantic_revision: revision }).strict(), false],
+    ['select', 'Select a UTF-16 range in the integrated editor.', z.object({ selection_start: z.number().int().min(0).max(2147483647), selection_end: z.number().int().min(0).max(2147483647), expected_semantic_revision: revision }).strict(), false],
     ['start_update', 'Start or replace the delayed scene update.', z.object({}).strict(), false],
     ['load_user', 'Fetch a user over HTTP and display the result in the integrated window.', z.object({ user_id: z.string().optional() }).strict(), false],
     ['cancel_update', 'Cancel the pending scene update.', z.object({}).strict(), false],

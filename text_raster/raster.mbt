@@ -2,6 +2,8 @@
 pub struct Engine {
   system : @cosmic.FontSystem
   mut cache : @cosmic.SwashCache
+  mut layout : @cosmic.Buffer?
+  mut text : String
 }
 
 ///|
@@ -10,7 +12,7 @@ pub fn create(font : Bytes) -> Engine? {
   if system.fonts().length() == 0 {
     None
   } else {
-    Some({ system, cache: @cosmic.SwashCache::new(), })
+    Some({ system, cache: @cosmic.SwashCache::new(), layout: None, text: "", })
   }
 }
 
@@ -20,6 +22,7 @@ pub fn render(
   text : String,
   width : Int,
   height : Int,
+  selection? : (Int, Int) = (0, 0),
 ) -> Bytes {
   if width < 1 || width > 1024 || height < 1 || height > 96 {
     Bytes::makei(0, _ => b'\x00')
@@ -33,7 +36,28 @@ pub fn render(
       .set_size(Some(Float::from_int(width)), Some(Float::from_int(height)))
       .set_wrap(@cosmic.Wrap::WordOrGlyph)
       .layout_all_with_font_system(engine.system)
+    engine.layout = Some(buffer)
+    engine.text = text
     let pixels : Array[Int] = Array::make(width * height, 255)
+    let selected : Array[Bool] = Array::make(width * height, false)
+    let (start, end) = selection
+    if start >= 0 && start < end && end <= text.length() {
+      let first = selection_cursor(text, start)
+      let last = selection_cursor(text, end)
+      for run in buffer.layout_runs() {
+        if run.highlight(first, last) is Some((left, span)) {
+          let x0 = left.floor().to_int().max(0)
+          let x1 = (left + span).ceil().to_int().min(width)
+          let y0 = run.line_top.floor().to_int().max(0)
+          let y1 = (run.line_top + run.line_height).ceil().to_int().min(height)
+          for y in y0..<y1 {
+            for x in x0..<x1 {
+              selected[y * width + x] = true
+            }
+          }
+        }
+      }
+    }
     let color = @cosmic.Color::rgb(b'\x00', b'\x00', b'\x00')
     let (_, next_cache) = buffer.draw(engine.system, engine.cache, color, (
       x : Int,
@@ -65,8 +89,53 @@ pub fn render(
       if i % 4 == 3 {
         b'\xff'
       } else {
-        pixels[i / 4].to_byte()
+        let background = if selected[i / 4] {
+          match i % 4 {
+            0 => 180
+            1 => 210
+            _ => 255
+          }
+        } else {
+          255
+        }
+        (pixels[i / 4] * background / 255).to_byte()
       }
     })
   }
+}
+
+///|
+fn selection_cursor(text : String, offset : Int) -> @cosmic.Cursor {
+  let mut remaining = offset
+  let mut line_index = 0
+  for line in text.split("\n") {
+    if remaining <= line.length() {
+      return @cosmic.Cursor::new(line_index, remaining)
+    }
+    remaining -= line.length() + 1
+    line_index += 1
+  }
+  @cosmic.Cursor::new(line_index, 0)
+}
+
+///|
+pub fn hit(engine : Engine, x : Int, y : Int) -> Int? {
+  let buffer = match engine.layout {
+    Some(value) => value
+    None => return None
+  }
+  let cursor = match buffer.hit(Float::from_int(x), Float::from_int(y)) {
+    Some(value) => value
+    None => return None
+  }
+  let mut offset = 0
+  let mut index = 0
+  for line in engine.text.split("\n") {
+    if index == cursor.line {
+      return Some(offset + cursor.index)
+    }
+    offset += line.length() + 1
+    index += 1
+  }
+  None
 }
