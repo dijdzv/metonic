@@ -101,8 +101,10 @@ operations to succeed rather than suppressing their errors.
 
 `scripts/verify-browser-headless.mjs` retains browser/page lifetime, direct
 Playwright calls and DOM observations, request interception, screenshot/file
-I/O, target iteration and final result aggregation. The latter two remain
-portable orchestration, not an unavoidable browser API boundary. Page cleanup
+I/O and routing exported verifier calls to the appropriate page adapters.
+MoonBit owns target iteration, cross-target reference propagation and final
+result aggregation. The suite rejects a result tagged with the wrong target
+and requires DPR completion before generating the final report. Page cleanup
 and release of held requests run in `finally`; observing a held request has a
 30-second deadline. The existing MoonBit supervisor continues to bound the
 overall child process. The JSON/Promise bridge does not establish cancellation
