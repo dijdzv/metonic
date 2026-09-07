@@ -184,7 +184,8 @@ pinned Noto Sans JP asset. Its build prepares and verifies that asset directly.
 Committed text replaces the selection; Backspace deletes the selection or one
 Unicode scalar. Selection highlights and staged composition use the shared text
 layout; grapheme navigation and physical IME verification remain incomplete.
-Arrow keys still control the rectangle.
+Left/right move the insertion position when text is focused; Tab switches text
+and scene focus. Up/down still control the rectangle.
 F5 starts a delayed move to the left; F6 cancels it. A new F5 replaces the pending
 job. The ordinary window uses the shared task-scope model to reject obsolete
 results and joins canceled work before releasing GPU/window resources.
@@ -192,7 +193,7 @@ results and joins canceled work before releasing GPU/window resources.
 The hidden window verification injects character messages, replaces Japanese
 text, inserts and deletes a supplementary character, and checks caret state.
 It renders through the same pass into an offscreen texture to check glyph
-presence and complete clearing of the text area after an empty update. This is
+presence and clearing down to the insertion caret after an empty update. This is
 not a swap-chain screenshot or a test of physical input, glyph-shape accuracy,
 IME or OS accessibility. Capture normalizes channel order to RGBA while retaining
 the surface's encoded color values.
@@ -395,11 +396,17 @@ this timer experiment and a general asynchronous runtime.
 
 The native editor supports Ctrl+A (select all), Home/End (start/end of the
 document), text click (place the insertion position), and Shift+click (select
-from the current range start). Typing replaces the selected range; Backspace
-deletes the selection or preceding Unicode scalar. Arrow keys still move the
-sample rectangle. Selection background uses the text library's layout highlights;
-pointer placement uses the same saved layout. A visible caret, drag selection,
-full directional selection and grapheme-aware navigation remain unfinished.
+from the preserved anchor). Left/right move over Unicode scalar boundaries;
+Shift extends or reverses selection around that anchor. Typing replaces the
+selected range; Backspace deletes the selection or preceding Unicode scalar.
+Tab switches text/scene focus, and clicking the scene restores its keyboard
+controls. Up/down still move the rectangle. Selection, a steady insertion caret,
+pointer placement and IME positioning use the same saved text layout. Drag
+selection, grapheme/visual-bidi and vertical navigation remain unfinished.
+
+Development snapshots include `selection_anchor` and `caret` in addition to the
+ordered range, so selection direction can be observed without reconstructing it
+from previous requests.
 
 CLI `select` and MCP `window_select` accept `selection_start`, `selection_end`
 and optional `expected_semantic_revision`. Offsets are UTF-16 boundaries; splitting

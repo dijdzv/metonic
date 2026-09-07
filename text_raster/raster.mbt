@@ -23,6 +23,7 @@ pub fn render(
   width : Int,
   height : Int,
   selection? : (Int, Int) = (0, 0),
+  caret? : Int? = None,
 ) -> Bytes {
   if width < 1 || width > 1024 || height < 1 || height > 96 {
     Bytes::makei(0, _ => b'\x00')
@@ -85,6 +86,16 @@ pub fn render(
       }
     })
     engine.cache = next_cache
+    if caret is Some(offset) {
+      if caret_position(engine, offset) is Some((x, y)) {
+        if x >= 0 {
+          let x = x.min(width - 1)
+          for py in y.max(0)..<(y + 32).min(height) {
+            pixels[py * width + x] = 0
+          }
+        }
+      }
+    }
     Bytes::makei(width * height * 4, i => {
       if i % 4 == 3 {
         b'\xff'

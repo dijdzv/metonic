@@ -20,6 +20,7 @@ editing session. Perform the sequence separately in each UI.
 | --- | --- | --- |
 | Replace the initial text | Ctrl+A, type Japanese and Latin text | Focus the text input, select all and type |
 | Select and replace a range | Click and Shift+click the GPU text, then type | Use the text input's selection and type |
+| Move the insertion position | Left/Right, Home/End; hold Shift to select | Use the text input's keyboard controls |
 | Load the sample user | F7 | Load user, with User ID `1` |
 | Observe the result | `月兎` below the editor; editor text preserved | Same result below the GPU editor and in the result output |
 | Start delayed scene movement | F5 | Move after delay |
@@ -29,9 +30,12 @@ editing session. Perform the sequence separately in each UI.
 
 For a domain error, the browser can request `missing`. The native shortcut uses
 user `1`; arbitrary IDs are available through the separate development CLI/MCP.
-Arrow keys currently move the sample rectangle in native; the browser requires
-canvas focus for scene keyboard controls. Native does not yet draw a visible
-caret. These are unfinished interaction differences, not full editing parity.
+Native left/right keys edit while text is focused; Tab switches between text and
+the scene, and clicking the scene returns its keyboard focus. Up/down still move
+the sample rectangle. The browser requires canvas focus for scene keyboard
+controls. Native uses a steady caret and scalar-boundary horizontal navigation;
+grapheme-aware and visual bidi navigation, vertical editing navigation and caret
+blinking remain unfinished. This is not full editing parity.
 
 Closing native ends the launcher and its owned server. An unexpected server exit
 fails the session and terminates its owned native child. Startup failure also

@@ -32,7 +32,9 @@ priv enum Event {
   CancelUpdate
   Updated(Int, Int)
   Development(DevelopmentRequest)
-  SelectBoundary(Int)
+  SelectBoundary(Int, Bool)
+  Navigate(Bool, Bool)
+  ToggleFocus
   TextPointer(Int, Int, Bool)
   Close
 }
@@ -54,6 +56,7 @@ struct App {
   mut raster : @raster.Engine?
   mut rendered_text : String?
   mut rendered_selection : (Int, Int)
+  mut rendered_caret : Int?
   mut text_width : Int
   hidden : Bool
   report : (String) -> Unit
@@ -140,18 +143,20 @@ pub impl @windows.ApplicationHandler for App with fn window_event(
       if key.state() is @core.ElementState::Pressed {
         match key.logical_key() {
           @core.Key::Character("a" | "A") if self.control_pressed =>
-            self.queue(SelectBoundary(0))
+            self.queue(SelectBoundary(0, false))
           @core.Key::Named(@core.NamedKey::Home) =>
-            self.queue(SelectBoundary(1))
-          @core.Key::Named(@core.NamedKey::End) => self.queue(SelectBoundary(2))
+            self.queue(SelectBoundary(1, self.shift_pressed))
+          @core.Key::Named(@core.NamedKey::End) =>
+            self.queue(SelectBoundary(2, self.shift_pressed))
+          @core.Key::Named(@core.NamedKey::Tab) => self.queue(ToggleFocus)
           @core.Key::Named(@core.NamedKey::F5) => self.queue(StartUpdate)
           @core.Key::Named(@core.NamedKey::F7) => self.queue(LoadUser("1"))
           @core.Key::Named(@core.NamedKey::F6) => self.queue(CancelUpdate)
           @core.Key::Named(@core.NamedKey::Backspace) => self.queue(Backspace)
           @core.Key::Named(@core.NamedKey::ArrowLeft) =>
-            self.queue(Input(Move(-10, 0)))
+            self.queue(Navigate(false, self.shift_pressed))
           @core.Key::Named(@core.NamedKey::ArrowRight) =>
-            self.queue(Input(Move(10, 0)))
+            self.queue(Navigate(true, self.shift_pressed))
           @core.Key::Named(@core.NamedKey::ArrowUp) =>
             self.queue(Input(Move(0, -10)))
           @core.Key::Named(@core.NamedKey::ArrowDown) =>
@@ -194,26 +199,35 @@ fn App::draw(self : App) -> Unit raise Error {
       } else {
         (node.selection_start, node.selection_end)
       }
+      let caret = if preview is Some(_) {
+        node.selection_start + self.preedit_cursor
+      } else {
+        @semantics.caret(node)
+      }
+      let visible_caret = if preview is Some(_) ||
+        (node.focused && node.selection_start == node.selection_end) {
+        Some(caret)
+      } else {
+        None
+      }
       let width = (@scene.field(self.state, 6) - 16).max(1).min(640)
       if self.rendered_text != Some(text) ||
         self.text_width != width ||
-        self.rendered_selection != selection {
+        self.rendered_selection != selection ||
+        self.rendered_caret != visible_caret {
         let pixels = @raster.render(
           self.raster.unwrap(),
           text,
           width,
           96,
           selection~,
+          caret=visible_caret,
         )
         renderer.set_text_pixels(width, 96, pixels)
         self.rendered_text = Some(text)
         self.rendered_selection = selection
+        self.rendered_caret = visible_caret
         self.text_width = width
-      }
-      let caret = if preview is Some(_) {
-        node.selection_start + self.preedit_cursor
-      } else {
-        node.selection_end
       }
       if @raster.caret_position(self.raster.unwrap(), caret) is Some((x, y)) {
         if self.window is Some(window) {
@@ -311,6 +325,7 @@ async fn run_loop(
     raster: None,
     rendered_text: None,
     rendered_selection: (-1, -1),
+    rendered_caret: None,
     text_width: 0,
     hidden,
     report,
@@ -385,13 +400,53 @@ async fn run_loop(
         while !app.closed && app.events.try_get() is Some(event) {
           match event {
             Development(request) => app.dispatch_development(request)
-            SelectBoundary(_) if app.composition is Some(_) => ()
-            SelectBoundary(kind) => {
+            SelectBoundary(_, _) | Navigate(_, _) | ToggleFocus if app.composition
+              is Some(_) => ()
+            ToggleFocus => {
+              let nodes = @semantics.snapshot(app.editor)
+              let target = if nodes[1].focused { nodes[0] } else { nodes[1] }
+              ignore(@semantics.focus(app.editor, target.reference))
+              app.draw()
+            }
+            Navigate(forward, extend_selection) => {
               let node = @semantics.snapshot(app.editor)[1]
-              let start = if kind == 2 { node.value.length() } else { 0 }
+              if node.focused {
+                ignore(
+                  @semantics.navigate(
+                    app.editor,
+                    node.reference,
+                    forward,
+                    extend_selection,
+                  ),
+                )
+              } else {
+                ignore(
+                  @scene.dispatch(
+                    app.state,
+                    Move(if forward { 10 } else { -10 }, 0),
+                  ),
+                )
+              }
+              app.draw()
+            }
+            SelectBoundary(kind, extend_selection) => {
+              let node = @semantics.snapshot(app.editor)[1]
+              ignore(@semantics.focus(app.editor, node.reference))
               let end = if kind == 1 { 0 } else { node.value.length() }
+              let anchor = if kind == 0 {
+                0
+              } else if extend_selection {
+                node.selection_anchor
+              } else {
+                end
+              }
               ignore(
-                @semantics.set_selection(app.editor, node.reference, start, end),
+                @semantics.set_selection_directed(
+                  app.editor,
+                  node.reference,
+                  anchor,
+                  end,
+                ),
               )
               app.draw()
             }
@@ -504,6 +559,7 @@ async fn run_loop(
             }
             Commit(value) => {
               let reference = @semantics.snapshot(app.editor)[1].reference
+              ignore(@semantics.focus(app.editor, reference))
               require(
                 @semantics.replace_selection(app.editor, reference, value) == "",
                 "committed text rejected",
@@ -525,24 +581,32 @@ async fn run_loop(
                 if app.raster is Some(engine) {
                   if @raster.hit(engine, x - 8, y - 8) is Some(offset) {
                     let node = @semantics.snapshot(app.editor)[1]
+                    ignore(@semantics.focus(app.editor, node.reference))
                     let caret = offset.min(node.value.length())
                     let anchor = if extend_selection {
-                      node.selection_start
+                      node.selection_anchor
                     } else {
                       caret
                     }
                     ignore(
-                      @semantics.set_selection(
+                      @semantics.set_selection_directed(
                         app.editor,
                         node.reference,
-                        anchor.min(caret),
-                        anchor.max(caret),
+                        anchor,
+                        caret,
                       ),
                     )
                     app.draw()
                   }
                 }
-              } else if @scene.dispatch(app.state, Click(x, y)) {
+              } else {
+                ignore(
+                  @semantics.focus(
+                    app.editor,
+                    @semantics.snapshot(app.editor)[0].reference,
+                  ),
+                )
+                ignore(@scene.dispatch(app.state, Click(x, y)))
                 app.draw()
               }
             Input(action) =>
@@ -553,7 +617,8 @@ async fn run_loop(
           if initializing && hooks.has_lifecycle() {
             match event {
               Close => may_present = hooks.notify(Closing, app)
-              Input(_) => may_present = hooks.notify(InputHandled, app)
+              Input(_) | Navigate(_, _) =>
+                may_present = hooks.notify(InputHandled, app)
               _ => ()
             }
           }

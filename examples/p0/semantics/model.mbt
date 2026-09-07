@@ -22,6 +22,7 @@ pub struct Node {
   focused : Bool
   selection_start : Int
   selection_end : Int
+  selection_anchor : Int
 } derive(Debug)
 
 ///|
@@ -52,6 +53,7 @@ pub fn create(session : Int, window : Int) -> Tree {
       focused: false,
       selection_start: 0,
       selection_end: 0,
+      selection_anchor: 0,
     }),
     input: Some({
       reference: input_ref,
@@ -62,6 +64,7 @@ pub fn create(session : Int, window : Int) -> Tree {
       focused: false,
       selection_start: 0,
       selection_end: 0,
+      selection_anchor: 0,
     }),
     closed: false,
     revision: 0,
@@ -184,6 +187,7 @@ pub fn set_text(tree : Tree, reference : NodeRef, value : String) -> String {
             value,
             selection_start: length,
             selection_end: length,
+            selection_anchor: length,
           })
           tree.revision += 1
           ""
@@ -227,6 +231,7 @@ pub fn replace_selection(
           value,
           selection_start: caret,
           selection_end: caret,
+          selection_anchor: caret,
         })
         tree.revision += 1
       }
@@ -264,6 +269,7 @@ pub fn delete_backward(tree : Tree, reference : NodeRef) -> String {
     node.value[node.selection_end:].to_owned(),
     selection_start: start,
     selection_end: start,
+    selection_anchor: start,
   })
   tree.revision += 1
   ""
@@ -315,6 +321,21 @@ pub fn set_selection(
   start : Int,
   end : Int,
 ) -> String {
+  if start > end {
+    return "invalid_selection"
+  }
+  set_selection_directed(tree, reference, start, end)
+}
+
+///|
+pub fn set_selection_directed(
+  tree : Tree,
+  reference : NodeRef,
+  anchor : Int,
+  caret : Int,
+) -> String {
+  let start = anchor.min(caret)
+  let end = anchor.max(caret)
   let (kind, error) = resolve(tree, reference)
   if kind < 0 {
     error
@@ -332,13 +353,16 @@ pub fn set_selection(
           !selection_boundary(node.value, start) ||
           !selection_boundary(node.value, end) {
           "invalid_selection"
-        } else if node.selection_start == start && node.selection_end == end {
+        } else if node.selection_start == start &&
+          node.selection_end == end &&
+          node.selection_anchor == anchor {
           ""
         } else {
           tree.input = Some({
             ..node,
             selection_start: start,
             selection_end: end,
+            selection_anchor: anchor,
           })
           tree.revision += 1
           ""
@@ -386,6 +410,7 @@ pub fn recreate_input(tree : Tree) -> NodeRef? {
       focused: false,
       selection_start: 0,
       selection_end: 0,
+      selection_anchor: 0,
     })
     tree.revision += 1
     Some(reference)

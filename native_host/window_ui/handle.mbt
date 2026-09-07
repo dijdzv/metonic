@@ -20,6 +20,8 @@ pub struct Snapshot {
   text : String
   selection_start : Int
   selection_end : Int
+  selection_anchor : Int
+  caret : Int
   frames : Int
   task_status : Int
   rpc_result : String
@@ -97,6 +99,8 @@ fn App::handle(self : App) -> Handle {
         text: node.value,
         selection_start: node.selection_start,
         selection_end: node.selection_end,
+        selection_anchor: node.selection_anchor,
+        caret: @semantics.caret(node),
         frames: self.diagnostics.frames,
         task_status: @task_scope.field(self.scope, 0),
         rpc_result: self.rpc_result,
