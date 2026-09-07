@@ -10,7 +10,7 @@ remain comparison baselines until equivalent requirements pass.
 | --- | --- | --- |
 | `native_gpu/surface_renderer.mbt` | Shared HWND presentation and GPU resource lifetime | Adopted `Milky2018/wgpu_mbt`; custom Rust renderer removed |
 | `examples/p0/native_window/bridge.c` | HWND, bounded event queue and lifetime | `wzzc-dev/window/windows`, raw handle compatibility |
-| `examples/p0/native_window/async_workers.h` | Worker completion, cancellation and UI wakeup | `moonbitlang/async`; event-loop integration still needed |
+| `examples/p0/native_window/async_workers.h` | Worker completion, cancellation and UI wakeup | `moonbitlang/async` public external-loop API; [integration decision](../adr/030-native-external-event-loop.md), existing worker evidence retained |
 | `native_gpu`, `examples/p0/native_headless` | Persistent offscreen GPU resources, readback and capture | Adopted `Milky2018/wgpu_mbt@0.16.0`; headless C stub removed, stdio and file writing use MoonBit async |
 | `examples/p0/browser/host/*.mjs` | WebGPU, DOM/input and host scheduling | Compare required calls against `mizchi/js_browser` and `bikallem/webapi` |
 | `tools/devtools/*.mjs`, `scripts/*` | CLI/MCP transport and development verification | MoonBit orchestration first; external SDK adapters scoped separately |
@@ -21,6 +21,9 @@ Shared prototype packages currently live there so each experiment can reuse the
 same contracts. Promote reusable implementations to library packages when their
 responsibility and tests are established; keep demonstration hosts in examples.
 Dependency experiments use isolated modules under `experiments` during comparison.
+The Windows candidate now has a locally evaluated bounded-pump correction and
+positive/negative contract comparison; see [event-pump results](windows-event-pump.md).
+The initial checkout checks below remain historical results, not adoption claims.
 The font-backed browser integration now uses a root `text_raster` package and pins
 moon_cosmic in the root module. Demonstration hosts remain under `examples/p0`.
 
