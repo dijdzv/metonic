@@ -404,6 +404,14 @@ async fn prepare(args : Array[String]) -> Unit raise Error {
   )
 
   let window_existing = sources + "/window"
+  for check_only in [true, false] {
+    let args = ["apply", "--directory=" + window_stage_relative]
+    if check_only {
+      args.push("--check")
+    }
+    args.push("patches/window-ime-position.patch")
+    ignore(run_checked("git", args, repo_root))
+  }
   let async_existing = sources + "/async"
   // Compare every existing destination before publishing any absent source.
   compare_sources(window_stage, window_existing, repo_root)

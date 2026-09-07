@@ -139,3 +139,17 @@ pub fn hit(engine : Engine, x : Int, y : Int) -> Int? {
   }
   None
 }
+
+///|
+pub fn caret_position(engine : Engine, offset : Int) -> (Int, Int)? {
+  if offset < 0 || offset > engine.text.length() {
+    return None
+  }
+  match engine.layout {
+    None => None
+    Some(buffer) =>
+      @cosmic.Editor::new(buffer)
+      .set_cursor(selection_cursor(engine.text, offset))
+      .cursor_position()
+  }
+}
