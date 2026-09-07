@@ -2,9 +2,9 @@
 
 ## Status
 
-Accepted for isolated evaluation. Product adoption depends on
-[integration verification](https://github.com/dijdzv/metonic/issues/71) and
-[resource cleanup](https://github.com/dijdzv/metonic/issues/72).
+Accepted for staged adoption. The isolated integration and resource experiments
+are recorded below. Reproducible preparation and product scenario parity remain
+required in [Issue 77](https://github.com/dijdzv/metonic/issues/77).
 
 ## Context
 
@@ -64,6 +64,22 @@ OS waiting for that pump. Client-size requests use Windows style/DPI adjustment
 through borrowed-buffer FFI, preserving the requested client dimensions. The
 [GPU integration record](../verification/windows-gpu-external-loop.md) describes
 the direct ABI inspection and measured boundaries.
+
+## Reproducible adoption workspace
+
+Prepare adoption in a separate native workspace that includes the root module
+as a workspace member. Import `local/p0/native_gpu` and the existing scene/task
+packages directly; do not copy their source into a dependency module. Keep the
+root module's browser/default command scope unchanged.
+
+Source preparation uses fixed window and async archives with SHA256 verification
+and the reviewed local patches. Reconstruct the patched source tree before
+reusing prepared sources and reject differences rather than silently accepting
+local edits. Offline preparation requires verified cached archives. Keep the
+archives and extracted dependencies under ignored `.work` paths, and provide a
+CommonJS boundary for dependency prebuild scripts without changing the browser's
+ES-module configuration. Track adoption and runtime parity in
+[Issue 77](https://github.com/dijdzv/metonic/issues/77).
 
 ## Consequences
 

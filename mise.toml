@@ -85,6 +85,16 @@ run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-browser-server.mbtx'
 run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/build-native.mbtx'
 env = { METONIC_NATIVE_BUILD = "headless" }
 
+[tasks."native:host-build"]
+description = "Prepare pinned native sources and build the external-loop GPU fixture"
+run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/build-native.mbtx'
+env = { METONIC_NATIVE_BUILD = "host-gpu" }
+
+[tasks."native:host-verify"]
+description = "Verify the prepared external-loop fixture on default and fallback adapters"
+depends = ["native:host-build"]
+run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-native-host.mbtx'
+
 [tasks."native:headless"]
 depends = ["native:build"]
 run = [

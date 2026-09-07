@@ -93,47 +93,66 @@ both HWNDs destroyed; their file/task stages were not reached. This establishes
 that the observer rejected the discovered gaps rather than accepting weaker
 dimensions or bypassing the redraw callback.
 
+The dedicated source-preparation path subsequently passed fresh online and
+offline reuse checks. A corrupted archive and an edited prepared async source
+each produced a nonzero exit; restoration allowed offline preparation to succeed
+again. A pre-existing lock was rejected and retained, while failures after lock
+acquisition released the invocation's lock. Reverse patch checks confirmed all
+five window files and the async waiter correction in the prepared trees. These
+checks establish preparation behavior, not additional runtime coverage.
+
+The prepared workspace then passed all six verification cases on the same two
+adapters. Normal runs again reported three frames, two redraws, one resize,
+800-by-450 client dimensions, sixteen task cleanups and zero pending work.
+The default/fallback timer measurements were 106/105 ms and shutdown measurements
+were 0/1 ms. Both error-mode runs retained the missing input path and destroyed
+both HWNDs. Offline preparation still passed after the build, confirming that
+the build had not changed the prepared dependency sources.
+
 ## Reproduction
 
-Use the project toolchain and the corrected isolated workspace described in
-[resource cleanup](native-resource-cleanup.md). Add `Milky2018/wgpu_mbt@0.16.0`
-and `local/p0@0.0.0` to the candidate `modules/window/moon.mod`. Create
-`modules/metonic/moon.mod` in that checkout:
+With the project toolchain and Visual Studio x64 build tools installed, run from
+the repository root:
 
-```toml
-name = "local/p0"
-version = "0.0.0"
-license = "MIT OR Apache-2.0"
-preferred_target = "native"
-import {
-  "moonbitlang/async@0.21.2",
-  "Milky2018/wgpu_mbt@0.16.0",
-}
+```text
+mise run native:host-verify
 ```
 
-Add `"./modules/metonic"` to the candidate root `moon.work`. Copy the root
-`native_gpu` package into `modules/metonic/native_gpu`, preserving the sources.
-The measured run compared hashes of `moon.pkg`, `initialization.mbt`,
-`gpu_initialization.mbt`, `bounded_readback.mbt`, `gpu_readback.mbt`,
-`renderer.mbt` and `surface_renderer.mbt`; all seven matched the product sources.
-Copy only `main.mbt`, `moon.pkg` and `wake.c` from `experiments/window_gpu_async`
-into `modules/window/examples/metonic_gpu_async`. Its standalone manifest must
-not replace a candidate module manifest. Resolve the workspace dependencies.
+The build task prepares fixed source archives and applies the existing window
+and waiter patches. `native_host/moon.work` includes the actual root module and
+`experiments/window_gpu_async`; no renderer or fixture source copy is required.
+The build helper activates the Visual Studio environment. See the
+[workspace preparation contract](../development.md#native-host-workspace).
 
-From a Visual Studio x64 Native Tools command prompt at the metonic root:
+The verification task runs normal input on default and fallback adapters, rejects
+missing input in ordinary mode, accepts the specific missing-input failure on
+both adapters in expected-error mode, and rejects valid input in that mode.
+It retains the existing observer's GPU, I/O and cleanup assertions. Pre-commit
+runs this task alongside the existing product checks; the candidate host does
+not replace the product window or worker implementation yet.
 
-```bat
-set "MOON_HOME=%CD%\.tools\moonbit"
-mise exec -- .tools\moonbit\bin\moon.exe -C .work\window-pump-source\modules\window update
-mise exec -- .tools\moonbit\bin\moon.exe -C .work\window-pump-source\modules\window build examples/metonic_gpu_async --target native --target-dir "%CD%\.work\window-gpu-integration"
-set "METONIC_GPU_FALLBACK=0"
-mise exec -- .tools\moonbit\bin\moon.exe run scripts/verify-window-gpu-async.mbtx -- "%CD%\.work\window-gpu-integration\native\debug\build\wzzc-dev\window\examples\metonic_gpu_async\metonic_gpu_async.exe" "%CD%\experiments\window_async_contract\input.txt"
-```
+The original measurements above used an isolated copy whose seven renderer
+package/source hashes matched the product files. The dedicated workspace removes
+that preparation step; it does not broaden the original measurement scope.
 
-Use a fresh target directory for changed native dependencies. Repeat with
-`METONIC_GPU_FALLBACK=1`. A nonexistent absolute input path must fail ordinarily
-and pass only with `--expect-input-error` appended; valid input with that flag
-must fail. Keep the product gate separate from these opt-in candidate tests.
+### Source provenance
+
+- Window and windowing come from revision
+  `b33c9f0ac85002bca4a9cceccbbcd512d13b7ceb` of
+  [wzzc-dev/window](https://github.com/wzzc-dev/window/tree/b33c9f0ac85002bca4a9cceccbbcd512d13b7ceb).
+  The fixed revision ZIP has SHA256
+  `41ff1dc110ff92f27938bc3f5b6dce3d72953dfa7fa9d1896b7f2d05d47b7135`.
+- Async uses the official registry archive for `moonbitlang/async@0.21.2`, with
+  SHA256 `742ee3d84d33d4602953741fb49f310ae5c8814648079facaa4b595d986c1618`,
+  matching the version's registry index entry. The official package manager's
+  [download implementation](https://github.com/moonbitlang/moon/blob/main/crates/mooncake/src/registry/online.rs)
+  identifies the registry archive endpoint.
+
+The preparation tool applies the tracked
+[window patch](../../experiments/window_pump_contract/windows-pump.patch) and
+[waiter patch](../../experiments/async_waiter_handles/windows-waiter.patch).
+These are local corrections, not claims of upstream acceptance. An archive hash
+change requires review; the tool does not update expected hashes automatically.
 
 ## Limits
 

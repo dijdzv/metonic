@@ -95,6 +95,29 @@ process fixture before testing the supervisor; it is included in pre-commit.
 See [process ownership and limits](verification/browser-supervisor.md) for its
 failure contract and reproduction commands.
 
+## Native host workspace
+
+`native_host/moon.work` isolates the external-loop adoption workspace while
+importing the existing root renderer and integration fixture directly. The
+ordinary native window/async commands remain the product baseline until runtime
+parity is established in [Issue 77](https://github.com/dijdzv/metonic/issues/77).
+
+`mise run native:host-build` prepares pinned source archives, applies the reviewed
+window and async patches, and builds the existing GPU integration fixture. The
+preparation tool uses `.work/native-deps/cache` for archives and
+`.work/native-deps/sources` for verified patched sources. To prepare using only
+cached archives, run:
+
+```powershell
+mise exec -- ./.tools/moonbit/bin/moon.exe run scripts/prepare-native-deps.mbtx -- --offline
+```
+
+Archive SHA256 values are fixed in the preparation tool. Source-tree comparison
+rejects edits to prepared dependencies; make deliberate changes to the tracked
+patches rather than editing the generated source tree. A source mismatch is an
+error, not permission to overwrite that tree. A failed or interrupted preparation
+may leave diagnostic files under `.work`; inspect those before removing them.
+
 ## Local pre-commit checks
 
 Tracked Markdown links are checked by `moon run scripts/verify-docs.mbtx`.
