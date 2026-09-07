@@ -161,6 +161,34 @@ an async timeout inside that host cannot interrupt a synchronous FFI call.
 Interactive initialization requires separate event-loop and cancellation
 evaluation. This source finding is not an observed initialization hang.
 
+The same version exposes nonblocking adapter/device request IDs, status polling
+and result access. Their clear functions differ from readback clear: in
+`src/c/wgpu_stub_extras.c`, they remove the ID and zero a reusable slot without
+checking completion, while the callback retains that slot's address. Do not call
+initialization clear or `take_or_raise` while status is pending. A caller that
+abandons a request must retain its callback storage and owning handles, consume
+and release a later result, and clear only after terminal completion. If no
+completion arrives, ownership must remain explicit or the owning process must
+terminate. This is a source-level calling constraint, not a reproduced driver
+failure. [Issue 53](https://github.com/dijdzv/metonic/issues/53) tracks the
+initialization integration contract.
+
+On 2026-09-07 the isolated binding suite passed all thirteen tests on NVIDIA
+GeForce RTX 3060 and Microsoft Basic Render Driver after adding two asynchronous
+initialization probes. They request explicit DX12 adapters with the selected
+fallback option, poll adapter/device futures while yielding through MoonBit
+async, take results only after terminal status, and check device backend and
+queue access. One case retains the first device while making a second request;
+another releases completed results before requesting a fresh adapter/device.
+
+Reproduce with `mise run native:binding`, and repeat with
+`METONIC_GPU_FALLBACK=1`. The test polling has a ten-second async timeout and a
+10,000-iteration cap. A request that remains pending aborts the test process
+instead of clearing its callback slot. This does not demonstrate in-process
+timeout recovery, actual task cancellation, a driver stall, or responsive GUI
+event processing. The application renderer still uses synchronous initialization
+until those ownership and integration requirements are met.
+
 The candidate also exposes asynchronous submit/map, status, read and clear APIs.
 In upstream commit `5b0608223bc491688a6f0f41492f23682717bc3b`,
 `src/c/wgpu_stub_extras.c` leaves a pending map entry intact when clear is called;
