@@ -28,6 +28,14 @@ each prior output before invoking capture. Color-region counts distinguish the
 initial cyan rectangle from the orange toggled rectangle and check the orange
 state after resize. UIA separately verifies editor preservation, HTTP result and
 updated editor bounds. The native Win32 title is checked independently of UIA.
+The rectangle mask must occupy exactly 120x72 pixels at the scene's client-area
+position (260,144). DWM extended frame bounds and the client origin translate
+that position into capture coordinates; the capture must match the reported
+frame dimensions. This rejects displaced, scaled, incomplete or extra colored
+regions in the tested flow, including after resize.
+The initial local run and a repeat with `METONIC_GPU_FALLBACK=1` passed these
+assertions. This records the two requested adapter modes on the current display,
+not coverage of every GPU or display configuration.
 
 PNG artifacts are `.work/presentation-initial.png`,
 `.work/presentation-toggled.png` and `.work/presentation-resized.png`. These include
@@ -44,7 +52,7 @@ machine-readable mode and optional require-WGC behavior are upstream improvement
 candidates. No upstream change has been submitted.
 
 This is not a complete presentation acceptance test: color regions do not prove
-glyph correctness, full geometry, every display scale, occlusion behavior, real
+glyph correctness, text layout, every display scale, occlusion behavior, real
 keyboard input or Japanese IME candidate placement. The opt-in check does not
 replace those requirements. GDI GetDC/GetPixel sampling was evaluated first but
 did not reproduce the Toggle color transition and was not adopted.
