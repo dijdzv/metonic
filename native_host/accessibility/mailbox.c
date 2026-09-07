@@ -1,5 +1,6 @@
 #include <windows.h>
 #include <stdint.h>
+#include <string.h>
 #include "accesskit.h"
 #pragma comment(lib, "accesskit.lib")
 
@@ -11,11 +12,19 @@ static unsigned int count;
 static uintptr_t generation;
 static HWND target;
 
+static int32_t value_length(const accesskit_action_request *request) {
+  if (request->action != ACCESSKIT_ACTION_SET_VALUE || !request->data.has_value ||
+      request->data.value.tag != ACCESSKIT_ACTION_DATA_VALUE ||
+      !request->data.value.value) return -1;
+  size_t length = strnlen(request->data.value.value, 65537);
+  return length <= 65536 ? (int32_t)length : -1;
+}
+
 static void receive(accesskit_action_request *request, void *userdata) {
   AcquireSRWLockExclusive(&lock);
   if (target && (uintptr_t)userdata == generation && count < 32 &&
       (request->action == ACCESSKIT_ACTION_CLICK ||
-       request->action == ACCESSKIT_ACTION_FOCUS)) {
+       request->action == ACCESSKIT_ACTION_FOCUS || value_length(request) >= 0)) {
     requests[count++] = request;
     PostMessageW(target, WM_APP + 77, 0, 0);
   } else {
@@ -52,7 +61,28 @@ uintptr_t metonic_accesskit_take(void) {
 }
 
 int32_t metonic_accesskit_action(uintptr_t request) {
-  return ((accesskit_action_request *)request)->action;
+  switch (((accesskit_action_request *)request)->action) {
+    case ACCESSKIT_ACTION_CLICK: return 0;
+    case ACCESSKIT_ACTION_FOCUS: return 1;
+    case ACCESSKIT_ACTION_SET_VALUE: return 2;
+    default: return -1;
+  }
+}
+
+void metonic_accesskit_value_action(uintptr_t node) {
+  accesskit_node_add_action((accesskit_node *)node, ACCESSKIT_ACTION_SET_VALUE);
+}
+
+int32_t metonic_accesskit_value_length(uintptr_t request) {
+  return value_length((accesskit_action_request *)request);
+}
+
+int32_t metonic_accesskit_copy_value(uintptr_t request, uint8_t *output,
+    int32_t capacity) {
+  int32_t length = value_length((accesskit_action_request *)request);
+  if (length < 0 || capacity != length) return 0;
+  memcpy(output, ((accesskit_action_request *)request)->data.value.value, length);
+  return 1;
 }
 
 uint64_t metonic_accesskit_node(uintptr_t request) {

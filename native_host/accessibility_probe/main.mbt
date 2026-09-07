@@ -52,6 +52,10 @@ extern "C" fn pattern(
 extern "C" fn toggle(pattern : UInt64) -> Int = "TogglePattern_Toggle"
 
 ///|
+#borrow(text)
+extern "C" fn set_value(pattern : UInt64, text : FixedArray[Byte]) -> Int = "ValuePattern_SetValue"
+
+///|
 extern "C" fn release_pattern(pattern : UInt64) -> Int = "UiaPatternRelease"
 
 ///|
@@ -132,6 +136,28 @@ fn integer(node : UInt64, id : Int) -> Int {
   } else {
     -1
   }
+}
+
+///|
+fn utf16z(text : String) -> FixedArray[Byte] {
+  let bytes = FixedArray::make(text.length() * 2 + 2, b'\x00')
+  for index in 0..<text.length() {
+    let unit = text[index].to_int()
+    bytes[index * 2] = (unit & 255).to_byte()
+    bytes[index * 2 + 1] = (unit >> 8).to_byte()
+  }
+  bytes
+}
+
+///|
+async fn expect_text(node : UInt64, expected : String) -> Unit {
+  for _ in 0..<500 {
+    if text_is(node, 30045, expected) {
+      return
+    }
+    @async.sleep(20)
+  }
+  fail("UIA text update missing")
 }
 
 ///|
@@ -219,6 +245,38 @@ async fn main {
     guard text_is(editor, 30045, "日本語の描画を確認します ABC 123") else {
       fail("UIA action changed editor")
     }
+    let value_provider = FixedArray::make(1, 0UL)
+    guard pattern(editor, 10002, value_provider) == 0 &&
+      value_provider[0] != 0UL else {
+      fail("Value pattern missing")
+    }
+    defer ignore(release_pattern(value_provider[0]))
+    let read_only_property = FixedArray::make(3, 0UL)
+    guard property(editor, 30046, read_only_property) == 0 else {
+      fail("read-only property missing")
+    }
+    let writable = read_only_property[0] == 11UL &&
+      (read_only_property[1] & 65535UL) == 0UL
+    ignore(clear(read_only_property))
+    guard writable else { fail("production editor remains read-only") }
+    for
+      text in ["日本語 ABC 😀", "変更後 XYZ 123", "", "再入力 🚀"] {
+      guard set_value(value_provider[0], utf16z(text)) == 0 else {
+        fail("Value request failed")
+      }
+      expect_text(editor, text)
+      guard integer(button, 30086) == 1 else {
+        fail("Value request changed scene")
+      }
+    }
+    guard post(hwnd, 0x0102U, 0x5AUL, 0L) != 0 else {
+      fail("ordinary text message failed")
+    }
+    expect_text(editor, "再入力 🚀Z")
+    guard post(hwnd, 0x0100U, 0x08UL, 0L) != 0 else {
+      fail("ordinary backspace message failed")
+    }
+    expect_text(editor, "再入力 🚀")
     guard post(hwnd, 0x0010U, 0UL, 0L) != 0 else {
       fail("production close failed")
     }
@@ -232,8 +290,11 @@ async fn main {
     guard toggle(provider[0]) < 0 else {
       fail("closed production provider accepted action")
     }
+    guard set_value(value_provider[0], utf16z("late")) < 0 else {
+      fail("closed editor accepted Value request")
+    }
     println(
-      "WINDOW_PRODUCTION_UIA_OK shared_text toggle_update close stale_provider",
+      "WINDOW_PRODUCTION_UIA_OK shared_text toggle_update value_roundtrip=4 ordinary_edit close stale_provider",
     )
   })
 }

@@ -18,10 +18,14 @@ and Focus requests rejoin the ordinary UI event queue. Focus requests also ask
 the window library to focus the window. Active IME composition currently rejects
 these application actions.
 
-The text value is readable through UIA, but Value mutation and Text/selection
-patterns are not implemented. The adapter advertises the value as read-only
-until its mutation contract exists. This is incomplete accessibility, not a
-claim that keyboard editing is read-only or that P0 accessibility is complete.
+The editor supports UIA Value replacement through the shared editor's validation
+and caret reset behavior. Requests are limited to 64 KiB of UTF-8 before queue
+admission; MoonBit decodes the owned bytes on the UI thread. During composition
+the adapter advertises read-only and the UI handler rejects queued external
+mutations. Value calls return before the application applies the queued request;
+clients must observe resulting state rather than treating a successful return as
+an application completion barrier. Full Text/selection patterns are not yet
+implemented, so this remains incomplete accessibility.
 
 `prepare-accesskit.mbtx` pins the official archive and verifies SHA256
 `b652e380fb78efe6721ad892f15b2224f38f661c3fb20436ef4c5b3ce0fe8177` before extracting
@@ -53,11 +57,15 @@ application state nor an independently implemented UIA provider.
 The production check verifies the exact root/button/editor names, Button/Edit
 roles, the initial Japanese/Latin editor value, the toggle's off-to-on change
 after an external Toggle request, editor preservation, normal process exit,
-HWND destruction and rejection by a retained provider after close. Success emits
+four Value round trips (Japanese/Latin, supplementary characters and empty text),
+ordinary posted character/backspace messages after replacement, HWND destruction
+and rejection by retained Toggle/Value providers after close. Success emits
 `WINDOW_PRODUCTION_UIA_OK` and `WINDOW_PRODUCTION_UIA_PROCESSES_OK`.
 
 Existing six native scenarios still exercise shared input/rendering after
-attachment. UIA properties do not prove presented GPU pixels, real keyboard or
+attachment; a staged-composition check rejects a queued accessibility value
+replacement without changing committed text. This is not a real IME run.
+UIA properties and posted messages do not prove presented GPU pixels, real keyboard or
 pointer delivery, Japanese IME behavior, or screen-reader usability. Forced queue
 overflow, action/close races and adapter recreation need dedicated evidence;
 the current normal-close check does not claim to cover those races. Full text

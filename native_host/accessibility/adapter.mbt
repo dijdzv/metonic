@@ -20,6 +20,17 @@ extern "C" fn target(request : UInt64) -> UInt64 = "metonic_accesskit_node"
 extern "C" fn free_request(request : UInt64) -> Unit = "accesskit_action_request_free"
 
 ///|
+extern "C" fn value_length(request : UInt64) -> Int = "metonic_accesskit_value_length"
+
+///|
+#borrow(output)
+extern "C" fn copy_value(
+  request : UInt64,
+  output : FixedArray[Byte],
+  capacity : Int,
+) -> Int = "metonic_accesskit_copy_value"
+
+///|
 extern "C" fn node_new(role : Int) -> UInt64 = "accesskit_node_new"
 
 ///|
@@ -27,6 +38,9 @@ extern "C" fn push_child(node : UInt64, child : UInt64) -> Unit = "accesskit_nod
 
 ///|
 extern "C" fn add_action(node : UInt64, action : Int) -> Unit = "accesskit_node_add_action"
+
+///|
+extern "C" fn add_value_action(node : UInt64) -> Unit = "metonic_accesskit_value_action"
 
 ///|
 extern "C" fn disabled(node : UInt64) -> Unit = "accesskit_node_set_disabled"
@@ -84,6 +98,14 @@ pub struct Bridge {
   mut height : Int
   mut x : Int
   mut y : Int
+  mut composing : Bool
+}
+
+///|
+pub(all) enum Request {
+  Click(Int)
+  Focus(Int)
+  SetValue(Int, String)
 }
 
 ///|
@@ -126,8 +148,11 @@ fn tree(_data : UInt64) -> UInt64 {
       toggled(node, if semantic.value == "on" { 1 } else { 0 })
       bounds(node, bridge.x.to_double(), bridge.y.to_double(), 120, 72)
     } else {
-      // Value editing is not advertised until its action/selection mapping exists.
-      read_only(node)
+      if bridge.composing {
+        read_only(node)
+      } else {
+        add_value_action(node)
+      }
       bounds(node, 8, 8, (bridge.width - 16).max(1).min(640).to_double(), 96)
     }
     push_child(root, id)
@@ -147,6 +172,7 @@ pub fn open(hwnd : UInt64, nodes : Array[@semantics.Node]) -> Bridge? {
     height: 360,
     x: 260,
     y: 144,
+    composing: false,
   }
   current.val = Some(bridge)
   bridge.adapter = native_open(hwnd, data => tree(data))
@@ -166,6 +192,7 @@ pub fn Bridge::update(
   height : Int,
   x : Int,
   y : Int,
+  composing : Bool,
 ) -> Unit {
   if self.adapter == 0UL {
     return
@@ -175,6 +202,7 @@ pub fn Bridge::update(
   self.height = height
   self.x = x
   self.y = y
+  self.composing = composing
   let events = update_active(self.adapter, data => tree(data), 0UL)
   if events != 0UL {
     raise_events(events)
@@ -182,7 +210,7 @@ pub fn Bridge::update(
 }
 
 ///|
-pub fn Bridge::poll(self : Bridge) -> Array[(Int, Int)] {
+pub fn Bridge::poll(self : Bridge) -> Array[Request] {
   let result = []
   if self.adapter == 0UL {
     return result
@@ -194,7 +222,24 @@ pub fn Bridge::poll(self : Bridge) -> Array[(Int, Int)] {
     }
     let id = target(request)
     if id == 1UL || id == 2UL {
-      result.push((action(request), id.to_int()))
+      match action(request) {
+        0 => result.push(Click(id.to_int()))
+        1 => result.push(Focus(id.to_int()))
+        2 if id == 2UL => {
+          let length = value_length(request)
+          if length >= 0 && length <= 65536 {
+            let bytes = FixedArray::make(length, b'\x00')
+            if copy_value(request, bytes, length) != 0 {
+              try @utf8.decode(bytes.unsafe_reinterpret_as_bytes()) catch {
+                _ => ()
+              } noraise {
+                text => result.push(SetValue(2, text))
+              }
+            }
+          }
+        }
+        _ => ()
+      }
     }
     free_request(request)
   }

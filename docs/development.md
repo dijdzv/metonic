@@ -164,8 +164,8 @@ the verifier's child PID. It never attaches to another process. This test opens
 a window briefly. It does not establish rendered content, input or HTTP results.
 
 `mise run native:accessibility` builds the same production window and verifies
-shared editor text, an external UIA Toggle action, resulting state and stale
-provider rejection after close. A separate MoonBit supervisor owns both processes
+shared editor text, external UIA Toggle/Value actions, resulting state, ordinary
+editing after replacement and stale-provider rejection after close. A separate MoonBit supervisor owns both processes
 so blocked UIA calls cannot leave the check waiting indefinitely. See
 [native accessibility](verification/native-accessibility.md) for the pinned
 dependency, small C ownership boundary and remaining text/selection requirements.
