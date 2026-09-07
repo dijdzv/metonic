@@ -1,0 +1,53 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/encoding/utf8",
+}
+
+///|
+async fn main {
+  @async.with_timeout(180000, async fn() {
+    let assets = ".work/winapp-assets"
+    if !@fs.exists(assets) {
+      @fs.mkdir(assets, recursive=true)
+    }
+    let archive = assets + "/winappcli-x64.zip"
+    if !@fs.exists(archive) {
+      guard @process.run(
+          "gh",
+          [
+            "release", "download", "v0.6.0", "-R", "microsoft/winappCli", "-p", "winappcli-x64.zip",
+            "-D", assets,
+          ],
+          no_console_window=true,
+        ) ==
+        0 else {
+        fail("winapp acquisition failed")
+      }
+    }
+    let (code, output, _) = @process.collect_output(
+      "certutil",
+      ["-hashfile", archive, "SHA256"],
+      no_console_window=true,
+    )
+    guard code == 0 &&
+      @utf8.decode_lossy(output.binary())
+      .split("\n")
+      .any(line => {
+        line.trim().to_owned().to_lower() ==
+        "f6dc42e3b4e4709c8f617003008e2cfdd9a51735e04e7170d60edda258db78a8"
+      }) else {
+      fail("winapp archive SHA256 mismatch")
+    }
+    guard @process.run(
+        "tar",
+        ["-xf", archive, "-C", assets, "winapp.exe", "libSkiaSharp.dll"],
+        no_console_window=true,
+      ) ==
+      0 else {
+      fail("winapp extraction failed")
+    }
+    println("WINAPP_ASSETS_OK version=0.6.0 windows_x64")
+  })
+}
