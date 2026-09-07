@@ -70,8 +70,19 @@ run = [
   '.\\.tools\\moonbit\\bin\\moonrun.exe _build/wasm/release/build/tools/verify_native_headless/verify_native_headless.wasm',
 ]
 
+[tasks."native:session-build"]
+run = '.\\.tools\\moonbit\\bin\\moon.exe build tools/native_session --target wasm --release --frozen --deny-warn'
+
+[tasks."native:session-test"]
+depends = ["native:build", "native:session-build"]
+run = [
+  '.\\.tools\\moonbit\\bin\\moon.exe build tools/verify_native_session --target wasm --release --frozen --deny-warn',
+  '.\\.tools\\moonbit\\bin\\moonrun.exe _build/wasm/release/build/tools/verify_native_session/verify_native_session.wasm',
+]
+
 [tasks."devtools:test"]
-run = "node --test tools/devtools/native-client.test.mjs"
+depends = ["native:build", "native:session-build"]
+run = "node --test tools/devtools/native-client.test.mjs tools/devtools/moonbit-session.test.mjs"
 
 [tasks."native:control"]
 depends = ["native:build"]
@@ -82,7 +93,7 @@ run = [
 ]
 
 [tasks."native:mcp-test"]
-depends = ["native:build"]
+depends = ["native:build", "native:session-build"]
 run = "node scripts/verify-native-mcp.mjs"
 
 [tasks."native:semantics"]
@@ -139,5 +150,5 @@ run = [
 ]
 
 [tasks."native:mcp"]
-depends = ["native:build"]
+depends = ["native:build", "native:session-build"]
 run = "node tools/devtools/native-mcp.mjs"

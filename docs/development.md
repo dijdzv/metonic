@@ -223,7 +223,7 @@ by the absolute repository path. This keeps build output out of the JSON stream.
 Input lines are limited to 4095 bytes and decoded as strict UTF-8. An invalid or
 oversized line produces an error response; subsequent valid lines remain usable.
 
-For an MCP host, use the pinned Node executable as the command and the absolute
+Build `mise run native:session-build` before using MCP. For an MCP host, use the pinned Node executable as the command and the absolute
 path to `tools/devtools/native-mcp.mjs` as its single argument. Build and install
 dependencies beforehand; do not send build-task output into MCP stdin/stdout.
 The server exposes `native_snapshot`, `native_move`, `native_resize`,
@@ -231,7 +231,7 @@ The server exposes `native_snapshot`, `native_move`, `native_resize`,
 arguments are rejected, and mutation/capture accepts `expected_revision`.
 
 Run `mise run devtools:test`, `mise run native:control`,
-`mise run native:cli-test`, and `mise run native:mcp-test` for transport and
+`mise run native:cli-test`, `mise run native:session-test`, and `mise run native:mcp-test` for transport and
 real-renderer checks. See the
 [control verification record](verification/native-control.md) for scope and results.
 
@@ -239,7 +239,11 @@ real-renderer checks. See the
 verification tools. `mise run native:semantics` builds its MoonBit verifier for
 the Wasm host runtime before running it against the native renderer. The verifier
 checks semantic actions, UTF-16 selection boundaries, stale references and full
-capture pixels. Node remains the host for the MCP adapter. See the
+capture pixels. Node hosts the official MCP SDK; `tools/native_session` owns the
+renderer, temporary capture file and PNG encoding through the MoonBit client.
+`native:session-test` checks state, complete capture pixels, stale revisions and
+temporary-directory cleanup after EOF. The Node session tests cover Promise and
+AbortSignal behavior at the SDK boundary. See the
 [semantic verification record](verification/semantics.md) for measured scope.
 
 ## Repository layout
