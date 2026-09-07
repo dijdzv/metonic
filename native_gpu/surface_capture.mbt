@@ -55,7 +55,18 @@ pub async fn SurfaceRenderer::capture_frame(
     0,
   )
   let width = frame_width.reinterpret_as_int()
+  let bgra = self.format.to_u32() == @wgpu.TEXTURE_FORMAT_BGRA8_UNORM ||
+    self.format.to_u32() == @wgpu.TEXTURE_FORMAT_BGRA8_UNORM_SRGB
   Bytes::makei(width * frame_height.reinterpret_as_int() * 4, i => {
-    padded[i / (width * 4) * row.reinterpret_as_int() + i % (width * 4)]
+    let channel = i % 4
+    let source = if bgra && channel == 0 {
+      i + 2
+    } else if bgra && channel == 2 {
+      i - 2
+    } else {
+      i
+    }
+    padded[source / (width * 4) * row.reinterpret_as_int() +
+    source % (width * 4)]
   })
 }

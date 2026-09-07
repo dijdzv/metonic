@@ -85,6 +85,44 @@ pub fn verify(client : Client) -> @js_async.Promise[String] {
       "arguments": {},
     })
     assert_eq(canceled.task_status, 4)
+    let capture_request : Json = { "name": "window_capture", "arguments": {} }
+    let captured : ImageReply = @json.from_json(
+      @json.parse(call(client, capture_request.stringify()).wait()),
+    )
+    assert_eq(captured.content[1].mimeType, Some("image/png"))
+    let image = @image.decode_png(
+      @base64.decode(captured.content[1].data.unwrap()),
+    )
+    assert_eq(image.width, 640)
+    assert_eq(image.height, 360)
+    let rectangle = (170 * image.width + 300) * 4
+    assert_true(image.data[rectangle + 1] > image.data[rectangle])
+    assert_true(image.data[rectangle + 2] > image.data[rectangle])
+    assert_eq(image.data[rectangle + 3], 255)
+    let mut dark = 0
+    for y in 8..<104 {
+      for x in 8..<632 {
+        let offset = (y * image.width + x) * 4
+        assert_eq(image.data[offset + 3], 255)
+        if image.data[offset] < 128 &&
+          image.data[offset + 1] < 128 &&
+          image.data[offset + 2] < 128 {
+          dark += 1
+        }
+      }
+    }
+    assert_true(dark > 100)
     "WINDOW_MCP_OK"
   })
 }
+
+///|
+struct ImageContent {
+  data : String?
+  mimeType : String?
+} derive(FromJson)
+
+///|
+struct ImageReply {
+  content : Array[ImageContent]
+} derive(FromJson)
