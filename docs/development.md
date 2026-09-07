@@ -163,11 +163,18 @@ then checks creation and orderly destruction of a visible window belonging to
 the verifier's child PID. It never attaches to another process. This test opens
 a window briefly. It does not establish rendered content, input or HTTP results.
 
+`mise run native:accessibility` builds the same production window and verifies
+shared editor text, an external UIA Toggle action, resulting state and stale
+provider rejection after close. A separate MoonBit supervisor owns both processes
+so blocked UIA calls cannot leave the check waiting indefinitely. See
+[native accessibility](verification/native-accessibility.md) for the pinned
+dependency, small C ownership boundary and remaining text/selection requirements.
+
 After both release and development builds,
 `moon run scripts/verify-window-production-exclusion.mbtx` checks generated C
 and link inputs with development code as a positive control. Both checks are
-included in pre-commit. Real input/IME and OS accessibility must still be verified
-against this production candidate; successful development tests do not prove them.
+included in pre-commit. Real input/IME and full accessibility must still be verified
+against this production candidate; initial UIA properties/actions do not prove them.
 
 `native:window-build` builds the ordinary `window_app` executable.
 `native:window` builds it and the dedicated `window_probe`, then runs the six

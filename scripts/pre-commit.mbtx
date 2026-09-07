@@ -59,7 +59,8 @@ async fn main {
     "native:mcp-test", "native:session-test", "native:semantics", "native:client-test",
     "native:cli-test", "native:window", "native:window-control", "native:window-rpc",
     "native:window-mcp", "native:host-verify", "native:async", "native:surface",
-    "native:binding", "rpc:verify", "native:release-lifecycle", "demo:test",
+    "native:binding", "rpc:verify", "native:release-lifecycle", "native:accessibility",
+    "demo:test",
   ]
   for gate in gates {
     println("pre-commit gate: mise run " + gate)

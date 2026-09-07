@@ -1,0 +1,239 @@
+///|
+extern "C" fn next_window(
+  parent : UInt64,
+  after : UInt64,
+  class_name : UInt64,
+  title : UInt64,
+) -> UInt64 = "FindWindowExW"
+
+///|
+#borrow(pid)
+extern "C" fn window_pid(hwnd : UInt64, pid : FixedArray[Int]) -> UInt = "GetWindowThreadProcessId"
+
+///|
+extern "C" fn visible(hwnd : UInt64) -> Int = "IsWindowVisible"
+
+///|
+extern "C" fn is_window(hwnd : UInt64) -> Int = "IsWindow"
+
+///|
+extern "C" fn post(
+  hwnd : UInt64,
+  message : UInt,
+  wparam : UInt64,
+  lparam : Int64,
+) -> Int = "PostMessageW"
+
+///|
+extern "C" fn initialize(reserved : UInt64, kind : UInt) -> Int = "CoInitializeEx"
+
+///|
+extern "C" fn uninitialize() -> Unit = "CoUninitialize"
+
+///|
+#borrow(result)
+extern "C" fn node_from_handle(
+  hwnd : UInt64,
+  result : FixedArray[UInt64],
+) -> Int = "UiaNodeFromHandle"
+
+///|
+extern "C" fn navigate(node : UInt64, direction : Int) -> UInt64 = "metonic_uia_navigate"
+
+///|
+#borrow(result)
+extern "C" fn pattern(
+  node : UInt64,
+  id : Int,
+  result : FixedArray[UInt64],
+) -> Int = "UiaGetPatternProvider"
+
+///|
+extern "C" fn toggle(pattern : UInt64) -> Int = "TogglePattern_Toggle"
+
+///|
+extern "C" fn release_pattern(pattern : UInt64) -> Int = "UiaPatternRelease"
+
+///|
+extern "C" fn release_node(node : UInt64) -> Int = "UiaNodeRelease"
+
+///|
+#borrow(value)
+extern "C" fn property(
+  node : UInt64,
+  id : Int,
+  value : FixedArray[UInt64],
+) -> Int = "UiaGetPropertyValue"
+
+///|
+#borrow(value)
+extern "C" fn clear(value : FixedArray[UInt64]) -> Int = "VariantClear"
+
+///|
+extern "C" fn bstr_length(value : UInt64) -> UInt = "SysStringLen"
+
+///|
+#borrow(output)
+extern "C" fn copy_name(
+  output : FixedArray[Byte],
+  pointer : UInt64,
+  length : UInt64,
+) -> Unit = "RtlMoveMemory"
+
+///|
+fn owned_window(pid : Int) -> UInt64 {
+  let owner = FixedArray::make(1, 0)
+  let mut cursor = 0UL
+  for _ in 0..<4096 {
+    cursor = next_window(0UL, cursor, 0UL, 0UL)
+    if cursor == 0UL {
+      return 0UL
+    }
+    ignore(window_pid(cursor, owner))
+    if owner[0] == pid && visible(cursor) != 0 {
+      return cursor
+    }
+  }
+  0UL
+}
+
+///|
+fn text_is(node : UInt64, id : Int, expected : String) -> Bool {
+  let value = FixedArray::make(3, 0UL)
+  if property(node, id, value) != 0 {
+    return false
+  }
+  defer ignore(clear(value))
+  if value[0] != 8UL ||
+    bstr_length(value[1]).reinterpret_as_int() != expected.length() {
+    return false
+  }
+  let bytes = FixedArray::make(expected.length() * 2, b'\x00')
+  copy_name(bytes, value[1], bytes.length().to_uint64())
+  for index in 0..<expected.length() {
+    let unit = expected[index].to_int()
+    if bytes[index * 2].to_int() != (unit & 255) ||
+      bytes[index * 2 + 1].to_int() != unit >> 8 {
+      return false
+    }
+  }
+  true
+}
+
+///|
+fn integer(node : UInt64, id : Int) -> Int {
+  let value = FixedArray::make(3, 0UL)
+  if property(node, id, value) != 0 {
+    return -1
+  }
+  defer ignore(clear(value))
+  if value[0] == 3UL {
+    value[1].to_int()
+  } else {
+    -1
+  }
+}
+
+///|
+fn child_named(parent : UInt64, name : String) -> UInt64 {
+  let mut node = navigate(parent, 3)
+  for _ in 0..<16 {
+    if node == 0UL {
+      return 0UL
+    }
+    if text_is(node, 30005, name) {
+      return node
+    }
+    let next = navigate(node, 1)
+    ignore(release_node(node))
+    node = next
+  }
+  if node != 0UL {
+    ignore(release_node(node))
+  }
+  0UL
+}
+
+///|
+async fn main {
+  @async.with_timeout(20000, async fn() {
+    guard initialize(0UL, 0U) >= 0 else {
+      fail("UIA COM initialization failed")
+    }
+    defer uninitialize()
+    let pid = @string.parse_int(@env.args()[1][:])
+    let mut hwnd = 0UL
+    while hwnd == 0UL {
+      hwnd = owned_window(pid)
+      @async.sleep(20)
+    }
+    let root = FixedArray::make(1, 0UL)
+    guard node_from_handle(hwnd, root) == 0 && root[0] != 0UL else {
+      fail("production UIA root missing")
+    }
+    defer ignore(release_node(root[0]))
+    guard text_is(root[0], 30005, "Metonic") else {
+      fail("production UIA root name mismatch")
+    }
+    let button = child_named(root[0], "Toggle")
+    guard button != 0UL else { fail("production UIA button missing") }
+    defer ignore(release_node(button))
+    guard text_is(button, 30005, "Toggle") && integer(button, 30003) == 50000 else {
+      fail("production button role/name mismatch")
+    }
+    let editor = child_named(root[0], "Text")
+    guard editor != 0UL else { fail("production UIA editor missing") }
+    defer ignore(release_node(editor))
+    guard text_is(editor, 30005, "Text") && integer(editor, 30003) == 50004 else {
+      fail("production editor role/name mismatch")
+    }
+    for _ in 0..<500 {
+      if text_is(editor, 30045, "日本語の描画を確認します ABC 123") {
+        break
+      }
+      @async.sleep(20)
+    }
+    guard text_is(editor, 30045, "日本語の描画を確認します ABC 123") else {
+      fail("production shared editor value mismatch")
+    }
+    guard integer(button, 30086) == 0 else {
+      fail("production initial toggle mismatch")
+    }
+    let provider = FixedArray::make(1, 0UL)
+    guard pattern(button, 10015, provider) == 0 && provider[0] != 0UL else {
+      fail("production Toggle pattern missing")
+    }
+    defer ignore(release_pattern(provider[0]))
+    guard toggle(provider[0]) == 0 else {
+      fail("production Toggle action failed")
+    }
+    for _ in 0..<500 {
+      if integer(button, 30086) == 1 {
+        break
+      }
+      @async.sleep(20)
+    }
+    guard integer(button, 30086) == 1 else {
+      fail("UIA action did not change shared state")
+    }
+    guard text_is(editor, 30045, "日本語の描画を確認します ABC 123") else {
+      fail("UIA action changed editor")
+    }
+    guard post(hwnd, 0x0010U, 0UL, 0L) != 0 else {
+      fail("production close failed")
+    }
+    for _ in 0..<500 {
+      if is_window(hwnd) == 0 {
+        break
+      }
+      @async.sleep(20)
+    }
+    guard is_window(hwnd) == 0 else { fail("production UIA close failed") }
+    guard toggle(provider[0]) < 0 else {
+      fail("closed production provider accepted action")
+    }
+    println(
+      "WINDOW_PRODUCTION_UIA_OK shared_text toggle_update close stale_provider",
+    )
+  })
+}

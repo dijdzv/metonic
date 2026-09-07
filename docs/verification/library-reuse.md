@@ -9,6 +9,7 @@ remain comparison baselines until equivalent requirements pass.
 | Existing code | Responsibility | Reuse comparison |
 | --- | --- | --- |
 | `native_gpu/surface_renderer.mbt` | Shared HWND presentation and GPU resource lifetime | Adopted `Milky2018/wgpu_mbt`; custom Rust renderer removed |
+| `native_host/accessibility` | Production Windows accessibility | Official AccessKit C 0.22.3; MoonBit state/tree translation and a bounded C request mailbox; [scope and remaining work](native-accessibility.md) |
 | `tools/native_surface_probe/window.c` | Isolated device-replacement diagnostic HWND | Ordinary window migrated to `wzzc-dev/window/windows`; diagnostic retained for comparison |
 | `native_host/async_app`, `native_host/windows_loop` | Async jobs, cancellation, completion delivery and UI wakeup | Adopted `moonbitlang/async` structured tasks and external-loop API with the prepared window library; custom C workers replaced after [comparison](native-async.md); context-free C wake thunk retained |
 | `native_gpu`, `examples/p0/native_headless` | Persistent offscreen GPU resources, readback and capture | Adopted `Milky2018/wgpu_mbt@0.16.0`; headless C stub removed, stdio and file writing use MoonBit async |

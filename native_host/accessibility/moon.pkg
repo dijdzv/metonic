@@ -1,0 +1,6 @@
+import {
+  "local/p0/examples/p0/semantics",
+  "moonbitlang/core/encoding/utf8",
+}
+supported_targets = "native"
+options("native-stub": ["mailbox.c"], "link": {"native": {"cc-link-flags": "accesskit.lib user32.lib"}})

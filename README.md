@@ -20,9 +20,10 @@ remain incomplete. Public APIs may change substantially.
 - First-class development automation through a CLI and MCP, excluded from production builds.
 - MIT OR Apache-2.0.
 
-AccessKit is under evaluation for the native accessibility adapter; it is not
-an adopted dependency. Development automation and production accessibility have
-separate responsibilities.
+The native prototype uses the official AccessKit adapter for initial production
+accessibility nodes and actions. Full text/selection support remains incomplete;
+see the [verification record](docs/verification/native-accessibility.md).
+Development automation and production accessibility have separate responsibilities.
 
 ## Try the current prototype
 

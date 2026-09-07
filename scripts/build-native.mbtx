@@ -22,6 +22,7 @@ async fn main {
       mode != "window" &&
       mode != "window-release" &&
       mode != "release-probe" &&
+      mode != "accessibility-probe" &&
       mode != "window-dev" &&
       mode != "window-probe" &&
       mode != "async" &&
@@ -150,6 +151,7 @@ async fn main {
       mode == "window" ||
       mode == "window-release" ||
       mode == "release-probe" ||
+      mode == "accessibility-probe" ||
       mode == "window-dev" ||
       mode == "window-probe" {
       let host_app = if mode == "async" {
@@ -160,6 +162,8 @@ async fn main {
         "window_probe"
       } else if mode == "release-probe" {
         "release_probe"
+      } else if mode == "accessibility-probe" {
+        "accessibility_probe"
       } else {
         "window_app"
       }
@@ -177,6 +181,31 @@ async fn main {
         "-C", "native_host", "build", host_app, "--target", "native", "--target-dir",
         native_host_build_dir, "--deny-warn",
       ]
+      if host_app == "window_app" ||
+        host_app == "window_dev" ||
+        host_app == "window_probe" {
+        guard @process.run(
+            moon,
+            ["run", "scripts/prepare-accesskit.mbtx"],
+            no_console_window=true,
+          ) ==
+          0 else {
+          fail("AccessKit preparation failed")
+        }
+        let accesskit = @fs.realpath(
+          ".work/accesskit-assets/accesskit-c-0.22.3",
+        )
+        envmap.set(
+          "INCLUDE",
+          accesskit + "/include;" + envmap.get("INCLUDE").unwrap_or(""),
+        )
+        envmap.set(
+          "LIB",
+          accesskit +
+          "/lib/windows/x86_64/msvc/shared;" +
+          envmap.get("LIB").unwrap_or(""),
+        )
+      }
       let profile = if mode == "window-release" {
         build_args.push("--release")
         "release"
@@ -202,6 +231,29 @@ async fn main {
         ".exe"
       if !@fs.exists(required_exe) {
         fail("native host " + mode + " build artifact missing")
+      }
+      if host_app == "window_app" ||
+        host_app == "window_dev" ||
+        host_app == "window_probe" {
+        let directory = native_host_build_dir +
+          "/native/" +
+          profile +
+          "/build/local/native_host/" +
+          host_app
+        @fs.write_file(
+          directory + "/accesskit.dll",
+          @fs.read_file(
+            ".work/accesskit-assets/accesskit-c-0.22.3/lib/windows/x86_64/msvc/shared/accesskit.dll",
+          ).binary(),
+        )
+        for license in ["MIT", "APACHE"] {
+          @fs.write_file(
+            directory + "/ACCESSKIT-LICENSE-" + license,
+            @fs.read_file(
+              ".work/accesskit-assets/accesskit-c-0.22.3/LICENSE-" + license,
+            ).binary(),
+          )
+        }
       }
       println("NATIVE_BUILD_OK mode=" + mode)
       return
