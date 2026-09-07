@@ -1,0 +1,35 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/process",
+}
+
+///|
+async fn main {
+  @async.with_timeout(35000, () => {
+    @async.with_task_group(group => {
+      let (reader, stdout) = @process.read_from_process()
+      defer reader.close()
+      let server = @process.spawn(
+        group,
+        ".tools/moonbit/bin/moonrun.exe",
+        ["_build/wasm/release/build/examples/p0/rpc_server/rpc_server.wasm"],
+        stdout~,
+        no_console_window=true,
+        cancel_handler=@process.hard_cancel(),
+      )
+      defer server.cancel()
+      let ready = reader.read_until("\n").unwrap().trim().to_owned()
+      assert_true(ready.has_prefix("RPC_READY 127.0.0.1:"))
+      let env : Map[String, String] = Map([])
+      env.set("METONIC_RPC_BASE", "http://" + ready[10:].to_owned())
+      let (code, out, err) = @process.collect_output(
+        "node",
+        ["scripts/verify-window-mcp.mjs"],
+        extra_env=env,
+      )
+      println(out.text())
+      println(err.text())
+      assert_eq(code, 0)
+    })
+  })
+}

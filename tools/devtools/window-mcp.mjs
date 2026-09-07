@@ -20,6 +20,7 @@ function factory() {
     ['insert', 'Insert text into the integrated window editor.', z.object({ text: z.string(), expected_semantic_revision: revision }).strict(), false],
     ['backspace', 'Delete the selection or preceding Unicode scalar.', z.object({ expected_semantic_revision: revision }).strict(), false],
     ['start_update', 'Start or replace the delayed scene update.', z.object({}).strict(), false],
+    ['load_user', 'Fetch a user over HTTP and display the result in the integrated window.', z.object({ user_id: z.string().optional() }).strict(), false],
     ['cancel_update', 'Cancel the pending scene update.', z.object({}).strict(), false],
   ];
   for (const [op, description, inputSchema, readOnlyHint] of definitions) {

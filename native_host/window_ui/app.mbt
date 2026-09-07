@@ -29,6 +29,8 @@ priv enum Event {
   Commit(String)
   Backspace
   StartUpdate
+  LoadUser(String)
+  UserLoaded(Int, Result[String, String])
   CancelUpdate
   Updated(Int, Int)
   Barrier(Ref[Bool])
@@ -45,6 +47,7 @@ struct App {
   editor : @semantics.Tree
   scope : @task_scope.Scope
   mut rejected_updates : Int
+  mut rpc_result : String
   mut raster : @raster.Engine?
   mut rendered_text : String?
   mut text_width : Int
@@ -123,6 +126,7 @@ pub impl @windows.ApplicationHandler for App with fn window_event(
       if key.state() is @core.ElementState::Pressed {
         match key.logical_key() {
           @core.Key::Named(@core.NamedKey::F5) => self.queue(StartUpdate)
+          @core.Key::Named(@core.NamedKey::F7) => self.queue(LoadUser("1"))
           @core.Key::Named(@core.NamedKey::F6) => self.queue(CancelUpdate)
           @core.Key::Named(@core.NamedKey::Backspace) => self.queue(Backspace)
           @core.Key::Named(@core.NamedKey::ArrowLeft) =>
@@ -153,7 +157,7 @@ pub impl @windows.ApplicationHandler for App with fn window_event(
 fn App::draw(self : App) -> Unit raise Error {
   match self.renderer {
     Some(renderer) => {
-      let text = @semantics.snapshot(self.editor)[1].value
+      let text = @semantics.snapshot(self.editor)[1].value + self.rpc_result
       let width = (@scene.field(self.state, 6) - 16).max(1).min(640)
       if self.rendered_text != Some(text) || self.text_width != width {
         let pixels = @raster.render(self.raster.unwrap(), text, width, 96)
@@ -254,6 +258,7 @@ pub async fn run(
     editor: @semantics.create(1, 1),
     scope: @task_scope.create(),
     rejected_updates: 0,
+    rpc_result: "",
     raster: None,
     rendered_text: None,
     text_width: 0,
@@ -379,7 +384,11 @@ pub async fn run(
                 }
                 result.val = Some(error)
               }
-            StartUpdate => {
+            StartUpdate | LoadUser(_) => {
+              let user_id = match event {
+                LoadUser(value) => Some(value)
+                _ => None
+              }
               ignore(@task_scope.cancel(app.scope))
               if update is Some(previous) {
                 previous.cancel()
@@ -393,8 +402,18 @@ pub async fn run(
               let target = (@scene.field(app.state, 0) - 10).max(0)
               update = Some(
                 group.spawn(() => {
-                  @async.sleep(250)
-                  app.queue(Updated(id, target))
+                  if user_id is Some(value) {
+                    let result = @rpc_client.get_user(
+                      @env.get_env_var("METONIC_RPC_BASE").unwrap_or(
+                        "http://127.0.0.1:4174",
+                      ),
+                      value,
+                    )
+                    app.queue(UserLoaded(id, result.map(user => user.name)))
+                  } else {
+                    @async.sleep(250)
+                    app.queue(Updated(id, target))
+                  }
                 }),
               )
             }
@@ -409,6 +428,19 @@ pub async fn run(
               }
               update = None
             }
+            UserLoaded(id, result) =>
+              match result {
+                Ok(name) =>
+                  if @task_scope.complete(app.scope, id, 0) {
+                    app.rpc_result = "\n" + name
+                    app.draw()
+                  }
+                Err(error) =>
+                  if @task_scope.fail(app.scope, id, 1) {
+                    app.rpc_result = "\nRPC: " + error
+                    app.draw()
+                  }
+              }
             Updated(id, value) =>
               if @task_scope.complete(app.scope, id, value) {
                 ignore(
