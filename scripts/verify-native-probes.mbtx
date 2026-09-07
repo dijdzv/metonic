@@ -106,6 +106,35 @@ fn shutdown_ms(text : String) -> Int? {
 }
 
 ///|
+fn marker_number(text : String, prefix : String) -> Int? {
+  let mut found : Int? = None
+  for line in lines(text) {
+    if line.has_prefix(prefix) {
+      let suffix = line[prefix.length():].to_owned()
+      if suffix == "" {
+        return None
+      }
+      let mut value = 0
+      for index = 0; index < suffix.length(); index = index + 1 {
+        let digit = suffix.code_unit_at(index).to_int() - 48
+        if digit < 0 ||
+          digit > 9 ||
+          value > 214748364 ||
+          (value == 214748364 && digit > 7) {
+          return None
+        }
+        value = value * 10 + digit
+      }
+      if found is Some(_) {
+        return None
+      }
+      found = Some(value)
+    }
+  }
+  found
+}
+
+///|
 fn json_null() -> Json {
   Json::null()
 }
@@ -115,6 +144,7 @@ async fn run_probe(
   root : String,
   kind : String,
   mode : String,
+  case_name : String,
 ) -> Unit raise Error {
   let fallback = if mode == "fallback" { "1" } else { "0" }
   let raw_surface = kind == "surface" &&
@@ -163,6 +193,7 @@ async fn run_probe(
           let env_map : Map[String, String] = Map([])
           env_map.set("METONIC_GPU_BRIDGE", bridge)
           env_map.set("METONIC_WINDOW_TEST", "1")
+          env_map.set("METONIC_WINDOW_INIT_TEST", case_name)
           env_map.set("METONIC_GPU_FALLBACK", fallback)
           let child = @process.spawn(
             group,
@@ -219,6 +250,7 @@ async fn run_probe(
     ),
     "elapsedMs": Json::number(elapsed.to_double()),
     "mode": Json::string(mode),
+    "initCase": Json::string(case_name),
     "scope": Json::string(
       if kind == "surface" {
         if raw_surface {
@@ -227,7 +259,13 @@ async fn run_probe(
           "hidden surface initial, resize, and three fresh renderer generations with close checks; not visible UI or desktop automation"
         }
       } else if kind == "window" {
-        "MoonBit surface renderer with own-window message dispatch; not visible UI, IME, accessibility or desktop automation"
+        if case_name == "input" {
+          "MoonBit surface renderer input initialization and own-window dispatch; hidden input path only"
+        } else if case_name == "close" {
+          "MoonBit surface renderer close initialization and own-window dispatch; hidden close path only"
+        } else {
+          "MoonBit surface renderer with own-window message dispatch; not visible UI, IME, accessibility or desktop automation"
+        }
       } else {
         "worker completion through hidden HWND; not network, visible input, IME or general closure FFI"
       },
@@ -237,7 +275,12 @@ async fn run_probe(
     "freshSurface": Json::boolean(fresh_surface),
   })
   @async.protect_from_cancel() <| () => {
-    @fs.write_file(output_dir + "/" + mode + ".json", report.stringify()) catch {
+    let filename = if case_name == "normal" {
+      mode
+    } else {
+      mode + "-" + case_name
+    }
+    @fs.write_file(output_dir + "/" + filename + ".json", report.stringify()) catch {
       error =>
         match original_error {
           Some(_) =>
@@ -254,6 +297,12 @@ async fn run_probe(
     !stdout_state.val.overflow && !stderr_state.val.overflow,
     kind + " output overflow",
   )
+  if kind == "window" && case_name != "normal" {
+    let retained = marker_number(stdout, "WINDOW_INIT_RETAINED=")
+    let remaining = marker_number(stdout, "WINDOW_INIT_REMAINING=")
+    require(retained is Some(value) && value > 0, "window retained marker")
+    require(remaining == Some(0), "window remaining marker")
+  }
   require(exit_code == Some(0), kind + " exit")
   require(!stdout.contains("FAILED"), kind + " FAILED marker")
   require(
@@ -266,7 +315,13 @@ async fn run_probe(
           "SURFACE_RENDERER_OK"
         }
       } else if kind == "window" {
-        "WINDOW_PROBE_OK"
+        if case_name == "input" {
+          "WINDOW_INIT_INPUT_OK"
+        } else if case_name == "close" {
+          "WINDOW_INIT_CLOSE_OK"
+        } else {
+          "WINDOW_PROBE_OK"
+        }
       } else {
         "NATIVE_ASYNC_OK"
       },
@@ -284,6 +339,24 @@ async fn run_probe(
 
 ///|
 async fn main {
+  require(marker_number("X=1\n", "X=") == Some(1), "marker parser valid")
+  require(marker_number("X=0\n", "X=") == Some(0), "marker parser zero")
+  require(marker_number("", "X=") is None, "marker parser missing")
+  require(marker_number("X=1\nX=2\n", "X=") is None, "marker parser duplicate")
+  require(marker_number("X=\n", "X=") is None, "marker parser empty")
+  require(marker_number("X=a\n", "X=") is None, "marker parser nondigit")
+  require(
+    marker_number("X=2147483648\n", "X=") is None,
+    "marker parser overflow",
+  )
+  require(
+    marker_number("X=21474836480\n", "X=") is None,
+    "marker parser long overflow",
+  )
+  require(
+    marker_number("X=4294967296\n", "X=") is None,
+    "marker parser wrapped overflow",
+  )
   let root = @fs.realpath(".")
   let selected = @env.get_env_var("METONIC_NATIVE_PROBE")
   let kinds = match selected {
@@ -300,10 +373,17 @@ async fn main {
   }
   for kind in kinds {
     for mode in modes {
-      run_probe(root, kind, mode) catch {
-        error => {
-          println(@debug.to_string(error))
-          abort(@debug.to_string(error))
+      let cases = if kind == "window" {
+        ["normal", "input", "close"]
+      } else {
+        ["normal"]
+      }
+      for case_name in cases {
+        run_probe(root, kind, mode, case_name) catch {
+          error => {
+            println(@debug.to_string(error))
+            abort(@debug.to_string(error))
+          }
         }
       }
     }

@@ -46,9 +46,11 @@ same-surface reuse has been fixed upstream.
 
 The HWND must outlive both the renderer and pending adapter/device callbacks.
 If initialization leaves a pending callback, closing the renderer alone does
-not authorize HWND destruction. The normal window sequence verifies input after
-initialization; pending-initialization input and close still require dedicated
-verification. The Rust worker-completion probe remains a separate baseline.
+not authorize HWND destruction. Dedicated hidden cases verify input and close
+while an initialization ticket remains retained before ownership transfer, then
+require zero retained tickets after completion or cancellation. This does not
+establish recovery from a driver stall or physical device loss. The Rust
+worker-completion probe remains a separate baseline.
 
 ## Automated verification boundary
 
