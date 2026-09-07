@@ -146,6 +146,48 @@ pub fn verify(client : Client) -> @js_async.Promise[String] {
     assert_true(dark > 100)
     verify_rpc(client, "1", "\n月兎", 2, deleted.text)
     verify_rpc(client, "missing", "\nRPC: domain:not_found", 3, deleted.text)
+    let selected = invoke(client, {
+      "name": "window_select",
+      "arguments": {
+        "selection_start": 0,
+        "selection_end": deleted.text.length(),
+      },
+    })
+    let emoji = invoke(client, {
+      "name": "window_insert",
+      "arguments": {
+        "text": "A😀B",
+        "expected_semantic_revision": selected.semantic_revision,
+      },
+    })
+    assert_eq(emoji.text, "A😀B")
+    let invalid_request : Json = {
+      "name": "window_select",
+      "arguments": { "selection_start": 2, "selection_end": 3 },
+    }
+    let invalid : Reply = @json.from_json(
+      @json.parse(call(client, invalid_request.stringify()).wait()),
+    )
+    assert_eq(invalid.isError, Some(true))
+    assert_eq(invalid.content[0].text, "invalid_selection")
+    let range = invoke(client, {
+      "name": "window_select",
+      "arguments": {
+        "selection_start": 1,
+        "selection_end": 3,
+        "expected_semantic_revision": emoji.semantic_revision,
+      },
+    })
+    assert_true(selection_pixels(client) > 50)
+    let replaced = invoke(client, {
+      "name": "window_insert",
+      "arguments": {
+        "text": "日本",
+        "expected_semantic_revision": range.semantic_revision,
+      },
+    })
+    assert_eq(replaced.text, "A日本B")
+    assert_eq(selection_pixels(client), 0)
     "WINDOW_MCP_OK"
   })
 }
@@ -160,3 +202,25 @@ struct ImageContent {
 struct ImageReply {
   content : Array[ImageContent]
 } derive(FromJson)
+
+///|
+async fn selection_pixels(client : Client) -> Int {
+  let request : Json = { "name": "window_capture", "arguments": {} }
+  let captured : ImageReply = @json.from_json(
+    @json.parse(call(client, request.stringify()).wait()),
+  )
+  let image = @image.decode_png(
+    @base64.decode(captured.content[1].data.unwrap()),
+  )
+  let mut selected = 0
+  for y in 8..<104 {
+    for x in 8..<632 {
+      let offset = (y * image.width + x) * 4
+      if image.data[offset] < image.data[offset + 1] &&
+        image.data[offset + 1] < image.data[offset + 2] {
+        selected += 1
+      }
+    }
+  }
+  selected
+}
