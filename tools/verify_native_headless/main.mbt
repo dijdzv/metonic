@@ -342,7 +342,7 @@ async fn main {
     @fs.mkdir(directory, recursive=true)
   }
   let capture_path = directory + "/capture.rgba"
-  let bridge = root + "/.work/native-cargo/release/metonic_wgpu_probe.dll"
+  let bridge = root + "/.work/native-cargo/missing-native-surface.dll"
   let captures : Ref[Array[Json]] = { val: [], }
   @async.with_timeout(20000, async fn() {
     captures.val = verify_session(root, directory, capture_path, bridge)

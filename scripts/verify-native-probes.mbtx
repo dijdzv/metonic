@@ -164,7 +164,7 @@ async fn run_probe(
   let bridge = if kind == "window" || kind == "surface" {
     root + "/.work/native-cargo/missing-surface-bridge.dll"
   } else {
-    root + "/.work/native-cargo/release/metonic_wgpu_probe.dll"
+    root + "/.work/native-cargo/missing-native-surface.dll"
   }
   let output_dir = root + "/.work/native-" + kind
   if !@fs.exists(output_dir) {

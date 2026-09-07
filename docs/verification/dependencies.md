@@ -15,10 +15,9 @@ Recorded: 2026-09-06.
 | moonbitlang/async | 0.21.2 | Host-side process, file and HTTP development tools | Apache-2.0; native/Wasm host use does not establish browser WasmGC support |
 | mizchi/image / mizchi/zlib | 0.4.3 / 0.4.8 | PNG output for native development captures | Both Apache-2.0; Wasm PNG interoperability checked against pngjs; other image formats are outside this adoption |
 | Milky2018/moon_cosmic | 0.3.3 | Shared text shaping/layout and raster experiments | Apache-2.0 module; transitive modules and font notices remain separate |
-| Rust GPU bridge dependencies | bridges/wgpu/Cargo.toml and Cargo.lock | Existing DX12 renderer baseline: wgpu 30.0.1, raw-window-handle 0.6.2, pollster 1.0.1 | Locked development probe dependencies; review their individual notices before distribution |
-| Milky2018/wgpu_mbt | 0.16.0 | Existing-binding comparison in experiments/wgpu_binding | Experimental alternative; see the [binding record](wgpu-mbt.md) for its native library boundary |
+| Milky2018/wgpu_mbt | 0.16.0 | Native offscreen, window and worker rendering; isolated binding comparison | See the [binding record](wgpu-mbt.md) for its pinned native library boundary and notices |
 
-Direct dependency pins above were reconciled with the module and Cargo manifests
+Direct dependency pins above were reconciled with the module manifests
 on 2026-09-07. The manifests and resolved dependency records define the complete
 transitive graph. The browser host uses the browser's WebGPU implementation; npm
 dependencies remain development tools. AccessKit has not been adopted. Font

@@ -7,6 +7,11 @@ Success and failure cross the native boundary as request IDs and integer
 payloads. Workers never call MoonBit or render; the UI thread receives a private
 window message and performs scope validation before updating scene state.
 
+MoonBit's shared `SurfaceRenderer` performs GPU composition through the published
+wgpu binding. Workers start after GPU initialization and the first presentation.
+The host uses bounded Win32 polling and yields to the MoonBit async scheduler
+between polls. This sequence does not verify worker input during GPU initialization.
+
 At most 16 worker slots exist. Each worker waits on its own cancellation event
 with a bounded delay. A slot stays occupied until the UI thread joins the worker
 and consumes its completion. Scope cancellation only prevents result application;
@@ -50,15 +55,18 @@ not a performance benchmark.
 The process verifier is `scripts/verify-native-probes.mbtx`, shared with the
 hidden-window probe. It uses the pinned MoonBit async process API, drains stdout
 and stderr concurrently, and limits each stream to 64 KiB while reading. The
-native worker implementation remains unchanged by this tooling migration.
+native worker implementation remains a C OS boundary. The verifier supplies a
+nonexistent legacy GPU DLL path so success cannot depend on loading that bridge.
 
 ## Scope
 
-On 2026-09-06, local Windows x64 runs passed with NVIDIA GeForce RTX 3060
+On 2026-09-07, after removing the custom Rust renderer and its DLL loader,
+local Windows x64 runs passed with NVIDIA GeForce RTX 3060
 (DX12) and Microsoft Basic Render Driver (DX12). Both completed the sequence and
 reported zero milliseconds at the shutdown clock's resolution. This is not a
 claim that shutdown has no cost. The existing native-window sequence also passed
-after adding the shared worker support.
+after removing the shared host's GPU DLL loader. The surface renderer's normal
+device-generation probe passed as well.
 
 This proves a bounded worker-thread wakeup path into the native event loop and
 request-lifetime validation. It does not implement network I/O, a general task

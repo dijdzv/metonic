@@ -55,9 +55,10 @@ mise run browser:install
 mise run browser:headless
 ```
 
-For native offscreen rendering, also install Rust through rustup, then run
-`mise run native:headless`. The pinned Rust toolchain and full setup are described
-in the development guide. This probe does not yet present a native window.
+For native offscreen rendering, install the Visual Studio C++ build tools and run
+`mise run native:headless`. It uses the published MoonBit wgpu binding. The separate
+`mise run native:window` task verifies a hidden native window and its own-message
+input sequence. Full setup and verification limits are in the development guide.
 
 Node and pnpm run development verification, including Playwright and screenshot
 inspection; neither is a native application runtime requirement. See the
