@@ -1,0 +1,55 @@
+# Integrated local demo
+
+After the Windows setup in [the development guide](../development.md), run
+`mise run demo` from the repository root. This builds both browser targets, the
+existing browser HTTP server, and the ordinary native release window. A MoonBit
+launcher starts the server, waits up to ten seconds for readiness, then starts
+the native window with that same server origin. Port 4173 must be available.
+An existing server is not reused or terminated.
+
+Open `http://127.0.0.1:4173/?target=js` in a WebGPU-capable browser. The target
+navigation also allows WasmGC comparison; this demo does not settle the final
+distribution choice. The launcher does not start or control a browser process.
+
+## Common operation sequence
+
+The two frontends share model implementations and the HTTP contract, not a live
+editing session. Perform the sequence separately in each UI.
+
+| Operation | Native | Browser |
+| --- | --- | --- |
+| Replace the initial text | Ctrl+A, type Japanese and Latin text | Focus the text input, select all and type |
+| Select and replace a range | Click and Shift+click the GPU text, then type | Use the text input's selection and type |
+| Load the sample user | F7 | Load user, with User ID `1` |
+| Observe the result | `月兎` below the editor; editor text preserved | Same result below the GPU editor and in the result output |
+| Start delayed scene movement | F5 | Move after delay |
+| Cancel before completion | F6 | Cancel |
+| Resize | Resize the native window | Resize the browser window |
+| End the session | Close the native window | Stop disposes the browser UI; close the tab separately |
+
+For a domain error, the browser can request `missing`. The native shortcut uses
+user `1`; arbitrary IDs are available through the separate development CLI/MCP.
+Arrow keys currently move the sample rectangle in native; the browser requires
+canvas focus for scene keyboard controls. Native does not yet draw a visible
+caret. These are unfinished interaction differences, not full editing parity.
+
+Closing native ends the launcher and its owned server. An unexpected server exit
+fails the session and terminates its owned native child. Startup failure also
+cleans up the server. Each child is a direct leaf executable; this launcher does
+not supervise independently spawned descendants. Normal native close runs the
+UI's resource cleanup; forced termination after a server failure does not prove
+that application-level cleanup ran.
+
+## Verification boundaries
+
+`mise run demo:test` exercises normal child exit, invalid readiness, native
+startup failure and unexpected server exit with process fixtures. It does not
+prove user interaction or rendering. Existing `browser:headless`,
+`native:window-rpc`, `native:window-mcp` and `native:window` checks exercise their
+respective UI paths. `native:release-lifecycle` checks the production window's
+startup and close, not its editor or pixels.
+
+The browser still includes development observations. Native uses the release
+artifact with the existing development-code exclusion check. Physical Japanese
+IME, OS accessibility and production input/rendering evidence remain separate
+requirements; see [native IME verification](native-ime.md).
