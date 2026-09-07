@@ -30,6 +30,10 @@ The integrated demo runs a native GPU window and serves the browser UI from one
 local HTTP server. Each UI owns its own editing state and uses the same typed
 user-lookup endpoint; this is not synchronized editing between windows.
 
+The browser defaults to WasmGC; JS remains available for comparison. The
+[backend selection record](docs/verification/browser-target.md) explains the
+measured tradeoff and the remaining production-packaging work.
+
 On Windows x64, install [mise](https://mise.jdx.dev/), PowerShell 7 (`pwsh`), and
 Visual Studio C++ build tools with the Windows SDK, then run:
 

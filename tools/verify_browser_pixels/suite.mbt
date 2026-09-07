@@ -19,6 +19,10 @@ async fn run_suite(host : BrowserHost, metadata : String) -> String {
     results.push(result)
   }
   let negative = command(host, { "op": "failures" })
+  require(
+    command(host, { "op": "default-target" }) == Json::string("wasm-gc"),
+    "P0 default target mismatch",
+  )
   for target in ["js", "wasm-gc"] {
     let flow = command(host, {
       "op": "editor-flow",

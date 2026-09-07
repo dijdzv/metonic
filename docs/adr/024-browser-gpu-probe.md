@@ -2,7 +2,7 @@
 
 Date: 2026-09-06.
 
-Status: rectangle experiment verified; production application backend selection remains open.
+Status: WasmGC selected for the P0 browser application on 2026-09-08; production packaging remains open.
 
 ## Context
 
@@ -48,12 +48,30 @@ capture/frame barriers require stronger synchronization. A single small-module
 initialization observation is not a performance benchmark or a backend selection
 criterion by itself. Native ABI, text, IME, and accessibility are separate gates.
 
+## P0 backend selection
+
+The integrated text/editor/HTTP application selects WasmGC as its default browser
+backend. JS remains an explicit comparison target, not an automatic fallback.
+Both targets have passed the existing state, GPU pixels, text, asynchronous
+updates, HTTP and shutdown checks in Chromium on the tested physical GPU and
+SwiftShader. WasmGC has the smaller uncompressed application artifact with the
+same current host/transfer contract. See [the current comparison](../verification/browser-target.md)
+for sizes, reproduction and limits.
+
+This decision is scoped to the verified P0 browser environment. It does not
+claim broader browser compatibility, superior execution speed, physical IME
+behavior or a completed production bundle. Missing WebGPU/WasmGC produces a
+visible startup failure; the application does not silently choose another backend.
+Production packaging must ship the selected artifact and exclude development
+adapters while keeping normal DOM/input/GPU/HTTP boundaries. That work remains
+open rather than being satisfied by changing the default query parameter.
+
 ## References
 
 The [verification record](../verification/browser-gpu.md) documents successful
 headless runs with physical and software GPU adapters. Keep both application
-targets in the experiment until text/async boundary evidence justifies narrowing
-them. Use explicit SwiftShader selection in hosted CI and record it as software
+targets in the comparison suite so the P0 selection remains testable. Use
+explicit SwiftShader selection in hosted CI and record it as software
 rendering, separately from local physical-GPU results.
 
 - [MoonBit exports and foreign libraries](https://docs.moonbitlang.com/en/latest/language/ffi.html#export-functions)

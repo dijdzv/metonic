@@ -121,7 +121,9 @@ POST `/rpc` uses the same bounded `rpc/http_host` handler as the standalone
 RPC server. It exposes only the sample typed user lookup, not arbitrary handlers.
 The server reads each allowed file into memory before sending it and limits
 concurrent connections to eight; it is a local development server, not a general
-file host. Browser UI execution still compares JS and WasmGC independently.
+file host. WasmGC is the P0 default; verification still compares JS and WasmGC
+independently. [The backend selection record](verification/browser-target.md)
+documents artifact sizes and the unfinished production-packaging boundary.
 
 `browser:server-test` uses `scripts/verify-browser-server.mbtx` to launch the
 server and verify asset MIME types, cache policy, GET/HEAD, method rejection and

@@ -1,0 +1,58 @@
+# P0 browser backend selection
+
+Recorded 2026-09-08 against the integrated application at `4c43490` with the
+pinned toolchain. This supersedes the small rectangle-only artifact comparison
+as the basis for selecting the P0 application backend.
+
+| Observation | JS | WasmGC |
+| --- | ---: | ---: |
+| Uncompressed application artifact | 5,665,653 bytes | 1,822,759 bytes |
+| Common staged host/font/license assets | 9,622,506 bytes | 9,622,506 bytes |
+| Application plus common assets | 15,288,159 bytes | 11,445,265 bytes |
+| Five-frame scene uniform uploads | 160 bytes | 160 bytes |
+| Chromium physical GPU and SwiftShader checks | pass | pass |
+
+The common-assets measurement includes the diagnostic HTML, host/loader/text
+renderer, CSS, full Noto Sans JP font and license. It excludes the other target's
+application artifact. These are uncompressed file sizes, not compressed network
+transfer measurements or a finished distribution size. WasmGC saves about
+3.84 MB for this application; the shared font still dominates total assets.
+
+The verified browser was Chrome for Testing 153.0.8010.12. Physical adapter
+metadata reported NVIDIA/Ampere, non-fallback; the software path reported
+Google/SwiftShader, fallback. Both pass scene input/resize/idle/stop, shared text
+pixels, staged editor composition, HTTP success/domain errors and cancellation
+checks. These are the existing suite's coverage, not evidence of every RPC
+failure case, physical IME or OS accessibility.
+
+Single load observations were 81.8/19.2 ms on the physical path and 79.4/19.2 ms
+on SwiftShader for JS/WasmGC respectively. They are **not benchmarks**: the loader
+times different import/instantiation paths, excludes fetch time from its timer,
+and does not measure full font/GPU initialization. They do not establish an
+execution-speed advantage and are not the reason for the selection.
+
+## Decision and distribution boundary
+
+WasmGC is the P0 default because the integrated behavior passes the same tests
+with a smaller application artifact and the existing shared host. JS remains
+available with `?target=js` for comparison. There is no automatic backend fallback
+and no claim about untested browser engines. See [ADR 024](../adr/024-browser-gpu-probe.md).
+
+The current `.work/browser-dist` is still a development distribution containing
+both targets and `metonicAsyncProbe`. A production bundle must contain only the
+selected application and required assets, exclude development adapters, and be
+tested through its ordinary interface. That packaging is still open; default
+selection alone does not meet the production-exclusion requirement.
+
+## Reproduction
+
+Run `mise run browser:headless` with `METONIC_GPU_BACKEND=default`, then with
+`METONIC_GPU_BACKEND=swiftshader`, using the pinned setup. Run
+`mise run browser:comparison-report` after both complete. The MoonBit script reads
+their results and current staged files and writes `.work/browser-comparison.json`.
+It rejects target duplication, page errors and artifact-size mismatches.
+
+Size equality is not a source-revision attestation: rerun the headless checks
+when application or host behavior changes. The recorded revision is the checkout
+at report time, not a claim that an arbitrary old result came from that revision.
+Raw measurements remain ignored local artifacts.

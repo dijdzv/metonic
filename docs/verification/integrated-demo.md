@@ -7,9 +7,10 @@ launcher starts the server, waits up to ten seconds for readiness, then starts
 the native window with that same server origin. Port 4173 must be available.
 An existing server is not reused or terminated.
 
-Open `http://127.0.0.1:4173/?target=js` in a WebGPU-capable browser. The target
-navigation also allows WasmGC comparison; this demo does not settle the final
-distribution choice. The launcher does not start or control a browser process.
+Open `http://127.0.0.1:4173/` in a WebGPU-capable browser. WasmGC is the selected
+P0 backend; target navigation retains JS for comparison. This remains the
+development host, not the final production distribution. The launcher does not
+start or control a browser process. See [the selection record](browser-target.md).
 
 ## Common operation sequence
 

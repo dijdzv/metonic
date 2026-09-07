@@ -1,0 +1,87 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/json",
+}
+
+///|
+fn field(value : Json, name : String) -> Json {
+  match value {
+    Object(fields) => fields.get(name).unwrap()
+    _ => abort("expected object: " + name)
+  }
+}
+
+///|
+async fn main {
+  let (code, revision, _) = @process.collect_output(
+    "git",
+    ["rev-parse", "HEAD"],
+    no_console_window=true,
+  )
+  assert_eq(code, 0)
+  let bytes : Map[String, Int] = Map([])
+  for
+    entry in [
+      ("js", ".work/browser-dist/app.mjs"),
+      ("wasm-gc", ".work/browser-dist/app.wasm"),
+    ] {
+    let (target, path) = entry
+    bytes.set(target, @fs.read_file(path).binary().length())
+  }
+  let results : Array[Json] = []
+  for backend in ["default", "swiftshader"] {
+    let record = @json.parse(
+      @fs.read_file(".work/browser-headless/" + backend + "/results.json").text(),
+    )
+    assert_eq(field(record, "backend"), Json::string(backend))
+    let targets = match field(record, "targets") {
+      Array(values) => values
+      _ => abort("missing target results")
+    }
+    assert_eq(targets.length(), 2)
+    let seen : Map[String, Bool] = Map([])
+    for result in targets {
+      let target : String = @json.from_json(field(result, "target"))
+      assert_true(!seen.contains(target))
+      seen.set(target, true)
+      let expected = bytes.get(target).unwrap()
+      let measured : Int = @json.from_json(field(result, "artifactBytes"))
+      assert_eq(
+        measured,
+        expected,
+        msg="stale artifact size: " + backend + "/" + target,
+      )
+      assert_eq(field(result, "pageerrors"), Json::array([]))
+      results.push({
+        "backend": backend,
+        "target": target,
+        "artifact_bytes": measured,
+        "load_ms_observation": field(result, "loadMs"),
+        "submitted_frames": field(result, "submitted"),
+        "uniform_bytes": field(result, "transferred"),
+        "adapter": field(result, "adapter"),
+        "browser": field(record, "browser"),
+      })
+    }
+  }
+  let mut shared_bytes = 0
+  for
+    path in [
+      "index.html", "style.css", "host.mjs", "loader.mjs", "text-renderer.mjs", "NotoSansJP.ttf",
+      "OFL.txt",
+    ] {
+    shared_bytes += @fs.read_file(".work/browser-dist/" + path)
+      .binary()
+      .length()
+  }
+  let report : Json = {
+    "revision_at_report": revision.text().trim().to_owned(),
+    "shared_uncompressed_bytes": shared_bytes,
+    "results": Json::array(results),
+    "scope": "Uncompressed staged files and existing successful headless observations. Size matching rejects mismatched artifacts; it is not a source-revision attestation. Load observations are not benchmarks or complete startup latency.",
+  }
+  @fs.write_file(".work/browser-comparison.json", report.stringify())
+  println(report.stringify())
+}
