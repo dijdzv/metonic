@@ -99,6 +99,7 @@ pub struct Bridge {
   mut x : Int
   mut y : Int
   mut composing : Bool
+  mut rpc_result : String
 }
 
 ///|
@@ -158,6 +159,13 @@ fn tree(_data : UInt64) -> UInt64 {
     push_child(root, id)
     push_node(result, id, node)
   }
+  if bridge.rpc_result != "" {
+    let status = node_new(3)
+    let text = @utf8.encode(bridge.rpc_result.trim().to_owned())
+    value(status, text, text.length().to_uint64())
+    push_child(root, 3UL)
+    push_node(result, 3UL, status)
+  }
   push_node(result, 0UL, root)
   result
 }
@@ -173,6 +181,7 @@ pub fn open(hwnd : UInt64, nodes : Array[@semantics.Node]) -> Bridge? {
     x: 260,
     y: 144,
     composing: false,
+    rpc_result: "",
   }
   current.val = Some(bridge)
   bridge.adapter = native_open(hwnd, data => tree(data))
@@ -193,6 +202,7 @@ pub fn Bridge::update(
   x : Int,
   y : Int,
   composing : Bool,
+  rpc_result : String,
 ) -> Unit {
   if self.adapter == 0UL {
     return
@@ -203,6 +213,7 @@ pub fn Bridge::update(
   self.x = x
   self.y = y
   self.composing = composing
+  self.rpc_result = rpc_result
   let events = update_active(self.adapter, data => tree(data), 0UL)
   if events != 0UL {
     raise_events(events)

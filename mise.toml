@@ -205,7 +205,10 @@ env = { METONIC_NATIVE_BUILD = "accessibility-probe" }
 
 [tasks."native:accessibility"]
 depends = ["native:accessibility-probe-build"]
-run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-native-accessibility.mbtx'
+run = [
+  '.\\.tools\\moonbit\\bin\\moon.exe build examples/p0/rpc_server --target wasm --release --frozen --deny-warn',
+  '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-native-accessibility.mbtx',
+]
 
 [tasks."native:window-dev-build"]
 run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/build-native.mbtx'
