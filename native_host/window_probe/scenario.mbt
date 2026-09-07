@@ -5,6 +5,7 @@ struct Scenario {
   mut polls : Int
   mut stage : Int
   mut canceled_id : Int
+  mut scene_revision : Int
 }
 
 ///|
@@ -74,6 +75,25 @@ async fn Scenario::step(self : Scenario, view : @ui.Observation) -> Unit {
       view.editor.selection_end == 3,
       "right split supplementary character",
     )
+    self.stage = 25
+    self.scene_revision = (view.scene)(5)
+    post(view.hwnd, 0x0100U, 0x20UL, 0L)
+    post(view.hwnd, 0x0100U, 0x0DUL, 0L)
+    post(view.hwnd, 0x0100U, 0x26UL, 0L)
+  } else if self.stage == 25 && view.editor.value == "A😀 語" {
+    require((view.scene)(5) == self.scene_revision, "editing changed the scene")
+    require(view.editor.focused, "typing lost editor focus")
+    self.stage = 26
+    post(view.hwnd, 0x0100U, 0x09UL, 0L)
+    post(view.hwnd, 0x0100U, 0x0DUL, 0L)
+    post(view.hwnd, 0x0100U, 0x20UL, 0L)
+    post(view.hwnd, 0x0100U, 0x08UL, 0L)
+  } else if self.stage == 26 && (view.scene)(5) == self.scene_revision + 2 {
+    require(!view.editor.focused, "scene activation stole editor focus")
+    require(view.editor.value == "A😀 語", "scene keys edited text")
+    self.stage = 27
+    post(view.hwnd, 0x0100U, 0x09UL, 0L)
+  } else if self.stage == 27 && view.editor.focused {
     self.stage = 30
     require(
       (view.set_text)("日本語の描画を確認します ABC 123") == "",
@@ -94,6 +114,15 @@ async fn Scenario::step(self : Scenario, view : @ui.Observation) -> Unit {
       "preedit changed selection",
     )
     require(view.preedit_cursor == 1, "composition cursor was lost")
+    self.stage = 32
+    post(view.hwnd, 0x0100U, 0x0DUL, 0L)
+    post(view.hwnd, 0x0100U, 0x26UL, 0L)
+  } else if self.stage == 32 {
+    require(view.composing, "scene shortcut interrupted composition")
+    require(
+      (view.scene)(5) == self.scene_revision + 2,
+      "composition key changed the scene",
+    )
     self.stage = 31
     (view.inject)(CompositionCancel)
   } else if self.stage == 31 &&
