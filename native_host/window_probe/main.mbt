@@ -11,6 +11,7 @@ async fn main {
     polls: 0,
     stage: 0,
     canceled_id: 0,
+    scene_revision: 0,
   }
   @ui.run(
     observer=Some(view => scenario.step(view)),

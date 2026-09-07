@@ -557,6 +557,9 @@ async fn run_loop(
               app.preedit = ""
               app.draw()
             }
+            // Space also arrives as text after scene activation; it must not
+            // transfer focus to the editor a second time.
+            Commit(" ") if !@semantics.snapshot(app.editor)[1].focused => ()
             Commit(value) => {
               let reference = @semantics.snapshot(app.editor)[1].reference
               ignore(@semantics.focus(app.editor, reference))
@@ -566,7 +569,8 @@ async fn run_loop(
               )
               app.draw()
             }
-            Backspace if app.composition is Some(_) => ()
+            Backspace if app.composition is Some(_) ||
+              !@semantics.snapshot(app.editor)[1].focused => ()
             Backspace => {
               let reference = @semantics.snapshot(app.editor)[1].reference
               require(
@@ -609,6 +613,8 @@ async fn run_loop(
                 ignore(@scene.dispatch(app.state, Click(x, y)))
                 app.draw()
               }
+            Input(_) if app.composition is Some(_) ||
+              @semantics.snapshot(app.editor)[1].focused => ()
             Input(action) =>
               if @scene.dispatch(app.state, action) {
                 app.draw()
