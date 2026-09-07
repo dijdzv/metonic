@@ -216,6 +216,13 @@ object per line and keeps a dedicated native process alive until stdin closes:
 Capture returns response metadata and base64 PNG content. Each CLI or MCP launch
 owns a fresh scene; it does not attach to an existing native window.
 
+The CLI runs as a MoonBit Wasm host program. For machine consumption, build it
+first and launch `.tools/moonbit/bin/moonrun.exe` with the absolute path to
+`_build/wasm/release/build/tools/native_cli/native_cli.wasm` and `--root` followed
+by the absolute repository path. This keeps build output out of the JSON stream.
+Input lines are limited to 4095 bytes and decoded as strict UTF-8. An invalid or
+oversized line produces an error response; subsequent valid lines remain usable.
+
 For an MCP host, use the pinned Node executable as the command and the absolute
 path to `tools/devtools/native-mcp.mjs` as its single argument. Build and install
 dependencies beforehand; do not send build-task output into MCP stdin/stdout.
@@ -223,15 +230,16 @@ The server exposes `native_snapshot`, `native_move`, `native_resize`,
 `native_activate`, and `native_capture`. Errors use MCP error content. Unknown
 arguments are rejected, and mutation/capture accepts `expected_revision`.
 
-Run `mise run devtools:test`, `mise run native:control`, and
-`mise run native:mcp-test` for transport and real-renderer checks. See the
+Run `mise run devtools:test`, `mise run native:control`,
+`mise run native:cli-test`, and `mise run native:mcp-test` for transport and
+real-renderer checks. See the
 [control verification record](verification/native-control.md) for scope and results.
 
 `mise run native:client-test` checks the MoonBit process client used by migrated
 verification tools. `mise run native:semantics` builds its MoonBit verifier for
 the Wasm host runtime before running it against the native renderer. The verifier
 checks semantic actions, UTF-16 selection boundaries, stale references and full
-capture pixels. Node remains the host for the existing CLI/MCP adapters. See the
+capture pixels. Node remains the host for the MCP adapter. See the
 [semantic verification record](verification/semantics.md) for measured scope.
 
 ## Repository layout
