@@ -15,6 +15,8 @@ pub struct SurfaceRenderer {
   format : @wgpu.TextureFormat
   mut closed : Bool
   mut poisoned : Bool
+  mut text_layer : SurfaceText?
+  readbacks : Map[Int, ReadbackTicket]
 }
 
 ///|
@@ -102,6 +104,8 @@ pub async fn SurfaceRenderer::new(
     format,
     closed: false,
     poisoned: false,
+    text_layer: None,
+    readbacks: Map([]),
   }
 }
 
@@ -220,15 +224,31 @@ pub fn SurfaceRenderer::present(
   let encoder = self.device.create_command_encoder()
   defer encoder.release()
   let pass = encoder.begin_render_pass_color(view)
-  pass.set_pipeline(self.pipeline)
-  pass.set_bind_group(0U, self.bind_group, [])
-  pass.draw(3U, 1U, 0U, 0U)
-  pass.end()
-  defer pass.release()
+  self.draw_pass(pass)
   let command = encoder.finish()
   defer command.release()
   self.queue.submit_one(command)
   self.surface.present_or_raise()
+}
+
+///|
+fn SurfaceRenderer::draw_pass(
+  self : SurfaceRenderer,
+  pass : @wgpu.RenderPass,
+) -> Unit {
+  pass.set_pipeline(self.pipeline)
+  pass.set_bind_group(0U, self.bind_group, [])
+  pass.draw(3U, 1U, 0U, 0U)
+  match self.text_layer {
+    Some(text) => {
+      pass.set_pipeline(text.pipeline)
+      pass.set_bind_group(0U, text.bind_group, [])
+      pass.draw(3U, 1U, 0U, 0U)
+    }
+    None => ()
+  }
+  pass.end()
+  pass.release()
 }
 
 ///|
@@ -237,6 +257,11 @@ pub fn SurfaceRenderer::close(self : SurfaceRenderer) -> Unit {
     return
   }
   self.closed = true
+  match self.text_layer {
+    Some(text) => text.pool.release()
+    None => ()
+  }
+  self.text_layer = None
   self.surface.unconfigure()
   self.pool.release()
   self.queue.release()

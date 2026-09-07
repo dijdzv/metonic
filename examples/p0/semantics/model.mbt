@@ -194,6 +194,82 @@ pub fn set_text(tree : Tree, reference : NodeRef, value : String) -> String {
 }
 
 ///|
+pub fn replace_selection(
+  tree : Tree,
+  reference : NodeRef,
+  inserted : String,
+) -> String {
+  let (kind, error) = resolve(tree, reference)
+  if kind < 0 {
+    return error
+  }
+  if kind != 2 {
+    return "unsupported_action"
+  }
+  match tree.input {
+    None => "stale_target"
+    Some(node) => {
+      if !node.enabled {
+        return "disabled"
+      }
+      if @text_position.utf16_to_scalar(inserted, 0) is None {
+        return "invalid_text"
+      }
+      let start = node.selection_start
+      let end = node.selection_end
+      let value = node.value[:start].to_owned() +
+        inserted +
+        node.value[end:].to_owned()
+      let caret = start + inserted.length()
+      if value != node.value || start != caret || end != caret {
+        tree.input = Some({
+          ..node,
+          value,
+          selection_start: caret,
+          selection_end: caret,
+        })
+        tree.revision += 1
+      }
+      ""
+    }
+  }
+}
+
+///|
+pub fn delete_backward(tree : Tree, reference : NodeRef) -> String {
+  let (kind, error) = resolve(tree, reference)
+  if kind < 0 {
+    return error
+  }
+  if kind != 2 {
+    return "unsupported_action"
+  }
+  let node = tree.input.unwrap()
+  if !node.enabled {
+    return "disabled"
+  }
+  if node.selection_start != node.selection_end {
+    return replace_selection(tree, reference, "")
+  }
+  if node.selection_start == 0 {
+    return ""
+  }
+  let mut start = node.selection_start - 1
+  while !selection_boundary(node.value, start) {
+    start -= 1
+  }
+  tree.input = Some({
+    ..node,
+    value: node.value[:start].to_owned() +
+    node.value[node.selection_end:].to_owned(),
+    selection_start: start,
+    selection_end: start,
+  })
+  tree.revision += 1
+  ""
+}
+
+///|
 fn selection_boundary(value : String, index : Int) -> Bool {
   @text_position.utf16_to_scalar(value, index) is Some(_)
 }

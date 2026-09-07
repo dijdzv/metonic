@@ -119,6 +119,19 @@ ordinary window and async commands use the shared Windows event-loop adapter.
 `native:async` uses structured MoonBit jobs; `native:window` handles input,
 resize and GPU initialization through the prepared window dependency.
 
+The window also renders the shared semantic editor using `text_raster` and the
+pinned Noto Sans JP asset. Its build prepares and verifies that asset directly.
+Committed text replaces the selection; Backspace deletes the selection or one
+Unicode scalar. Grapheme navigation, selection visualization and real IME
+composition are not yet integrated. Arrow keys still control the rectangle.
+
+The hidden window verification injects character messages, replaces Japanese
+text, inserts and deletes a supplementary character, and checks caret state.
+It renders through the same pass into an offscreen texture to check glyph
+presence and complete clearing of the text area after an empty update. This is
+not a swap-chain screenshot or a test of physical input, glyph-shape accuracy,
+IME or OS accessibility. Capture bytes retain the surface's native format.
+
 `mise run native:host-build` prepares pinned source archives, applies the reviewed
 window and async patches, and builds the existing GPU integration fixture. The
 preparation tool uses `.work/native-deps/cache` for archives and
