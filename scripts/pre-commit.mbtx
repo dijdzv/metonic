@@ -47,7 +47,6 @@ async fn main {
   run(moon, ["fmt"])
   run(moon, ["run", "scripts/format-scripts.mbtx"])
   run(moon, ["-C", "experiments/wgpu_binding", "fmt"])
-  run("cargo", ["fmt", "--manifest-path", "bridges/wgpu/Cargo.toml"])
   expect_clean(
     ["diff", "--exit-code"],
     "formatting changed files; review and stage explicitly",

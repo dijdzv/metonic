@@ -9,7 +9,7 @@ Status: experimental; not a final cross-platform windowing decision.
 Add a Windows-only probe alongside the offscreen renderer. MoonBit owns scene
 state, input interpretation and the DX12 renderer through the published MoonBit
 binding. A small C stub owns HWND creation and bounded Win32 message polling.
-The worker-completion probe retains the blocking C loop and Rust renderer.
+The worker-completion probe uses the same renderer and bounded polling boundary.
 
 This isolates the Windows lifetime boundary without introducing another event
 loop abstraction. A portable windowing library remains an alternative when
@@ -21,12 +21,12 @@ performance advantage for direct Win32 or choose an accessibility adapter.
 The C stub forwards paint, nonzero resize, key, pointer and close events through
 a bounded ring. An overflow terminates the probe. The window host polls at most
 64 Win32 messages per call and yields through the MoonBit async scheduler between
-iterations. Unrelated messages do not become application events. The worker
-baseline retains blocking GetMessage. State changes and paint trigger rendering.
+iterations. Unrelated messages do not become application events. The worker host
+uses the same polling path. State changes and paint trigger rendering.
 
 WM_CLOSE is forwarded without destroying the HWND. MoonBit exits its loop and
-calls cleanup, which destroys the surface before the HWND. The worker baseline
-also unloads its Rust DLL.
+calls cleanup, which destroys the surface before the HWND. The worker host first
+stops and joins its workers; a failed join prevents resource destruction.
 The raw window handle must remain valid throughout the surface lifetime.
 Surface loss or an outdated surface causes one reconfiguration and acquisition
 retry. Other acquisition failures terminate this bounded probe; recovery and
@@ -49,8 +49,9 @@ If initialization leaves a pending callback, closing the renderer alone does
 not authorize HWND destruction. Dedicated hidden cases verify input and close
 while an initialization ticket remains retained before ownership transfer, then
 require zero retained tickets after completion or cancellation. This does not
-establish recovery from a driver stall or physical device loss. The Rust
-worker-completion probe remains a separate baseline.
+establish recovery from a driver stall or physical device loss. The separate
+worker-completion probe starts its workers after GPU initialization and the first
+presentation; it does not test worker input during GPU initialization.
 
 ## Automated verification boundary
 

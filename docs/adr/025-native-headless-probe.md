@@ -14,7 +14,9 @@ below supersedes the original custom-wrapper choice for the headless host only.
 Use `Milky2018/wgpu_mbt@0.16.0` with pinned wgpu-native 29.0.1.1 for the headless
 renderer. The root `native_gpu` package owns persistent resources and asynchronous
 readback; the example composes it with MoonBit async stdio and file writing.
-The custom Rust/C window and worker hosts remain separate migration candidates.
+Window and worker rendering subsequently adopted the shared MoonBit surface
+renderer; see [ADR 027](027-native-window-probe.md). The Win32/worker C boundary
+remains, but the custom Rust renderer is no longer part of the build.
 The following original comparison records the baseline decision rather than
 requiring its offscreen implementation to remain the application's renderer.
 

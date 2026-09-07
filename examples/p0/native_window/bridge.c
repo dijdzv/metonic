@@ -13,17 +13,8 @@ static volatile LONG ring_head, ring_tail;
 static volatile LONG ring_failed;
 static HWND window_handle;
 static HINSTANCE instance_handle;
-static HMODULE gpu_module;
-static void *gpu_surface;
 static int test_mode_enabled;
 static int client_width = 640, client_height = 360;
-
-typedef void *(__cdecl *gpu_create_fn)(void *, int32_t);
-typedef int32_t (__cdecl *gpu_present_fn)(void *, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t);
-typedef void (__cdecl *gpu_destroy_fn)(void *);
-static gpu_create_fn gpu_create;
-static gpu_present_fn gpu_present;
-static gpu_destroy_fn gpu_destroy;
 
 static void fatal(const char *message) { fputs(message, stderr); fputc('\n', stderr); }
 static int enqueue(int32_t type, int32_t x, int32_t y) {
@@ -50,20 +41,6 @@ static LRESULT CALLBACK window_proc(HWND hwnd, UINT message, WPARAM wparam, LPAR
     case WM_DESTROY: PostQuitMessage(0); return 0;
     default: return DefWindowProcW(hwnd, message, wparam, lparam);
   }
-}
-
-static int load_gpu(void) {
-  if (gpu_module) return gpu_surface != NULL;
-  wchar_t path[MAX_PATH]; DWORD length = GetEnvironmentVariableW(L"METONIC_GPU_BRIDGE", path, MAX_PATH);
-  if (!length || length >= MAX_PATH) return 0;
-  gpu_module = LoadLibraryExW(path, NULL, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32);
-  if (!gpu_module) return 0;
-  gpu_create = (gpu_create_fn)GetProcAddress(gpu_module, "metonic_surface_create");
-  gpu_present = (gpu_present_fn)GetProcAddress(gpu_module, "metonic_surface_present");
-  gpu_destroy = (gpu_destroy_fn)GetProcAddress(gpu_module, "metonic_surface_destroy");
-  if (!gpu_create || !gpu_present || !gpu_destroy) return 0;
-  gpu_surface = gpu_create(window_handle, GetEnvironmentVariableW(L"METONIC_GPU_FALLBACK", path, MAX_PATH) == 1 && path[0] == L'1');
-  return gpu_surface != NULL;
 }
 
 __declspec(dllexport) int32_t metonic_window_create(void) {
@@ -114,14 +91,9 @@ __declspec(dllexport) void *metonic_window_hinstance(void) { return instance_han
 __declspec(dllexport) int32_t metonic_window_event_x(void) { LONG tail = (ring_tail - 1) & 63; return ring[tail].x; }
 __declspec(dllexport) int32_t metonic_window_event_y(void) { LONG tail = (ring_tail - 1) & 63; return ring[tail].y; }
 
-__declspec(dllexport) int32_t metonic_window_render(int32_t width, int32_t height, int32_t x, int32_t y, int32_t w, int32_t h, int32_t active) {
-  if (!load_gpu()) return -1; return gpu_present(gpu_surface, width, height, x, y, w, h, active);
-}
 __declspec(dllexport) void metonic_window_destroy(void) {
   metonic_async_shutdown();
-  if (metonic_async_pending() != 0) { fatal("worker join failed; retaining HWND and GPU resources"); return; }
-  if (gpu_surface && gpu_destroy) gpu_destroy(gpu_surface); gpu_surface = NULL;
-  if (gpu_module) FreeLibrary(gpu_module); gpu_module = NULL; gpu_create = NULL; gpu_present = NULL; gpu_destroy = NULL;
+  if (metonic_async_pending() != 0) { fatal("worker join failed; retaining HWND"); return; }
   if (window_handle) DestroyWindow(window_handle); window_handle = NULL;
 }
 __declspec(dllexport) int32_t metonic_window_test_mode(void) { return test_mode_enabled; }

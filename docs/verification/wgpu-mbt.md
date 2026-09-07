@@ -1,7 +1,14 @@
 # Existing MoonBit GPU binding evaluation
 
-Date: 2026-09-06. Evaluation is ongoing; the custom Rust wrapper is not a final
-selection over the existing MoonBit binding.
+Initial evaluation: 2026-09-06. Integration update: 2026-09-07.
+
+The published binding is now used for native offscreen, window and worker
+rendering. The custom Rust wrapper has been removed. The comparisons below record
+the original evaluation and its limits; references to the Rust baseline describe
+that earlier implementation. Current window lifetime requirements are in
+[ADR 027](../adr/027-native-window-probe.md), with worker assertions in the
+[async verification record](native-async.md). This adoption does not remove
+wgpu-native's upstream Rust implementation or the project's Win32 C boundary.
 
 ## Pinned candidate
 

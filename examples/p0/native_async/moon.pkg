@@ -1,6 +1,11 @@
 import {
   "local/p0/examples/p0/scene",
   "local/p0/examples/p0/task_scope",
+  "local/p0/native_gpu" @gpu,
+  "Milky2018/wgpu_mbt" @wgpu,
+  "Milky2018/wgpu_mbt/c",
+  "moonbitlang/async",
+  "moonbitlang/core/env",
 }
 
 pkgtype(kind: "executable")

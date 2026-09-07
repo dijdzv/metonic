@@ -104,11 +104,11 @@ separate bootstrap step.
 
 Native probe build tasks use `scripts/build-native.mbtx` with explicit headless,
 window, async or surface modes. Each mode builds the MoonBit headless executable;
-async additionally builds the locked Rust bridge. Window and surface rendering
-use the published MoonBit binding; all three windowed probes build a C stub. The
+window, worker and surface rendering use the published MoonBit binding. All three
+windowed probes build a C stub. The
 script checks output artifacts and rejects unsupported modes before building.
-Headless rendering also uses the binding. The worker's Rust renderer and the
-shared Win32 C boundary remain under comparison.
+Headless rendering also uses the binding. The shared Win32 C boundary remains
+under comparison; application-owned GPU composition is MoonBit.
 
 `native:surface` builds a separate MoonBit surface renderer probe using the
 existing HWND boundary and the published wgpu binding, without building the Rust
@@ -146,7 +146,7 @@ frontmatter instead of silently skipping it.
 
 `mise run pre-commit` runs the same local gate manually. The MoonBit `.mbtx`
 orchestrator rejects tracked unstaged edits, checks staged whitespace, runs
-MoonBit/Rust formatters and stops if formatting changes files. Review and stage
+MoonBit formatters and stops if formatting changes files. Review and stage
 those changes before retrying; the hook never stages or stashes them for you.
 It then runs MoonBit static checks, the native/JS/WasmGC contract tests, browser
 artifact/server/GPU/async checks, and native GPU/control/MCP/semantics/window/async
@@ -169,9 +169,9 @@ verification tasks. CI must use the same committed pin.
 Node 26.8.1 runs generated JavaScript; it is not a native product dependency.
 pnpm 12.3.4 manages the pinned Playwright and PNG inspection tools used by browser
 verification. Commit `pnpm-lock.yaml` and use `pnpm install --frozen-lockfile` in CI.
-The native window/worker probes use Rust 1.98.1 from `rust-toolchain.toml` and exact wgpu
-dependencies in `bridges/wgpu/Cargo.lock`. Install this toolchain through rustup;
-the build uses `--locked` and does not change the global default toolchain.
+Native probes use the pinned prebuilt wgpu-native library through the MoonBit
+binding and require the Visual Studio C++ build tools. Building the project does
+not require a Rust toolchain; the upstream GPU implementation still contains Rust.
 
 ## Native headless GPU probe
 

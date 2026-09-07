@@ -83,6 +83,7 @@ That branch does not compare device identity. This is a candidate explanation,
 not a verified causal fix.
 
 The ordinary window host now uses the MoonBit renderer and bounded event polling.
-The worker-completion probe retains the Rust renderer pending its migration.
+The worker-completion probe also uses the shared MoonBit surface renderer; its
+worker-lifetime assertions remain separate from this device-replacement diagnostic.
 These hidden-window observations do not verify real input, IME, OS accessibility
 or recovery from physical GPU loss.

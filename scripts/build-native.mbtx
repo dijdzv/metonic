@@ -94,16 +94,6 @@ async fn main {
     envmap.set("VSLANG", "1033")
     envmap.set("MBT_WGPU_NATIVE_ROOT", @fs.realpath(".work/wgpu-assets"))
     envmap.set("MBT_WGPU_LINK_MODE", "static")
-    if mode == "async" {
-      let cargo = [
-        "+1.98.1", "build", "--manifest-path", "bridges/wgpu/Cargo.toml", "--locked",
-        "--release", "--target-dir", ".work/native-cargo",
-      ]
-      if @process.run("cargo", cargo, extra_env=envmap, no_console_window=true) !=
-        0 {
-        fail("cargo bridge build failed")
-      }
-    }
     let package_name = if mode == "headless" {
       "native_headless"
     } else if mode == "surface" {
@@ -125,7 +115,6 @@ async fn main {
       0 {
       fail("MoonBit headless build failed")
     }
-    let dll = ".work/native-cargo/release/metonic_wgpu_probe.dll"
     let headless_exe = "_build/native/release/build/examples/p0/native_headless/native_headless.exe"
     let required_exe = if mode == "surface" {
       "_build/native/release/build/tools/native_surface_probe/native_surface_probe.exe"
@@ -135,9 +124,6 @@ async fn main {
       "_build/native/release/build/examples/p0/native_async/native_async.exe"
     } else {
       headless_exe
-    }
-    if mode == "async" && !@fs.exists(dll) {
-      fail("native bridge artifact missing")
     }
     if mode == "window" || mode == "async" || mode == "surface" {
       // Included headers may not invalidate the cached C stub.
