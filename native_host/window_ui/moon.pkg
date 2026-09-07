@@ -19,3 +19,11 @@ import {
 }
 
 supported_targets = "native"
+
+options(targets: {
+  "handle.mbt": ["debug"],
+  "observation.mbt": ["debug"],
+  "development.mbt": ["debug"],
+  "hooks_debug.mbt": ["debug"],
+  "hooks_release.mbt": ["release"],
+})

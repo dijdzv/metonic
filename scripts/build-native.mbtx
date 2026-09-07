@@ -20,6 +20,8 @@ async fn main {
     }
     if mode != "headless" &&
       mode != "window" &&
+      mode != "window-release" &&
+      mode != "release-probe" &&
       mode != "window-dev" &&
       mode != "window-probe" &&
       mode != "async" &&
@@ -29,7 +31,10 @@ async fn main {
     }
     let moon = @fs.realpath(".tools/moonbit/bin/moon.exe")
     let moon_home = @fs.realpath(".tools/moonbit")
-    if mode == "window" || mode == "window-dev" || mode == "window-probe" {
+    if mode == "window" ||
+      mode == "window-release" ||
+      mode == "window-dev" ||
+      mode == "window-probe" {
       let asset_env : Map[String, String] = Map([])
       asset_env.set("METONIC_TEXT_ASSETS_ONLY", "1")
       if @process.run(
@@ -143,6 +148,8 @@ async fn main {
     }
     if mode == "async" ||
       mode == "window" ||
+      mode == "window-release" ||
+      mode == "release-probe" ||
       mode == "window-dev" ||
       mode == "window-probe" {
       let host_app = if mode == "async" {
@@ -151,6 +158,8 @@ async fn main {
         "window_dev"
       } else if mode == "window-probe" {
         "window_probe"
+      } else if mode == "release-probe" {
+        "release_probe"
       } else {
         "window_app"
       }
@@ -164,12 +173,19 @@ async fn main {
         fail("native dependency preparation failed")
       }
       let native_host_build_dir = @fs.realpath(".") + "/.work/native-host-build"
+      let build_args = [
+        "-C", "native_host", "build", host_app, "--target", "native", "--target-dir",
+        native_host_build_dir, "--deny-warn",
+      ]
+      let profile = if mode == "window-release" {
+        build_args.push("--release")
+        "release"
+      } else {
+        "debug"
+      }
       if @process.run(
           moon,
-          [
-            "-C", "native_host", "build", host_app, "--target", "native", "--target-dir",
-            native_host_build_dir,
-          ],
+          build_args,
           extra_env=envmap,
           no_console_window=true,
         ) !=
@@ -177,7 +193,9 @@ async fn main {
         fail("MoonBit host " + mode + " build failed")
       }
       let required_exe = native_host_build_dir +
-        "/native/debug/build/local/native_host/" +
+        "/native/" +
+        profile +
+        "/build/local/native_host/" +
         host_app +
         "/" +
         host_app +

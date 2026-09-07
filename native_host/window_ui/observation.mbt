@@ -1,13 +1,4 @@
 ///|
-pub(all) enum Lifecycle {
-  Starting
-  InputHandled
-  Closing
-  Ready
-  Poll
-}
-
-///|
 pub(all) enum Injected {
   CompositionStart
   CompositionUpdate(String, Int?)
@@ -39,7 +30,7 @@ pub struct Observation {
 ///|
 fn App::observation(self : App) -> Observation {
   {
-    frames: self.frames,
+    frames: self.diagnostics.frames,
     pending_initialization: self.owner.pending_count(),
     has_renderer: self.renderer is Some(_),
     hwnd: self.hwnd,
@@ -49,7 +40,7 @@ fn App::observation(self : App) -> Observation {
     rendered_text: self.rendered_text,
     preedit_cursor: self.preedit_cursor,
     composing: self.composition is Some(_),
-    rejected_updates: self.rejected_updates,
+    rejected_updates: self.diagnostics.rejected_updates,
     resize: (width, height) => {
       ignore(
         self.window

@@ -56,7 +56,7 @@ fn App::handle(self : App) -> Handle {
         return "closed"
       }
       let result : Ref[String?] = Ref(None)
-      self.events.put(Select(start, end, expected, result))
+      self.events.put(Development(Select(start, end, expected, result)))
       while result.val is None && !self.closed {
         @async.sleep(1)
       }
@@ -65,7 +65,7 @@ fn App::handle(self : App) -> Handle {
     capture: () => {
       require(!self.closed, "window closed")
       let result : Ref[Result[Captured, Error]?] = Ref(None)
-      self.events.put(Capture(result))
+      self.events.put(Development(Capture(result)))
       while result.val is None && !self.closed {
         @async.sleep(1)
       }
@@ -80,7 +80,7 @@ fn App::handle(self : App) -> Handle {
         return "closed"
       }
       let result : Ref[String?] = Ref(None)
-      self.events.put(Edit(text, expected, result))
+      self.events.put(Development(Edit(text, expected, result)))
       while result.val is None && !self.closed {
         @async.sleep(1)
       }
@@ -97,7 +97,7 @@ fn App::handle(self : App) -> Handle {
         text: node.value,
         selection_start: node.selection_start,
         selection_end: node.selection_end,
-        frames: self.frames,
+        frames: self.diagnostics.frames,
         task_status: @task_scope.field(self.scope, 0),
         rpc_result: self.rpc_result,
         composing: self.composition is Some(_),
@@ -130,7 +130,7 @@ fn App::handle(self : App) -> Handle {
       }
       let applied = Ref(false)
       self.events.put(event)
-      self.events.put(Barrier(applied))
+      self.events.put(Development(Barrier(applied)))
       while !applied.val && !self.closed {
         @async.sleep(1)
       }
