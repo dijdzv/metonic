@@ -331,7 +331,15 @@ requests and duplicate IDs do not prevent subsequent valid requests.
 request correlation, malformed/oversized input recovery and EOF cleanup on
 default and fallback GPU adapters. It is part of the local pre-commit gate.
 These hidden checks do not establish physical input or OS accessibility.
-The current MCP commands below still use the separate headless renderer.
+For MCP, use the pinned Node executable with the absolute path to
+`tools/devtools/window-mcp.mjs`. This dedicated server exposes `window_snapshot`,
+`window_insert`, `window_backspace`, `window_start_update` and `window_cancel_update`.
+It owns the launched window and uses the same JSON control path. Set
+`METONIC_DEV_HIDDEN=1` in the MCP launch environment for hidden operation.
+`mise run native:window-mcp` verifies the SDK connection, edits, stale revision
+rejection and cancellation; its assertions run in MoonBit. Request abort or timeout
+closes the owned session rather than promising rollback of an already applied edit.
+The older `native_*` MCP commands below still use the separate headless renderer.
 Protocol imports are in `window_dev`; full production exclusion is not yet proven
 because shared UI diagnostic fixtures and capture support still remain.
 
