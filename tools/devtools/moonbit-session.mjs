@@ -1,20 +1,27 @@
 import { spawn } from 'node:child_process';
 import path from 'node:path';
-import { StringDecoder } from 'node:string_decoder';
 import { fileURLToPath } from 'node:url';
 
 const MAX_PENDING = 16;
 const MAX_STDOUT = 32 * 1024 * 1024;
 const MAX_STDERR = 16 * 1024;
 
-export async function createMoonBitSession() {
+export async function createMoonBitSession(options = {}) {
   const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-  const executable = path.join(repo, '.tools', 'moonbit', 'bin', 'moonrun.exe');
+  const executable = options.executable ?? path.join(repo, '.tools', 'moonbit', 'bin', 'moonrun.exe');
   const program = path.join(repo, '_build', 'wasm', 'release', 'build', 'tools', 'native_session', 'native_session.wasm');
-  const child = spawn(executable, [program, '--root', repo], { cwd: repo, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+  const args = options.args ?? [program, '--root', repo];
+  const readyTimeoutMs = options.readyTimeoutMs ?? 15000;
+  const requestTimeoutMs = options.requestTimeoutMs ?? 15000;
+  const closeTimeoutMs = options.closeTimeoutMs ?? 2000;
+  if (!path.isAbsolute(executable) || !Array.isArray(args) || !args.every(arg => typeof arg === 'string') ||
+      !Number.isFinite(readyTimeoutMs) || readyTimeoutMs <= 0 || !Number.isFinite(requestTimeoutMs) || requestTimeoutMs <= 0 ||
+      !Number.isFinite(closeTimeoutMs) || closeTimeoutMs <= 0) throw new Error('invalid MoonBit session launch options');
+  const child = spawn(executable, args, { cwd: repo, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
   const pending = new Map();
-  const decoder = new StringDecoder('utf8');
-  let line = '';
+  const decoder = new TextDecoder('utf-8', { fatal: true });
+  let lineParts = [];
+  let lineBytes = 0;
   let nextId = 1;
   let sessionId;
   let fatalError;
@@ -44,6 +51,8 @@ export async function createMoonBitSession() {
     readyReject(fatalError);
     for (const waiter of pending.values()) waiter.reject(fatalError);
     pending.clear();
+    lineParts = [];
+    lineBytes = 0;
     void close().catch(error => console.error(error));
   }
   function dispatch(value) {
@@ -75,15 +84,32 @@ export async function createMoonBitSession() {
       Number.isInteger(state[7]) && state[7] >= 1 && state[7] <= 2048 && Number.isInteger(response.frame) && response.frame >= 0;
   }
   child.stdout.on('data', (chunk) => {
-    line += decoder.write(chunk);
-    let index;
-    while ((index = line.indexOf('\n')) >= 0) {
-      const text = line.slice(0, index).replace(/\r$/, '');
-      line = line.slice(index + 1);
-      if (Buffer.byteLength(text, 'utf8') > MAX_STDOUT) return fail(new Error('native session response line exceeds 32MiB'));
-      try { dispatch(JSON.parse(text)); } catch (error) { fail(new Error(`invalid native session response: ${error.message}`)); }
+    if (fatalError) return;
+    let decoded;
+    try { decoded = decoder.decode(chunk, { stream: true }); }
+    catch (error) { fail(new Error(`invalid UTF-8 from native session: ${error.message}`)); return; }
+    const parts = decoded.split('\n');
+    for (let i = 0; i < parts.length - 1; i += 1) {
+      lineParts.push(parts[i]);
+      lineBytes += Buffer.byteLength(parts[i], 'utf8');
+      if (lineBytes > MAX_STDOUT) return fail(new Error('native session response line exceeds 32MiB'));
+      const text = lineParts.join('').replace(/\r$/, '');
+      lineParts = [];
+      lineBytes = 0;
+      try { dispatch(JSON.parse(text)); } catch (error) { fail(new Error(`invalid native session response: ${error.message}`)); return; }
+      if (fatalError) return;
     }
-    if (Buffer.byteLength(line, 'utf8') > MAX_STDOUT) return fail(new Error('native session response line exceeds 32MiB'));
+    const tail = parts[parts.length - 1];
+    lineParts.push(tail);
+    lineBytes += Buffer.byteLength(tail, 'utf8');
+    if (lineBytes > MAX_STDOUT) return fail(new Error('native session response line exceeds 32MiB'));
+  });
+  child.stdout.on('end', () => {
+    if (fatalError) return;
+    try {
+      lineParts.push(decoder.decode());
+      if (lineParts.join('').length > 0) fail(new Error('truncated native session response line'));
+    } catch (error) { fail(new Error(`invalid UTF-8 at native session EOF: ${error.message}`)); }
   });
   child.stdout.on('error', fail);
   child.stdin.on('error', fail);
@@ -117,14 +143,19 @@ export async function createMoonBitSession() {
     if (pending.size >= MAX_PENDING) return Promise.reject(new Error('native session pending limit exceeded'));
     const id = nextId++;
     if (id > 2147483647) return Promise.reject(new Error('native session request id exhausted'));
+    if (typeof op !== 'string' || !args || typeof args !== 'object' || Array.isArray(args)) return Promise.reject(new Error('invalid native session request'));
+    let payload;
+    try { payload = `${JSON.stringify({ id, op, args })}\n`; }
+    catch (error) { return Promise.reject(new Error(`invalid native session request: ${error.message}`)); }
+    if (Buffer.byteLength(payload, 'utf8') - 1 > 4095) return Promise.reject(new Error('native session request exceeds 4095 bytes'));
     return new Promise((resolve, reject) => {
       const signal = options.signal;
       const cleanup = () => { clearTimeout(timer); signal?.removeEventListener('abort', onAbort); };
-      const timer = setTimeout(() => { cleanup(); pending.delete(id); fail(new Error('native session request timed out')); reject(new Error('native session request timed out')); }, 15000);
+      const timer = setTimeout(() => { cleanup(); pending.delete(id); fail(new Error('native session request timed out')); reject(new Error('native session request timed out')); }, requestTimeoutMs);
       const onAbort = () => { cleanup(); pending.delete(id); fail(abortError()); reject(abortError()); };
       pending.set(id, { resolve: value => { cleanup(); resolve(value); }, reject: error => { cleanup(); reject(error); } });
       signal?.addEventListener('abort', onAbort, { once: true });
-      try { child.stdin.write(`${JSON.stringify({ id, op, args })}\n`); }
+      try { child.stdin.write(payload); }
       catch (error) { cleanup(); pending.delete(id); fail(error); reject(error); }
     });
   }
@@ -149,10 +180,10 @@ export async function createMoonBitSession() {
       pending.clear();
       if (!stdinEnded) { stdinEnded = true; child.stdin.end(); }
       try {
-        await waitExited(2000);
+        await waitExited(closeTimeoutMs);
       } catch (error) {
         if (!exited) { forcedKill = true; child.kill('SIGKILL'); }
-        await waitExited(2000).catch(() => {});
+        await waitExited(closeTimeoutMs).catch(() => {});
         if (!exited) throw error;
       }
       if (!exited) throw diagnosticError('native session did not exit');
@@ -162,9 +193,10 @@ export async function createMoonBitSession() {
   }
   let readyTimer;
   try {
-    await Promise.race([ready, new Promise((_, reject) => { readyTimer = setTimeout(() => reject(diagnosticError('native session ready timeout')), 15000); })]);
+    await Promise.race([ready, new Promise((_, reject) => { readyTimer = setTimeout(() => reject(diagnosticError('native session ready timeout')), readyTimeoutMs); })]);
   } catch (error) {
-    await close();
+    try { await close(); }
+    catch (cleanupError) { error.cleanupError = cleanupError; }
     throw error;
   } finally {
     clearTimeout(readyTimer);

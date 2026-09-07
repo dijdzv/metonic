@@ -84,8 +84,11 @@ run = [
 run = '.\\.tools\\moonbit\\bin\\moon.exe build tools/control_fixture --target wasm --release --frozen --deny-warn'
 
 [tasks."devtools:test"]
-depends = ["native:build", "native:session-build"]
-run = "node --test tools/devtools/moonbit-session.test.mjs"
+depends = ["native:build", "native:session-build", "devtools:fixture-build"]
+run = "node --test tools/devtools/moonbit-session.test.mjs tools/devtools/session-failure.test.mjs"
+
+[tasks."devtools:fixture-build"]
+run = '.\\.tools\\moonbit\\bin\\moon.exe build tools/session_fixture --target wasm --release --frozen --deny-warn'
 
 [tasks."native:control"]
 depends = ["native:build"]
