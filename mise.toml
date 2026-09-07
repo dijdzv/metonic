@@ -43,10 +43,19 @@ run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/build-browser.mbtx'
 depends = ["browser:build"]
 run = ".\\.tools\\moonbit\\bin\\moonrun.exe _build/wasm/release/build/tools/browser_server/browser_server.wasm"
 
+[tasks."browser:package"]
+depends = ["browser:build"]
+run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/package-browser.mbtx'
+
+[tasks."browser:release-serve"]
+description = "Serve the packaged UI at http://127.0.0.1:4173/release/"
+depends = ["browser:package"]
+run = '.\\.tools\\moonbit\\bin\\moonrun.exe _build/wasm/release/build/tools/browser_server/browser_server.wasm'
+
 [tasks."demo:build"]
 description = "Build both UI targets and their shared local HTTP server"
 run = [
-  'mise run browser:build',
+  'mise run browser:package',
   'mise run native:window-release-build',
   '.\\.tools\\moonbit\\bin\\moon.exe build tools/demo --target wasm --release --frozen --deny-warn',
 ]
@@ -76,7 +85,7 @@ description = "Compare current staged artifacts with existing default and SwiftS
 run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/report-browser-comparison.mbtx'
 
 [tasks."browser:headless"]
-depends = ["browser:build"]
+depends = ["browser:package"]
 run = [
   '.\\.tools\\moonbit\\bin\\moon.exe build tools/verify_browser_pixels --target js --release --frozen --deny-warn',
   '.\\.tools\\moonbit\\bin\\moon.exe test tools/verify_browser_pixels --target js --release --frozen --deny-warn',

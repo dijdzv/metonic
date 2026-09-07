@@ -2,7 +2,7 @@
 
 Date: 2026-09-06.
 
-Status: WasmGC selected for the P0 browser application on 2026-09-08; production packaging remains open.
+Status: WasmGC selected for the P0 browser application on 2026-09-08; a separate package excludes browser development adapters.
 
 ## Context
 
@@ -62,9 +62,13 @@ This decision is scoped to the verified P0 browser environment. It does not
 claim broader browser compatibility, superior execution speed, physical IME
 behavior or a completed production bundle. Missing WebGPU/WasmGC produces a
 visible startup failure; the application does not silently choose another backend.
-Production packaging must ship the selected artifact and exclude development
-adapters while keeping normal DOM/input/GPU/HTTP boundaries. That work remains
-open rather than being satisfied by changing the default query parameter.
+The package ships the selected artifact and excludes the development environment
+module while retaining the same DOM/input/GPU/HTTP host. Build-time file selection
+chooses the release loader, page and environment; a runtime flag does not enable
+the development global. Small no-op hook calls remain in the shared host, but the
+development adapter and comparison artifact are absent from the fixed asset list.
+The ordinary packaged UI is exercised separately in the headless suite. The
+verification record distinguishes these checks from physical IME/accessibility.
 
 ## References
 

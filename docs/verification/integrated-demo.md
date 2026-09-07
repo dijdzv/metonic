@@ -7,10 +7,10 @@ launcher starts the server, waits up to ten seconds for readiness, then starts
 the native window with that same server origin. Port 4173 must be available.
 An existing server is not reused or terminated.
 
-Open `http://127.0.0.1:4173/` in a WebGPU-capable browser. WasmGC is the selected
-P0 backend; target navigation retains JS for comparison. This remains the
-development host, not the final production distribution. The launcher does not
-start or control a browser process. See [the selection record](browser-target.md).
+Open `http://127.0.0.1:4173/release/` in a WebGPU-capable browser. The packaged
+WasmGC UI excludes the development control adapter. The separate comparison
+page at `/` retains JS and diagnostic controls. The launcher does not start or
+control a browser process. See [the selection and package record](browser-target.md).
 
 ## Common operation sequence
 
@@ -54,7 +54,8 @@ prove user interaction or rendering. Existing `browser:headless`,
 respective UI paths. `native:release-lifecycle` checks the production window's
 startup and close, not its editor or pixels.
 
-The browser still includes development observations. Native uses the release
-artifact with the existing development-code exclusion check. Physical Japanese
+The packaged browser omits the development adapter and comparison artifact.
+Native uses the release artifact with the existing development-code exclusion
+check. Physical Japanese
 IME, OS accessibility and production input/rendering evidence remain separate
 requirements; see [native IME verification](native-ime.md).

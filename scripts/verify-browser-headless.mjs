@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { chromium } from 'playwright'
-import { verify as verifyPixels, runScene, runFailures, runFontFailures, runText, runDpr, runSuite } from '../_build/js/release/build/tools/verify_browser_pixels/verify_browser_pixels.js'
+import { verify as verifyPixels, runScene, runFailures, runFontFailures, runText, runDpr, runSuite, runRelease } from '../_build/js/release/build/tools/verify_browser_pixels/verify_browser_pixels.js'
 
 if (process.env.METONIC_BROWSER_SUPERVISED !== '1') throw new Error('Run mise run browser:async/headless')
 
@@ -241,6 +241,44 @@ try {
   }
   const output = await runSuite(async (request) => {
     switch (request.op) {
+      case 'release': {
+        const page = await browser.newPage({ viewport: { width: 1000, height: 800 }, deviceScaleFactor: 1 });
+        const errors = [], resources = [];
+        page.on('pageerror', (error) => errors.push(error.message));
+        page.on('request', (request) => resources.push(new URL(request.url()).pathname));
+        const settle = () => page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+        try {
+          return JSON.parse(await runRelease(async (command) => {
+            switch (command.op) {
+              case 'goto': await page.goto(`${baseUrl}/release/`); break;
+              case 'wait-text': await page.waitForFunction(({ selector, text }) => document.querySelector(selector)?.textContent?.trim() === text, command); break;
+              case 'fill': await page.locator(command.selector).fill(command.value); await settle(); break;
+              case 'click': await page.locator(command.selector).click(); break;
+              case 'value': return page.locator(command.selector).inputValue();
+              case 'disabled': return page.locator(command.selector).isDisabled();
+              case 'no-probe': return page.evaluate(() => !('metonicAsyncProbe' in window));
+              case 'width': return page.locator('#canvas').evaluate((element) => element.width);
+              case 'viewport': await page.setViewportSize({ width: command.width, height: 800 }); await settle(); break;
+              case 'errors': return errors;
+              case 'late-input': await page.evaluate(() => { const input = document.querySelector('#text-input'); input.value = 'late'; input.dispatchEvent(new Event('input')); window.dispatchEvent(new Event('resize')); }); await page.waitForTimeout(350); break;
+              case 'image': {
+                await settle();
+                const canvas = page.locator('#canvas');
+                await canvas.evaluate((element) => { element.style.position = 'relative'; element.style.left = '0px'; element.style.top = '0px'; const rect = element.getBoundingClientRect(); element.style.left = `${Math.ceil(rect.x) - rect.x}px`; element.style.top = `${Math.ceil(rect.y) - rect.y}px`; });
+                const image = await canvas.screenshot();
+                await fs.writeFile(path.join(outputDir, `release-${command.name}.png`), image);
+                return image.toString('base64');
+              }
+              case 'excluded-assets': {
+                const statuses = await Promise.all(['app.mjs', 'environment-dev.mjs'].map(async (file) => (await page.request.get(`${baseUrl}/release/${file}`)).status()));
+                return statuses.every((status) => status === 404) && resources.includes('/release/app.wasm') && resources.every((path) => path === '/rpc' || path.startsWith('/release/'));
+              }
+              default: throw new Error(`Unknown release operation: ${command.op}`);
+            }
+            return null;
+          }));
+        } finally { await page.close(); }
+      }
       case 'default-target': {
         const page = await browser.newPage();
         try {

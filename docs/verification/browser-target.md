@@ -38,11 +38,53 @@ with a smaller application artifact and the existing shared host. JS remains
 available with `?target=js` for comparison. There is no automatic backend fallback
 and no claim about untested browser engines. See [ADR 024](../adr/024-browser-gpu-probe.md).
 
-The current `.work/browser-dist` is still a development distribution containing
-both targets and `metonicAsyncProbe`. A production bundle must contain only the
-selected application and required assets, exclude development adapters, and be
-tested through its ordinary interface. That packaging is still open; default
-selection alone does not meet the production-exclusion requirement.
+`.work/browser-dist` remains the comparison distribution with both targets and
+`metonicAsyncProbe`. `mise run browser:package` produces the separate
+`.work/browser-release` directory and `.work/metonic-browser-p0.zip` using a fixed
+12-file list. It includes the WasmGC application, shared UI/text host, release
+loader/environment, CSS, font, font license and project licenses. It omits the JS
+application, comparison page and development environment module.
+
+The UI loop, editor, GPU and HTTP behavior stay in the same host. Build-selected
+`environment.mjs` supplies diagnostic DOM updates and the control global only in
+the development distribution; the release environment supplies human-readable
+task status and no-op hooks. Shared counters and hook call sites remain internal
+implementation details. This is adapter exclusion, not a claim that every
+internal metric or every public MoonBit export was eliminated.
+
+The package tool rejects unexpected destination files, checks shipped text files
+for development entry points, checks the development adapter as a positive
+control, and verifies the archive member list. It does not silently delete files
+from an existing destination directory.
+
+## Run the packaged application
+
+Use `mise run browser:release-serve` and open
+`http://127.0.0.1:4173/release/`, or run `mise run demo` for the packaged browser UI
+and native release window sharing one API. The existing local server serves the
+package under that prefix, with a fixed allowlist. It also serves the separate
+development comparison at `/`; that server is a verification/development tool,
+not part of the browser ZIP.
+
+To host the ZIP elsewhere, extract its contents into one directory, serve it over
+HTTPS with `application/wasm` for the Wasm file, and provide the standard
+same-origin `POST /rpc` API. Host and font URLs are relative to the page; the RPC
+URL is origin-rooted. No backend or credentials are embedded in the archive.
+
+## Packaged-UI verification
+
+The normal `browser:headless` suite also drives `/release/` through ordinary DOM
+controls and screenshots, without a development global. MoonBit owns the sequence
+and assertions. It checks changed text pixels, preserved editor text and added
+HTTP result pixels, domain errors, cancellation, resize, clearing the editor,
+disabled input after stop and an unchanged frame after late input/timer work.
+It also checks absence of the global and rejects requests for comparison assets.
+
+Screenshots use the actual canvas. The pinned Noto Sans JP font covers the tested
+Japanese/Latin text; the supplementary-character case does not establish emoji
+glyph coverage. Physical IME, full accessibility, device loss and the full RPC
+failure matrix remain separate requirements. Package exclusion does not make
+those unverified requirements complete.
 
 ## Reproduction
 
