@@ -18,8 +18,9 @@ The MoonBit client in `tools/native_control` provides the same launch-scoped
 transport for migrated development verification. Its pure JSON envelope and
 bounded line framing live in `tools/native_wire`; process scheduling and pipe
 ownership use the existing MoonBit async library on native/Wasm host runtimes.
-The earlier Node client remains with its fixture tests while their remaining
-coverage is migrated. The MCP session boundary is described in
+The native-control tests use a MoonBit fixture process, including delayed and
+malformed responses. The earlier Node client and fixture have been removed after
+their contracts were covered by the MoonBit tests. The MCP session boundary is described in
 [ADR 029](029-moonbit-development-session.md).
 This host runtime choice does not establish browser WasmGC support.
 

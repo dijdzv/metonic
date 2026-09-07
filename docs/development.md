@@ -241,6 +241,9 @@ the Wasm host runtime before running it against the native renderer. The verifie
 checks semantic actions, UTF-16 selection boundaries, stale references and full
 capture pixels. Node hosts the official MCP SDK; `tools/native_session` owns the
 renderer, temporary capture file and PNG encoding through the MoonBit client.
+`native:client-test` builds the MoonBit control fixture before exercising response
+correlation, delays, malformed replies and process failures. Direct `moon test`
+invocations for that package require `mise run native:fixture-build` first.
 `native:session-test` checks state, complete capture pixels, stale revisions and
 temporary-directory cleanup after EOF. The Node session tests cover Promise and
 AbortSignal behavior at the SDK boundary. See the

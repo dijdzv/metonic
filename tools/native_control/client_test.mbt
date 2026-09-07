@@ -1,31 +1,14 @@
 ///|
-priv suberror TestFailure {
-  Failure(String)
-}
-
-///|
-async fn fixture_config(timeout_ms : Int, max_pending : Int) -> Config {
-  let (code, output) = @process.collect_stdout(
-    "where.exe",
-    ["node"],
-    no_console_window=true,
+async fn fixture_config(
+  timeout_ms : Int,
+  max_pending : Int,
+) -> Config raise Error {
+  let moonrun = @fs.realpath(".tools/moonbit/bin/moonrun.exe")
+  let fixture = @fs.realpath(
+    "_build/wasm/release/build/tools/control_fixture/control_fixture.wasm",
   )
-  if code != 0 {
-    raise Failure("where.exe node failed")
-  }
-  let mut node = ""
-  for line in output.text().split("\n") {
-    let candidate = line.trim()
-    if candidate.length() > 0 && node == "" {
-      node = @fs.realpath(candidate)
-    }
-  }
-  if node == "" {
-    raise Failure("node executable not found")
-  }
-  let fixture = @fs.realpath("tools/devtools/fixtures/control-host.mjs")
   Config::new(
-    node,
+    moonrun,
     [fixture],
     "C:/bridge.dll",
     "C:/capture.rgba",
@@ -96,11 +79,36 @@ async test "native control fixture snapshot and echo" {
   with_client(config, async fn(client) {
     let snapshot = client.request("snapshot")
     assert_true(has_ok(snapshot))
+    assert_eq(test_field(snapshot, "id"), Some(Json::number(1.0)))
+    assert_eq(test_field(snapshot, "version"), Some(Json::number(1.0)))
+    assert_eq(
+      test_field(snapshot, "state"),
+      Some(
+        Json::array([
+          Json::number(260.0),
+          Json::number(144.0),
+          Json::number(120.0),
+          Json::number(72.0),
+          Json::number(0.0),
+          Json::number(0.0),
+          Json::number(640.0),
+          Json::number(360.0),
+        ]),
+      ),
+    )
     let echo = client.request(
       "echo",
       args=Json::object({ "value": Json::string("hello") }),
     )
     assert_true(has_ok(echo))
+    assert_eq(test_field(echo, "id"), Some(Json::number(2.0)))
+    assert_eq(test_field(echo, "version"), Some(Json::number(1.0)))
+    match test_field(echo, "value") {
+      Some(Json::Object(value)) =>
+        assert_eq(value.get("value"), Some(Json::string("hello")))
+      _ => assert_true(false)
+    }
+    assert_eq(test_field(echo, "state"), test_field(snapshot, "state"))
     client.close()
   })
 }
@@ -129,6 +137,12 @@ async test "native control fixture out of order pending requests" {
         )
       })
       let first = fast.wait()
+      assert_true(
+        match slow.try_wait() {
+          None => true
+          Some(_) => false
+        },
+      )
       let second = slow.wait()
       assert_eq(test_field(first, "value"), Some(Json::string("fast")))
       assert_eq(test_field(second, "value"), Some(Json::string("slow")))
