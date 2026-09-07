@@ -6,5 +6,6 @@ import {
   "moonbitlang/async@0.21.2",
   "Milky2018/wgpu_mbt@0.16.0",
   "local/p0@0.0.0",
+  "local/native_host@0.0.0",
   "wzzc-dev/window@0.5.4-0.1.7",
 }

@@ -8,6 +8,11 @@ The renderer, initialization owner and published `Milky2018/wgpu_mbt@0.16.0`
 binding are reused unchanged. The product window and worker implementation is
 still the comparison baseline; this experiment does not replace it.
 
+The fixture uses the shared `native_host/windows_loop` adapter for external-loop
+polling and foreign wakeups. The adapter snapshots its diagnostics at termination;
+the fixture retains GPU/window cleanup, scenario state and result assertions.
+The context-free C wake implementation is moved unchanged into that package.
+
 The candidate revision and waiter correction are pinned in the
 [resource cleanup record](native-resource-cleanup.md). The current
 [combined window patch](../../experiments/window_pump_contract/windows-pump.patch)
@@ -108,6 +113,10 @@ The default/fallback timer measurements were 106/105 ms and shutdown measurement
 were 0/1 ms. Both error-mode runs retained the missing input path and destroyed
 both HWNDs. Offline preparation still passed after the build, confirming that
 the build had not changed the prepared dependency sources.
+
+After extracting the shared Windows adapter, the same six cases passed again
+without changing the observer. The moved C wake file matched its original Git
+blob, and offline preparation again confirmed unchanged upstream sources.
 
 ## Reproduction
 

@@ -1,27 +1,9 @@
 ///|
-extern "C" fn wake() -> Unit = "metonic_async_wake"
-
-///|
-extern "C" fn init_ui_thread() -> Unit = "metonic_async_init_ui_thread"
-
-///|
-extern "C" fn wake_count() -> Int = "metonic_async_wake_count"
-
-///|
-extern "C" fn failed_wake_count() -> Int = "metonic_async_failed_wake_count"
-
-///|
 extern "C" fn is_window(hwnd : UInt64) -> Int = "IsWindow"
-
-///|
-extern "C" fn message_window() -> UInt64 = "metonic_async_message_window"
 
 ///|
 struct Probe {
   event_loop : @windows.EventLoop
-  mut zero_count : Int
-  mut finite_count : Int
-  mut indefinite_count : Int
   mut proxy_count : Int
   mut main_done : Bool
   mut original_error : Error?
@@ -52,9 +34,6 @@ struct Probe {
 fn Probe::new(event_loop : @windows.EventLoop) -> Probe {
   {
     event_loop,
-    zero_count: 0,
-    finite_count: 0,
-    indefinite_count: 0,
     proxy_count: 0,
     main_done: false,
     original_error: None,
@@ -171,30 +150,7 @@ pub impl @windows.ApplicationHandler for Probe with fn about_to_wait(
 }
 
 ///|
-using @external_loop_integration {trait ExternalEventLoop}
-
-///|
-pub impl ExternalEventLoop for Probe with fn poll(self, timeout?) {
-  match timeout {
-    Some(0) => self.zero_count += 1
-    Some(_) => self.finite_count += 1
-    None => self.indefinite_count += 1
-  }
-  match self.event_loop.pump_app_events(timeout, self) {
-    @core.PumpStatus::Continue => ()
-    @core.PumpStatus::Exit(_) => abort("external event loop exited")
-  }
-}
-
-///|
-pub impl ExternalEventLoop for Probe with fn get_wakeup_callback_for_foreign_thread(
-  _self,
-) {
-  () => wake()
-}
-
-///|
-pub impl ExternalEventLoop for Probe with fn terminate(self) {
+fn Probe::finish(self : Probe, stats : @loop.Snapshot) -> Unit raise Error {
   require(self.pending == 0, "pending tasks remain")
   match self.initialization {
     Some(initialization) =>
@@ -203,12 +159,12 @@ pub impl ExternalEventLoop for Probe with fn terminate(self) {
   }
   let no_error = self.original_error is None
   if no_error {
-    require(wake_count() > 0, "no foreign wake")
-    require(failed_wake_count() == 0, "foreign wake failed")
+    require(stats.wakes > 0, "no foreign wake")
+    require(stats.failed_wakes == 0, "foreign wake failed")
     require(self.proxy_count > 0, "no proxy callback")
-    require(self.finite_count > 0, "no finite poll")
-    require(self.zero_count > 0, "no zero poll")
-    require(self.indefinite_count > 0, "no indefinite poll")
+    require(stats.finite_count > 0, "no finite poll")
+    require(stats.zero_count > 0, "no zero poll")
+    require(stats.indefinite_count > 0, "no indefinite poll")
   }
   match self.renderer {
     Some(renderer) => renderer.close()
@@ -259,15 +215,15 @@ pub impl ExternalEventLoop for Probe with fn terminate(self) {
     ",\"cleanup\":" +
     self.cleanup.to_string() +
     ",\"wakes\":" +
-    wake_count().to_string() +
+    stats.wakes.to_string() +
     ",\"proxies\":" +
     self.proxy_count.to_string() +
     ",\"finite\":" +
-    self.finite_count.to_string() +
+    stats.finite_count.to_string() +
     ",\"zero\":" +
-    self.zero_count.to_string() +
+    stats.zero_count.to_string() +
     ",\"indefinite\":" +
-    self.indefinite_count.to_string() +
+    stats.indefinite_count.to_string() +
     ",\"io_wakes\":" +
     self.io_wakes.to_string() +
     ",\"io_proxies\":" +
@@ -328,15 +284,19 @@ async fn main {
   }
   let event_loop = @windows.EventLoop::new()
   let probe = Probe::new(event_loop)
-  init_ui_thread()
-  @async.set_external_event_loop(probe)
+  let driver = @loop.Driver::new(
+    event_loop,
+    probe as &@windows.ApplicationHandler,
+    stats => probe.finish(stats),
+  )
+  @async.set_external_event_loop(driver)
   probe.event_loop.set_control_flow(@core.ControlFlow::Wait)
-  @external_loop_integration.ExternalEventLoop::poll(probe, timeout=0)
+  @external_loop_integration.ExternalEventLoop::poll(driver, timeout=0)
   match probe.window {
     Some(_) => ()
     None => abort("hidden window was not created")
   }
-  probe.message_hwnd = message_window()
+  probe.message_hwnd = driver.message_window_handle()
   require(is_window(probe.message_hwnd) != 0, "message window was not created")
   let app_drop_error : Error? = try {
     probe.event_loop.try_drop()
@@ -380,7 +340,7 @@ async fn main {
         }
         let redraw_deadline = @async.now() + 2000L
         while probe.redraws == start_redraws && @async.now() < redraw_deadline {
-          @external_loop_integration.ExternalEventLoop::poll(probe, timeout=10)
+          @external_loop_integration.ExternalEventLoop::poll(driver, timeout=10)
           @async.pause()
         }
         match probe.original_error {
@@ -407,7 +367,7 @@ async fn main {
         )
         let redraws_after = probe.redraws
         let frames_after = probe.frames
-        @external_loop_integration.ExternalEventLoop::poll(probe, timeout=0)
+        @external_loop_integration.ExternalEventLoop::poll(driver, timeout=0)
         require(
           probe.redraws == redraws_after && probe.frames == frames_after,
           "redraw coalescing failed frames=" +
@@ -427,7 +387,7 @@ async fn main {
         }
         let resize_deadline = @async.now() + 2000L
         while probe.resizes == start_resizes && @async.now() < resize_deadline {
-          @external_loop_integration.ExternalEventLoop::poll(probe, timeout=10)
+          @external_loop_integration.ExternalEventLoop::poll(driver, timeout=10)
           @async.pause()
         }
         require(
@@ -446,7 +406,7 @@ async fn main {
         }
         let frame_deadline = @async.now() + 2000L
         while probe.frames == resize_frames && @async.now() < frame_deadline {
-          @external_loop_integration.ExternalEventLoop::poll(probe, timeout=10)
+          @external_loop_integration.ExternalEventLoop::poll(driver, timeout=10)
           @async.pause()
         }
         match probe.original_error {
@@ -473,14 +433,15 @@ async fn main {
       }
       _ => abort("GPU resources were not initialized")
     }
-    let io_wakes_before = wake_count()
+    let io_wakes_before = driver.snapshot().wakes
     let io_proxies_before = probe.proxy_count
-    let io_indefinite_before = probe.indefinite_count
+    let io_indefinite_before = driver.snapshot().indefinite_count
     let content = @fs.read_file(args[1]).text()
     require(content == "metonic async wake\n", "unexpected input sentinel")
-    probe.io_wakes = wake_count() - io_wakes_before
+    probe.io_wakes = driver.snapshot().wakes - io_wakes_before
     probe.io_proxies = probe.proxy_count - io_proxies_before
-    probe.io_indefinite = probe.indefinite_count - io_indefinite_before
+    probe.io_indefinite = driver.snapshot().indefinite_count -
+      io_indefinite_before
     require(probe.io_wakes > 0, "I/O did not produce foreign wake")
     require(probe.io_proxies > 0, "I/O did not produce proxy callback")
     require(probe.io_indefinite > 0, "I/O did not use indefinite poll")
