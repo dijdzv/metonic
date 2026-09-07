@@ -85,6 +85,8 @@ async fn respond(
     "semantic_revision": state.semantic_revision,
     "selection_start": state.selection_start,
     "selection_end": state.selection_end,
+    "selection_anchor": state.selection_anchor,
+    "caret": state.caret,
     "frames": state.frames,
     "task_status": state.task_status,
     "rpc_result": state.rpc_result,

@@ -58,7 +58,27 @@ async fn Scenario::step(self : Scenario, view : @ui.Observation) -> Unit {
     self.stage = 22
     post(view.hwnd, 0x0201U, 1UL, ((16 << 16) | 8).to_int64())
   } else if self.stage == 22 && view.editor.selection_start == 0 {
+    self.stage = 23
+    require((view.set_text)("A😀語") == "", "navigation text rejected")
+    require((view.select)(3, 3) == "", "navigation selection rejected")
+    post(view.hwnd, 0x0100U, 0x25UL, 0L)
+  } else if self.stage == 23 && view.editor.selection_start == 1 {
+    require(
+      view.editor.selection_end == 1,
+      "left split supplementary character",
+    )
+    self.stage = 24
+    post(view.hwnd, 0x0100U, 0x27UL, 0L)
+  } else if self.stage == 24 && view.editor.selection_start == 3 {
+    require(
+      view.editor.selection_end == 3,
+      "right split supplementary character",
+    )
     self.stage = 30
+    require(
+      (view.set_text)("日本語の描画を確認します ABC 123") == "",
+      "editor restore rejected",
+    )
     require((view.select)(0, 3) == "", "test selection rejected")
     (view.inject)(CompositionStart)
     (view.inject)(CompositionUpdate("にほん", Some(1)))
@@ -121,9 +141,10 @@ async fn Scenario::step(self : Scenario, view : @ui.Observation) -> Unit {
       for x in 8..<309 {
         let offset = (y * 317 + x) * 4
         for channel in 0..<4 {
+          let expected = if x == 8 && y < 40 && channel < 3 { 0 } else { 255 }
           require(
-            empty[offset + channel] == 255,
-            "empty text retained glyph pixels",
+            empty[offset + channel].to_int() == expected,
+            "empty editor must show only its insertion caret",
           )
         }
       }
