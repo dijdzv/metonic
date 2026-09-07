@@ -35,22 +35,19 @@ struct VertexOut { @builtin(position) position: vec4f, @location(0) uv: vec2f };
   let texture;
   let bindGroup;
   let uniform;
-  let lastText = '';
-  let width = 0;
   let uploaded = 0;
   let renders = 0;
   uniform = device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-  function rasterText(text, cssWidth) {
-    const nextWidth = Math.min(640, Math.max(1, Math.trunc(cssWidth - 16)));
-    if (text === lastText && nextWidth === width) return;
-    if (app.text_begin(text.length) !== 1) throw new Error('MoonBit text_begin rejected input');
-    for (let index = 0; index < text.length; index += 1) if (app.text_put(text.charCodeAt(index)) !== 1) throw new Error('MoonBit text_put rejected input');
-    if (app.text_commit(nextWidth) !== 1) throw new Error('MoonBit text_commit rejected input');
+  function rasterText(cssWidth) {
+    const result = app.editor_render(Math.trunc(cssWidth));
+    if (result === 2) return;
+    if (result !== 1) throw new Error('MoonBit editor_render rejected input');
     const textWidth = app.text_width();
-    const pixels = new Uint8Array(textWidth * 96 * 4);
-    for (let index = 0; index < textWidth * 96; index += 1) { const packed = app.text_pixel(index); pixels[index * 4] = packed & 255; pixels[index * 4 + 1] = (packed >>> 8) & 255; pixels[index * 4 + 2] = (packed >>> 16) & 255; pixels[index * 4 + 3] = (packed >>> 24) & 255; }
-    texture?.destroy(); texture = device.createTexture({ size: { width: textWidth, height: 96 }, format: 'rgba8unorm', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST }); device.queue.writeTexture({ texture }, pixels, { bytesPerRow: textWidth * 4 }, { width: textWidth, height: 96 });
-    bindGroup = device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: uniform } }, { binding: 1, resource: texture.createView() }] }); uploaded += pixels.byteLength; lastText = text; width = nextWidth; renders += 1;
+    const height = app.text_height();
+    const pixels = new Uint8Array(textWidth * height * 4);
+    for (let index = 0; index < textWidth * height; index += 1) { const packed = app.text_pixel(index); pixels[index * 4] = packed & 255; pixels[index * 4 + 1] = (packed >>> 8) & 255; pixels[index * 4 + 2] = (packed >>> 16) & 255; pixels[index * 4 + 3] = (packed >>> 24) & 255; }
+    texture?.destroy(); texture = device.createTexture({ size: { width: textWidth, height }, format: 'rgba8unorm', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST }); device.queue.writeTexture({ texture }, pixels, { bytesPerRow: textWidth * 4 }, { width: textWidth, height });
+    bindGroup = device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: uniform } }, { binding: 1, resource: texture.createView() }] }); uploaded += pixels.byteLength; renders += 1;
   }
-  return { rasterText, record(pass, cssW, cssH) { if (!texture) return; device.queue.writeBuffer(uniform, 0, new Float32Array([cssW, cssH, 8, 8, app.text_width(), 96, 0, 0])); pass.setPipeline(pipeline); pass.setBindGroup(0, bindGroup); pass.draw(6); }, stats: () => ({ width: app.text_width(), renders, uploaded }), dispose() { texture?.destroy(); uniform?.destroy(); app.text_dispose(); } };
+  return { rasterText, record(pass, cssW, cssH) { if (!texture) return; device.queue.writeBuffer(uniform, 0, new Float32Array([cssW, cssH, 8, 8, app.text_width(), app.text_height(), 0, 0])); pass.setPipeline(pipeline); pass.setBindGroup(0, bindGroup); pass.draw(6); }, stats: () => ({ width: app.text_width(), renders, uploaded }), dispose() { texture?.destroy(); uniform?.destroy(); app.text_dispose(); } };
 }

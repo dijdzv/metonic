@@ -42,9 +42,6 @@ function renderRpc() {
   renderEditor();
   updateTaskDiagnostics();
 }
-function editorText() {
-  return Array.from({ length: Math.max(0, Number(app.editor_field(4))) }, (_, i) => String.fromCharCode(Number(app.editor_display_unit(i)))).join('');
-}
 function sendEditorText(value) {
   if (Number(app.text_begin(value.length)) !== 1) throw new Error('Editor input limit');
   for (let i = 0; i < value.length; i += 1) if (Number(app.text_put(value.charCodeAt(i))) !== 1) throw new Error('Editor input rejected');
@@ -201,7 +198,7 @@ function resize(force = false) {
   canvas.height = backingH;
   context.configure({ device, format, alphaMode: 'opaque' });
   app.resize(cssW, cssH);
-  textRenderer?.rasterText(editorText() + rpcOutput(1), cssW);
+  textRenderer?.rasterText(cssW);
   environment.dimensions(cssW, cssH, backingW, backingH);
   dirty = true;
   schedule();
@@ -256,7 +253,7 @@ function onReset() {
   textInput.value = DEFAULT_TEXT;
   composing = false;
   syncEditor();
-  textRenderer?.rasterText(DEFAULT_TEXT, cssW);
+  textRenderer?.rasterText(cssW);
   updateTaskDiagnostics();
   resize(true);
   dirty = true;
@@ -271,7 +268,7 @@ function onTextInput(event) {
 function renderEditor() {
   if (disposed || !textRenderer) return;
   try {
-    textRenderer.rasterText(editorText() + rpcOutput(1), cssW);
+    textRenderer.rasterText(cssW);
     const stats = textRenderer.stats();
     environment.text(stats);
     dirty = true;
