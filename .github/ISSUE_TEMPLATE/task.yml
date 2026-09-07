@@ -4,7 +4,8 @@ body:
   - type: textarea
     id: purpose
     attributes:
-      label: Purpose
+      label: Single outcome and scope
+      description: Split independently deliverable outcomes into separate tasks. Apply one priority label; do not write a priority list here.
     validations:
       required: true
   - type: textarea
@@ -17,4 +18,5 @@ body:
   - type: textarea
     id: context
     attributes:
-      label: Evidence, dependencies, and open questions
+      label: Current state, evidence links, and open questions
+      description: Keep this body current. Use GitHub blocked-by relationships for prerequisites; link to existing evidence instead of copying progress logs.
