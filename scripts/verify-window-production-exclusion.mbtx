@@ -1,0 +1,43 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+}
+
+///|
+async fn main {
+  let root = ".work/native-host-build/native/"
+  let production = @fs.read_file(
+    root + "release/build/local/native_host/window_app/window_app.c",
+  ).text()
+  let development = @fs.read_file(
+    root + "debug/build/local/native_host/window_dev/window_dev.c",
+  ).text()
+  for marker in ["App_3a_3ahandle", "capture__frame", "Captured"] {
+    guard development.contains(marker) else {
+      abort("development positive control missing: " + marker)
+    }
+    guard !production.contains(marker) else {
+      abort("production retains development code: " + marker)
+    }
+  }
+  for marker in ["Observation", "window_probe", "window_dev"] {
+    guard !production.contains(marker) else {
+      abort("production retains development type or package: " + marker)
+    }
+  }
+  let link = @fs.read_file(
+    root + "release/build/local/native_host/window_app/window_app.c.rsp",
+  ).text()
+  guard link.contains("window_app") else {
+    abort("production link input missing")
+  }
+  for
+    dependency in [
+      "window_probe", "window_dev", "native_session", "native_control",
+    ] {
+    guard !link.contains(dependency) else {
+      abort("production links development package: " + dependency)
+    }
+  }
+  println("WINDOW_PRODUCTION_EXCLUSION_OK generated_c_and_link_inputs")
+}

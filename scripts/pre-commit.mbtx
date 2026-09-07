@@ -59,13 +59,14 @@ async fn main {
     "native:mcp-test", "native:session-test", "native:semantics", "native:client-test",
     "native:cli-test", "native:window", "native:window-control", "native:window-rpc",
     "native:window-mcp", "native:host-verify", "native:async", "native:surface",
-    "native:binding", "rpc:verify",
+    "native:binding", "rpc:verify", "native:release-lifecycle",
   ]
   for gate in gates {
     println("pre-commit gate: mise run " + gate)
     run("mise", ["run", gate])
   }
   run(moon, ["run", "scripts/verify-window-fixture-exclusion.mbtx"])
+  run(moon, ["run", "scripts/verify-window-production-exclusion.mbtx"])
   println("pre-commit gate: docs")
   run(moon, ["run", "scripts/verify-docs.mbtx"])
 }

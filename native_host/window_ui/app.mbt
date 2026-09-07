@@ -14,6 +14,9 @@ fn require(ok : Bool, message : String) -> Unit raise WindowFailure {
 }
 
 ///|
+// Release keeps an unconstructible-by-public-API slot so the event loop stays shared;
+// its payload and handler contain no development operations in that build.
+#warnings("-unused_constructor")
 priv enum Event {
   Redraw
   Resize(@dpi.PhysicalSize)
@@ -28,10 +31,7 @@ priv enum Event {
   UserLoaded(Int, Result[String, String])
   CancelUpdate
   Updated(Int, Int)
-  Barrier(Ref[Bool])
-  Capture(Ref[Result[Captured, Error]?])
-  Edit(String?, Int?, Ref[String?])
-  Select(Int, Int, Int?, Ref[String?])
+  Development(DevelopmentRequest)
   SelectBoundary(Int)
   TextPointer(Int, Int, Bool)
   Close
@@ -44,7 +44,7 @@ struct App {
   state : @scene.State
   editor : @semantics.Tree
   scope : @task_scope.Scope
-  mut rejected_updates : Int
+  diagnostics : Diagnostics
   mut rpc_result : String
   mut composition : @semantics.Composition?
   mut preedit : String
@@ -65,7 +65,6 @@ struct App {
   mut surface : @wgpu.Surface?
   owner : @gpu.Initialization
   mut renderer : @gpu.SurfaceRenderer?
-  mut frames : Int
   mut closed : Bool
 }
 
@@ -233,7 +232,7 @@ fn App::draw(self : App) -> Unit raise Error {
         @scene.field(self.state, 3),
         @scene.field(self.state, 4),
       )
-      self.frames += 1
+      self.diagnostics.presented()
     }
     None => ()
   }
@@ -290,13 +289,10 @@ fn App::finish(self : App) -> Unit raise Error {
 }
 
 ///|
-pub async fn run(
-  observer? : (async (Observation) -> Unit)? = None,
-  completed? : ((Observation) -> Unit raise Error)? = None,
-  lifecycle? : ((Lifecycle, Observation) -> Bool raise Error)? = None,
-  controller? : (async (Handle) -> Unit)? = None,
-  hidden? : Bool = false,
-  report? : (String) -> Unit = println,
+async fn run_loop(
+  hooks : Hooks,
+  hidden : Bool,
+  report : (String) -> Unit,
 ) -> Unit {
   let event_loop = @windows.EventLoop::new()
   let app : App = {
@@ -305,7 +301,7 @@ pub async fn run(
     state: @scene.create(),
     editor: @semantics.create(1, 1),
     scope: @task_scope.create(),
-    rejected_updates: 0,
+    diagnostics: Diagnostics::new(),
     rpc_result: "",
     composition: None,
     preedit: "",
@@ -326,7 +322,6 @@ pub async fn run(
     surface: None,
     owner: @gpu.Initialization::new(),
     renderer: None,
-    frames: 0,
     closed: false,
   }
   let driver = @loop.Driver::new(
@@ -381,47 +376,15 @@ pub async fn run(
       let mut may_present = true
       let mut update : @async.Task[Unit]? = None
       let mut control_task : @async.Task[Unit]? = None
-      if lifecycle is Some(notify) {
+      if hooks.has_lifecycle() {
         @async.pause()
-        may_present = notify(Starting, app.observation())
+        may_present = hooks.notify(Starting, app)
       }
       while !app.closed {
         app.pump(driver)
         while !app.closed && app.events.try_get() is Some(event) {
           match event {
-            Barrier(applied) => applied.val = true
-            Capture(result) =>
-              result.val = Some(
-                try {
-                  let pixels = app.renderer.unwrap().capture_frame()
-                  Ok(Captured::{
-                    pixels,
-                    width: @scene.field(app.state, 6),
-                    height: @scene.field(app.state, 7),
-                    frame: app.frames,
-                  })
-                } catch {
-                  error => Err(error)
-                },
-              )
-            Edit(text, expected, result) =>
-              if app.composition is Some(_) {
-                result.val = Some("composition_active")
-              } else if expected is Some(revision) &&
-                revision != @semantics.revision(app.editor) {
-                result.val = Some("stale_revision")
-              } else {
-                let reference = @semantics.snapshot(app.editor)[1].reference
-                let error = match text {
-                  Some(text) =>
-                    @semantics.replace_selection(app.editor, reference, text)
-                  None => @semantics.delete_backward(app.editor, reference)
-                }
-                if error == "" {
-                  app.draw()
-                }
-                result.val = Some(error)
-              }
+            Development(request) => app.dispatch_development(request)
             SelectBoundary(_) if app.composition is Some(_) => ()
             SelectBoundary(kind) => {
               let node = @semantics.snapshot(app.editor)[1]
@@ -432,25 +395,6 @@ pub async fn run(
               )
               app.draw()
             }
-            Select(start, end, expected, result) =>
-              if app.composition is Some(_) {
-                result.val = Some("composition_active")
-              } else if expected is Some(revision) &&
-                revision != @semantics.revision(app.editor) {
-                result.val = Some("stale_revision")
-              } else {
-                let reference = @semantics.snapshot(app.editor)[1].reference
-                let error = @semantics.set_selection(
-                  app.editor,
-                  reference,
-                  start,
-                  end,
-                )
-                if error == "" {
-                  app.draw()
-                }
-                result.val = Some(error)
-              }
             StartUpdate | LoadUser(_) => {
               let user_id = match event {
                 LoadUser(value) => Some(value)
@@ -515,7 +459,7 @@ pub async fn run(
                 )
                 app.draw()
               } else {
-                app.rejected_updates += 1
+                app.diagnostics.rejected()
               }
             Close => {
               app.closed = true
@@ -606,10 +550,10 @@ pub async fn run(
                 app.draw()
               }
           }
-          if initializing && lifecycle is Some(notify) {
+          if initializing && hooks.has_lifecycle() {
             match event {
-              Close => may_present = notify(Closing, app.observation())
-              Input(_) => may_present = notify(InputHandled, app.observation())
+              Close => may_present = hooks.notify(Closing, app)
+              Input(_) => may_present = hooks.notify(InputHandled, app)
               _ => ()
             }
           }
@@ -621,20 +565,18 @@ pub async fn run(
           if init.try_wait() is Some(_) {
             init.wait()
             initializing = false
-            if lifecycle is Some(notify) {
-              ignore(notify(Ready, app.observation()))
-            }
+            ignore(hooks.notify(Ready, app))
             app.draw()
-            if controller is Some(control) {
-              control_task = Some(group.spawn(() => control(app.handle())))
+            if hooks.has_controller() {
+              control_task = Some(group.spawn(() => hooks.control(app)))
             }
           }
         }
-        if !initializing && observer is Some(observe) {
-          observe(app.observation())
+        if !initializing {
+          hooks.observe(app)
         }
-        if initializing && !may_present && lifecycle is Some(notify) {
-          may_present = notify(Poll, app.observation())
+        if initializing && !may_present && hooks.has_lifecycle() {
+          may_present = hooks.notify(Poll, app)
         } else {
           @async.sleep(1)
         }
@@ -661,9 +603,7 @@ pub async fn run(
           error => raise error
         }
       }
-      if completed is Some(complete) {
-        complete(app.observation())
-      }
+      hooks.complete(app)
     }
   } catch {
     error => {

@@ -133,6 +133,26 @@ failure contract and reproduction commands.
 
 ## Native host workspace
 
+For the current native build policy, debug hosts include development adapters;
+the ordinary `window_app` release build excludes `handle`, `observation`, and
+development request processing through package file selection. Release uses
+empty hook implementations that do not reference development types or capture.
+The UI loop, semantic state, input, rendering and HTTP client remain shared.
+`window_dev` and `window_probe` are debug-only entry points under this policy;
+optimized development hosts are not currently supported.
+
+Run `mise run native:window-release-build` to build the production candidate.
+`mise run native:release-lifecycle` builds it and an external MoonBit verifier,
+then checks creation and orderly destruction of a visible window belonging to
+the verifier's child PID. It never attaches to another process. This test opens
+a window briefly. It does not establish rendered content, input or HTTP results.
+
+After both release and development builds,
+`moon run scripts/verify-window-production-exclusion.mbtx` checks generated C
+and link inputs with development code as a positive control. Both checks are
+included in pre-commit. Real input/IME and OS accessibility must still be verified
+against this production candidate; successful development tests do not prove them.
+
 `native:window-build` builds the ordinary `window_app` executable.
 `native:window` builds it and the dedicated `window_probe`, then runs the six
 hidden verification scenarios against the probe. Only that probe reads
