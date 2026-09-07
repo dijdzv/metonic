@@ -28,6 +28,9 @@ enum Event {
   Input(@scene.Action)
   Commit(String)
   Backspace
+  StartUpdate
+  CancelUpdate
+  Updated(Int, Int)
   Close
 }
 
@@ -37,6 +40,8 @@ struct App {
   events : @aqueue.Queue[Event]
   state : @scene.State
   editor : @semantics.Tree
+  scope : @task_scope.Scope
+  mut rejected_updates : Int
   mut raster : @raster.Engine?
   mut rendered_text : String?
   mut text_width : Int
@@ -112,6 +117,8 @@ pub impl @windows.ApplicationHandler for App with fn window_event(
     @core.WindowEvent::KeyboardInput(_, key, false) =>
       if key.state() is @core.ElementState::Pressed {
         match key.logical_key() {
+          @core.Key::Named(@core.NamedKey::F5) => self.queue(StartUpdate)
+          @core.Key::Named(@core.NamedKey::F6) => self.queue(CancelUpdate)
           @core.Key::Named(@core.NamedKey::Backspace) => self.queue(Backspace)
           @core.Key::Named(@core.NamedKey::ArrowLeft) =>
             self.queue(Input(Move(-10, 0)))
@@ -236,6 +243,8 @@ async fn main {
     events: @aqueue.Queue::Queue(kind=@aqueue.Blocking(64)),
     state: @scene.create(),
     editor: @semantics.create(1, 1),
+    scope: @task_scope.create(),
+    rejected_updates: 0,
     raster: None,
     rendered_text: None,
     text_width: 0,
@@ -313,6 +322,8 @@ async fn main {
       let mut retained = false
       let mut polls = 0
       let mut stage = 0
+      let mut canceled_id = 0
+      let mut update : @async.Task[Unit]? = None
       if mode != "normal" {
         @async.pause()
         require(
@@ -323,9 +334,51 @@ async fn main {
       }
       while !app.closed {
         app.pump(driver)
-        while app.events.try_get() is Some(event) {
+        while !app.closed && app.events.try_get() is Some(event) {
           match event {
-            Close => app.closed = true
+            StartUpdate => {
+              ignore(@task_scope.cancel(app.scope))
+              if update is Some(previous) {
+                previous.cancel()
+                previous.wait() catch {
+                  error if @async.is_cancellation_error(error) => ()
+                  error => raise error
+                }
+              }
+              let id = @task_scope.begin(app.scope)
+              require(id > 0, "update scope unavailable")
+              let target = (@scene.field(app.state, 0) - 10).max(0)
+              update = Some(
+                group.spawn(() => {
+                  @async.sleep(250)
+                  app.queue(Updated(id, target))
+                }),
+              )
+            }
+            CancelUpdate => {
+              ignore(@task_scope.cancel(app.scope))
+              if update is Some(previous) {
+                previous.cancel()
+                previous.wait() catch {
+                  error if @async.is_cancellation_error(error) => ()
+                  error => raise error
+                }
+              }
+              update = None
+            }
+            Updated(id, value) =>
+              if @task_scope.complete(app.scope, id, value) {
+                ignore(
+                  @scene.move_to(app.state, value, @scene.field(app.state, 1)),
+                )
+                app.draw()
+              } else {
+                app.rejected_updates += 1
+              }
+            Close => {
+              app.closed = true
+              ignore(@task_scope.dispose(app.scope))
+            }
             Resize(size) =>
               if size.width() > 0 && size.height() > 0 {
                 if @scene.resize(app.state, size.width(), size.height()) {
@@ -471,6 +524,39 @@ async fn main {
                 }
               }
             }
+            app.post(0x0100U, 0x74UL, 0L)
+            app.post(0x0100U, 0x74UL, 0L)
+            app.post(0x0102U, 0x41UL, 0L)
+          } else if stage == 5 &&
+            @semantics.snapshot(app.editor)[1].value == "A" {
+            require(
+              @task_scope.field(app.scope, 0) == 1,
+              "text input did not precede delayed update",
+            )
+            stage = 6
+            app.queue(Updated(@task_scope.field(app.scope, 1) - 1, 0))
+          } else if stage == 6 && @task_scope.field(app.scope, 0) == 2 {
+            require(
+              @scene.field(app.state, 0) == @task_scope.field(app.scope, 2),
+              "delayed result did not update scene",
+            )
+            stage = 7
+            require(app.rejected_updates == 1, "stale result was accepted")
+            app.post(0x0100U, 0x74UL, 0L)
+          } else if stage == 7 && @task_scope.field(app.scope, 0) == 1 {
+            canceled_id = @task_scope.field(app.scope, 1)
+            stage = 8
+            app.post(0x0100U, 0x75UL, 0L)
+          } else if stage == 8 && @task_scope.field(app.scope, 0) == 4 {
+            stage = 9
+            app.queue(Updated(canceled_id, 0))
+          } else if stage == 9 && app.rejected_updates == 2 {
+            require(
+              @scene.field(app.state, 0) == @task_scope.field(app.scope, 2),
+              "rejected result changed scene",
+            )
+            stage = 10
+            app.post(0x0100U, 0x74UL, 0L)
             app.post(0x0010U, 0UL, 0L)
           }
         }
@@ -479,6 +565,14 @@ async fn main {
           require(polls <= 64, "initialization host event poll limit exceeded")
         } else {
           @async.sleep(1)
+        }
+      }
+      ignore(@task_scope.dispose(app.scope))
+      if update is Some(previous) {
+        previous.cancel()
+        previous.wait() catch {
+          error if @async.is_cancellation_error(error) => ()
+          error => raise error
         }
       }
       if initializing {
@@ -505,7 +599,7 @@ async fn main {
           app.success = "WINDOW_INIT_CLOSE_OK"
         } else {
           require(
-            stage == 5 &&
+            stage == 10 &&
             app.frames >= 3 &&
             @scene.field(app.state, 4) == 1 &&
             @scene.field(app.state, 6) == 317 &&
@@ -521,6 +615,10 @@ async fn main {
       }
     }
   } catch {
-    error => app.error = Some(error)
+    error => {
+      app.closed = true
+      ignore(@task_scope.dispose(app.scope))
+      app.error = Some(error)
+    }
   }
 }

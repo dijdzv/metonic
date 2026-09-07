@@ -1,5 +1,6 @@
 import {
   "local/p0/examples/p0/scene",
+  "local/p0/examples/p0/task_scope",
   "local/p0/examples/p0/semantics",
   "local/p0/text_raster" @raster,
   "local/p0/native_gpu" @gpu,
