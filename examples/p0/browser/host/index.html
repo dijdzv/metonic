@@ -24,6 +24,13 @@
       <div class="controls"><button id="task-start" type="button" disabled>Move after delay</button><button id="task-fail" type="button" disabled>Fail</button><button id="task-cancel" type="button" disabled>Cancel</button></div>
       <dl><dt>Task state</dt><dd id="task-state">[0,0,0,0,0,0]</dd><dt>Pending</dt><dd id="task-pending">0</dd><dt>Rejected callbacks</dt><dd id="task-rejected">0</dd></dl>
     </section>
+    <section aria-labelledby="rpc-title">
+      <h3 id="rpc-title">User lookup</h3>
+      <label for="rpc-user">User ID</label>
+      <input id="rpc-user" value="1" maxlength="1024" disabled>
+      <button id="rpc-load" type="button" disabled>Load user</button>
+      <output id="rpc-result" aria-live="polite"></output>
+    </section>
     <p id="status" role="status" aria-live="polite">Loading…</p>
     <details open><summary>Performance result</summary><dl>
       <dt>Target</dt><dd id="target">—</dd><dt>Artifact bytes</dt><dd id="artifact-bytes">—</dd><dt>Load ms</dt><dd id="load-ms">—</dd>

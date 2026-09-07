@@ -241,6 +241,44 @@ try {
   }
   const output = await runSuite(async (request) => {
     switch (request.op) {
+      case 'rpc': {
+        const page = await browser.newPage();
+        let release;
+        try {
+          await page.goto(`${baseUrl}/?target=${encodeURIComponent(request.target)}`);
+          await waitStatus(page, `Ready: ${request.target}`);
+          await page.locator('#text-input').fill(request.text);
+          let seen;
+          if (request.mode) {
+            let notify;
+            seen = new Promise(resolve => { notify = resolve; });
+            const held = new Promise(resolve => { release = resolve; });
+            await page.route('**/rpc', async route => {
+              notify();
+              await held;
+              await route.abort();
+            }, { times: 1 });
+          }
+          await page.locator('#rpc-user').fill(request.user);
+          await page.locator('#rpc-load').click();
+          if (request.mode) {
+            await seen;
+            if (request.mode === 'cancel') await page.locator('#task-cancel').click();
+            else {
+              await page.locator('#rpc-user').fill('missing');
+              await page.locator('#rpc-load').click();
+            }
+            release();
+          }
+          if (request.mode !== 'cancel') await page.waitForFunction(() => document.querySelector('#rpc-result').textContent !== '');
+          await page.waitForLoadState('networkidle');
+          return await page.evaluate(() => ({
+            text: document.querySelector('#text-input').value,
+            result: document.querySelector('#rpc-result').textContent,
+            status: JSON.parse(document.querySelector('#task-state').textContent)[0],
+          }));
+        } finally { release?.(); await page.close(); }
+      }
       case 'scene': return runTarget(browser, request.target)
       case 'failures': return negativeTests(browser)
       case 'text': return textTarget(browser, request.target, request.reference)

@@ -11,7 +11,63 @@ let cssW = 0, cssH = 0, backingW = 0, backingH = 0, submitted = 0, transferred =
 const textInput = $('text-input');
 const DEFAULT_TEXT = textInput.value;
 let textRenderer;
-const taskButtons = [$('task-start'), $('task-fail'), $('task-cancel')];
+const taskButtons = [$('task-start'), $('task-fail'), $('task-cancel'), $('rpc-load')];
+let rpcController;
+function rpcOutput(kind) {
+  return new TextDecoder('utf-8', { fatal: true }).decode(Uint8Array.from({ length: Number(app.rpc_output_length(kind)) }, (_, i) => Number(app.rpc_output_byte(kind, i))));
+}
+function rpcInput(bytes) {
+  if (Number(app.rpc_begin_input(bytes.length)) !== 1) throw new Error('RPC input limit');
+  for (const byte of bytes) if (Number(app.rpc_put(byte)) !== 1) throw new Error('RPC input rejected');
+}
+function renderRpc() {
+  $('rpc-result').textContent = rpcOutput(1);
+  onTextInput();
+  updateTaskDiagnostics();
+}
+async function loadUser() {
+  if (disposed || !app) return;
+  rpcInput(new TextEncoder().encode($('rpc-user').value));
+  if (Number(app.rpc_request()) !== 1) return;
+  const request = rpcOutput(0);
+  rpcController?.abort();
+  const controller = new AbortController();
+  rpcController = controller;
+  const id = app.task_begin();
+  const epoch = taskEpoch;
+  let failure = 0;
+  const timer = setTimeout(() => { failure = 1; controller.abort(); }, 3000);
+  updateTaskDiagnostics();
+  try {
+    const response = await fetch('/rpc', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: request, signal: controller.signal });
+    const type = response.headers.get('Content-Type');
+    if (type !== 'application/json' && type !== 'application/json; charset=utf-8') { failure = 3; throw new Error('RPC content type'); }
+    const reader = response.body.getReader();
+    const chunks = [];
+    let length = 0;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        length += value.length;
+        if (length > 65536) { failure = 2; throw new Error('RPC response limit'); }
+        chunks.push(value);
+      }
+    } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
+    if (disposed || taskEpoch !== epoch || rpcController !== controller) return;
+    const bytes = new Uint8Array(length);
+    let offset = 0;
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
+    rpcInput(bytes);
+    if (Number(app.rpc_response(id, response.status)) === 1) renderRpc();
+  } catch {
+    if (!disposed && taskEpoch === epoch && rpcController === controller && Number(app.rpc_transport_error(id, failure)) === 1) renderRpc();
+  } finally {
+    clearTimeout(timer);
+    controller.abort();
+    if (rpcController === controller) rpcController = undefined;
+  }
+}
 const taskTimers = new Map();
 let taskEpoch = 0;
 let rejectedCallbacks = 0;
@@ -30,6 +86,8 @@ function dispatchTask(delayMs, value, fail = false) {
     || taskTimers.size >= 16) return false;
   const id = app.task_begin();
   if (Number(id) < 0) return false;
+  rpcController?.abort();
+  rpcController = undefined;
   const epoch = taskEpoch;
   const timer = setTimeout(() => {
     taskTimers.delete(id);
@@ -43,8 +101,10 @@ function dispatchTask(delayMs, value, fail = false) {
   updateTaskDiagnostics();
   return true;
 }
-function cancelTask() { if (!disposed && app) { app.task_cancel(); updateTaskDiagnostics(); } }
+function cancelTask() { if (!disposed && app) { app.task_cancel(); rpcController?.abort(); rpcController = undefined; updateTaskDiagnostics(); } }
 function resetTasks() {
+  rpcController?.abort();
+  rpcController = undefined;
   for (const timer of taskTimers.values()) clearTimeout(timer);
   taskTimers.clear();
   taskEpoch += 1;
@@ -120,7 +180,7 @@ function resize(force = false) {
   canvas.height = backingH;
   context.configure({ device, format, alphaMode: 'opaque' });
   app.resize(cssW, cssH);
-  textRenderer?.rasterText(textInput.value, cssW);
+  textRenderer?.rasterText(textInput.value + rpcOutput(1), cssW);
   els.dimensions.textContent = `${cssW} × ${cssH} CSS / ${backingW} × ${backingH} backing`;
   dirty = true;
   schedule();
@@ -171,6 +231,7 @@ function onReset() {
   if (disposed || !app) return;
   resetTasks();
   app.init();
+  $('rpc-result').textContent = '';
   textInput.value = DEFAULT_TEXT;
   textRenderer?.rasterText(DEFAULT_TEXT, cssW);
   updateTaskDiagnostics();
@@ -182,7 +243,7 @@ function onReset() {
 function onTextInput() {
   if (disposed || !textRenderer) return;
   try {
-    textRenderer.rasterText(textInput.value, cssW);
+    textRenderer.rasterText(textInput.value + rpcOutput(1), cssW);
     const stats = textRenderer.stats();
     $('text-width').textContent = String(stats.width);
     $('text-renders').textContent = String(stats.renders);
@@ -196,6 +257,10 @@ function onTextInput() {
 function stop(reason = 'Stopped.', error = false) {
   if (disposed) return;
   disposed = true;
+  rpcController?.abort();
+  rpcController = undefined;
+  $('rpc-load').removeEventListener('click', loadUser);
+  $('rpc-user').disabled = true;
   textRenderer?.dispose();
   textRenderer = undefined;
   try { app?.text_dispose?.(); } catch {}
@@ -302,6 +367,8 @@ struct U { rect: vec4f, viewport: vec2f, enabled: f32, pad: f32 };
   textInput.addEventListener('input', onTextInput);
   textInput.disabled = false;
   $('task-start').addEventListener('click', onTaskStart);
+  $('rpc-load').addEventListener('click', loadUser);
+  $('rpc-user').disabled = false;
   $('task-fail').addEventListener('click', onTaskFail);
   $('task-cancel').addEventListener('click', onTaskCancel);
   for (const button of taskButtons) button.disabled = false;
