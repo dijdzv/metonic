@@ -22,7 +22,7 @@ stream is capped at 64 KiB during collection.
 
 ## Local evidence
 
-On 2026-09-07, the Windows x64 release build using `Milky2018/wgpu_mbt` 0.16.0
+On 2026-09-07, the Windows x64 native host build using `Milky2018/wgpu_mbt` 0.16.0
 and wgpu-native 29.0.1.1 passed with the pinned compiler. Both runs exited
 successfully with `WINDOW_PROBE_OK`, with a missing Rust DLL path supplied:
 
@@ -37,9 +37,14 @@ least three successful rendering calls, and a close event at the expected stage.
 MoonBit SurfaceRenderer calls acquire, draw, submit and present through the
 published binding. Cleanup releases the renderer and surface before the HWND.
 
-Initialization runs in a child task while the parent polls Win32 events and
-yields to the async scheduler. Completion draws the current scene even if an
-earlier paint was consumed. Each C poll dispatches at most 64 messages. The host
+`native_host/window_app` uses the shared `windows_loop` driver and the prepared
+`wzzc-dev/window/windows` dependency. The old application-owned C event queue and
+window procedure are removed from this path. The separate surface diagnostic
+retains its C window fixture under `tools/native_surface_probe`.
+
+Initialization runs in a child task while the parent drains a bounded MoonBit
+event queue and yields to the async scheduler. Completion draws the current scene
+even if an earlier paint was consumed. The shared driver bounds message dispatch. The host
 currently sleeps one millisecond between iterations; idle scheduling has not
 been optimized or benchmarked.
 
@@ -64,7 +69,11 @@ have received its native callback and be paused before ownership transfer; this
 test does not prove that the driver callback itself is still pending. No artificial
 GPU delay is introduced. Driver stalls and physical device loss remain untested.
 Pending initialization prevents HWND destruction; the parent deadline contains
-cleanup that cannot finish safely.
+cleanup that cannot finish safely. Every case also requires `WINDOW_CLEANUP_OK`
+exactly once, after GPU teardown, window destruction, and event-loop disposal.
+The host checks both application and message HWNDs with `IsWindow` before reporting
+success. `PostMessageW` and `IsWindow` are direct OS FFI declarations; the shared
+driver retains its context-free C wake callback.
 
 This test does not read back surface pixels or inspect visible output. Full
 pixel comparisons remain in the separate [offscreen probe](native-headless.md).

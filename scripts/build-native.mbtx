@@ -126,7 +126,8 @@ async fn main {
       println("NATIVE_BUILD_OK mode=host-gpu")
       return
     }
-    if mode == "async" {
+    if mode == "async" || mode == "window" {
+      let host_app = if mode == "async" { "async_app" } else { "window_app" }
       if @process.run(
           moon,
           ["run", "scripts/prepare-native-deps.mbtx"],
@@ -140,21 +141,25 @@ async fn main {
       if @process.run(
           moon,
           [
-            "-C", "native_host", "build", "async_app", "--target", "native", "--target-dir",
+            "-C", "native_host", "build", host_app, "--target", "native", "--target-dir",
             native_host_build_dir,
           ],
           extra_env=envmap,
           no_console_window=true,
         ) !=
         0 {
-        fail("MoonBit host async build failed")
+        fail("MoonBit host " + mode + " build failed")
       }
       let required_exe = native_host_build_dir +
-        "/native/debug/build/local/native_host/async_app/async_app.exe"
+        "/native/debug/build/local/native_host/" +
+        host_app +
+        "/" +
+        host_app +
+        ".exe"
       if !@fs.exists(required_exe) {
-        fail("native host async build artifact missing")
+        fail("native host " + mode + " build artifact missing")
       }
-      println("NATIVE_BUILD_OK mode=async")
+      println("NATIVE_BUILD_OK mode=" + mode)
       return
     }
     if @process.run(
@@ -172,33 +177,19 @@ async fn main {
     let headless_exe = "_build/native/release/build/examples/p0/native_headless/native_headless.exe"
     let required_exe = if mode == "surface" {
       "_build/native/release/build/tools/native_surface_probe/native_surface_probe.exe"
-    } else if mode == "window" {
-      "_build/native/release/build/examples/p0/native_window/native_window.exe"
     } else {
       headless_exe
     }
-    if mode == "window" || mode == "surface" {
+    if mode == "surface" {
       // Included headers may not invalidate the cached C stub.
-      let stale = if mode == "surface" {
-        "_build/native/release/build/tools/native_surface_probe/bridge.obj"
-      } else {
-        "_build/native/release/build/examples/p0/native_window/bridge.obj"
-      }
+      let stale = "_build/native/release/build/tools/native_surface_probe/bridge.obj"
       if @fs.exists(stale) {
         @fs.remove(stale)
       }
       if @process.run(
           moon,
           [
-            "build",
-            if mode == "surface" {
-              "tools/native_surface_probe"
-            } else {
-              "examples/p0/native_window"
-            },
-            "--target",
-            "native",
-            "--release",
+            "build", "tools/native_surface_probe", "--target", "native", "--release",
             "--deny-warn",
           ],
           extra_env=envmap,
