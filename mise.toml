@@ -54,14 +54,25 @@ run = "pnpm exec playwright install chromium"
 
 [tasks."browser:headless"]
 depends = ["browser:build"]
-run = "node scripts/verify-browser-headless.mjs"
+run = [
+  '.\\.tools\\moonbit\\bin\\moon.exe build tools/browser_supervisor --target wasm --release --frozen --deny-warn',
+  '.\\.tools\\moonbit\\bin\\moonrun.exe _build/wasm/release/build/tools/browser_supervisor/browser_supervisor.wasm headless',
+]
 
 [tasks."browser:async"]
 depends = ["browser:build"]
 run = [
   '.\\.tools\\moonbit\\bin\\moon.exe build tools/verify_browser_async --target js --release --frozen --deny-warn',
   '.\\.tools\\moonbit\\bin\\moon.exe test tools/verify_browser_async --target js --release --frozen --deny-warn',
-  'node scripts/verify-browser-async.mjs',
+  '.\\.tools\\moonbit\\bin\\moon.exe build tools/browser_supervisor --target wasm --release --frozen --deny-warn',
+  '.\\.tools\\moonbit\\bin\\moonrun.exe _build/wasm/release/build/tools/browser_supervisor/browser_supervisor.wasm async',
+]
+
+[tasks."browser:supervisor-test"]
+depends = ["browser:build"]
+run = [
+  '.\\.tools\\moonbit\\bin\\moon.exe build tools/browser_supervisor_fixture --target wasm --release --frozen --deny-warn',
+  '.\\.tools\\moonbit\\bin\\moon.exe test tools/browser_supervisor --target wasm --release --frozen --deny-warn',
 ]
 
 [tasks."browser:server-test"]
