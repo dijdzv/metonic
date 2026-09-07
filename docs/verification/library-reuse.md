@@ -11,7 +11,7 @@ remain comparison baselines until equivalent requirements pass.
 | `bridges/wgpu/src/lib.rs`, `window.rs` | wgpu 30.0.1 DX12 resources, offscreen readback and HWND presentation | `Milky2018/wgpu_mbt` over pinned wgpu-native |
 | `examples/p0/native_window/bridge.c` | HWND, bounded event queue and lifetime | `wzzc-dev/window/windows`, raw handle compatibility |
 | `examples/p0/native_window/async_workers.h` | Worker completion, cancellation and UI wakeup | `moonbitlang/async`; event-loop integration still needed |
-| `examples/p0/native_headless/bridge.c` | GPU DLL loading and capture-file boundary | Stdio and UTF-8 moved to MoonBit async/shared LF framing; GPU integration remains under comparison |
+| `native_gpu`, `examples/p0/native_headless` | Persistent offscreen GPU resources, readback and capture | Adopted `Milky2018/wgpu_mbt@0.16.0`; headless C stub removed, stdio and file writing use MoonBit async |
 | `examples/p0/browser/host/*.mjs` | WebGPU, DOM/input and host scheduling | Compare required calls against `mizchi/js_browser` and `bikallem/webapi` |
 | `tools/devtools/*.mjs`, `scripts/*` | CLI/MCP transport and development verification | MoonBit orchestration first; external SDK adapters scoped separately |
 | `examples/p0/text_position`, `semantics`, `task_scope` | Position validity, semantic actions and cancellation policy | Framework responsibilities; library presence does not replace these contracts |

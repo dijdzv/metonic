@@ -6,8 +6,33 @@ Status: proposed experiment; window and accessibility adapter choices remain ope
 
 Review update: the initial comparison omitted `wgpu-mbt`. Its Windows compute
 and surface-contract tests now pass locally; see the
-[existing binding evaluation](../verification/wgpu-mbt.md). The custom wrapper
-remains an experimental baseline while equivalent rendering is evaluated.
+[existing binding evaluation](../verification/wgpu-mbt.md). The ownership update
+below supersedes the original custom-wrapper choice for the headless host only.
+
+## Headless binding integration update (2026-09-07)
+
+Use `Milky2018/wgpu_mbt@0.16.0` with pinned wgpu-native 29.0.1.1 for the headless
+renderer. The root `native_gpu` package owns persistent resources and asynchronous
+readback; the example composes it with MoonBit async stdio and file writing.
+The custom Rust/C window and worker hosts remain separate migration candidates.
+The following original comparison records the baseline decision rather than
+requiring its offscreen implementation to remain the application's renderer.
+
+Retain each pending readback ticket and its native references until terminal
+completion. A timeout starts a separate bounded cancellation drain. If that
+drain leaves a pending ticket, stop the headless command loop after its failure
+response and terminate the owning process instead of accepting more GPU work.
+Do not describe a pending callback as reclaimed. Synchronous adapter/device
+initialization remains contained by the parent process deadline; it is not
+approved for the interactive UI thread.
+
+Static linking removes runtime custom-DLL selection from this host. Captures
+still require an absolute launch-selected output path. Only successful GPU
+readback and file writing increment the frame count. Invalid input, failed
+capture and shutdown retain their command-level contracts. The
+[headless verification record](../verification/native-headless.md) is the
+acceptance evidence; neither package tests nor a successful build substitute
+for those application checks.
 
 ## Context and comparison
 

@@ -1,0 +1,68 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/encoding/utf8",
+}
+
+///|
+fn fail(message : String) -> Unit {
+  println(message)
+  abort(message)
+}
+
+///|
+async fn main {
+  let assets = ".work/wgpu-assets"
+  if !@fs.exists(assets) {
+    @fs.mkdir(assets, recursive=true)
+  }
+  let archive = assets + "/wgpu-windows-x86_64-msvc-release.zip"
+  if !@fs.exists(archive) {
+    let (code, _out, err) = @process.collect_output(
+      "gh",
+      [
+        "release", "download", "v29.0.1.1", "-R", "gfx-rs/wgpu-native", "-p", "wgpu-windows-x86_64-msvc-release.zip",
+        "-D", assets, "--skip-existing",
+      ],
+      no_console_window=true,
+    )
+    if code != 0 {
+      fail("wgpu download failed: " + @utf8.decode_lossy(err.binary()))
+    }
+  }
+  let (hash_code, hash_out, hash_err) = @process.collect_output(
+    "certutil",
+    ["-hashfile", archive, "SHA256"],
+    no_console_window=true,
+  )
+  if hash_code != 0 {
+    fail("wgpu hash failed: " + @utf8.decode_lossy(hash_err.binary()))
+  }
+  let expected = "7e67d7445c42aeb85e30f88930fd8d7d83ee769e3390aeb1ada75ebf3cf78132"
+  let mut found = false
+  for line in @utf8.decode_lossy(hash_out.binary()).split("\n") {
+    let value = line.trim().to_owned()
+    if value == expected ||
+      value ==
+      "7E67D7445C42AEB85E30F88930FD8D7D83EE769E3390AEB1ADA75EBF3CF78132" {
+      found = true
+    }
+  }
+  if !found {
+    fail("wgpu asset SHA256 mismatch")
+  }
+  let (extract_code, _extract_out, extract_err) = @process.collect_output(
+    "tar",
+    ["-xf", archive, "-C", assets],
+    no_console_window=true,
+  )
+  if extract_code != 0 {
+    fail("wgpu extraction failed: " + @utf8.decode_lossy(extract_err.binary()))
+  }
+  let mooncakes = ".mooncakes"
+  if !@fs.exists(mooncakes) {
+    @fs.mkdir(mooncakes, recursive=true)
+  }
+  @fs.write_file(mooncakes + "/package.json", "{\"type\":\"commonjs\"}\n")
+}

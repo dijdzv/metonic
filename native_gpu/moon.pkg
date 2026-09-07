@@ -1,0 +1,10 @@
+import {
+  "Milky2018/wgpu_mbt" @wgpu,
+  "moonbitlang/async",
+  "moonbitlang/core/int",
+  "moonbitlang/core/env",
+}
+
+pkgtype(kind: "library")
+
+supported_targets = "native"
