@@ -7,16 +7,18 @@ import {
   "moonbitlang/core/json",
   "moonbitlang/core/string",
   "Milky2018/wgpu_mbt" @wgpu,
-  "Milky2018/wgpu_mbt/c" @c,
+  "Milky2018/wgpu_mbt/c",
   "local/p0/native_gpu" @gpu,
+  "local/native_host/windows_loop" @loop,
   "wzzc-dev/window/core",
-  "wzzc-dev/window/dpi" @dpi,
+  "wzzc-dev/window/dpi",
   "wzzc-dev/window/windows",
 }
 
 supported_targets = "native"
+
 pkgtype(kind: "executable")
+
 options(
-  "native-stub": ["wake.c"],
-  targets: {"main.mbt": ["native"]},
+  targets: { "main.mbt": [ "native" ] },
 )

@@ -1,0 +1,12 @@
+import {
+  "moonbitlang/async/external_loop_integration",
+  "wzzc-dev/window/core" @core,
+  "wzzc-dev/window/windows" @windows,
+}
+
+supported_targets = "native"
+
+options(
+  "native-stub": ["wake.c"],
+  targets: {"driver.mbt": ["native"]},
+)

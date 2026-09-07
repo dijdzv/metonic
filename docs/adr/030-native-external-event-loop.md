@@ -67,6 +67,15 @@ the direct ABI inspection and measured boundaries.
 
 ## Reproducible adoption workspace
 
+Share the Windows external-loop adapter through `native_host/windows_loop`.
+The adapter owns timeout forwarding, the context-free wake boundary and poll/wake
+diagnostics. It accepts the application's window handler and a termination
+callback rather than embedding scenario state or GPU policy. Applications retain
+their window/GPU ownership and perform ordered cleanup in that callback after
+the async runtime has joined its tasks. The adapter does not destroy windows on
+their behalf. Keep the adapter out of the handler state to avoid a reference cycle
+between the stored handler and termination closure.
+
 Prepare adoption in a separate native workspace that includes the root module
 as a workspace member. Import `local/p0/native_gpu` and the existing scene/task
 packages directly; do not copy their source into a dependency module. Keep the
