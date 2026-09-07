@@ -242,6 +242,19 @@ async fn main {
       hwnd = owned_window(pid)
       @async.sleep(20)
     }
+    if @env.args().length() == 3 && @env.args()[2] == "close-only" {
+      guard post(hwnd, 0x0010U, 0UL, 0L) != 0 else {
+        fail("owned window close request failed")
+      }
+      for _ in 0..<500 {
+        if is_window(hwnd) == 0 {
+          println("OWNED_WINDOW_CLOSE_OK")
+          return
+        }
+        @async.sleep(20)
+      }
+      fail("owned window did not close")
+    }
     let root = FixedArray::make(1, 0UL)
     guard node_from_handle(hwnd, root) == 0 && root[0] != 0UL else {
       fail("production UIA root missing")
