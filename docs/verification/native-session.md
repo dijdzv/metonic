@@ -39,13 +39,27 @@ capture image decoding and pixels, stale revisions and invalid resize rejection.
 This additionally tests the composition through the real SDK rather than only
 the internal session protocol.
 
+The dedicated MoonBit `tools/session_fixture` host exercises the SDK adapter
+without a GPU. Its fourteen tests cover missing executables (preserving ENOENT),
+invalid readiness, raw invalid UTF-8, truncated output, malformed responses with
+two pending callers, unknown identifiers, output beyond 32 MiB, readiness timeout,
+exit code 19 and forced termination. Locally rejected oversized, cyclic and invalid
+arguments leave the session usable. A 4095-byte JSON body succeeds; 4096 bytes is
+rejected before dispatch, excluding the line delimiter. Recoverable fixture
+shutdown checks require exit code zero without forced termination.
+
+`mise run devtools:test` builds this fixture and runs both fixture and real-renderer
+adapter tests. The fixture tests passed with no skipped cases on Windows using
+the pinned MoonBit runtime and Node 26.8.1. Forced termination is an expected
+failure case, not evidence of resource cleanup.
+
 ## Limits
 
 The session wire is an internal development boundary, not a stable public API.
 The MoonBit native-client fixture suite covers the renderer protocol separately
 from the SDK adapter. Forced termination cannot establish cleanup; successful adapter close
-must report a normal host exit. Input-flood, malformed-host-output and process
-startup-failure cases need dedicated adapter fixtures beyond the renderer checks.
+must report a normal host exit. The fixture cases do not establish sustained
+input-flood resistance or arbitrary fault recovery in the renderer itself.
 
 These checks do not establish live-window attachment, physical input, Japanese
 IME composition, OS accessibility or exclusion from a production artifact.

@@ -1,10 +1,10 @@
 # ADR 029: MoonBit ownership of native development sessions
 
-Status: implementation in progress
+Status: accepted
 
 ## Context
 
-The native MCP adapter currently owns renderer process correlation, capture files
+The previous native MCP adapter owned renderer process correlation, capture files
 and PNG encoding in JavaScript. The existing MoonBit control client and image
 codec can provide those operations. The interactive CLI processes lines serially;
 using it unchanged would alter concurrent MCP requests and cancellation.
