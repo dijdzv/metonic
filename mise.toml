@@ -98,7 +98,8 @@ env = { METONIC_NATIVE_BUILD = "window" }
 
 [tasks."native:window"]
 depends = ["native:window-build"]
-run = "node scripts/verify-native-window.mjs"
+run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-native-probes.mbtx'
+env = { METONIC_NATIVE_PROBE = "window" }
 
 [tasks."native:async-build"]
 run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/build-native.mbtx'
@@ -106,7 +107,8 @@ env = { METONIC_NATIVE_BUILD = "async" }
 
 [tasks."native:async"]
 depends = ["native:async-build"]
-run = "node scripts/verify-native-async.mjs"
+run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-native-probes.mbtx'
+env = { METONIC_NATIVE_PROBE = "async" }
 
 [tasks."native:binding"]
 run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-wgpu-binding.mbtx'

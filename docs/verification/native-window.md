@@ -15,6 +15,11 @@ stdout/stderr and exit information under `.work/native-window/`. Each child has
 a 20-second deadline. Failure markers, missing success, nonzero exit, timeout
 or excessive output fail verification.
 
+`scripts/verify-native-probes.mbtx` provides the process verification using the
+pinned MoonBit async library. It shares process handling with the worker-completion
+probe while keeping their success and shutdown assertions separate. Each output
+stream is capped at 64 KiB during collection.
+
 ## Local evidence
 
 On 2026-09-06, the Windows x64 release build passed with the pinned compiler and

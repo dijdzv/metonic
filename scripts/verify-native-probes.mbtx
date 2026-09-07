@@ -1,0 +1,285 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+  "moonbitlang/core/debug",
+  "moonbitlang/core/encoding/utf8",
+}
+
+///|
+suberror ProbeFailure {
+  ProbeFailure(String)
+} derive(Debug)
+
+///|
+struct StreamState {
+  bytes : Array[Byte]
+  mut overflow : Bool
+}
+
+///|
+fn fail(message : String) -> Unit raise Error {
+  raise ProbeFailure(message)
+}
+
+///|
+fn require(value : Bool, message : String) -> Unit raise Error {
+  if !value {
+    fail(message)
+  }
+}
+
+///|
+async fn drain(
+  reader : @process.ReadFromProcess,
+  state : Ref[StreamState],
+  process : @process.Process,
+) -> Unit {
+  while !state.val.overflow {
+    match reader.read_some(max_len=4096) {
+      None => break
+      Some(chunk) => {
+        let remaining = 65536 - state.val.bytes.length()
+        let count = if chunk.length() < remaining {
+          chunk.length()
+        } else {
+          remaining
+        }
+        for i = 0; i < count; i = i + 1 {
+          state.val.bytes.push(chunk[i])
+        }
+        if count < chunk.length() {
+          state.val.overflow = true
+          process.cancel()
+        }
+      }
+    }
+  }
+}
+
+///|
+fn lines(text : String) -> Array[String] {
+  text
+  .replace_all(old="\r\n", new="\n")
+  .split("\n")
+  .map(fn(value) { value.to_owned() })
+  .to_array()
+}
+
+///|
+fn exact_line(text : String, expected : String) -> Bool {
+  for line in lines(text) {
+    if line == expected {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn shutdown_ms(text : String) -> Int? {
+  let prefix = "NATIVE_ASYNC_SHUTDOWN_MS="
+  let mut found : Int? = None
+  for line in lines(text) {
+    if line.has_prefix(prefix) {
+      let suffix = line[prefix.length():].to_owned()
+      if suffix.length() == 0 {
+        return None
+      }
+      let mut value = 0
+      for index = 0; index < suffix.length(); index = index + 1 {
+        let digit = suffix.code_unit_at(index).to_int() - 48
+        if digit < 0 || digit > 9 || value > 3999 {
+          return None
+        }
+        value = value * 10 + digit
+      }
+      if found is Some(_) {
+        return None
+      }
+      found = Some(value)
+    }
+  }
+  found
+}
+
+///|
+fn json_null() -> Json {
+  Json::null()
+}
+
+///|
+async fn run_probe(
+  root : String,
+  kind : String,
+  mode : String,
+) -> Unit raise Error {
+  let fallback = if mode == "fallback" { "1" } else { "0" }
+  let executable = if kind == "window" {
+    root +
+    "/_build/native/release/build/examples/p0/native_window/native_window.exe"
+  } else {
+    root +
+    "/_build/native/release/build/examples/p0/native_async/native_async.exe"
+  }
+  let bridge = root + "/.work/native-cargo/release/metonic_wgpu_probe.dll"
+  let output_dir = root + "/.work/native-" + kind
+  if !@fs.exists(output_dir) {
+    @fs.mkdir(output_dir, recursive=true)
+  }
+  let started = @async.now()
+  let stdout_state : Ref[StreamState] = {
+    val: { bytes: [], overflow: false, },
+  }
+  let stderr_state : Ref[StreamState] = {
+    val: { bytes: [], overflow: false, },
+  }
+  let mut exit_code : Int? = None
+  let mut timed_out = false
+  let mut original_error : Error? = None
+  try {
+    exit_code = Some(
+      @async.with_timeout(20000, async fn() {
+        @async.with_task_group() <| group => {
+          let (stdout_reader, stdout_output) = @process.read_from_process()
+          let (stderr_reader, stderr_output) = @process.read_from_process()
+          group.add_defer(fn() {
+            stdout_reader.close()
+            stderr_reader.close()
+          })
+          let env_map : Map[String, String] = Map([])
+          env_map.set("METONIC_GPU_BRIDGE", bridge)
+          env_map.set("METONIC_WINDOW_TEST", "1")
+          env_map.set("METONIC_GPU_FALLBACK", fallback)
+          let child = @process.spawn(
+            group,
+            executable,
+            [],
+            extra_env=env_map,
+            stdout=stdout_output,
+            stderr=stderr_output,
+            no_console_window=true,
+            no_wait=true,
+            cancel_handler=@process.hard_cancel(),
+          )
+          group.add_defer(fn() { child.cancel() })
+          group.spawn_bg() <| () => {
+            drain(stdout_reader, stdout_state, child)
+          }
+          group.spawn_bg() <| () => {
+            drain(stderr_reader, stderr_state, child)
+          }
+          child.wait()
+        }
+      }),
+    )
+  } catch {
+    @async.TimeoutError as error => {
+      timed_out = true
+      original_error = Some(error)
+    }
+    error => original_error = Some(error)
+  }
+  let stdout = @utf8.decode_lossy(Bytes::from_array(stdout_state.val.bytes))
+  let stderr = @utf8.decode_lossy(Bytes::from_array(stderr_state.val.bytes))
+  let elapsed = (@async.now() - started).to_int()
+  let shutdown = if kind == "async" { shutdown_ms(stdout) } else { None }
+  let shutdown_json = match shutdown {
+    Some(value) => Json::number(value.to_double())
+    None => json_null()
+  }
+  let report = Json::object({
+    "exit": match exit_code {
+      Some(value) => Json::number(value.to_double())
+      None => json_null()
+    },
+    "stdout": Json::string(stdout),
+    "stderr": Json::string(stderr),
+    "timedOut": Json::boolean(timed_out),
+    "error": match original_error {
+      Some(value) => Json::string(@debug.to_string(value))
+      None => json_null()
+    },
+    "signal": json_null(),
+    "overflow": Json::boolean(
+      stdout_state.val.overflow || stderr_state.val.overflow,
+    ),
+    "elapsedMs": Json::number(elapsed.to_double()),
+    "mode": Json::string(mode),
+    "scope": Json::string(
+      if kind == "window" {
+        "hidden HWND swapchain and own-window message dispatch; not visible UI, IME, accessibility or desktop automation"
+      } else {
+        "worker completion through hidden HWND; not network, visible input, IME or general closure FFI"
+      },
+    ),
+    "shutdownMs": shutdown_json,
+  })
+  @async.protect_from_cancel() <| () => {
+    @fs.write_file(output_dir + "/" + mode + ".json", report.stringify()) catch {
+      error =>
+        match original_error {
+          Some(_) =>
+            println("probe report write failed: " + @debug.to_string(error))
+          None => raise error
+        }
+    }
+  }
+  match original_error {
+    Some(error) => raise error
+    None => ()
+  }
+  require(
+    !stdout_state.val.overflow && !stderr_state.val.overflow,
+    kind + " output overflow",
+  )
+  require(exit_code == Some(0), kind + " exit")
+  require(!stdout.contains("FAILED"), kind + " FAILED marker")
+  require(
+    exact_line(
+      stdout,
+      if kind == "window" {
+        "WINDOW_PROBE_OK"
+      } else {
+        "NATIVE_ASYNC_OK"
+      },
+    ),
+    kind + " success marker",
+  )
+  if kind == "async" {
+    match shutdown {
+      Some(value) =>
+        require(value >= 0 && value < 4000, "async shutdown timing")
+      None => fail("async shutdown timing missing or duplicated")
+    }
+  }
+}
+
+///|
+async fn main {
+  let root = @fs.realpath(".")
+  let selected = @env.get_env_var("METONIC_NATIVE_PROBE")
+  let kinds = match selected {
+    None => ["window", "async"]
+    Some(value) if value == "window" => ["window"]
+    Some(value) if value == "async" => ["async"]
+    Some(_) => abort("METONIC_NATIVE_PROBE must be window or async")
+  }
+  let modes = if @env.get_env_var("METONIC_GPU_FALLBACK") == Some("1") {
+    ["fallback"]
+  } else {
+    ["default", "fallback"]
+  }
+  for kind in kinds {
+    for mode in modes {
+      run_probe(root, kind, mode) catch {
+        error => {
+          println(@debug.to_string(error))
+          abort(@debug.to_string(error))
+        }
+      }
+    }
+  }
+}
