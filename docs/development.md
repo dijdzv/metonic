@@ -36,15 +36,19 @@ mise run verify-native
 verification. `doctor` rejects a different version. Tool binaries, caches, and
 temporary diagnostics stay under ignored `.tools`, `_build`, and `.work` paths.
 
-Run `mise run fmt` to format. For other MoonBit commands, use the project wrapper:
+Run `mise run fmt` to format. For other MoonBit commands, use the pinned executable
+inside the mise environment:
 
 ```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/moon.ps1 version --all
-pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/moon.ps1 check --target js
+mise exec -- ./.tools/moonbit/bin/moon.exe version --all
+mise exec -- ./.tools/moonbit/bin/moon.exe check --target js
 ```
 
-This explicit wrapper avoids falling back to an older global executable when
-Windows PATH entries are ordered differently by a parent shell.
+The explicit path avoids falling back to an older global executable. mise supplies
+MOON_HOME, PATH and the pinned wgpu library environment from `mise.toml`; a separate
+PowerShell activation or command wrapper is unnecessary. Bootstrap remains a
+PowerShell installation boundary because MoonBit is not yet available on a fresh
+checkout.
 
 ## MoonBit scripts
 
