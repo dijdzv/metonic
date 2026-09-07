@@ -1,0 +1,12 @@
+import {
+  "local/native_host/window_ui" @ui,
+  "local/p0/tools/cli_lines" @lines,
+  "moonbitlang/async",
+  "moonbitlang/async/stdio",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/json",
+  "moonbitlang/core/env",
+}
+
+pkgtype(kind: "executable")
+supported_targets = "native"

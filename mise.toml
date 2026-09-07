@@ -152,6 +152,14 @@ run = '.\\.tools\\moonbit\\bin\\moon.exe test tools/native_control --target wasm
 run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/build-native.mbtx'
 env = { METONIC_NATIVE_BUILD = "window" }
 
+[tasks."native:window-dev-build"]
+run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/build-native.mbtx'
+env = { METONIC_NATIVE_BUILD = "window-dev" }
+
+[tasks."native:window-control"]
+depends = ["native:window-dev-build"]
+run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-window-control.mbtx'
+
 [tasks."native:window"]
 depends = ["native:window-build"]
 run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-native-probes.mbtx'
