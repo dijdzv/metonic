@@ -23,6 +23,11 @@ pub struct Snapshot {
   frames : Int
   task_status : Int
   rpc_result : String
+  composing : Bool
+  preedit : String
+  preedit_cursor : Int?
+  ime_requested_x : Int?
+  ime_requested_y : Int?
   closed : Bool
 }
 
@@ -95,6 +100,19 @@ fn App::handle(self : App) -> Handle {
         frames: self.frames,
         task_status: @task_scope.field(self.scope, 0),
         rpc_result: self.rpc_result,
+        composing: self.composition is Some(_),
+        preedit: self.preedit,
+        preedit_cursor: if self.composition is Some(_) {
+          Some(self.preedit_cursor)
+        } else {
+          None
+        },
+        ime_requested_x: self.window.map(window => {
+          window.ime_cursor_area_position().x()
+        }),
+        ime_requested_y: self.window.map(window => {
+          window.ime_cursor_area_position().y()
+        }),
         closed: self.closed,
       }
     },

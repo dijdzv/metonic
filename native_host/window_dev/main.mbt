@@ -88,6 +88,11 @@ async fn respond(
     "frames": state.frames,
     "task_status": state.task_status,
     "rpc_result": state.rpc_result,
+    "composing": state.composing,
+    "preedit": state.preedit,
+    "preedit_cursor": state.preedit_cursor,
+    "ime_requested_x": state.ime_requested_x,
+    "ime_requested_y": state.ime_requested_y,
     "image": captured_image,
   }
   @stdio.stdout.write(response.stringify() + "\n")

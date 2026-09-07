@@ -27,6 +27,9 @@ priv enum Event {
   Resize(@dpi.PhysicalSize)
   Input(@scene.Action)
   Commit(String)
+  CompositionStart
+  CompositionUpdate(String, Int?)
+  CompositionCancel
   Backspace
   StartUpdate
   LoadUser(String)
@@ -51,6 +54,9 @@ struct App {
   scope : @task_scope.Scope
   mut rejected_updates : Int
   mut rpc_result : String
+  mut composition : @semantics.Composition?
+  mut preedit : String
+  mut preedit_cursor : Int
   mut control_pressed : Bool
   mut shift_pressed : Bool
   mut raster : @raster.Engine?
@@ -131,7 +137,12 @@ pub impl @windows.ApplicationHandler for App with fn window_event(
     @core.WindowEvent::Focused(false) => {
       self.control_pressed = false
       self.shift_pressed = false
+      self.queue(CompositionCancel)
     }
+    @core.WindowEvent::Ime(@core.Ime::Enabled) => self.queue(CompositionStart)
+    @core.WindowEvent::Ime(@core.Ime::Preedit(value, range)) =>
+      self.queue(CompositionUpdate(value, range.map(cursor => cursor.start())))
+    @core.WindowEvent::Ime(@core.Ime::Disabled) => self.queue(CompositionCancel)
     @core.WindowEvent::Ime(@core.Ime::Commit(value)) =>
       if !(value.length() == 1 && value[0].to_int() < 32) {
         self.queue(Commit(value))
@@ -184,8 +195,16 @@ fn App::draw(self : App) -> Unit raise Error {
   match self.renderer {
     Some(renderer) => {
       let node = @semantics.snapshot(self.editor)[1]
-      let text = node.value + self.rpc_result
-      let selection = (node.selection_start, node.selection_end)
+      let preview = match self.composition {
+        Some(composition) => composition.preview(self.preedit)
+        None => None
+      }
+      let text = preview.unwrap_or(node.value) + self.rpc_result
+      let selection = if preview is Some(_) {
+        (node.selection_start, node.selection_start + self.preedit.length())
+      } else {
+        (node.selection_start, node.selection_end)
+      }
       let width = (@scene.field(self.state, 6) - 16).max(1).min(640)
       if self.rendered_text != Some(text) ||
         self.text_width != width ||
@@ -201,6 +220,19 @@ fn App::draw(self : App) -> Unit raise Error {
         self.rendered_text = Some(text)
         self.rendered_selection = selection
         self.text_width = width
+      }
+      let caret = if preview is Some(_) {
+        node.selection_start + self.preedit_cursor
+      } else {
+        node.selection_end
+      }
+      if @raster.caret_position(self.raster.unwrap(), caret) is Some((x, y)) {
+        if self.window is Some(window) {
+          window.set_ime_cursor_area(
+            @dpi.PhysicalPosition(x + 8, y + 8).into_position(),
+            @dpi.PhysicalSize(1, 32).into_size(),
+          )
+        }
       }
       renderer.present(
         @scene.field(self.state, 6),
@@ -296,6 +328,9 @@ pub async fn run(
     scope: @task_scope.create(),
     rejected_updates: 0,
     rpc_result: "",
+    composition: None,
+    preedit: "",
+    preedit_cursor: 0,
     control_pressed: false,
     shift_pressed: false,
     raster: None,
@@ -409,7 +444,9 @@ pub async fn run(
                 },
               )
             Edit(text, expected, result) =>
-              if expected is Some(revision) &&
+              if app.composition is Some(_) {
+                result.val = Some("composition_active")
+              } else if expected is Some(revision) &&
                 revision != @semantics.revision(app.editor) {
                 result.val = Some("stale_revision")
               } else {
@@ -424,6 +461,7 @@ pub async fn run(
                 }
                 result.val = Some(error)
               }
+            SelectBoundary(_) if app.composition is Some(_) => ()
             SelectBoundary(kind) => {
               let node = @semantics.snapshot(app.editor)[1]
               let start = if kind == 2 { node.value.length() } else { 0 }
@@ -434,7 +472,9 @@ pub async fn run(
               app.draw()
             }
             Select(start, end, expected, result) =>
-              if expected is Some(revision) &&
+              if app.composition is Some(_) {
+                result.val = Some("composition_active")
+              } else if expected is Some(revision) &&
                 revision != @semantics.revision(app.editor) {
                 result.val = Some("stale_revision")
               } else {
@@ -527,6 +567,36 @@ pub async fn run(
                 }
               }
             Redraw => app.draw()
+            CompositionStart =>
+              if app.composition is None {
+                app.composition = @semantics.begin_composition(app.editor)
+                app.preedit = ""
+              }
+            CompositionUpdate(value, cursor) => {
+              if app.composition is None {
+                app.composition = @semantics.begin_composition(app.editor)
+              }
+              app.preedit = value
+              app.preedit_cursor = cursor
+                .unwrap_or(value.length())
+                .max(0)
+                .min(value.length())
+              app.draw()
+            }
+            CompositionCancel => {
+              if app.composition is Some(composition) {
+                composition.cancel()
+              }
+              app.composition = None
+              app.preedit = ""
+              app.draw()
+            }
+            Commit(value) if app.composition is Some(composition) => {
+              ignore(composition.commit(value))
+              app.composition = None
+              app.preedit = ""
+              app.draw()
+            }
             Commit(value) => {
               let reference = @semantics.snapshot(app.editor)[1].reference
               require(
@@ -535,6 +605,7 @@ pub async fn run(
               )
               app.draw()
             }
+            Backspace if app.composition is Some(_) => ()
             Backspace => {
               let reference = @semantics.snapshot(app.editor)[1].reference
               require(
@@ -543,6 +614,7 @@ pub async fn run(
               )
               app.draw()
             }
+            TextPointer(_, _, _) if app.composition is Some(_) => ()
             TextPointer(x, y, extend_selection) =>
               if x >= 8 && x < 8 + app.text_width && y >= 8 && y < 104 {
                 if app.raster is Some(engine) {
@@ -646,12 +718,37 @@ pub async fn run(
             app.post(0x0201U, 1UL, ((16 << 16) | 8).to_int64())
           } else if stage == 22 &&
             @semantics.snapshot(app.editor)[1].selection_start == 0 {
-            stage = 3
+            stage = 30
             let reference = @semantics.snapshot(app.editor)[1].reference
             require(
               @semantics.set_selection(app.editor, reference, 0, 3) == "",
               "test selection rejected",
             )
+            app.queue(CompositionStart)
+            app.queue(CompositionUpdate("にほん", Some(1)))
+          } else if stage == 30 &&
+            app.rendered_text ==
+            Some("にほんの描画を確認します ABC 123") {
+            let node = @semantics.snapshot(app.editor)[1]
+            require(
+              node.value == "日本語の描画を確認します ABC 123",
+              "preedit mutated committed text",
+            )
+            require(
+              node.selection_start == 0 && node.selection_end == 3,
+              "preedit changed selection",
+            )
+            require(app.preedit_cursor == 1, "composition cursor was lost")
+            stage = 31
+            app.queue(CompositionCancel)
+          } else if stage == 31 &&
+            app.rendered_text ==
+            Some("日本語の描画を確認します ABC 123") {
+            require(
+              app.composition is None,
+              "composition survived cancellation",
+            )
+            stage = 3
             app.post(0x0102U, 0x8A9EUL, 0L)
             app.post(0x0102U, 0xD83DUL, 0L)
             app.post(0x0102U, 0xDE00UL, 0L)
