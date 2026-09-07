@@ -41,6 +41,13 @@ cleanup after `async fn main` returns, so dropping the host directly at the end 
 main would be premature. Verify the final success record from terminate, not
 merely from main.
 
+The isolated lifetime correction also destroys the message-only HWND after
+application windows and the waiter have stopped. Keep the process-single-instance
+restriction and process-lifetime class/IMM caches. Preserve input errors through
+termination and rethrow after cleanup; a cleanup result cannot hide main failure.
+The [resource experiment](../verification/native-resource-cleanup.md) records
+the local patches, handle-count comparison and untested failure paths.
+
 ## Consequences
 
 The existing worker probe stays intact during comparison. Passing this experiment

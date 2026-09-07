@@ -2,3 +2,4 @@
 *.zip binary
 # Unified diffs encode an empty context line as a single space.
 experiments/window_pump_contract/windows-pump.patch whitespace=-blank-at-eol
+experiments/async_waiter_handles/windows-waiter.patch whitespace=-blank-at-eol

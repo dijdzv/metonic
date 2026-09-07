@@ -1,5 +1,5 @@
 diff --git a/modules/window/windows/app_state.mbt b/modules/window/windows/app_state.mbt
-index ee56141..9ed7657 100644
+index ee56141..e9726f4 100644
 --- a/modules/window/windows/app_state.mbt
 +++ b/modules/window/windows/app_state.mbt
 @@ -2,6 +2,7 @@
@@ -10,7 +10,47 @@ index ee56141..9ed7657 100644
    AboutToWait
    WindowEvent(@core.WindowId, @core.WindowEvent)
    ScaleFactorChanged(@core.WindowId, Double, @dpi.PhysicalSize)
-@@ -178,6 +179,7 @@ fn[A : ApplicationHandler] app_state_dispatch_callback(
+@@ -62,14 +63,14 @@ fn app_state_register_window_handle(raw_id : Int, hwnd : UInt64) -> Unit {
+   let mut replaced = false
+   for entry in app_state_runtime.val.window_handles {
+     if entry.raw_id == raw_id {
+-      next_entries.push({ raw_id, hwnd })
++      next_entries.push({ raw_id, hwnd, })
+       replaced = true
+     } else {
+       next_entries.push(entry)
+     }
+   }
+   if replaced == false {
+-    next_entries.push({ raw_id, hwnd })
++    next_entries.push({ raw_id, hwnd, })
+   }
+   app_state_runtime.val.window_handles = next_entries
+ }
+@@ -151,6 +152,22 @@ fn app_state_handler_ready() -> Bool {
+   app_state_runtime.val.dispatch_callback is Some(_)
+ }
+ 
++///|
++fn app_state_can_drop() -> Bool {
++  app_state_runtime.val.window_handles.length() == 0 &&
++  !app_state_runtime.val.event_handler_in_use &&
++  app_state_runtime.val.dispatch_callback is None
++}
++
++///|
++fn app_state_clear_runtime_for_drop() -> Unit {
++  app_state_runtime.val.is_running = false
++  app_state_runtime.val.exit_requested = true
++  app_state_runtime.val.exit_code = 0
++  app_state_runtime.val.pending_redraw_window_ids = []
++  app_state_runtime.val.deferred_callbacks = []
++}
++
+ ///|
+ fn[A : ApplicationHandler] app_state_set_dispatch_handler(
+   app : A,
+@@ -178,6 +195,7 @@ fn[A : ApplicationHandler] app_state_dispatch_callback(
    match callback {
      NewEvents(cause) => app.new_events(active_loop, cause)
      CanCreateSurfaces => app.can_create_surfaces(active_loop)
@@ -18,10 +58,11 @@ index ee56141..9ed7657 100644
      AboutToWait => app.about_to_wait(active_loop)
      WindowEvent(window_id, event) =>
        app.window_event(active_loop, window_id, event)
-@@ -216,6 +218,10 @@ fn app_state_queue_window_event(
+@@ -216,6 +234,11 @@ fn app_state_queue_window_event(
    app_state_queue_callback(WindowEvent(window_id, event))
  }
  
++///|
 +fn app_state_queue_proxy_wake_up() -> Unit {
 +  app_state_queue_callback(ProxyWakeUp)
 +}
@@ -30,10 +71,96 @@ index ee56141..9ed7657 100644
  fn app_state_queue_redraw(raw_id : Int) -> Unit {
    match app_state_window_handle(raw_id) {
 diff --git a/modules/window/windows/event_loop.mbt b/modules/window/windows/event_loop.mbt
-index 0520ec3..8b74019 100644
+index 0520ec3..540a4d8 100644
 --- a/modules/window/windows/event_loop.mbt
 +++ b/modules/window/windows/event_loop.mbt
-@@ -478,41 +478,44 @@ fn EventLoop::run_message_loop(
+@@ -12,6 +12,7 @@ pub fn EventLoopProxy::wake_up(self : EventLoopProxy) -> Unit {
+ pub struct EventLoop {
+   priv msg_window : UInt64
+   priv thread_id : UInt
++  priv mut closed : Bool
+ } derive(Debug)
+ 
+ ///|
+@@ -31,7 +32,7 @@ pub fn EventLoop::builder() -> EventLoopBuilder {
+ 
+ ///|
+ pub fn EventLoopBuilder::new() -> EventLoopBuilder {
+-  { platform_attributes_: @core.PlatformEventLoopAttributes::default() }
++  { platform_attributes_: @core.PlatformEventLoopAttributes::default(), }
+ }
+ 
+ ///|
+@@ -138,15 +139,20 @@ pub fn EventLoop::try_new_with_platform_attributes(
+     raise @core.EventLoopError::os("OS error")
+   }
+   let msg_window = native_create_msg_window()
++  if msg_window == 0UL {
++    raise @core.EventLoopError::os(
++      "CreateWindowExW returned a null message HWND",
++    )
++  }
+   let thread_id = native_get_current_thread_id()
+   app_state_install_native_callbacks()
+   event_loop_global_created.val = true
+-  { msg_window, thread_id }
++  { msg_window, thread_id, closed: false, }
+ }
+ 
+ ///|
+ fn EventLoop::as_active(self : EventLoop) -> ActiveEventLoop {
+-  { inner: self }
++  { inner: self, }
+ }
+ 
+ ///|
+@@ -156,7 +162,35 @@ pub fn EventLoop::window_target(self : EventLoop) -> ActiveEventLoop {
+ 
+ ///|
+ pub fn EventLoop::drop(self : EventLoop) -> Unit {
+-  let _ = self
++  try! self.try_drop()
++}
++
++///|
++/// The caller must stop foreign producers before dropping the event loop.
++pub fn EventLoop::try_drop(self : EventLoop) -> Unit raise @core.EventLoopError {
++  if self.closed {
++    return
++  }
++  if native_get_current_thread_id() != self.thread_id {
++    raise @core.EventLoopError::os(
++      "EventLoop must be dropped on its owner thread",
++    )
++  }
++  if !app_state_can_drop() {
++    raise @core.EventLoopError::os(
++      "EventLoop cannot be dropped while windows or callbacks are active",
++    )
++  }
++  if native_destroy_msg_window(self.msg_window) == 0 {
++    raise @core.EventLoopError::os("DestroyWindow returned a failure")
++  }
++  app_state_clear_runtime_for_drop()
++  self.closed = true
++}
++
++///|
++fn EventLoop::is_closed(self : EventLoop) -> Bool {
++  self.closed
+ }
+ 
+ ///|
+@@ -177,7 +211,7 @@ pub fn EventLoop::try_create_window(
+ 
+ ///|
+ pub fn EventLoop::create_proxy(self : EventLoop) -> EventLoopProxy {
+-  { thread_id: self.thread_id }
++  { thread_id: self.thread_id, }
+ }
+ 
+ ///|
+@@ -478,40 +512,70 @@ fn EventLoop::run_message_loop(
  ) -> Unit {
    let mut continue_loop = true
    while continue_loop {
@@ -45,10 +172,23 @@ index 0520ec3..8b74019 100644
 -          native_wait_and_process_message((0 : Int).to_uint64(), 0, 0) > 0
 -        } else {
 -          native_process_one_message((0 : Int).to_uint64(), 0, 0, pm_remove) !=
--          0
--        }
++    let wait_timeout = match app_state_control_flow() {
++      Poll => Some(0)
++      Wait => timeout_ms
++      WaitUntil(deadline) => {
++        let now = native_now_ms()
++        let clamped = if deadline <= now {
+           0
++        } else {
++          let remaining = deadline - now
++          if remaining > 2147483647L {
++            2147483647
++          } else {
++            remaining.to_int()
++          }
+         }
 -      WaitUntil(_) =>
--        match timeout_ms {
+         match timeout_ms {
 -          Some(t) if t <= 0 =>
 -            native_process_one_message((0 : Int).to_uint64(), 0, 0, pm_remove) !=
 -            0
@@ -56,36 +196,45 @@ index 0520ec3..8b74019 100644
 -            native_wait_timeout_and_process(t.reinterpret_as_uint()) != 0
 -          None =>
 -            native_wait_and_process_message((0 : Int).to_uint64(), 0, 0) > 0
-+    let wait_timeout = match app_state_control_flow() {
-+      Poll => Some(0)
-+      Wait => timeout_ms
-+      WaitUntil(deadline) => {
-+        let now = native_now_ms()
-+        let clamped = if deadline <= now { 0 } else {
-+          let remaining = deadline - now
-+          if remaining > 2147483647L { 2147483647 } else { remaining.to_int() }
++          Some(value) if value < clamped => Some(value)
++          _ => Some(clamped)
          }
-+        match timeout_ms { Some(value) if value < clamped => Some(value); _ => Some(clamped) }
 +      }
 +    }
 +    let first = match wait_timeout {
-+      Some(value) if value <= 0 => native_process_one_message((0 : Int).to_uint64(), 0, 0, pm_remove)
-+      Some(value) => native_wait_timeout_and_process(value.reinterpret_as_uint())
++      Some(value) if value <= 0 =>
++        native_process_one_message((0 : Int).to_uint64(), 0, 0, pm_remove)
++      Some(value) =>
++        native_wait_timeout_and_process(value.reinterpret_as_uint())
 +      None => native_wait_and_process_message((0 : Int).to_uint64(), 0, 0)
 +    }
 +    let mut count = 0
 +    let mut code = first
 +    while count < 64 && code != 0 && !app_state_exit_requested() {
-+      if code == 2 { app_state_queue_proxy_wake_up() }
-+      if code == -2 { app_state_set_exit(native_last_quit_code()); break }
-+      if code < 0 { app_state_set_exit(-1); break }
++      if code == 2 {
++        app_state_queue_proxy_wake_up()
++      }
++      if code == -2 {
++        app_state_set_exit(native_last_quit_code())
++        break
++      }
++      if code < 0 {
++        app_state_set_exit(-1)
++        break
++      }
 +      count += 1
 +      self.dispatch_events()
-+      if app_state_exit_requested() { break }
-+      if count == 64 { break }
++      if app_state_exit_requested() {
++        break
++      }
++      if count == 64 {
++        break
++      }
 +      code = native_process_one_message((0 : Int).to_uint64(), 0, 0, pm_remove)
 +    }
-+    if count == 0 && first == 0 { self.dispatch_events() }
++    if count == 0 && first == 0 {
++      self.dispatch_events()
++    }
 +    if !app_state_exit_requested() {
 +      app_state_queue_callback(AboutToWait)
 +      app_state_dispatch_deferred_callbacks()
@@ -103,16 +252,56 @@ index 0520ec3..8b74019 100644
 -        if has_msg == false && blocking == false {
 -          continue_loop = false
 -        }
--    }
-+    if !blocking { continue_loop = false }
++    if !blocking {
++      continue_loop = false
+     }
    }
  }
- 
+@@ -529,6 +593,9 @@ pub fn[A : ApplicationHandler] EventLoop::try_run_app(
+   self : EventLoop,
+   app : A,
+ ) -> Unit raise @core.EventLoopError {
++  if self.closed {
++    raise @core.EventLoopError::os("EventLoop is closed")
++  }
+   if app_state_is_running() {
+     raise @core.EventLoopError::RecreationAttempt
+   }
+@@ -553,6 +620,9 @@ pub fn[A : ApplicationHandler] EventLoop::try_run_app_on_demand(
+   self : EventLoop,
+   app : A,
+ ) -> Unit raise @core.EventLoopError {
++  if self.closed {
++    raise @core.EventLoopError::os("EventLoop is closed")
++  }
+   if app_state_is_running() {
+     raise @core.EventLoopError::RecreationAttempt
+   }
+@@ -580,6 +650,9 @@ pub fn[A : ApplicationHandler] EventLoop::try_pump_app_events(
+   timeout_ms : Int?,
+   app : A,
+ ) -> @core.PumpStatus {
++  if self.closed {
++    return @core.PumpStatus::Exit(0)
++  }
+   if app_state_is_running() == false {
+     app_state_set_running(true)
+     app_state_set_dispatch_handler(app, self.as_active())
 diff --git a/modules/window/windows/ffi.mbt b/modules/window/windows/ffi.mbt
-index 72dad89..6abf7a5 100644
+index 72dad89..ba3bfab 100644
 --- a/modules/window/windows/ffi.mbt
 +++ b/modules/window/windows/ffi.mbt
-@@ -70,6 +70,12 @@ extern "C" fn native_wait_and_process_message(
+@@ -7,6 +7,9 @@ extern "C" fn native_hinstance_handle() -> UInt64 = "mbw_hinstance_handle"
+ ///|
+ extern "C" fn native_create_msg_window() -> UInt64 = "mbw_create_msg_window"
+ 
++///|
++extern "C" fn native_destroy_msg_window(hwnd : UInt64) -> Int = "mbw_destroy_msg_window"
++
+ ///|
+ extern "C" fn native_create_window(
+   width : Int,
+@@ -70,6 +73,12 @@ extern "C" fn native_wait_and_process_message(
  ///|
  extern "C" fn native_wait_timeout_and_process(timeout_ms : UInt) -> Int = "mbw_wait_timeout_and_process"
  
@@ -126,7 +315,7 @@ index 72dad89..6abf7a5 100644
  #borrow(key_path, value_name)
  extern "C" fn native_read_registry_dword_bytes(
 diff --git a/modules/window/windows/native_window.c b/modules/window/windows/native_window.c
-index dc3059c..ca70308 100644
+index dc3059c..0c6511d 100644
 --- a/modules/window/windows/native_window.c
 +++ b/modules/window/windows/native_window.c
 @@ -59,6 +59,7 @@ static void *g_input_event_closure = NULL;
@@ -157,7 +346,46 @@ index dc3059c..ca70308 100644
  
  typedef HIMC(WINAPI *mbw_imm_get_context_t)(HWND);
  typedef BOOL(WINAPI *mbw_imm_release_context_t)(HWND, HIMC);
-@@ -1063,8 +1075,7 @@ int32_t mbw_process_one_message(uint64_t hwnd, uint32_t min_msg,
+@@ -538,6 +550,38 @@ void mbw_destroy_window(uint64_t hwnd) {
+   DestroyWindow((HWND)hwnd);
+ }
+ 
++MOONBIT_FFI_EXPORT
++int32_t mbw_destroy_msg_window(uint64_t hwnd) {
++  HWND expected = g_msg_window;
++  if (expected == NULL || (HWND)(uintptr_t)hwnd != expected ||
++      GetCurrentThreadId() != g_main_thread_id) {
++    return 0;
++  }
++  if (!DestroyWindow(expected)) {
++    return 0;
++  }
++  g_msg_window = NULL;
++  g_main_thread_id = 0;
++  if (g_window_event_closure != NULL) {
++    moonbit_decref(g_window_event_closure);
++  }
++  if (g_input_event_closure != NULL) {
++    moonbit_decref(g_input_event_closure);
++  }
++  if (g_sync_query_closure != NULL) {
++    moonbit_decref(g_sync_query_closure);
++  }
++  g_window_event_trampoline = NULL;
++  g_window_event_closure = NULL;
++  g_input_event_trampoline = NULL;
++  g_input_event_closure = NULL;
++  g_sync_query_trampoline = NULL;
++  g_sync_query_closure = NULL;
++  g_native_message_hook = NULL;
++  g_native_message_hook_context = NULL;
++  return 1;
++}
++
+ MOONBIT_FFI_EXPORT
+ void mbw_install_window_event_callback(
+     mbw_window_event_trampoline_t trampoline, void *closure) {
+@@ -1063,8 +1107,7 @@ int32_t mbw_process_one_message(uint64_t hwnd, uint32_t min_msg,
    int32_t has_msg = (int32_t)PeekMessageW(&msg, (HWND)hwnd, min_msg, max_msg,
                                             remove_msg);
    if (has_msg) {
@@ -167,7 +395,7 @@ index dc3059c..ca70308 100644
    }
    return has_msg;
  }
-@@ -1074,11 +1085,12 @@ int32_t mbw_wait_and_process_message(uint64_t hwnd, uint32_t min_msg,
+@@ -1074,11 +1117,12 @@ int32_t mbw_wait_and_process_message(uint64_t hwnd, uint32_t min_msg,
                                       uint32_t max_msg) {
    MSG msg;
    int32_t result = (int32_t)GetMessageW(&msg, (HWND)hwnd, min_msg, max_msg);
@@ -184,7 +412,7 @@ index dc3059c..ca70308 100644
  }
  
  MOONBIT_FFI_EXPORT
-@@ -1088,14 +1100,16 @@ int32_t mbw_wait_timeout_and_process(uint32_t timeout_ms) {
+@@ -1088,14 +1132,16 @@ int32_t mbw_wait_timeout_and_process(uint32_t timeout_ms) {
    if (result == WAIT_TIMEOUT) {
      return 0;
    }
@@ -207,7 +435,20 @@ index dc3059c..ca70308 100644
  MOONBIT_FFI_EXPORT
  moonbit_bytes_t mbw_read_registry_utf8(const uint16_t *key_path,
                                          const uint16_t *value_name) {
-@@ -1273,6 +1287,12 @@ int32_t mbw_wait_timeout_and_process(uint32_t timeout_ms) {
+@@ -1184,6 +1230,12 @@ int32_t mbw_get_window_raw_id(uint64_t hwnd) {
+ MOONBIT_FFI_EXPORT
+ void mbw_destroy_window(uint64_t hwnd) { (void)hwnd; }
+ 
++MOONBIT_FFI_EXPORT
++int32_t mbw_destroy_msg_window(uint64_t hwnd) {
++  (void)hwnd;
++  return 0;
++}
++
+ MOONBIT_FFI_EXPORT
+ void mbw_install_window_event_callback(
+     mbw_window_event_trampoline_t trampoline, void *closure) {
+@@ -1273,6 +1325,12 @@ int32_t mbw_wait_timeout_and_process(uint32_t timeout_ms) {
    return 0;
  }
  
@@ -220,3 +461,18 @@ index dc3059c..ca70308 100644
  MOONBIT_FFI_EXPORT
  moonbit_bytes_t mbw_read_registry_utf8(const uint16_t *key_path,
                                         const uint16_t *value_name) {
+diff --git a/modules/window/windows/window.mbt b/modules/window/windows/window.mbt
+index a75c26d..ce03197 100644
+--- a/modules/window/windows/window.mbt
++++ b/modules/window/windows/window.mbt
+@@ -181,7 +181,9 @@ pub fn Window::new(
+   event_loop : EventLoop,
+   attributes : @core.WindowAttributes,
+ ) -> Window raise @core.RequestError {
+-  let _ = event_loop
++  if event_loop.is_closed() {
++    raise @core.RequestError::os("EventLoop is closed")
++  }
+   let raw_id = app_state_next_window_id()
+   let window_id = @core.WindowId::from_raw(raw_id)
+   let style = compute_window_style(attributes)
