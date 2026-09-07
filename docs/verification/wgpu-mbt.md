@@ -46,9 +46,10 @@ environment setup and returns environment variables. Orchestration is MoonBit;
 the candidate's external CommonJS prebuild remains unchanged. The nested
 `package.json` establishes that CommonJS boundary.
 
-This proves the candidate can replace the custom bridge for this offscreen
-operation. The existing command host and Rust baseline remain intact while the
-broader lifetime, integration and distribution requirements are compared.
+This establishes equivalent pixels for the tested offscreen cases. It does not
+establish equivalent failure handling or bounded completion. The existing command
+host and Rust baseline remain intact while lifetime, integration and distribution
+requirements are compared.
 
 ## Hidden HWND comparison
 
@@ -99,6 +100,33 @@ warnings, and an ignored `-lvulkan-1` MSVC option. The tests nevertheless ran;
 warnings must be addressed or scoped before integrating strict project checks.
 
 ## Next acceptance
+
+Source inspection on 2026-09-07 found that the synchronous readback helper in
+`src/c/wgpu_stub_map.c` polls until its callback completes without a deadline.
+The Rust baseline bounds device polling and result receipt at ten seconds each.
+Replacing that call directly would lose an existing completion bound.
+
+The candidate also exposes asynchronous submit/map, status, read and clear APIs.
+In upstream commit `5b0608223bc491688a6f0f41492f23682717bc3b`,
+`src/c/wgpu_stub_extras.c` leaves a pending map entry intact when clear is called;
+buffer references and callback storage are reclaimed only after completion.
+A timeout followed by clear alone is therefore insufficient cleanup. This source
+finding does not demonstrate a runtime hang or leak on either tested adapter.
+
+The recovery suite passed all five tests on both local adapters on 2026-09-07.
+The synchronous probe checks exact range/alignment errors, subsequent known-byte
+readback on the same device, repeated buffer allocation and a second device.
+The asynchronous probe reads two payloads through the same staging buffer, then
+destroys another buffer while its request is pending. Event pumping observes
+`MAP_ASYNC_STATUS_ERROR`, clear removes its observable result, and a fresh staging
+buffer reads successfully on the same device. Its wait loop uses nonblocking poll,
+a ten-second wall-clock deadline and a 100,000-iteration cap; it does not call the
+synchronous readback or blocking poll helpers.
+
+This establishes the tested pending-buffer-destruction recovery path. It does not
+inject an actual GPU stall or device loss, prove a monotonic production deadline,
+or prove reclamation when callbacks never complete. Production integration must
+preserve the deadline and define cleanup for that remaining case.
 
 Extend failure cleanup and device-loss coverage, then compare integration and
 distribution costs. Retain the existing renderer as the comparison baseline.
