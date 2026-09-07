@@ -99,8 +99,10 @@ failure contract and reproduction commands.
 
 `native_host/moon.work` isolates the external-loop adoption workspace while
 importing the existing root renderer and integration fixture directly. The
-ordinary native window/async commands remain the product baseline until runtime
-parity is established in [Issue 77](https://github.com/dijdzv/metonic/issues/77).
+ordinary native window command remains on its existing C boundary.
+`native:async` uses the shared adapter and structured MoonBit jobs after comparison
+with the old C worker scenario. Full host adoption remains tracked in
+[Issue 77](https://github.com/dijdzv/metonic/issues/77).
 
 `mise run native:host-build` prepares pinned source archives, applies the reviewed
 window and async patches, and builds the existing GPU integration fixture. The
@@ -140,9 +142,11 @@ parent shell's environment is not modified. Toolchain installation remains a
 separate bootstrap step.
 
 Native probe build tasks use `scripts/build-native.mbtx` with explicit headless,
-window, async or surface modes. Each mode builds the MoonBit headless executable;
-window, worker and surface rendering use the published MoonBit binding. All three
-windowed probes build a C stub. The
+window, async or surface modes. Async builds the dedicated native host workspace;
+the other product modes also build the MoonBit headless executable. Window,
+async and surface rendering use the published MoonBit binding. The window and
+surface probes retain the C HWND stub; async uses the prepared window dependency
+and a context-free C wake thunk. The
 script checks output artifacts and rejects unsupported modes before building.
 Headless rendering also uses the binding. The shared Win32 C boundary remains
 under comparison; application-owned GPU composition is MoonBit.

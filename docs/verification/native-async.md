@@ -2,28 +2,23 @@
 
 ## Contract
 
-The native probe uses the same MoonBit task scope as the browser experiment.
-Success and failure cross the native boundary as request IDs and integer
-payloads. Workers never call MoonBit or render; the UI thread receives a private
-window message and performs scope validation before updating scene state.
+`native_host/async_app` reuses the existing MoonBit scene, task scope and
+`SurfaceRenderer`. The prepared dependencies and shared external-loop adapter
+are described in [ADR 030](../adr/030-native-external-event-loop.md).
+Jobs use a structured task group and bounded completion queue. Each job reads
+the real fixture asynchronously; a timer controls completion order. The runtime's
+foreign-thread notification reaches the UI loop through the context-free C wake
+thunk. Application workers no longer need custom C thread/cancellation handling.
 
-MoonBit's shared `SurfaceRenderer` performs GPU composition through the published
-wgpu binding. Workers start after GPU initialization and the first presentation.
-The host uses bounded Win32 polling and yields to the MoonBit async scheduler
-between polls. This sequence does not verify worker input during GPU initialization.
+Sixteen admission slots include completed results not yet consumed. Logical scope
+cancellation and disposal leave the job running so its late result actually reaches
+the rejection check. Shutdown closes admission, cancels and joins jobs before GPU
+and window teardown. Task-group cleanup clears slots after all children terminate.
+Original I/O errors remain failures after cleanup.
 
-At most 16 worker slots exist. Each worker waits on its own cancellation event
-with a bounded delay. A slot stays occupied until the UI thread joins the worker
-and consumes its completion. Scope cancellation only prevents result application;
-the late completion is deliberately delivered to test rejection. Shutdown signals
-all remaining workers and joins them before destroying the surface and HWND.
-New work is rejected after shutdown. A join failure retains the window/resources
-rather than invalidating a handle still referenced by a worker.
-
-The implementation uses caller-owned thread handles from
-[`_beginthreadex`](https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/beginthread-beginthreadex?view=msvc-170),
-[`WaitForSingleObject`](https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-waitforsingleobject)
-and [`PostMessageW`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-postmessagew).
+The hidden window requests and verifies a 640 by 360 client area. GPU initialization
+and first presentation precede jobs. Key and close messages target only its own
+HWND. This is synthetic-message coverage, not physical input or desktop automation.
 
 ## Reproduction and assertions
 
@@ -31,48 +26,50 @@ and [`PostMessageW`](https://learn.microsoft.com/en-us/windows/win32/api/winuser
 mise run native:async
 ```
 
-Set `METONIC_GPU_FALLBACK=1` for fallback only; otherwise both default and fallback
-adapters run. Reports are under `.work/native-async/`. The test creates a hidden
-HWND and addresses input messages only to that window, without desktop automation.
+The task prepares pinned dependencies and builds the native host workspace.
+Set `METONIC_GPU_FALLBACK=1` for fallback only; otherwise both adapters run.
+Reports under `.work/native-async/` are overwritten by later runs.
+`METONIC_ASYNC_INPUT` may override the fixture for failure diagnosis.
 
-The executable checks these steps in order:
+The executable checks these steps:
 
-1. Right-arrow input changes the scene while the first request remains pending.
-2. A successful worker completion updates the scene to x=40 and submits rendering.
-3. A newer request updates x=90; the older completion is rejected.
-4. A cancelled request's completion is rejected.
-5. An error completion enters the error state without moving the scene.
-6. A completion after scope disposal is rejected.
-7. Sixteen five-second workers fill the host capacity; the seventeenth is rejected.
-8. Close cancels and joins pending workers, empties the slots, and rejects restart.
+1. Right-key input moves the scene while the first request is loading.
+2. Its successful completion moves x=40.
+3. A newer request moves x=90; the older result is received and rejected.
+4. A cancelled request's late result is rejected, preserving cancelled status.
+5. A domain failure sets error code 7 without moving the scene.
+6. A result after disposal is rejected.
+7. Sixteen active five-second jobs fill capacity; the next is rejected.
+8. Close cancels and joins jobs, empties slots, and prevents restart.
 
-The verifier requires one success marker, no failure marker, a successful process
-exit, bounded output and a 20-second deadline. It checks shutdown alone takes less
-than four seconds, separately from GPU startup, to detect waiting for the full
-five-second worker delay instead of cancelling it. This is a watchdog assertion,
-not a performance benchmark.
+Initial state, input, first success and newer success each submit a frame.
+External-loop termination emits the final record after releasing GPU resources,
+the application HWND and message-only HWND. Destruction is checked with
+`IsWindow`; pending GPU initialization or active jobs prevent resource release.
 
-The process verifier is `scripts/verify-native-probes.mbtx`, shared with the
-hidden-window probe. It uses the pinned MoonBit async process API, drains stdout
-and stderr concurrently, and limits each stream to 64 KiB while reading. The
-native worker implementation remains a C OS boundary. The verifier supplies a
-nonexistent legacy GPU DLL path so success cannot depend on loading that bridge.
+The MoonBit observer requires exit zero, exactly one success marker, exactly one
+correctly typed JSON result, no failure marker, bounded output and a 20-second
+deadline. It checks at least four frames, final scene/scope state, three rejected
+results, zero outstanding jobs, I/O wake/proxy/indefinite-poll deltas and both HWND
+destruction flags. Shutdown must take less than one second separately from GPU
+startup. This is a watchdog assertion, not a benchmark.
 
-## Scope
+## Observed comparison and limits
 
-On 2026-09-07, after removing the custom Rust renderer and its DLL loader,
-local Windows x64 runs passed with NVIDIA GeForce RTX 3060
-(DX12) and Microsoft Basic Render Driver (DX12). Both completed the sequence and
-reported zero milliseconds at the shutdown clock's resolution. This is not a
-claim that shutdown has no cost. The existing native-window sequence also passed
-after removing the shared host's GPU DLL loader. The surface renderer's normal
-device-generation probe passed as well.
+On 2026-09-07, the comparison observer passed on NVIDIA GeForce RTX 3060 and
+Microsoft Basic Render Driver. Both reported four frames, x=90, disposed status,
+three rejected results, zero active/pending jobs and both HWNDs destroyed.
+Shutdown measured 6 ms each; wake/proxy/indefinite-poll deltas were 24/24/21.
+The old C-worker baseline also passed before removal was authorized.
 
-This proves a bounded worker-thread wakeup path into the native event loop and
-request-lifetime validation. It does not implement network I/O, a general task
-runtime, arbitrary MoonBit closure transfer, or a reusable thread pool. Visible
-input, IME and accessibility remain separate verification gates. The scope is
-single-use; this probe does not implement reset within the same HWND.
+A missing-input run retained the file-open error and supplied path, with zero
+active/pending jobs and both HWNDs destroyed. The ordinary observer rejected its
+nonzero exit. After switching the canonical `native:async` task and removing the
+old sources, both adapters passed again with four frames, the same final state
+and complete HWND cleanup. Shutdown measured 2 ms and 0 ms at clock resolution;
+all three I/O deltas were 21. A zero reading does not imply cost-free shutdown.
 
-The native build wrappers invalidate the generated stub object before building
-so edits to included C/header files are reflected by the pinned compiler's build.
+This does not verify physical input, IME, OS accessibility, network I/O, physical
+device loss, arbitrary foreign-thread MoonBit closures or a reusable thread pool.
+Input during GPU initialization remains separate. The window and scope are
+single-use.

@@ -8,9 +8,9 @@ required in [Issue 77](https://github.com/dijdzv/metonic/issues/77).
 
 ## Context
 
-The current native asynchronous probe uses explicit C worker slots and a bounded
-Win32 poll followed by a MoonBit async yield. That establishes a worker completion
-path but leaves application-owned thread creation, cancellation events and joins.
+The previous native asynchronous probe used explicit C worker slots and a bounded
+Win32 poll followed by a MoonBit async yield. That established a worker completion
+path but left application-owned thread creation, cancellation events and joins.
 Replacing these with timers alone would remove the existing foreign-thread
 notification evidence without establishing native I/O integration.
 
@@ -75,6 +75,15 @@ their window/GPU ownership and perform ordered cleanup in that callback after
 the async runtime has joined its tasks. The adapter does not destroy windows on
 their behalf. Keep the adapter out of the handler state to avoid a reference cycle
 between the stored handler and termination closure.
+
+Use the async library's structured task group and bounded queue for application
+jobs. Keep sixteen admission slots occupied until their completion is consumed,
+including jobs whose I/O has already finished. Logical task-scope cancellation
+and disposal must still reject late results; they are distinct from cancelling
+and joining all jobs during shutdown. Close admission first, join every task,
+then release GPU resources and HWNDs. Preserve the first application error after
+cleanup instead of treating every task error as cancellation. Jobs perform real
+asynchronous file I/O; timers only establish the comparison's completion order.
 
 Prepare adoption in a separate native workspace that includes the root module
 as a workspace member. Import `local/p0/native_gpu` and the existing scene/task
