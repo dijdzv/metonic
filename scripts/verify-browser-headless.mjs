@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { chromium } from 'playwright'
-import { verify as verifyPixels, runScene, runFailures, runFontFailures, runText, runDpr } from '../_build/js/release/build/tools/verify_browser_pixels/verify_browser_pixels.js'
+import { verify as verifyPixels, runScene, runFailures, runFontFailures, runText, runDpr, runSuite } from '../_build/js/release/build/tools/verify_browser_pixels/verify_browser_pixels.js'
 
 if (process.env.METONIC_BROWSER_SUPERVISED !== '1') throw new Error('Run mise run browser:async/headless')
 
@@ -13,7 +13,6 @@ const backend = process.env.METONIC_GPU_BACKEND ?? 'default'
 assert(['default', 'swiftshader'].includes(backend), 'METONIC_GPU_BACKEND must be default or swiftshader')
 const baseUrl = `http://${host}:${port}`
 const outputDir = path.resolve('.work/browser-headless', backend)
-const targets = ['js', 'wasm-gc']
 let activePage
 let gpuSession
 
@@ -90,7 +89,6 @@ async function runTargetUnsafe(browser, target) {
   }
   Object.assign(result, JSON.parse(await runScene(hostCommand, target)))
   Object.assign(result, await diagnostic(page))
-  await pixelVerify({ action: 'browser_result', backend, result })
   return result
 }
 
@@ -180,13 +178,8 @@ try {
   const gpu = systemInfo.gpu ?? {}
   const gpuInfo = { devices: gpu.devices, featureStatus: gpu.featureStatus, auxAttributes: { glRenderer: gpu.auxAttributes?.glRenderer, glVendor: gpu.auxAttributes?.glVendor } }
   await fs.writeFile(path.join(outputDir, 'gpu-info.json'), JSON.stringify(gpuInfo, null, 2))
-  const results = []
-  for (const target of targets) results.push(await runTarget(browser, target))
-  async function textTests(browser) {
-    const summaries = []
-    let cropIndex = 0
-    let reference
-    for (const target of ['js', 'wasm-gc']) {
+  let cropIndex = 0
+  async function textTarget(browser, target, reference) {
       const page = await browser.newPage({ viewport: { width: 1000, height: 800 }, deviceScaleFactor: 1 })
       try {
         await page.goto(`${baseUrl}/?target=${target}`)
@@ -223,11 +216,10 @@ try {
           }
           return null
         }
-        const verified = JSON.parse(await runText(hostCommand, target, reference ?? ''))
-        summaries.push(verified.summary)
-        reference = verified.reference
+        return JSON.parse(await runText(hostCommand, target, reference))
       } finally { await page.close() }
-    }
+  }
+  async function dprTarget(browser, reference) {
     const dpr = await browser.newPage({ viewport: { width: 1000, height: 800 }, deviceScaleFactor: 2 })
     try {
       await runDpr(async (request) => {
@@ -245,10 +237,19 @@ try {
         return null
       }, reference)
     } finally { await dpr.close() }
-    return { targets: summaries, dpr2: true }
+    return true
   }
-  const output = { backend, browser: browser.version(), node: process.version, targets: results, negative: await negativeTests(browser), text: await textTests(browser), textFailures: await negativeTests(browser, runFontFailures) }
-  await fs.writeFile(path.join(outputDir, 'results.json'), JSON.stringify(output, null, 2))
+  const output = await runSuite(async (request) => {
+    switch (request.op) {
+      case 'scene': return runTarget(browser, request.target)
+      case 'failures': return negativeTests(browser)
+      case 'text': return textTarget(browser, request.target, request.reference)
+      case 'dpr': return dprTarget(browser, request.reference)
+      case 'font-failures': return negativeTests(browser, runFontFailures)
+      default: throw new Error(`Unknown suite command: ${request.op}`)
+    }
+  }, JSON.stringify({ backend, browser: browser.version(), node: process.version }))
+  await fs.writeFile(path.join(outputDir, 'results.json'), output)
   console.log(JSON.stringify({ backend, gpu: gpuInfo }, null, 2))
 } catch (error) {
   console.error(error)
