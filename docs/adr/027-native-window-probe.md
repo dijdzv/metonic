@@ -30,6 +30,23 @@ Surface loss or an outdated surface causes one reconfiguration and acquisition
 retry. Other acquisition failures terminate this bounded probe; recovery and
 occlusion scheduling for a production application remain unimplemented.
 
+### MoonBit renderer replacement contract
+
+The binding-based renderer evaluation treats the surface as part of a device
+generation. Replacing the device requires closing the renderer, releasing the
+caller's surface reference, and creating a fresh surface on the still-live HWND.
+Resizing within the same device generation continues to reconfigure that surface.
+This distinction avoids carrying a DX12 swapchain across device generations:
+the pinned binding/native combination fails the same-surface replacement probe.
+See the [replacement verification](../verification/surface-device-replacement.md)
+for the comparison and its limits; fresh-surface success does not mean that
+same-surface reuse has been fixed upstream.
+
+The HWND must outlive both the renderer and pending adapter/device callbacks.
+If initialization leaves a pending callback, closing the renderer alone does
+not authorize HWND destruction. The existing Rust event-loop probe remains
+the baseline until the replacement is integrated and verified with event pumping.
+
 ## Automated verification boundary
 
 With METONIC_WINDOW_TEST=1, the probe creates a hidden HWND and posts messages only

@@ -103,11 +103,17 @@ parent shell's environment is not modified. Toolchain installation remains a
 separate bootstrap step.
 
 Native probe build tasks use `scripts/build-native.mbtx` with explicit headless,
-window or async modes. Each mode builds the MoonBit headless executable;
+window, async or surface modes. Each mode builds the MoonBit headless executable;
 window/async additionally build the locked Rust bridge, C stub and executable. The
 script checks output artifacts and rejects unsupported modes before building.
 Headless rendering uses the existing wgpu binding; the window/worker Rust and C
 implementation remains under comparison.
+
+`native:surface` builds a separate MoonBit surface renderer probe using the
+existing HWND boundary and the published wgpu binding, without building the Rust
+DLL. Its [device replacement diagnostic](verification/surface-device-replacement.md)
+compares reuse and recreation of the surface. The raw diagnostic does not exercise
+the renderer class or the normal window/worker input verification.
 
 The opt-in [Windows event-pump evaluation](verification/windows-event-pump.md)
 records the candidate window library's wakeup and pumping behavior. It does not

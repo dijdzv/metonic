@@ -1,11 +1,19 @@
 ///|
-fn adapter_options(force_fallback : Bool) -> @c.WGPURequestAdapterOptionsPtr {
+fn adapter_options(
+  force_fallback : Bool,
+  compatible_surface : @wgpu.Surface?,
+  power_preference? : UInt = @wgpu.POWER_PREFERENCE_UNDEFINED,
+) -> @c.WGPURequestAdapterOptionsPtr {
+  let raw_surface = match compatible_surface {
+    Some(surface) => surface.raw_handle()
+    None => @c.null_surface()
+  }
   @c.request_adapter_options_new_u32(
     @wgpu.FEATURE_LEVEL_CORE,
-    @wgpu.POWER_PREFERENCE_UNDEFINED,
+    power_preference,
     force_fallback,
     @wgpu.BACKEND_TYPE_D3_D12,
-    @c.null_surface(),
+    raw_surface,
   )
 }
 
@@ -14,15 +22,25 @@ async fn initialize_adapter(
   owner : Initialization,
   instance : @wgpu.Instance,
   force_fallback : Bool,
+  compatible_surface? : @wgpu.Surface? = None,
+  power_preference? : UInt = @wgpu.POWER_PREFERENCE_UNDEFINED,
   poll_limit? : Int = 100000,
 ) -> @wgpu.Adapter raise Error {
   let id = owner.next_id
   owner.next_id += 1
   let kept_instance = instance.add_ref()
-  let options = adapter_options(force_fallback)
+  let kept_surface = match compatible_surface {
+    Some(surface) => Some(surface.add_ref())
+    None => None
+  }
+  let options = adapter_options(force_fallback, kept_surface, power_preference~)
   let future = instance.request_adapter_future_id_u64(options~)
   @c.request_adapter_options_free(options)
   if future == 0UL {
+    match kept_surface {
+      Some(surface) => surface.release()
+      None => ()
+    }
     kept_instance.release()
     raise InitializationFailed::InitializationFailed(0U)
   }
@@ -56,6 +74,10 @@ async fn initialize_adapter(
     },
     clear: () => {
       kept_instance.request_adapter_async_clear(future)
+      match kept_surface {
+        Some(surface) => surface.release()
+        None => ()
+      }
       kept_instance.release()
     },
   }

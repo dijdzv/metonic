@@ -117,14 +117,25 @@ async fn run_probe(
   mode : String,
 ) -> Unit raise Error {
   let fallback = if mode == "fallback" { "1" } else { "0" }
-  let executable = if kind == "window" {
+  let raw_surface = kind == "surface" &&
+    @env.get_env_var("METONIC_SURFACE_RAW") == Some("1")
+  let fresh_surface = kind == "surface" &&
+    (!raw_surface || @env.get_env_var("METONIC_SURFACE_FRESH") == Some("1"))
+  let executable = if kind == "surface" {
+    root +
+    "/_build/native/release/build/tools/native_surface_probe/native_surface_probe.exe"
+  } else if kind == "window" {
     root +
     "/_build/native/release/build/examples/p0/native_window/native_window.exe"
   } else {
     root +
     "/_build/native/release/build/examples/p0/native_async/native_async.exe"
   }
-  let bridge = root + "/.work/native-cargo/release/metonic_wgpu_probe.dll"
+  let bridge = if kind == "surface" {
+    root + "/.work/native-cargo/missing-surface-bridge.dll"
+  } else {
+    root + "/.work/native-cargo/release/metonic_wgpu_probe.dll"
+  }
   let output_dir = root + "/.work/native-" + kind
   if !@fs.exists(output_dir) {
     @fs.mkdir(output_dir, recursive=true)
@@ -209,13 +220,21 @@ async fn run_probe(
     "elapsedMs": Json::number(elapsed.to_double()),
     "mode": Json::string(mode),
     "scope": Json::string(
-      if kind == "window" {
+      if kind == "surface" {
+        if raw_surface {
+          "raw clear/present across device replacement; no renderer, resize or input coverage"
+        } else {
+          "hidden surface initial, resize, and three fresh renderer generations with close checks; not visible UI or desktop automation"
+        }
+      } else if kind == "window" {
         "hidden HWND swapchain and own-window message dispatch; not visible UI, IME, accessibility or desktop automation"
       } else {
         "worker completion through hidden HWND; not network, visible input, IME or general closure FFI"
       },
     ),
     "shutdownMs": shutdown_json,
+    "rawSurface": Json::boolean(raw_surface),
+    "freshSurface": Json::boolean(fresh_surface),
   })
   @async.protect_from_cancel() <| () => {
     @fs.write_file(output_dir + "/" + mode + ".json", report.stringify()) catch {
@@ -240,7 +259,13 @@ async fn run_probe(
   require(
     exact_line(
       stdout,
-      if kind == "window" {
+      if kind == "surface" {
+        if raw_surface {
+          "RAW_SURFACE_OK"
+        } else {
+          "SURFACE_RENDERER_OK"
+        }
+      } else if kind == "window" {
         "WINDOW_PROBE_OK"
       } else {
         "NATIVE_ASYNC_OK"
@@ -265,7 +290,8 @@ async fn main {
     None => ["window", "async"]
     Some(value) if value == "window" => ["window"]
     Some(value) if value == "async" => ["async"]
-    Some(_) => abort("METONIC_NATIVE_PROBE must be window or async")
+    Some(value) if value == "surface" => ["surface"]
+    Some(_) => abort("METONIC_NATIVE_PROBE must be window, async, or surface")
   }
   let modes = if @env.get_env_var("METONIC_GPU_FALLBACK") == Some("1") {
     ["fallback"]

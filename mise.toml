@@ -139,6 +139,15 @@ depends = ["native:async-build"]
 run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-native-probes.mbtx'
 env = { METONIC_NATIVE_PROBE = "async" }
 
+[tasks."native:surface-build"]
+run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/build-native.mbtx'
+env = { METONIC_NATIVE_BUILD = "surface" }
+
+[tasks."native:surface"]
+depends = ["native:surface-build"]
+run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-native-probes.mbtx'
+env = { METONIC_NATIVE_PROBE = "surface" }
+
 [tasks."native:binding"]
 run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-wgpu-binding.mbtx'
 
