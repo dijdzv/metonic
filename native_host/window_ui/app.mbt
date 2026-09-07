@@ -32,7 +32,7 @@ priv enum Event {
   CancelUpdate
   Updated(Int, Int)
   Development(DevelopmentRequest)
-  Accessibility(Int, Int)
+  Accessibility(@accessibility.Request)
   SelectBoundary(Int, Bool)
   Navigate(Bool, Bool)
   ToggleFocus
@@ -209,6 +209,7 @@ fn App::draw(self : App) -> Unit raise Error {
       @scene.field(self.state, 7),
       @scene.field(self.state, 0),
       @scene.field(self.state, 1),
+      self.composition is Some(_),
     )
   }
   match self.renderer {
@@ -429,27 +430,35 @@ async fn run_loop(
         app.pump(driver)
         if app.accessibility is Some(bridge) {
           for request in bridge.poll() {
-            let (action, target) = request
-            app.queue(Accessibility(action, target))
+            app.queue(Accessibility(request))
           }
         }
         while !app.closed && app.events.try_get() is Some(event) {
           match event {
             Development(request) => app.dispatch_development(request)
-            Accessibility(_, _) if app.composition is Some(_) => ()
-            Accessibility(action, target) => {
+            Accessibility(_) if app.composition is Some(_) => ()
+            Accessibility(request) => {
               let nodes = @semantics.snapshot(app.editor)
-              if action == 1 {
-                if app.window is Some(window) {
-                  window.focus_window()
+              match request {
+                @accessibility.Focus(target) => {
+                  if app.window is Some(window) {
+                    window.focus_window()
+                  }
+                  ignore(
+                    @semantics.focus(app.editor, nodes[target - 1].reference),
+                  )
+                  app.draw()
                 }
-                ignore(
-                  @semantics.focus(app.editor, nodes[target - 1].reference),
-                )
-                app.draw()
-              } else if action == 0 && target == 1 {
-                ignore(@scene.dispatch(app.state, Activate))
-                app.draw()
+                @accessibility.Click(1) => {
+                  ignore(@scene.dispatch(app.state, Activate))
+                  app.draw()
+                }
+                @accessibility.SetValue(2, text) =>
+                  if @semantics.set_text(app.editor, nodes[1].reference, text) ==
+                    "" {
+                    app.draw()
+                  }
+                _ => ()
               }
             }
             SelectBoundary(_, _) | Navigate(_, _) | ToggleFocus if app.composition
@@ -583,6 +592,7 @@ async fn run_loop(
               if app.composition is None {
                 app.composition = @semantics.begin_composition(app.editor)
                 app.preedit = ""
+                app.draw()
               }
             CompositionUpdate(value, cursor) => {
               if app.composition is None {

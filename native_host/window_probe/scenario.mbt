@@ -115,10 +115,15 @@ async fn Scenario::step(self : Scenario, view : @ui.Observation) -> Unit {
     )
     require(view.preedit_cursor == 1, "composition cursor was lost")
     self.stage = 32
+    (view.inject)(AccessibilityValue("must not replace composition"))
     post(view.hwnd, 0x0100U, 0x0DUL, 0L)
     post(view.hwnd, 0x0100U, 0x26UL, 0L)
   } else if self.stage == 32 {
     require(view.composing, "scene shortcut interrupted composition")
+    require(
+      view.editor.value == "日本語の描画を確認します ABC 123",
+      "accessibility mutation replaced composition",
+    )
     require(
       (view.scene)(5) == self.scene_revision + 2,
       "composition key changed the scene",

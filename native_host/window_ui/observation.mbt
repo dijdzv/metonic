@@ -3,6 +3,7 @@ pub(all) enum Injected {
   CompositionStart
   CompositionUpdate(String, Int?)
   CompositionCancel
+  AccessibilityValue(String)
   Updated(Int, Int)
 }
 
@@ -71,6 +72,8 @@ fn App::observation(self : App) -> Observation {
           CompositionStart => CompositionStart
           CompositionUpdate(text, cursor) => CompositionUpdate(text, cursor)
           CompositionCancel => CompositionCancel
+          AccessibilityValue(text) =>
+            Accessibility(@accessibility.SetValue(2, text))
           Updated(id, value) => Updated(id, value)
         },
       )
