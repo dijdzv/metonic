@@ -51,7 +51,7 @@ fn rectangle_shader() -> String {
 }
 
 ///|
-test "wgpu rectangle rgba8 readback" {
+async test "wgpu rectangle rgba8 readback" {
   let instance = @wgpu.Instance::create()
   defer instance.release()
   let adapter = instance.request_adapter_sync_options_u32(
@@ -114,6 +114,7 @@ test "wgpu rectangle rgba8 readback" {
     },
     { width: 1U, height: 1U, x: 0U, y: 0U, rw: 1U, rh: 1U, active: 0U, },
   ]
+  let registry : Map[Int, ReadbackTicket] = Map([])
   let mut checks = 0
   for case_ in cases {
     let texture = device.create_texture_rgba8_2d(case_.width, case_.height)
@@ -159,8 +160,17 @@ test "wgpu rectangle rgba8 readback" {
     )
     let command = encoder.finish()
     defer command.release()
-    queue.submit_one(command)
-    let out = readback.readback(instance, 0UL, size.to_uint64())
+    let out = read_gpu_buffer(
+      instance,
+      device,
+      queue,
+      command,
+      readback,
+      0UL,
+      size.to_uint64(),
+      registry,
+      checks,
+    )
     assert_eq(out.length(), size.reinterpret_as_int())
     let mut y = 0U
     while y < case_.height {
@@ -178,6 +188,7 @@ test "wgpu rectangle rgba8 readback" {
       y += 1U
     }
     checks += 1
+    assert_true(registry.is_empty(), msg="readback ticket retained")
   }
   println("adapter=" + adapter.info_device() + " checks=" + checks.to_string())
 }
