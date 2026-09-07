@@ -93,6 +93,24 @@ __declspec(dllexport) int32_t metonic_window_next_event(void) {
     if (ring_failed) return -1;
   }
 }
+__declspec(dllexport) int32_t metonic_window_poll_event(void) {
+  if (ring_failed) return -1;
+  LONG tail = ring_tail;
+  if (tail != ring_head) { ring_tail = (tail + 1) & 63; return ring[tail].type; }
+  for (int i = 0; i < 64; ++i) {
+    MSG message;
+    if (!PeekMessageW(&message, NULL, 0, 0, PM_REMOVE)) break;
+    if (message.message == WM_QUIT) return 5;
+    TranslateMessage(&message);
+    DispatchMessageW(&message);
+    if (ring_failed) return -1;
+    tail = ring_tail;
+    if (tail != ring_head) { ring_tail = (tail + 1) & 63; return ring[tail].type; }
+  }
+  return 0;
+}
+__declspec(dllexport) void *metonic_window_hwnd(void) { return window_handle; }
+__declspec(dllexport) void *metonic_window_hinstance(void) { return instance_handle; }
 __declspec(dllexport) int32_t metonic_window_event_x(void) { LONG tail = (ring_tail - 1) & 63; return ring[tail].x; }
 __declspec(dllexport) int32_t metonic_window_event_y(void) { LONG tail = (ring_tail - 1) & 63; return ring[tail].y; }
 

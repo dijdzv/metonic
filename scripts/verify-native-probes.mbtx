@@ -131,7 +131,7 @@ async fn run_probe(
     root +
     "/_build/native/release/build/examples/p0/native_async/native_async.exe"
   }
-  let bridge = if kind == "surface" {
+  let bridge = if kind == "window" || kind == "surface" {
     root + "/.work/native-cargo/missing-surface-bridge.dll"
   } else {
     root + "/.work/native-cargo/release/metonic_wgpu_probe.dll"
@@ -227,7 +227,7 @@ async fn run_probe(
           "hidden surface initial, resize, and three fresh renderer generations with close checks; not visible UI or desktop automation"
         }
       } else if kind == "window" {
-        "hidden HWND swapchain and own-window message dispatch; not visible UI, IME, accessibility or desktop automation"
+        "MoonBit surface renderer with own-window message dispatch; not visible UI, IME, accessibility or desktop automation"
       } else {
         "worker completion through hidden HWND; not network, visible input, IME or general closure FFI"
       },

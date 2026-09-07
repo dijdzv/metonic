@@ -2,7 +2,7 @@
 
 ## Reproduction
 
-Use the pinned MoonBit and Rust toolchains described in the
+Use the pinned MoonBit toolchain described in the
 [development guide](../development.md), with Visual Studio C++ build tools.
 
 ```powershell
@@ -22,8 +22,9 @@ stream is capped at 64 KiB during collection.
 
 ## Local evidence
 
-On 2026-09-06, the Windows x64 release build passed with the pinned compiler and
-wgpu 30.0.1. Both runs exited successfully with `WINDOW_PROBE_OK`:
+On 2026-09-07, the Windows x64 release build using `Milky2018/wgpu_mbt` 0.16.0
+and wgpu-native 29.0.1.1 passed with the pinned compiler. Both runs exited
+successfully with `WINDOW_PROBE_OK`, with a missing Rust DLL path supplied:
 
 | Adapter | Backend | Result |
 | --- | --- | --- |
@@ -33,8 +34,19 @@ wgpu 30.0.1. Both runs exited successfully with `WINDOW_PROBE_OK`:
 The MoonBit loop requires right-arrow movement from x=260 to x=270, resize to
 317 by 193, activation from a pointer event inside the current rectangle, at
 least three successful rendering calls, and a close event at the expected stage.
-Rust rendering calls acquire a surface texture, draw, submit and present.
-Cleanup releases the surface before destroying the HWND.
+MoonBit SurfaceRenderer calls acquire, draw, submit and present through the
+published binding. Cleanup releases the renderer and surface before the HWND.
+
+Initialization runs in a child task while the parent polls Win32 events and
+yields to the async scheduler. Completion draws the current scene even if an
+earlier paint was consumed. Each C poll dispatches at most 64 messages. The host
+currently sleeps one millisecond between iterations; idle scheduling has not
+been optimized or benchmarked.
+
+The normal test posts its first key after initial rendering. It does not prove
+input or close delivery while GPU initialization is pending. Those lifecycle
+cases remain separate work. Pending initialization prevents HWND destruction;
+the parent deadline contains cleanup that cannot finish safely.
 
 This test does not read back surface pixels or inspect visible output. Full
 pixel comparisons remain in the separate [offscreen probe](native-headless.md).

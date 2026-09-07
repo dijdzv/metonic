@@ -7,9 +7,9 @@ Status: experimental; not a final cross-platform windowing decision.
 ## Decision
 
 Add a Windows-only probe alongside the offscreen renderer. MoonBit owns scene
-state and input interpretation. A small C stub owns HWND creation and a blocking
-Win32 message loop. Rust owns the wgpu DX12 surface, device, pipeline and queue.
-The existing rectangle shader is shared with the offscreen probe.
+state, input interpretation and the DX12 renderer through the published MoonBit
+binding. A small C stub owns HWND creation and bounded Win32 message polling.
+The worker-completion probe retains the blocking C loop and Rust renderer.
 
 This isolates the Windows lifetime boundary without introducing another event
 loop abstraction. A portable windowing library remains an alternative when
@@ -19,12 +19,14 @@ performance advantage for direct Win32 or choose an accessibility adapter.
 ## Lifetime and scheduling
 
 The C stub forwards paint, nonzero resize, key, pointer and close events through
-a bounded ring. An overflow terminates the probe. GetMessage blocks when no
-events are pending; unrelated messages are dispatched without being treated as
-application events or errors. State changes and paint events trigger rendering.
+a bounded ring. An overflow terminates the probe. The window host polls at most
+64 Win32 messages per call and yields through the MoonBit async scheduler between
+iterations. Unrelated messages do not become application events. The worker
+baseline retains blocking GetMessage. State changes and paint trigger rendering.
 
 WM_CLOSE is forwarded without destroying the HWND. MoonBit exits its loop and
-calls cleanup, which destroys the surface before the HWND and unloads the DLL.
+calls cleanup, which destroys the surface before the HWND. The worker baseline
+also unloads its Rust DLL.
 The raw window handle must remain valid throughout the surface lifetime.
 Surface loss or an outdated surface causes one reconfiguration and acquisition
 retry. Other acquisition failures terminate this bounded probe; recovery and
@@ -44,8 +46,9 @@ same-surface reuse has been fixed upstream.
 
 The HWND must outlive both the renderer and pending adapter/device callbacks.
 If initialization leaves a pending callback, closing the renderer alone does
-not authorize HWND destruction. The existing Rust event-loop probe remains
-the baseline until the replacement is integrated and verified with event pumping.
+not authorize HWND destruction. The normal window sequence verifies input after
+initialization; pending-initialization input and close still require dedicated
+verification. The Rust worker-completion probe remains a separate baseline.
 
 ## Automated verification boundary
 

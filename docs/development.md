@@ -104,10 +104,11 @@ separate bootstrap step.
 
 Native probe build tasks use `scripts/build-native.mbtx` with explicit headless,
 window, async or surface modes. Each mode builds the MoonBit headless executable;
-window/async additionally build the locked Rust bridge, C stub and executable. The
+async additionally builds the locked Rust bridge. Window and surface rendering
+use the published MoonBit binding; all three windowed probes build a C stub. The
 script checks output artifacts and rejects unsupported modes before building.
-Headless rendering uses the existing wgpu binding; the window/worker Rust and C
-implementation remains under comparison.
+Headless rendering also uses the binding. The worker's Rust renderer and the
+shared Win32 C boundary remain under comparison.
 
 `native:surface` builds a separate MoonBit surface renderer probe using the
 existing HWND boundary and the published wgpu binding, without building the Rust
