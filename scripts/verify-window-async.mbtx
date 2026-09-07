@@ -1,0 +1,185 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/debug",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+  "moonbitlang/core/string",
+}
+
+///|
+suberror ObserverFailure {
+  Failure(String)
+} derive(Debug)
+
+///|
+fn fail(message : String) -> Unit raise ObserverFailure {
+  raise ObserverFailure::Failure(message)
+}
+
+///|
+fn absolute(path : String) -> Bool {
+  let chars = path.to_array()
+  let drive = chars.length() >= 3 &&
+    (
+      (chars[0] >= 'A' && chars[0] <= 'Z') ||
+      (chars[0] >= 'a' && chars[0] <= 'z')
+    ) &&
+    chars[1] == ':' &&
+    (chars[2] == '\\' || chars[2] == '/')
+  let unc = chars.length() >= 2 && chars[0] == '\\' && chars[1] == '\\'
+  let unix = chars.length() > 0 && chars[0] == '/'
+  drive || unc || unix
+}
+
+///|
+async fn drain(reader : @process.ReadFromProcess) -> String raise Error {
+  let bytes : Array[Byte] = []
+  while bytes.length() <= 65536 {
+    match reader.read_some(max_len=4096) {
+      None => return @utf8.decode_lossy(Bytes::from_array(bytes))
+      Some(chunk) =>
+        for byte in chunk {
+          if bytes.length() == 65536 {
+            fail("output overflow")
+          }
+          bytes.push(byte)
+        }
+    }
+  }
+  fail("output overflow")
+  ""
+}
+
+///|
+fn integer(
+  values : Map[String, Json],
+  name : String,
+) -> Int64 raise ObserverFailure {
+  match values.get(name) {
+    Some(Json::Number(value, ..)) if value.to_int64().to_double() == value =>
+      return value.to_int64()
+    _ => raise ObserverFailure::Failure("missing or non-integer field: " + name)
+  }
+}
+
+///|
+fn check_result(output : String) -> Unit raise ObserverFailure {
+  let lines = output.split("\n")
+  let mut found = 0
+  let mut result : Json? = None
+  for line in lines {
+    let trimmed = line.trim()
+    if trimmed != "" {
+      guard trimmed.has_prefix("RESULT ") else {
+        fail("unexpected child output")
+      }
+      found += 1
+      guard found == 1 else { fail("duplicate RESULT") }
+      result = Some(
+        @json.parse(trimmed[7:].to_owned()) catch {
+          _ => raise ObserverFailure::Failure("malformed RESULT JSON")
+        },
+      )
+    }
+  }
+  guard found == 1 else { fail("missing RESULT") }
+  match result {
+    Some(Json::Object(values)) => {
+      match values.get("ok") {
+        Some(Json::True) => ()
+        _ => fail("RESULT ok is false")
+      }
+      match values.get("mode") {
+        Some(Json::String(value)) if value == "async" => ()
+        _ => fail("RESULT mode is not async")
+      }
+      guard integer(values, "pending") == 0L else {
+        fail("pending is not zero")
+      }
+      guard integer(values, "cleanup") == 16L else { fail("cleanup is not 16") }
+      guard integer(values, "wakes") > 0L else { fail("wakes is not positive") }
+      guard integer(values, "proxies") > 0L else {
+        fail("proxies is not positive")
+      }
+      guard integer(values, "finite") > 0L else {
+        fail("finite is not positive")
+      }
+      guard integer(values, "indefinite") > 0L else {
+        fail("indefinite is not positive")
+      }
+      match values.get("hwnd_destroyed") {
+        Some(Json::True) => ()
+        _ => fail("hwnd_destroyed is false")
+      }
+    }
+    _ => fail("RESULT is not an object")
+  }
+}
+
+///|
+async fn observe(executable : String, fixture : String) -> Unit raise Error {
+  let (stdout_reader, stdout_output) = @process.read_from_process()
+  defer stdout_reader.close()
+  defer stdout_output.close()
+  let (stderr_reader, stderr_output) = @process.read_from_process()
+  defer stderr_reader.close()
+  defer stderr_output.close()
+  @async.with_timeout(10000, async fn() {
+    @async.with_task_group() <| group => {
+      let child = @process.spawn(
+        group,
+        executable,
+        [fixture],
+        stdout=stdout_output,
+        stderr=stderr_output,
+        no_console_window=true,
+        no_wait=false,
+        cancel_handler=@process.hard_cancel(),
+      )
+      let stdout_task = group.spawn() <| () => { drain(stdout_reader) }
+      let stderr_task = group.spawn() <| () => { drain(stderr_reader) }
+      let exit_code = child.wait()
+      let stdout = stdout_task.wait()
+      let stderr = stderr_task.wait()
+      if exit_code != 0 {
+        fail(
+          "child exited with code " +
+          exit_code.to_string() +
+          "\nstdout:\n" +
+          stdout +
+          "\nstderr:\n" +
+          stderr,
+        )
+      }
+      check_result(stdout) catch {
+        error =>
+          fail(
+            @debug.to_string(error) +
+            "\nstdout:\n" +
+            stdout +
+            "\nstderr:\n" +
+            stderr,
+          )
+      }
+      println(stdout.trim())
+    }
+  })
+}
+
+///|
+async fn main {
+  let args = @env.args()
+  guard args.length() == 3 && absolute(args[1]) && absolute(args[2]) else {
+    abort("usage: verify-window-async <absolute-executable> <absolute-fixture>")
+  }
+  observe(args[1], args[2]) catch {
+    error => {
+      let message = "window async observation failed: " +
+        @debug.to_string(error)
+      println(message)
+      abort(message)
+    }
+  }
+}

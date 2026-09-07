@@ -1,0 +1,54 @@
+# ADR 030: Evaluate the native async external-loop boundary
+
+## Status
+
+Accepted for isolated evaluation. Product adoption depends on
+[integration verification](https://github.com/dijdzv/metonic/issues/71) and
+[resource cleanup](https://github.com/dijdzv/metonic/issues/72).
+
+## Context
+
+The current native asynchronous probe uses explicit C worker slots and a bounded
+Win32 poll followed by a MoonBit async yield. That establishes a worker completion
+path but leaves application-owned thread creation, cancellation events and joins.
+Replacing these with timers alone would remove the existing foreign-thread
+notification evidence without establishing native I/O integration.
+
+The resolved `moonbitlang/async@0.21.2` exposes `ExternalEventLoop`. Its native
+runtime contains a Windows IOCP waiter which notifies a caller-supplied main loop.
+This implementation is more specific evidence than the package README's older
+platform summary. It still requires Windows execution before adoption.
+
+## Decision
+
+Evaluate the public external-loop API against the pinned Windows window candidate
+and its [bounded pump correction](../verification/windows-event-pump.md). Forward
+zero, finite and indefinite timeouts without substituting periodic polling.
+Use real asynchronous file I/O to exercise the runtime's waiter notification and
+use structured tasks to check cancellation cleanup.
+
+Keep a minimal context-free C wake thunk where the foreign-thread callback
+contract requires it. The thunk may read an initialized native thread ID, post a
+Win32 thread message and maintain native atomic diagnostics. It must not retain,
+release or access MoonBit objects. The callback must call that FFI directly:
+capturing a MoonBit proxy object would violate the async library's documented
+foreign-thread restriction. Application policy and task sequencing stay in
+MoonBit; the thunk does not create workers or implement a scheduler.
+
+Destroy the test application HWND in `ExternalEventLoop::terminate`, after the
+async main task and its child tasks have completed. The runtime performs further
+cleanup after `async fn main` returns, so dropping the host directly at the end of
+main would be premature. Verify the final success record from terminate, not
+merely from main.
+
+## Consequences
+
+The existing worker probe stays intact during comparison. Passing this experiment
+would establish the tested I/O and task-lifetime integration; it would not prove
+arbitrary MoonBit closure execution on OS threads, GPU initialization behavior,
+real input, IME, or complete resource cleanup.
+
+In particular, joining the async waiter is distinct from closing its Windows
+thread handle, and dropping an application HWND is distinct from destroying the
+candidate's message-only HWND. Track those ownership paths separately before
+product adoption. No upstream source changes are published by this decision.
