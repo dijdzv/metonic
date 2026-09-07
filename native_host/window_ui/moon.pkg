@@ -6,6 +6,7 @@ import {
   "local/p0/native_gpu" @gpu,
   "local/native_host/windows_loop" @loop,
   "local/native_host/rpc_client",
+  "local/native_host/accessibility",
   "Milky2018/wgpu_mbt" @wgpu,
   "Milky2018/wgpu_mbt/c",
   "moonbitlang/async",

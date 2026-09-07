@@ -1,0 +1,57 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/encoding/utf8",
+}
+
+///|
+async fn main {
+  @async.with_timeout(180000, async fn() {
+    let assets = ".work/accesskit-assets"
+    if !@fs.exists(assets) {
+      @fs.mkdir(assets, recursive=true)
+    }
+    let archive = assets + "/accesskit-c-0.22.3.zip"
+    if !@fs.exists(archive) {
+      guard @process.run(
+          "gh",
+          [
+            "release", "download", "0.22.3", "-R", "AccessKit/accesskit-c", "-p",
+            "accesskit-c-0.22.3.zip", "-D", assets,
+          ],
+          no_console_window=true,
+        ) ==
+        0 else {
+        fail("AccessKit acquisition failed")
+      }
+    }
+    let (code, output, _) = @process.collect_output(
+      "certutil",
+      ["-hashfile", archive, "SHA256"],
+      no_console_window=true,
+    )
+    guard code == 0 &&
+      @utf8.decode_lossy(output.binary())
+      .split("\n")
+      .any(line => {
+        line.trim().to_owned().to_lower() ==
+        "b652e380fb78efe6721ad892f15b2224f38f661c3fb20436ef4c5b3ce0fe8177"
+      }) else {
+      fail("AccessKit archive SHA256 mismatch")
+    }
+    guard @process.run(
+        "tar",
+        [
+          "-xf", archive, "-C", assets, "accesskit-c-0.22.3/include/accesskit.h",
+          "accesskit-c-0.22.3/lib/windows/x86_64/msvc/shared/accesskit.dll", "accesskit-c-0.22.3/lib/windows/x86_64/msvc/shared/accesskit.lib",
+          "accesskit-c-0.22.3/LICENSE-MIT", "accesskit-c-0.22.3/LICENSE-APACHE",
+        ],
+        no_console_window=true,
+      ) ==
+      0 else {
+      fail("AccessKit extraction failed")
+    }
+    println("ACCESSKIT_ASSETS_OK version=0.22.3 windows_x64")
+  })
+}

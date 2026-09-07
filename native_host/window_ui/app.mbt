@@ -32,6 +32,7 @@ priv enum Event {
   CancelUpdate
   Updated(Int, Int)
   Development(DevelopmentRequest)
+  Accessibility(Int, Int)
   SelectBoundary(Int, Bool)
   Navigate(Bool, Bool)
   ToggleFocus
@@ -61,6 +62,7 @@ struct App {
   hidden : Bool
   report : (String) -> Unit
   mut window : @windows.Window?
+  mut accessibility : @accessibility.Bridge?
   mut error : Error?
   mut hwnd : UInt64
   mut message_hwnd : UInt64
@@ -88,11 +90,21 @@ pub impl @windows.ApplicationHandler for App with fn can_create_surfaces(
 ) {
   let window = event_loop.create_window(
     @core.WindowAttributes::default()
-    .with_visible(!self.hidden)
+    .with_visible(false)
     .with_inner_size(@dpi.PhysicalSize(640, 360).into_size()),
   )
   self.window = Some(window)
   self.hwnd = window.native_window_handle()
+  self.accessibility = @accessibility.open(
+    self.hwnd,
+    @semantics.snapshot(self.editor),
+  )
+  if self.accessibility is None {
+    self.error = Some(WindowFailure::Failure("accessibility attachment failed"))
+    self.queue(Close)
+  } else {
+    window.set_visible(!self.hidden)
+  }
 }
 
 ///|
@@ -186,6 +198,19 @@ pub impl @windows.ApplicationHandler for App with fn window_event(
 
 ///|
 fn App::draw(self : App) -> Unit raise Error {
+  let button = @semantics.snapshot(self.editor)[0]
+  if (button.value == "on") != (@scene.field(self.state, 4) == 1) {
+    ignore(@semantics.activate(self.editor, button.reference))
+  }
+  if self.accessibility is Some(bridge) {
+    bridge.update(
+      @semantics.snapshot(self.editor),
+      @scene.field(self.state, 6),
+      @scene.field(self.state, 7),
+      @scene.field(self.state, 0),
+      @scene.field(self.state, 1),
+    )
+  }
   match self.renderer {
     Some(renderer) => {
       let node = @semantics.snapshot(self.editor)[1]
@@ -263,6 +288,10 @@ fn App::pump(self : App, driver : @loop.Driver) -> Unit raise Error {
 
 ///|
 fn App::finish(self : App) -> Unit raise Error {
+  if self.accessibility is Some(bridge) {
+    bridge.close()
+  }
+  self.accessibility = None
   require(
     self.owner.pending_count() == 0,
     "GPU initialization still owns window",
@@ -330,6 +359,7 @@ async fn run_loop(
     hidden,
     report,
     window: None,
+    accessibility: None,
     error: None,
     hwnd: 0UL,
     message_hwnd: 0UL,
@@ -397,9 +427,31 @@ async fn run_loop(
       }
       while !app.closed {
         app.pump(driver)
+        if app.accessibility is Some(bridge) {
+          for request in bridge.poll() {
+            let (action, target) = request
+            app.queue(Accessibility(action, target))
+          }
+        }
         while !app.closed && app.events.try_get() is Some(event) {
           match event {
             Development(request) => app.dispatch_development(request)
+            Accessibility(_, _) if app.composition is Some(_) => ()
+            Accessibility(action, target) => {
+              let nodes = @semantics.snapshot(app.editor)
+              if action == 1 {
+                if app.window is Some(window) {
+                  window.focus_window()
+                }
+                ignore(
+                  @semantics.focus(app.editor, nodes[target - 1].reference),
+                )
+                app.draw()
+              } else if action == 0 && target == 1 {
+                ignore(@scene.dispatch(app.state, Activate))
+                app.draw()
+              }
+            }
             SelectBoundary(_, _) | Navigate(_, _) | ToggleFocus if app.composition
               is Some(_) => ()
             ToggleFocus => {

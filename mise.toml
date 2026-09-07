@@ -198,6 +198,15 @@ env = { METONIC_NATIVE_BUILD = "release-probe" }
 depends = ["native:release-probe-build"]
 run = '.\\.work\\native-host-build\\native\\debug\\build\\local\\native_host\\release_probe\\release_probe.exe'
 
+[tasks."native:accessibility-probe-build"]
+depends = ["native:window-release-build"]
+run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/build-native.mbtx'
+env = { METONIC_NATIVE_BUILD = "accessibility-probe" }
+
+[tasks."native:accessibility"]
+depends = ["native:accessibility-probe-build"]
+run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-native-accessibility.mbtx'
+
 [tasks."native:window-dev-build"]
 run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/build-native.mbtx'
 env = { METONIC_NATIVE_BUILD = "window-dev" }

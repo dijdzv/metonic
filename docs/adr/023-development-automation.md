@@ -53,7 +53,7 @@ properties, snapshots, and remote control are separate additions.
 
 | Option | Advantages | Costs and questions | Status |
 | --- | --- | --- | --- |
-| MoonBit semantics → thin Rust AccessKit adapter → Windows UIA | Reuses an accessibility platform adapter; fits the planned Rust OS boundary | Own tree producer still required; validate C ABI, text ranges, focus/action routing, thread ownership, updates and teardown | Primary experiment, not adopted |
+| MoonBit semantics → official AccessKit C adapter → Windows UIA | Reuses the platform provider through its published ABI without a custom Rust bridge | Small foreign-thread ownership and ABI boundary; full text patterns and closure-race evidence remain | Adopted for initial production nodes/actions |
 | MoonBit semantics → direct Windows UIA provider | Full control of provider behavior and representations | More COM/provider implementation and long-term maintenance; still needs a semantic model | Comparison baseline |
 | Use only OS UIA as the development interface | Can test production accessibility from outside | Cannot cover all frame capture, exact input, renderer diagnostics, or internal completion barriers | Supplemental tests only |
 | Put MCP directly into the production UI core | Fewer initial process boundaries | Adds protocol, control and diagnostic dependencies to every app | Rejected |
@@ -62,6 +62,25 @@ AccessKit is meaningful here only as a low-level adapter: it does not require
 adopting egui, GPUI, or a Rust component model. A successful spike must demonstrate
 that the adapter can consume the MoonBit model without forcing platform types
 into its public API. See the [AccessKit architecture](https://accesskit.dev/how-it-works/).
+
+The initial Windows adapter uses official AccessKit C 0.22.3 (Windows adapter
+0.34.0) after a MoonBit attachment experiment and external UIA verification against
+the ordinary production window. `Milky2018/moon_accesskit@0.4.1` provides common
+and consumer data, not the Windows platform adapter. Direct UIA would also require
+COM provider identities, navigation/pattern implementations, threading and event
+delivery; it offers no demonstrated advantage for the existing shared model.
+The official ABI is therefore selected while text support remains incomplete.
+
+Foreign-thread request ownership uses a bounded C mailbox rather than a MoonBit
+GC object or posted owning pointer. The official provider holds a weak context,
+but an operation already in progress can retain it during adapter destruction;
+freeing the adapter alone is not an admission barrier for our application queue.
+See the fixed [platform node implementation](https://github.com/AccessKit/accesskit/blob/accesskit_windows-v0.34.0/platforms/windows/src/node.rs)
+and [subclass lifecycle](https://github.com/AccessKit/accesskit/blob/accesskit_windows-v0.34.0/platforms/windows/src/subclass.rs).
+The [verification record](../verification/native-accessibility.md) describes the
+remaining C boundary, reproducible check and unverified requirements. OS UIA
+remains production accessibility; it does not replace development capture or
+completion barriers.
 
 Browser accessibility uses a semantic DOM adapter from the same model. Sharing
 meaning does not imply a shared native/browser memory layout or identical wire DTOs.

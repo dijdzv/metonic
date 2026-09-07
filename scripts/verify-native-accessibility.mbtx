@@ -1,0 +1,33 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/async@0.21.2/fs",
+}
+
+///|
+async fn main {
+  // A blocked COM call cannot yield to the native client's async timeout.
+  @async.with_timeout(25000, async fn() {
+    @async.with_task_group() <| group => {
+      let root = @fs.realpath(".work/native-host-build/native")
+      let app = @process.spawn(
+        group,
+        root + "/release/build/local/native_host/window_app/window_app.exe",
+        [],
+        no_console_window=true,
+      )
+      let client = @process.spawn(
+        group,
+        root +
+        "/debug/build/local/native_host/accessibility_probe/accessibility_probe.exe",
+        [app.pid.to_string()],
+        no_console_window=true,
+      )
+      guard client.wait() == 0 else { fail("production UIA client failed") }
+      guard app.wait() == 0 else {
+        fail("production UI failed during UIA verification")
+      }
+      println("WINDOW_PRODUCTION_UIA_PROCESSES_OK")
+    }
+  })
+}
