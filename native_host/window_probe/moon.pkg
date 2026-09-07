@@ -1,0 +1,9 @@
+import {
+  "moonbitlang/async",
+  "moonbitlang/core/env",
+  "local/native_host/window_ui" @ui,
+}
+
+pkgtype(kind: "executable")
+
+supported_targets = "native"

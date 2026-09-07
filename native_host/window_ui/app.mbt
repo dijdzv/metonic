@@ -1,12 +1,4 @@
 ///|
-extern "C" fn post_message(
-  hwnd : UInt64,
-  message : UInt,
-  wparam : UInt64,
-  lparam : Int64,
-) -> Int = "PostMessageW"
-
-///|
 extern "C" fn is_window(hwnd : UInt64) -> Int = "IsWindow"
 
 ///|
@@ -63,7 +55,6 @@ struct App {
   mut rendered_text : String?
   mut rendered_selection : (Int, Int)
   mut text_width : Int
-  is_test : Bool
   hidden : Bool
   report : (String) -> Unit
   mut window : @windows.Window?
@@ -76,7 +67,6 @@ struct App {
   mut renderer : @gpu.SurfaceRenderer?
   mut frames : Int
   mut closed : Bool
-  mut success : String
 }
 
 ///|
@@ -96,7 +86,7 @@ pub impl @windows.ApplicationHandler for App with fn can_create_surfaces(
 ) {
   let window = event_loop.create_window(
     @core.WindowAttributes::default()
-    .with_visible(!self.is_test && !self.hidden)
+    .with_visible(!self.hidden)
     .with_inner_size(@dpi.PhysicalSize(640, 360).into_size()),
   )
   self.window = Some(window)
@@ -259,20 +249,6 @@ fn App::pump(self : App, driver : @loop.Driver) -> Unit raise Error {
 }
 
 ///|
-fn App::post(
-  self : App,
-  message : UInt,
-  wparam : UInt64,
-  lparam : Int64,
-) -> Unit raise Error {
-  require(self.is_test, "test injection requires hidden mode")
-  require(
-    post_message(self.hwnd, message, wparam, lparam) != 0,
-    "PostMessage failed",
-  )
-}
-
-///|
 fn App::finish(self : App) -> Unit raise Error {
   require(
     self.owner.pending_count() == 0,
@@ -309,12 +285,15 @@ fn App::finish(self : App) -> Unit raise Error {
       (self.report)("WINDOW_PROBE_FAILED")
       raise error
     }
-    None => if self.is_test { (self.report)(self.success) }
+    None => ()
   }
 }
 
 ///|
 pub async fn run(
+  observer? : (async (Observation) -> Unit)? = None,
+  completed? : ((Observation) -> Unit raise Error)? = None,
+  lifecycle? : ((Lifecycle, Observation) -> Bool raise Error)? = None,
   controller? : (async (Handle) -> Unit)? = None,
   hidden? : Bool = false,
   report? : (String) -> Unit = println,
@@ -337,7 +316,6 @@ pub async fn run(
     rendered_text: None,
     rendered_selection: (-1, -1),
     text_width: 0,
-    is_test: @env.get_env_var("METONIC_WINDOW_TEST") == Some("1"),
     hidden,
     report,
     window: None,
@@ -350,7 +328,6 @@ pub async fn run(
     renderer: None,
     frames: 0,
     closed: false,
-    success: "WINDOW_PROBE_FAILED",
   }
   let driver = @loop.Driver::new(
     event_loop,
@@ -360,15 +337,6 @@ pub async fn run(
   @async.set_external_event_loop(driver)
   event_loop.set_control_flow(@core.ControlFlow::Wait)
   try {
-    let mode = @env.get_env_var("METONIC_WINDOW_INIT_TEST").unwrap_or("normal")
-    require(
-      mode == "normal" || mode == "input" || mode == "close",
-      "unknown initialization test",
-    )
-    require(
-      mode == "normal" || app.is_test,
-      "initialization test requires hidden mode",
-    )
     app.pump(driver)
     app.message_hwnd = driver.message_window_handle()
     app.raster = @raster.create(
@@ -410,19 +378,12 @@ pub async fn run(
         )
       }
       let mut initializing = true
-      let mut retained = false
-      let mut polls = 0
-      let mut stage = 0
-      let mut canceled_id = 0
+      let mut may_present = true
       let mut update : @async.Task[Unit]? = None
       let mut control_task : @async.Task[Unit]? = None
-      if mode != "normal" {
+      if lifecycle is Some(notify) {
         @async.pause()
-        require(
-          app.owner.pending_count() > 0,
-          "initialization ticket not retained",
-        )
-        app.post(if mode == "input" { 0x0100U } else { 0x0010U }, 0x27UL, 0L)
+        may_present = notify(Starting, app.observation())
       }
       while !app.closed {
         app.pump(driver)
@@ -645,209 +606,35 @@ pub async fn run(
                 app.draw()
               }
           }
-          if initializing && mode != "normal" && !retained {
-            let observed = match event {
-              Close => mode == "close"
-              Input(Move(10, 0)) => mode == "input"
-              _ => false
-            }
-            if observed {
-              require(
-                app.owner.pending_count() > 0,
-                "host event arrived after initialization ownership released",
-              )
-              retained = true
-              (app.report)(
-                "WINDOW_INIT_RETAINED=" + app.owner.pending_count().to_string(),
-              )
+          if initializing && lifecycle is Some(notify) {
+            match event {
+              Close => may_present = notify(Closing, app.observation())
+              Input(_) => may_present = notify(InputHandled, app.observation())
+              _ => ()
             }
           }
         }
         if app.closed {
           break
         }
-        if initializing && (mode == "normal" || retained) {
+        if initializing && may_present {
           if init.try_wait() is Some(_) {
             init.wait()
             initializing = false
-            if mode == "input" {
-              require(
-                @scene.field(app.state, 0) == 270,
-                "first frame lost initialization input",
-              )
+            if lifecycle is Some(notify) {
+              ignore(notify(Ready, app.observation()))
             }
             app.draw()
             if controller is Some(control) {
               control_task = Some(group.spawn(() => control(app.handle())))
             }
-            if app.is_test && mode == "normal" {
-              app.post(0x0100U, 0x27UL, 0L)
-            }
           }
         }
-        if app.is_test && !initializing {
-          if stage == 0 && @scene.field(app.state, 0) == 270 {
-            stage = 1
-            ignore(
-              window.request_inner_size(@dpi.PhysicalSize(317, 193).into_size()),
-            )
-          } else if stage == 1 &&
-            @scene.field(app.state, 6) == 317 &&
-            @scene.field(app.state, 7) == 193 {
-            stage = 2
-            let packed = ((@scene.field(app.state, 1) + 1) << 16) |
-              (@scene.field(app.state, 0) + 1)
-            app.post(0x0201U, 1UL, packed.to_int64())
-          } else if stage == 2 && @scene.field(app.state, 4) == 1 {
-            stage = 20
-            app.post(0x0102U, 1UL, 0L)
-            app.post(0x0100U, 0x24UL, 0L)
-          } else if stage == 20 &&
-            @semantics.snapshot(app.editor)[1].selection_start == 0 {
-            require(
-              @semantics.snapshot(app.editor)[1].value ==
-              "日本語の描画を確認します ABC 123",
-              "control character entered editor",
-            )
-            stage = 21
-            app.post(0x0100U, 0x23UL, 0L)
-          } else if stage == 21 &&
-            @semantics.snapshot(app.editor)[1].selection_start ==
-            @semantics.snapshot(app.editor)[1].value.length() {
-            stage = 22
-            app.post(0x0201U, 1UL, ((16 << 16) | 8).to_int64())
-          } else if stage == 22 &&
-            @semantics.snapshot(app.editor)[1].selection_start == 0 {
-            stage = 30
-            let reference = @semantics.snapshot(app.editor)[1].reference
-            require(
-              @semantics.set_selection(app.editor, reference, 0, 3) == "",
-              "test selection rejected",
-            )
-            app.queue(CompositionStart)
-            app.queue(CompositionUpdate("にほん", Some(1)))
-          } else if stage == 30 &&
-            app.rendered_text ==
-            Some("にほんの描画を確認します ABC 123") {
-            let node = @semantics.snapshot(app.editor)[1]
-            require(
-              node.value == "日本語の描画を確認します ABC 123",
-              "preedit mutated committed text",
-            )
-            require(
-              node.selection_start == 0 && node.selection_end == 3,
-              "preedit changed selection",
-            )
-            require(app.preedit_cursor == 1, "composition cursor was lost")
-            stage = 31
-            app.queue(CompositionCancel)
-          } else if stage == 31 &&
-            app.rendered_text ==
-            Some("日本語の描画を確認します ABC 123") {
-            require(
-              app.composition is None,
-              "composition survived cancellation",
-            )
-            stage = 3
-            app.post(0x0102U, 0x8A9EUL, 0L)
-            app.post(0x0102U, 0xD83DUL, 0L)
-            app.post(0x0102U, 0xDE00UL, 0L)
-          } else if stage == 3 &&
-            @semantics.snapshot(app.editor)[1].value ==
-            "語😀の描画を確認します ABC 123" {
-            let node = @semantics.snapshot(app.editor)[1]
-            require(
-              node.selection_start == 3 && node.selection_end == 3,
-              "committed text caret mismatch",
-            )
-            require(
-              app.rendered_text == Some(node.value),
-              "committed text was not rendered",
-            )
-            stage = 4
-            app.post(0x0100U, 0x08UL, 0L)
-          } else if stage == 4 &&
-            @semantics.snapshot(app.editor)[1].value ==
-            "語の描画を確認します ABC 123" {
-            require(
-              @semantics.snapshot(app.editor)[1].selection_start == 1,
-              "backspace caret mismatch",
-            )
-            stage = 5
-            let pixels = app.renderer.unwrap().capture_frame()
-            let mut dark = 0
-            for y in 8..<104 {
-              for x in 8..<309 {
-                let offset = (y * 317 + x) * 4
-                require(
-                  pixels[offset + 3] == 255,
-                  "text capture alpha mismatch",
-                )
-                if pixels[offset] < 128 &&
-                  pixels[offset + 1] < 128 &&
-                  pixels[offset + 2] < 128 {
-                  dark += 1
-                }
-              }
-            }
-            require(dark > 100, "text capture has no glyphs")
-            let reference = @semantics.snapshot(app.editor)[1].reference
-            require(
-              @semantics.set_text(app.editor, reference, "") == "",
-              "empty text rejected",
-            )
-            app.draw()
-            let empty = app.renderer.unwrap().capture_frame()
-            for y in 8..<104 {
-              for x in 8..<309 {
-                let offset = (y * 317 + x) * 4
-                for channel in 0..<4 {
-                  require(
-                    empty[offset + channel] == 255,
-                    "empty text retained glyph pixels",
-                  )
-                }
-              }
-            }
-            app.post(0x0100U, 0x74UL, 0L)
-            app.post(0x0100U, 0x74UL, 0L)
-            app.post(0x0102U, 0x41UL, 0L)
-          } else if stage == 5 &&
-            @semantics.snapshot(app.editor)[1].value == "A" {
-            require(
-              @task_scope.field(app.scope, 0) == 1,
-              "text input did not precede delayed update",
-            )
-            stage = 6
-            app.queue(Updated(@task_scope.field(app.scope, 1) - 1, 0))
-          } else if stage == 6 && @task_scope.field(app.scope, 0) == 2 {
-            require(
-              @scene.field(app.state, 0) == @task_scope.field(app.scope, 2),
-              "delayed result did not update scene",
-            )
-            stage = 7
-            require(app.rejected_updates == 1, "stale result was accepted")
-            app.post(0x0100U, 0x74UL, 0L)
-          } else if stage == 7 && @task_scope.field(app.scope, 0) == 1 {
-            canceled_id = @task_scope.field(app.scope, 1)
-            stage = 8
-            app.post(0x0100U, 0x75UL, 0L)
-          } else if stage == 8 && @task_scope.field(app.scope, 0) == 4 {
-            stage = 9
-            app.queue(Updated(canceled_id, 0))
-          } else if stage == 9 && app.rejected_updates == 2 {
-            require(
-              @scene.field(app.state, 0) == @task_scope.field(app.scope, 2),
-              "rejected result changed scene",
-            )
-            stage = 10
-            app.post(0x0100U, 0x74UL, 0L)
-            app.post(0x0010U, 0UL, 0L)
-          }
+        if !initializing && observer is Some(observe) {
+          observe(app.observation())
         }
-        if initializing && mode != "normal" && !retained {
-          polls += 1
-          require(polls <= 64, "initialization host event poll limit exceeded")
+        if initializing && !may_present && lifecycle is Some(notify) {
+          may_present = notify(Poll, app.observation())
         } else {
           @async.sleep(1)
         }
@@ -874,36 +661,8 @@ pub async fn run(
           error => raise error
         }
       }
-      if mode != "normal" {
-        require(retained, "initialization event not observed")
-        (app.report)(
-          "WINDOW_INIT_REMAINING=" + app.owner.pending_count().to_string(),
-        )
-      }
-      if app.is_test {
-        if mode == "close" {
-          require(
-            app.frames == 0 &&
-            app.renderer is None &&
-            app.owner.pending_count() == 0,
-            "initialization close failed",
-          )
-          app.success = "WINDOW_INIT_CLOSE_OK"
-        } else {
-          require(
-            stage == 10 &&
-            app.frames >= 3 &&
-            @scene.field(app.state, 4) == 1 &&
-            @scene.field(app.state, 6) == 317 &&
-            @scene.field(app.state, 7) == 193,
-            "window scenario failed",
-          )
-          app.success = if mode == "input" {
-            "WINDOW_INIT_INPUT_OK"
-          } else {
-            "WINDOW_PROBE_OK"
-          }
-        }
+      if completed is Some(complete) {
+        complete(app.observation())
       }
     }
   } catch {

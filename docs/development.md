@@ -133,6 +133,19 @@ failure contract and reproduction commands.
 
 ## Native host workspace
 
+`native:window-build` builds the ordinary `window_app` executable.
+`native:window` builds it and the dedicated `window_probe`, then runs the six
+hidden verification scenarios against the probe. Only that probe reads
+`METONIC_WINDOW_INIT_TEST` and owns synthetic input, staged assertions and
+completion criteria. Both entry points share the UI event loop; lifecycle
+callbacks let the probe observe initialization ownership without copying it.
+
+`native:window-fixture-exclusion` checks generated C and MoonBit link inputs:
+the ordinary executable excludes `window_probe`, while the probe is a positive
+control. The same check runs after native builds in pre-commit. This establishes
+fixture separation for the current debug build, not complete production exclusion
+of control, observation and capture support or production accessibility.
+
 `native_host/moon.work` isolates the external-loop adoption workspace while
 importing the existing root renderer and integration fixture directly. The
 ordinary window and async commands use the shared Windows event-loop adapter.

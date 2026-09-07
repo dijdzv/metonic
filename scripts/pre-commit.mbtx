@@ -65,6 +65,7 @@ async fn main {
     println("pre-commit gate: mise run " + gate)
     run("mise", ["run", gate])
   }
+  run(moon, ["run", "scripts/verify-window-fixture-exclusion.mbtx"])
   println("pre-commit gate: docs")
   run(moon, ["run", "scripts/verify-docs.mbtx"])
 }

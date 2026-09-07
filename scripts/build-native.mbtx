@@ -21,6 +21,7 @@ async fn main {
     if mode != "headless" &&
       mode != "window" &&
       mode != "window-dev" &&
+      mode != "window-probe" &&
       mode != "async" &&
       mode != "surface" &&
       mode != "host-gpu" {
@@ -28,7 +29,7 @@ async fn main {
     }
     let moon = @fs.realpath(".tools/moonbit/bin/moon.exe")
     let moon_home = @fs.realpath(".tools/moonbit")
-    if mode == "window" || mode == "window-dev" {
+    if mode == "window" || mode == "window-dev" || mode == "window-probe" {
       let asset_env : Map[String, String] = Map([])
       asset_env.set("METONIC_TEXT_ASSETS_ONLY", "1")
       if @process.run(
@@ -140,11 +141,16 @@ async fn main {
       println("NATIVE_BUILD_OK mode=host-gpu")
       return
     }
-    if mode == "async" || mode == "window" || mode == "window-dev" {
+    if mode == "async" ||
+      mode == "window" ||
+      mode == "window-dev" ||
+      mode == "window-probe" {
       let host_app = if mode == "async" {
         "async_app"
       } else if mode == "window-dev" {
         "window_dev"
+      } else if mode == "window-probe" {
+        "window_probe"
       } else {
         "window_app"
       }

@@ -156,6 +156,15 @@ env = { METONIC_NATIVE_BUILD = "window" }
 run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/build-native.mbtx'
 env = { METONIC_NATIVE_BUILD = "window-dev" }
 
+[tasks."native:window-probe-build"]
+depends = ["native:window-build"]
+run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/build-native.mbtx'
+env = { METONIC_NATIVE_BUILD = "window-probe" }
+
+[tasks."native:window-fixture-exclusion"]
+depends = ["native:window-probe-build"]
+run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-window-fixture-exclusion.mbtx'
+
 [tasks."native:window-control"]
 depends = ["native:window-dev-build"]
 run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-window-control.mbtx'
@@ -176,7 +185,7 @@ run = [
 ]
 
 [tasks."native:window"]
-depends = ["native:window-build"]
+depends = ["native:window-probe-build"]
 run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-native-probes.mbtx'
 env = { METONIC_NATIVE_PROBE = "window" }
 
