@@ -178,8 +178,10 @@ mise run browser:verify
 mise run browser:headless
 ```
 
-`browser:verify` builds release JS/WasmGC artifacts and compares their exported
-state transitions in Node. `browser:headless` launches an isolated headless
+`browser:verify` builds release JS/WasmGC artifacts and a MoonBit JS verifier.
+The Node entry point only loads both artifacts and invokes the verifier;
+MoonBit checks export availability, state transitions, return values and agreement
+between targets. `browser:headless` launches an isolated headless
 Chromium and a loopback-only server, drives input, and checks the resulting GPU
 pixels, resize, idle scheduling, and stop behavior. Screenshots and JSON results
 are local files under ignored `.work/browser-headless`. Both processes close at

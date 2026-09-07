@@ -43,7 +43,10 @@ run = ".\\.tools\\moonbit\\bin\\moonrun.exe _build/wasm/release/build/tools/brow
 
 [tasks."browser:verify"]
 depends = ["browser:build"]
-run = "node scripts/verify-browser.mjs"
+run = [
+  '.\\.tools\\moonbit\\bin\\moon.exe build tools/verify_browser_artifacts --target js --release --frozen --deny-warn',
+  'node scripts/verify-browser.mjs',
+]
 [tasks."browser:install"]
 run = "pnpm exec playwright install chromium"
 

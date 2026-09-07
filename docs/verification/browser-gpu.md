@@ -57,6 +57,26 @@ The server tests verified GET/HEAD and MIME handling, rejected POST, and rejecte
 unlisted files and path traversal attempts. It binds only to 127.0.0.1 and serves
 an explicit asset list.
 
+## Artifact verifier ownership
+
+`tools/verify_browser_artifacts` contains the MoonBit verification sequence:
+five required function exports, eight complete snapshots per target, mutation
+return values, reset and equality between the JS and WasmGC histories.
+`scripts/verify-browser.mjs` only imports the actual release artifacts,
+instantiates WasmGC with the existing host imports and calls that verifier.
+The verifier's small JS FFI functions access the exported API; application state
+and expected results remain in MoonBit.
+
+The exported verification entry point converts validation failures to JavaScript
+exceptions so Node exits unsuccessfully. A MoonBit error result returned across
+the foreign-library boundary must not be silently treated as successful execution.
+Four whitebox tests passed on the JS target: missing export, incorrect initial
+state, incorrect mutation result and JavaScript exception propagation. Run them
+with `moon test tools/verify_browser_artifacts --target js --frozen --deny-warn`
+using the pinned toolchain; the normal local verification gate includes them.
+This check exercises generated artifacts in Node, separately from the real
+WebGPU pixel and input checks above.
+
 ## Limits and next gate
 
 The harness reports initialization timing for diagnostics. It is a single small
