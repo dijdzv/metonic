@@ -25,3 +25,11 @@ int metonic_async_wake_count(void) {
 int metonic_async_failed_wake_count(void) {
   return (int)InterlockedCompareExchange(&metonic_failed_wakes, 0, 0);
 }
+
+unsigned long long metonic_async_message_window(void) {
+  HWND hwnd = FindWindowExW(HWND_MESSAGE, NULL, L"MBWWindowClass", NULL);
+  if (hwnd == NULL || GetWindowThreadProcessId(hwnd, NULL) != GetCurrentThreadId()) {
+    return 0;
+  }
+  return (unsigned long long)(ULONG_PTR)hwnd;
+}

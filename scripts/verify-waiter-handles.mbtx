@@ -1,0 +1,232 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/debug",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+  "moonbitlang/core/string",
+}
+
+///|
+suberror ObserverFailure {
+  Failure(String)
+} derive(Debug)
+
+///|
+struct StreamState {
+  bytes : Array[Byte]
+  mut overflow : Bool
+}
+
+///|
+fn absolute(path : String) -> Bool {
+  let chars = path.to_array()
+  let drive = chars.length() >= 3 &&
+    (
+      (chars[0] >= 'A' && chars[0] <= 'Z') ||
+      (chars[0] >= 'a' && chars[0] <= 'z')
+    ) &&
+    chars[1] == ':' &&
+    (chars[2] == '\\' || chars[2] == '/')
+  let unc = chars.length() >= 2 && chars[0] == '\\' && chars[1] == '\\'
+  let unix = chars.length() > 0 && chars[0] == '/'
+  drive || unc || unix
+}
+
+///|
+fn expected_delta(text : String) -> Int64 raise ObserverFailure {
+  let value = @string.parse_int64(text) catch {
+    _ =>
+      raise ObserverFailure::Failure(
+        "expected_delta must be an integer from 0 through 32",
+      )
+  }
+  if value < 0L || value > 32L {
+    raise ObserverFailure::Failure(
+      "expected_delta must be an integer from 0 through 32",
+    )
+  }
+  value
+}
+
+///|
+async fn drain(
+  reader : @process.ReadFromProcess,
+  state : Ref[StreamState],
+  child : @process.Process,
+) -> Unit {
+  while !state.val.overflow {
+    match reader.read_some(max_len=4096) {
+      None => break
+      Some(chunk) => {
+        let remaining = 65536 - state.val.bytes.length()
+        let count = if chunk.length() < remaining {
+          chunk.length()
+        } else {
+          remaining
+        }
+        for index = 0; index < count; index = index + 1 {
+          state.val.bytes.push(chunk[index])
+        }
+        if count < chunk.length() {
+          state.val.overflow = true
+          child.cancel()
+        }
+      }
+    }
+  }
+}
+
+///|
+fn integer(
+  values : Map[String, Json],
+  name : String,
+) -> Int64 raise ObserverFailure {
+  match values.get(name) {
+    Some(Json::Number(value, ..)) if value.to_int64().to_double() == value =>
+      value.to_int64()
+    _ => raise ObserverFailure::Failure("missing or non-integer field: " + name)
+  }
+}
+
+///|
+fn check_result(
+  output : String,
+  expected : Int64,
+) -> Unit raise ObserverFailure {
+  let mut found = 0
+  let mut result : Json? = None
+  for line in output.replace_all(old="\r\n", new="\n").split("\n") {
+    let trimmed = line.trim()
+    if trimmed != "" {
+      if !trimmed.has_prefix("RESULT ") {
+        raise ObserverFailure::Failure("unexpected child output")
+      }
+      found += 1
+      if found != 1 {
+        raise ObserverFailure::Failure("duplicate RESULT")
+      }
+      result = Some(
+        @json.parse(trimmed[7:].to_owned()) catch {
+          _ => raise ObserverFailure::Failure("malformed RESULT JSON")
+        },
+      )
+    }
+  }
+  if found != 1 {
+    raise ObserverFailure::Failure("missing RESULT")
+  }
+  match result {
+    Some(Json::Object(values)) => {
+      match values.get("ok") {
+        Some(Json::True) => ()
+        _ => raise ObserverFailure::Failure("RESULT ok is false")
+      }
+      match values.get("mode") {
+        Some(Json::String(value)) if value == "waiter_handles" => ()
+        _ => raise ObserverFailure::Failure("RESULT mode is not waiter_handles")
+      }
+      if integer(values, "cycles") != 32L {
+        raise ObserverFailure::Failure("cycles is not 32")
+      }
+      let before = integer(values, "before")
+      let after = integer(values, "after")
+      let delta = integer(values, "delta")
+      if before < 0L || after < 0L {
+        raise ObserverFailure::Failure("handle counts are negative")
+      }
+      if delta != expected {
+        raise ObserverFailure::Failure("delta does not match expected_delta")
+      }
+      if after - before != delta {
+        raise ObserverFailure::Failure("after-before does not equal delta")
+      }
+    }
+    _ => raise ObserverFailure::Failure("RESULT is not an object")
+  }
+}
+
+///|
+async fn observe(executable : String, expected : Int64) -> Unit raise Error {
+  let (stdout_reader, stdout_output) = @process.read_from_process()
+  defer stdout_reader.close()
+  defer stdout_output.close()
+  let (stderr_reader, stderr_output) = @process.read_from_process()
+  defer stderr_reader.close()
+  defer stderr_output.close()
+  let stdout_state : Ref[StreamState] = {
+    val: { bytes: [], overflow: false, },
+  }
+  let stderr_state : Ref[StreamState] = {
+    val: { bytes: [], overflow: false, },
+  }
+  @async.with_timeout(10000, async fn() {
+    @async.with_task_group() <| group => {
+      let child = @process.spawn(
+        group,
+        executable,
+        [expected.to_string()],
+        stdout=stdout_output,
+        stderr=stderr_output,
+        no_console_window=true,
+        no_wait=false,
+        cancel_handler=@process.hard_cancel(),
+      )
+      let stdout_task = group.spawn() <| () => {
+        drain(stdout_reader, stdout_state, child)
+      }
+      let stderr_task = group.spawn() <| () => {
+        drain(stderr_reader, stderr_state, child)
+      }
+      let exit_code = child.wait()
+      stdout_task.wait()
+      stderr_task.wait()
+      let stdout = @utf8.decode_lossy(Bytes::from_array(stdout_state.val.bytes))
+      if stdout_state.val.overflow || stderr_state.val.overflow {
+        raise ObserverFailure::Failure("child output overflow")
+      }
+      if exit_code != 0 {
+        raise ObserverFailure::Failure(
+          "child exited with code " + exit_code.to_string(),
+        )
+      }
+      check_result(stdout, expected)
+      println(stdout.trim())
+    }
+  }) catch {
+    error => {
+      let stdout = @utf8.decode_lossy(Bytes::from_array(stdout_state.val.bytes))
+      let stderr = @utf8.decode_lossy(Bytes::from_array(stderr_state.val.bytes))
+      raise ObserverFailure::Failure(
+        @debug.to_string(error) +
+        "\nstdout:\n" +
+        stdout +
+        "\nstderr:\n" +
+        stderr,
+      )
+    }
+  }
+}
+
+///|
+async fn main {
+  let args = @env.args()
+  if args.length() != 3 || !absolute(args[1]) {
+    abort(
+      "usage: verify-waiter-handles <absolute-executable> <expected_delta 0..32>",
+    )
+  }
+  let expected = expected_delta(args[2]) catch {
+    error => {
+      println(@debug.to_string(error))
+      abort("invalid expected_delta")
+    }
+  }
+  observe(args[1], expected) catch {
+    error => {
+      println("waiter handles observation failed: " + @debug.to_string(error))
+      abort("waiter handles observation failed")
+    }
+  }
+}

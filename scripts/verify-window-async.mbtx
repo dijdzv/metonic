@@ -65,7 +65,10 @@ fn integer(
 }
 
 ///|
-fn check_result(output : String) -> Unit raise ObserverFailure {
+fn check_result(
+  output : String,
+  expect_error : Bool,
+) -> Unit raise ObserverFailure {
   let lines = output.split("\n")
   let mut found = 0
   let mut result : Json? = None
@@ -87,9 +90,20 @@ fn check_result(output : String) -> Unit raise ObserverFailure {
   guard found == 1 else { fail("missing RESULT") }
   match result {
     Some(Json::Object(values)) => {
-      match values.get("ok") {
-        Some(Json::True) => ()
-        _ => fail("RESULT ok is false")
+      if expect_error {
+        match values.get("ok") {
+          Some(Json::False) => ()
+          _ => fail("RESULT ok is not false")
+        }
+        match values.get("original_error") {
+          Some(Json::String(value)) if value != "" => ()
+          _ => fail("RESULT original_error is empty")
+        }
+      } else {
+        match values.get("ok") {
+          Some(Json::True) => ()
+          _ => fail("RESULT ok is false")
+        }
       }
       match values.get("mode") {
         Some(Json::String(value)) if value == "async" => ()
@@ -98,20 +112,31 @@ fn check_result(output : String) -> Unit raise ObserverFailure {
       guard integer(values, "pending") == 0L else {
         fail("pending is not zero")
       }
-      guard integer(values, "cleanup") == 16L else { fail("cleanup is not 16") }
-      guard integer(values, "wakes") > 0L else { fail("wakes is not positive") }
-      guard integer(values, "proxies") > 0L else {
-        fail("proxies is not positive")
-      }
-      guard integer(values, "finite") > 0L else {
-        fail("finite is not positive")
-      }
-      guard integer(values, "indefinite") > 0L else {
-        fail("indefinite is not positive")
+      if !expect_error {
+        guard integer(values, "cleanup") == 16L else {
+          fail("cleanup is not 16")
+        }
+        guard integer(values, "wakes") > 0L else {
+          fail("wakes is not positive")
+        }
+        guard integer(values, "proxies") > 0L else {
+          fail("proxies is not positive")
+        }
+        guard integer(values, "finite") > 0L else {
+          fail("finite is not positive")
+        }
+        guard integer(values, "zero") > 0L else { fail("zero is not positive") }
+        guard integer(values, "indefinite") > 0L else {
+          fail("indefinite is not positive")
+        }
       }
       match values.get("hwnd_destroyed") {
         Some(Json::True) => ()
         _ => fail("hwnd_destroyed is false")
+      }
+      match values.get("message_hwnd_destroyed") {
+        Some(Json::True) => ()
+        _ => fail("message_hwnd_destroyed is false")
       }
     }
     _ => fail("RESULT is not an object")
@@ -119,7 +144,11 @@ fn check_result(output : String) -> Unit raise ObserverFailure {
 }
 
 ///|
-async fn observe(executable : String, fixture : String) -> Unit raise Error {
+async fn observe(
+  executable : String,
+  fixture : String,
+  expect_error : Bool,
+) -> Unit raise Error {
   let (stdout_reader, stdout_output) = @process.read_from_process()
   defer stdout_reader.close()
   defer stdout_output.close()
@@ -143,7 +172,7 @@ async fn observe(executable : String, fixture : String) -> Unit raise Error {
       let exit_code = child.wait()
       let stdout = stdout_task.wait()
       let stderr = stderr_task.wait()
-      if exit_code != 0 {
+      if !expect_error && exit_code != 0 {
         fail(
           "child exited with code " +
           exit_code.to_string() +
@@ -153,7 +182,10 @@ async fn observe(executable : String, fixture : String) -> Unit raise Error {
           stderr,
         )
       }
-      check_result(stdout) catch {
+      if expect_error {
+        guard exit_code != 0 else { fail("expected child failure") }
+      }
+      check_result(stdout, expect_error) catch {
         error =>
           fail(
             @debug.to_string(error) +
@@ -163,6 +195,9 @@ async fn observe(executable : String, fixture : String) -> Unit raise Error {
             stderr,
           )
       }
+      if expect_error {
+        println("verified child result mode=async expected-input-error")
+      }
       println(stdout.trim())
     }
   })
@@ -171,10 +206,18 @@ async fn observe(executable : String, fixture : String) -> Unit raise Error {
 ///|
 async fn main {
   let args = @env.args()
-  guard args.length() == 3 && absolute(args[1]) && absolute(args[2]) else {
+  let expect_error = match args.length() {
+    3 => false
+    4 if args[3] == "--expect-input-error" => true
+    _ =>
+      abort(
+        "usage: verify-window-async <absolute-executable> <absolute-fixture> [--expect-input-error]",
+      )
+  }
+  guard absolute(args[1]) && absolute(args[2]) else {
     abort("usage: verify-window-async <absolute-executable> <absolute-fixture>")
   }
-  observe(args[1], args[2]) catch {
+  observe(args[1], args[2], expect_error) catch {
     error => {
       let message = "window async observation failed: " +
         @debug.to_string(error)

@@ -28,6 +28,12 @@ The observer requires process success and exactly one matching RESULT, with a
 ten-second deadline and 64 KiB per output stream. Its process group joins before
 pipe handles are closed, including on cancellation.
 
+The current fixture also checks message-only HWND destruction, rejected drop
+while an application window is alive, repeated drop and closed-loop behavior.
+Input errors are retained through cleanup and rethrown after a failure RESULT.
+See the [resource cleanup record](native-resource-cleanup.md) for the required
+combined patch, exact current results and expected-error observer mode.
+
 ## Observations
 
 On Windows on 2026-09-07, the normal observer exited 0. The post-read counters
@@ -40,7 +46,7 @@ application HWND destruction. Shutdown measured 0 ms at the clock's resolution;
 this is not a claim of zero cost.
 
 A missing executable and a missing input file each produced observer exit 1.
-The latter exercises rejection of a failing async main rather than merely a
+In that earlier fixture, the latter exercises rejection of a failing async main rather than merely a
 process launch error. It is not proof of graceful resource cleanup on every
 exception path. Counts and timing are observations from one run, not fixed
 performance guarantees. A final wake may remain queued after the last pump while
@@ -61,6 +67,10 @@ block. Copy only `main.mbt`, `moon.pkg` and `wake.c` from
 `modules/window/examples/metonic_async_contract`; the standalone `moon.mod`
 must not replace the candidate's module manifest.
 
+For the current fixture, also prepare the isolated async module and apply the
+waiter correction in the [resource cleanup setup](native-resource-cleanup.md).
+The current window patch includes both pump and lifetime corrections.
+
 ```bat
 set "MOON_HOME=%CD%\.tools\moonbit"
 mise exec -- .tools\moonbit\bin\moon.exe -C .work\window-pump-source\modules\window update
@@ -76,9 +86,9 @@ missing sentinel is a negative case and must produce a nonzero observer exit.
 
 This experiment addresses the runtime waiter and structured task cleanup; it does
 not validate arbitrary MoonBit closures on worker threads, GPU presentation,
-physical input, IME or UI Automation. Destruction of the test application HWND
-does not prove release of the candidate's message-only HWND or the upstream
-waiter's Windows thread handle. Those ownership paths remain in
-[Issue 72](https://github.com/dijdzv/metonic/issues/72). Existing product worker
+physical input, IME or UI Automation. The original application-HWND result alone
+did not prove message-HWND or waiter-HANDLE release. The additional ownership
+measurements and their limits are recorded in
+[resource cleanup](native-resource-cleanup.md). Existing product worker
 completion and shutdown evidence remains separate in
 [the native async probe](native-async.md).

@@ -3,7 +3,7 @@
 The `wzzc-dev/window` candidate at
 `b33c9f0ac85002bca4a9cceccbbcd512d13b7ceb` was evaluated on Windows on
 2026-09-07 before replacing the existing window/worker boundary.
-The candidate sources were not patched. This experiment uses message-loop
+The initial observations below used unpatched sources. This experiment uses message-loop
 callbacks without creating a visible window; it does not exercise real input,
 IME, cross-thread wakeup while blocked, or window teardown ordering.
 
@@ -73,7 +73,10 @@ This opt-in candidate evaluation is separate from the normal application gate.
 
 `experiments/window_pump_contract/windows-pump.patch` contains a local correction
 against the same pinned source revision. It changes only the candidate's Windows
-event loop, callback dispatch, FFI declarations and native message helpers. It
+event loop, callback dispatch, FFI declarations and native message helpers. The
+current patch also guards window creation after loop destruction and includes
+the [resource lifetime correction](native-resource-cleanup.md). Apply it once
+to the pinned source; it replaces the earlier pump-only patch. It
 does not replace the application's existing window/worker boundary.
 The patch includes context from
 [`wzzc-dev/window`](https://github.com/wzzc-dev/window/tree/b33c9f0ac85002bca4a9cceccbbcd512d13b7ceb),

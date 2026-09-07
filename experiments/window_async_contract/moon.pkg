@@ -3,6 +3,8 @@ import {
   "moonbitlang/async/external_loop_integration",
   "moonbitlang/async/fs",
   "moonbitlang/core/env",
+  "moonbitlang/core/debug",
+  "moonbitlang/core/json",
   "moonbitlang/core/string",
   "wzzc-dev/window/core",
   "wzzc-dev/window/windows",
