@@ -45,6 +45,14 @@ the color transition and the resized HTTP result. It also revealed a default
 box with the current font; preserving supplementary text does not prove font
 coverage.
 
+The long-editor regression uses four committed lines after HTTP success. The
+editor keeps its 96-pixel viewport; the result occupies a separate 32-pixel row
+below it. `.work/presentation-long-editor.png` must contain result ink in that
+row, and its result pixels must exactly match `.work/presentation-result.png`
+after restoring the short editor text. This detects the previous clipping of the
+result by editor contents. It does not establish scrolling of the editor's own
+offscreen lines.
+
 The CLI's screenshot JSON does not report capture mode. Its pinned source tries
 Windows Graphics Capture and may fall back to PrintWindow. Consequently this
 record calls the images HWND-scoped captures, not verified WGC frames. A

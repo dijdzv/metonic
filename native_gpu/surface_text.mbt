@@ -40,7 +40,7 @@ pub fn SurfaceRenderer::set_text_pixels(
   if width < 1 ||
     width > 1024 ||
     height < 1 ||
-    height > 96 ||
+    height > 128 ||
     pixels.length() != width * height * 4 {
     raise InvalidTextPixels
   }

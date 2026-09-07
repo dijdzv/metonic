@@ -7,6 +7,9 @@ struct CaptureMetadata {
 } derive(FromJson)
 
 ///|
+let long_result_pixels : Ref[Bytes?] = { val: None, }
+
+///|
 #borrow(rect)
 extern "C" fn frame_bounds(
   hwnd : UInt64,
@@ -100,5 +103,38 @@ async fn capture_presentation(hwnd : UInt64, phase : String) -> Unit {
   assert_eq(right - left + 1, 120)
   assert_eq(bottom - top + 1, 72)
   assert_eq(cyan + orange, 120 * 72)
+  if phase == "long-editor" || phase == "result" {
+    let mut status_ink = 0
+    let x0 = origin[0] - frame[0] + 8
+    let y0 = origin[1] - frame[1] + 104
+    for y in y0..<(y0 + 32) {
+      for x in x0..<(x0 + 200) {
+        let offset = (y * image.width + x) * 4
+        if image.data[offset] < b'\x50' &&
+          image.data[offset + 1] < b'\x50' &&
+          image.data[offset + 2] < b'\x50' {
+          status_ink += 1
+        }
+      }
+    }
+    assert_true(
+      status_ink > 20,
+      msg="HTTP result is not visible below the editor",
+    )
+    let row = Bytes::makei(200 * 32 * 4, index => {
+      let y = index / (200 * 4)
+      let x_byte = index % (200 * 4)
+      image.data[((y0 + y) * image.width + x0) * 4 + x_byte]
+    })
+    if phase == "long-editor" {
+      long_result_pixels.val = Some(row)
+    } else {
+      assert_eq(
+        row,
+        long_result_pixels.val.unwrap(),
+        msg="editor content changed the result row",
+      )
+    }
+  }
   stage("presentation colors and geometry verified " + phase)
 }

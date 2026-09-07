@@ -370,6 +370,15 @@ async fn main {
     defer ignore(release_node(result_node))
     stage("HTTP result observed")
     expect_text(editor, "再入力 🚀")
+    if @env.get_env_var("METONIC_PRESENTATION_CAPTURE") == Some("1") {
+      let long_text = "一行目\n二行目\n三行目\n四行目"
+      assert_eq(set_value(value_provider[0], utf16z(long_text)), 0)
+      expect_text(editor, long_text)
+      capture_presentation(hwnd, "long-editor")
+      assert_eq(set_value(value_provider[0], utf16z("再入力 🚀")), 0)
+      expect_text(editor, "再入力 🚀")
+      capture_presentation(hwnd, "result")
+    }
     let before = FixedArray::make(4, 0)
     guard client_rect(hwnd, before) != 0 else {
       fail("initial client bounds missing")
