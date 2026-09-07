@@ -71,6 +71,10 @@ run = [
 [tasks."browser:install"]
 run = "pnpm exec playwright install chromium"
 
+[tasks."browser:comparison-report"]
+description = "Compare current staged artifacts with existing default and SwiftShader results"
+run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/report-browser-comparison.mbtx'
+
 [tasks."browser:headless"]
 depends = ["browser:build"]
 run = [

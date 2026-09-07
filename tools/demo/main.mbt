@@ -40,7 +40,7 @@ async fn run_session(
       cancel_handler=@process.hard_cancel(),
     )
     defer native.cancel()
-    println("Web: http://127.0.0.1:4173/?target=js (WasmGC: ?target=wasm-gc)")
+    println("Web: http://127.0.0.1:4173/ (WasmGC; JS comparison: ?target=js)")
     println("Native: edit text; F7 lookup, F5 delayed move, F6 cancel.")
     println("Close the native window to stop this demo and its HTTP server.")
     while native.try_wait() is None {

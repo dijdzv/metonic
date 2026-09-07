@@ -4,7 +4,7 @@ import { createTextRenderer } from './text-renderer.mjs';
 const $ = (id) => document.getElementById(id);
 const canvas = $('canvas');
 const status = $('status');
-const target = new URLSearchParams(location.search).get('target') || 'js';
+const target = new URLSearchParams(location.search).get('target') || 'wasm-gc';
 const els = { target: $('target'), bytes: $('artifact-bytes'), load: $('load-ms'), adapter: $('adapter'), dimensions: $('dimensions'), revision: $('revision'), submitted: $('submitted'), transferred: $('transferred') };
 let app, device, context, pipeline, uniform, bindGroup, observer, raf = 0, disposed = false, dirty = false;
 let cssW = 0, cssH = 0, backingW = 0, backingH = 0, submitted = 0, transferred = 0, format;

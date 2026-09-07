@@ -241,6 +241,14 @@ try {
   }
   const output = await runSuite(async (request) => {
     switch (request.op) {
+      case 'default-target': {
+        const page = await browser.newPage();
+        try {
+          await page.goto(`${baseUrl}/`);
+          await waitStatus(page, 'Ready: wasm-gc');
+          return await text(page, '#target');
+        } finally { await page.close(); }
+      }
       case 'editor-flow': {
         const page = await browser.newPage();
         try {
