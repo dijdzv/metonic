@@ -1,0 +1,100 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/debug",
+}
+
+///|
+suberror VerifyFailure {
+  Failure(String)
+} derive(Debug)
+
+///|
+fn fail(message : String) -> Unit raise VerifyFailure {
+  raise VerifyFailure::Failure(message)
+}
+
+///|
+fn normalized_absolute(path : String) -> String {
+  path.replace_all(old="\\", new="/")
+}
+
+///|
+async fn verify_case(
+  moon : String,
+  label : String,
+  executable : String,
+  fixture : String,
+  expect_input_error : Bool,
+  expect_success : Bool,
+  fallback : String,
+) -> Unit raise Error {
+  println("CASE " + label)
+  let envmap : Map[String, String] = Map([])
+  envmap.set("METONIC_GPU_FALLBACK", fallback)
+  let args = [
+    "run", "scripts/verify-window-gpu-async.mbtx", "--", executable, fixture,
+  ]
+  if expect_input_error {
+    args.push("--expect-input-error")
+  }
+  let code = @process.run(
+    moon,
+    args,
+    extra_env=envmap,
+    no_console_window=true,
+    cancel_handler=@process.hard_cancel(),
+  )
+  let succeeded = code == 0
+  if succeeded != expect_success {
+    fail(
+      label +
+      " expected " +
+      (if expect_success { "success" } else { "failure" }) +
+      ", got exit code " +
+      code.to_string(),
+    )
+  }
+}
+
+///|
+async fn main {
+  @async.with_timeout(240000, async fn() {
+    let repo = normalized_absolute(@fs.realpath("."))
+    let moon = repo + "/.tools/moonbit/bin/moon.exe"
+    let executable = repo +
+      "/.work/native-host-build/native/debug/build/local/window_gpu_async/window_gpu_async.exe"
+    let fixture = repo + "/experiments/window_async_contract/input.txt"
+    let missing = repo + "/.work/native-host-missing-input.txt"
+    if !@fs.exists(executable) {
+      fail("missing native host executable: " + executable)
+    }
+    if !@fs.exists(fixture) {
+      fail("missing window async fixture: " + fixture)
+    }
+    if @fs.exists(missing) {
+      fail("missing-input path unexpectedly exists: " + missing)
+    }
+    verify_case(moon, "valid-fallback0", executable, fixture, false, true, "0")
+    verify_case(moon, "valid-fallback1", executable, fixture, false, true, "1")
+    verify_case(
+      moon, "missing-fallback0", executable, missing, false, false, "0",
+    )
+    verify_case(
+      moon, "missing-expect-fallback0", executable, missing, true, true, "0",
+    )
+    verify_case(
+      moon, "missing-expect-fallback1", executable, missing, true, true, "1",
+    )
+    verify_case(
+      moon, "valid-expect-fallback0", executable, fixture, true, false, "0",
+    )
+    println("NATIVE_HOST_VERIFY_OK")
+  }) catch {
+    error => {
+      println("native host verification failed: " + @debug.to_string(error))
+      abort("native host verification failed")
+    }
+  }
+}

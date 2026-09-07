@@ -21,7 +21,8 @@ async fn main {
     if mode != "headless" &&
       mode != "window" &&
       mode != "async" &&
-      mode != "surface" {
+      mode != "surface" &&
+      mode != "host-gpu" {
       fail("invalid native build mode: " + mode)
     }
     let moon = @fs.realpath(".tools/moonbit/bin/moon.exe")
@@ -94,6 +95,37 @@ async fn main {
     envmap.set("VSLANG", "1033")
     envmap.set("MBT_WGPU_NATIVE_ROOT", @fs.realpath(".work/wgpu-assets"))
     envmap.set("MBT_WGPU_LINK_MODE", "static")
+    if mode == "host-gpu" {
+      if @process.run(
+          moon,
+          ["run", "scripts/prepare-native-deps.mbtx"],
+          extra_env=envmap,
+          no_console_window=true,
+        ) !=
+        0 {
+        fail("native dependency preparation failed")
+      }
+      let native_host_build_dir = @fs.realpath(".") + "/.work/native-host-build"
+      if @process.run(
+          moon,
+          [
+            "-C", "native_host", "build", "../experiments/window_gpu_async", "--target",
+            "native", "--target-dir", native_host_build_dir,
+          ],
+          extra_env=envmap,
+          no_console_window=true,
+        ) !=
+        0 {
+        fail("MoonBit host GPU build failed")
+      }
+      let required_exe = native_host_build_dir +
+        "/native/debug/build/local/window_gpu_async/window_gpu_async.exe"
+      if !@fs.exists(required_exe) {
+        fail("native host GPU build artifact missing")
+      }
+      println("NATIVE_BUILD_OK mode=host-gpu")
+      return
+    }
     let package_name = if mode == "headless" {
       "native_headless"
     } else if mode == "surface" {

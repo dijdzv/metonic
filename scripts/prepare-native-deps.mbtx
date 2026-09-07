@@ -1,0 +1,441 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/debug",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/env",
+}
+
+///|
+suberror PrepareFailure {
+  Failure(String)
+} derive(Debug)
+
+///|
+fn fail(message : String) -> Unit raise PrepareFailure {
+  raise PrepareFailure::Failure(message)
+}
+
+///|
+async fn drain(reader : @process.ReadFromProcess) -> String raise Error {
+  let bytes : Array[Byte] = []
+  while true {
+    match reader.read_some(max_len=4096) {
+      None => return @utf8.decode_lossy(Bytes::from_array(bytes))
+      Some(chunk) => {
+        if bytes.length() + chunk.length() > 65536 {
+          fail("child process output exceeded 64 KiB")
+        }
+        for byte in chunk {
+          bytes.push(byte)
+        }
+      }
+    }
+  } nobreak {
+    fail("child process output reader stopped unexpectedly")
+    ""
+  }
+}
+
+///|
+async fn run_process(
+  command : String,
+  args : Array[String],
+  cwd : String,
+) -> (Int, String, String) raise Error {
+  // Pipes are owned by this function, outside the timeout and task group, so
+  // a timeout still closes both readers after hard cancellation has completed.
+  let (stdout_reader, stdout_output) = @process.read_from_process()
+  defer stdout_reader.close()
+  defer stdout_output.close()
+  let (stderr_reader, stderr_output) = @process.read_from_process()
+  defer stderr_reader.close()
+  defer stderr_output.close()
+  @async.with_timeout(90000, async fn() {
+    @async.with_task_group() <| group => {
+      let child = @process.spawn(
+        group,
+        command,
+        args,
+        stdout=stdout_output,
+        stderr=stderr_output,
+        cwd~,
+        no_console_window=true,
+        no_wait=false,
+        cancel_handler=@process.hard_cancel(),
+      )
+      let stdout_task = group.spawn() <| () => { drain(stdout_reader) }
+      let stderr_task = group.spawn() <| () => { drain(stderr_reader) }
+      let exit_code = child.wait()
+      let stdout = stdout_task.wait()
+      let stderr = stderr_task.wait()
+      (exit_code, stdout, stderr)
+    }
+  })
+}
+
+///|
+async fn run_checked(
+  command : String,
+  args : Array[String],
+  cwd : String,
+) -> String raise Error {
+  let (code, stdout, stderr) = run_process(command, args, cwd)
+  if code != 0 {
+    fail(
+      command +
+      " failed (" +
+      code.to_string() +
+      ")\nstdout:\n" +
+      stdout +
+      "\nstderr:\n" +
+      stderr,
+    )
+  }
+  stdout
+}
+
+///|
+fn normalize(path : String) -> String {
+  path.replace_all(old="\\", new="/").to_lower()
+}
+
+///|
+fn is_inside(path : String, root : String) -> Bool {
+  let child = normalize(path)
+  let parent = normalize(root).trim_end(chars="/").to_owned()
+  child == parent || child.has_prefix(parent + "/")
+}
+
+///|
+fn is_strictly_inside(path : String, root : String) -> Bool {
+  let child = normalize(path)
+  let parent = normalize(root).trim_end(chars="/").to_owned()
+  child.has_prefix(parent + "/")
+}
+
+///|
+async fn create_staging(root : String) -> String raise Error {
+  // mkdir is the uniqueness operation.  A separate exists check would race
+  // with another preparation process and could share its staging directory.
+  for index in 0..<10000 {
+    let candidate = root + "/staging-" + index.to_string()
+    try {
+      @fs.mkdir(candidate)
+      return candidate
+    } catch {
+      _ =>
+        if !@fs.exists(candidate) {
+          fail("unable to create staging directory: " + candidate)
+        }
+    }
+  }
+  fail("unable to allocate a unique staging directory")
+  ""
+}
+
+///|
+async fn sha256(path : String, repo_root : String) -> String raise Error {
+  let output = run_checked(
+    "certutil.exe",
+    ["-hashfile", path, "SHA256"],
+    repo_root,
+  )
+  for line in output.split("\n") {
+    let value = line.trim().to_lower()
+    if value.length() == 64 &&
+      value
+      .to_array()
+      .all(c => (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+      return value.to_owned()
+    }
+  }
+  fail("unable to read SHA256 for " + path)
+  ""
+}
+
+///|
+async fn verify_archive(
+  path : String,
+  expected : String,
+  repo_root : String,
+) -> Unit raise Error {
+  if !@fs.exists(path) {
+    fail("missing archive: " + path)
+  }
+  let actual = sha256(path, repo_root)
+  if actual != expected {
+    fail("archive checksum mismatch: " + path)
+  }
+}
+
+///|
+async fn download_archive(
+  path : String,
+  url : String,
+  expected : String,
+  repo_root : String,
+) -> Unit raise Error {
+  if @fs.exists(path) {
+    verify_archive(path, expected, repo_root)
+    return
+  }
+  let part = path + ".part"
+  if @fs.exists(part) {
+    @fs.remove(part)
+  }
+  let mut part_owned = true
+  defer (if part_owned && @fs.exists(part) { @fs.remove(part) })
+  ignore(
+    run_checked(
+      "curl.exe",
+      ["--fail", "--location", "--max-time", "60", url, "-o", part],
+      repo_root,
+    ),
+  )
+  verify_archive(part, expected, repo_root)
+  // Never replace a cache entry that appeared while the download was running.
+  @fs.rename(part, path, replace=false)
+  part_owned = false
+}
+
+///|
+async fn compare_sources(
+  fresh : String,
+  existing : String,
+  repo_root : String,
+) -> Unit raise Error {
+  if !@fs.exists(existing) {
+    return
+  }
+  let (code, stdout, stderr) = run_process(
+    "git",
+    [
+      "diff", "--no-index", "--quiet", "--exit-code", "--no-ext-diff", "--no-textconv",
+      fresh, existing,
+    ],
+    repo_root,
+  )
+  if code == 1 {
+    fail("prepared source differs from existing: " + existing)
+  }
+  if code != 0 {
+    fail(
+      "git source comparison failed (" +
+      code.to_string() +
+      ")\nstdout:\n" +
+      stdout +
+      "\nstderr:\n" +
+      stderr,
+    )
+  }
+}
+
+///|
+async fn prepare(args : Array[String]) -> Unit raise Error {
+  let offline = match args.length() {
+    1 => false
+    2 if args[1] == "--offline" => true
+    _ => {
+      fail("usage: prepare-native-deps [--offline]")
+      false
+    }
+  }
+
+  // These are read-only checks and must precede every mutation, including
+  // creation of .work and the lock directory.
+  let repo_root = @fs.realpath(".")
+  if !@fs.exists(repo_root + "/.git") ||
+    !@fs.exists(repo_root + "/moon.mod") ||
+    !@fs.exists(repo_root + "/scripts/prepare-native-deps.mbtx") ||
+    !@fs.exists(
+      repo_root + "/experiments/window_pump_contract/windows-pump.patch",
+    ) ||
+    !@fs.exists(
+      repo_root + "/experiments/async_waiter_handles/windows-waiter.patch",
+    ) {
+    fail("must run from the Metonic repository root")
+  }
+  let root_relative = ".work/native-deps"
+  let root = root_relative
+  let cache = root + "/cache"
+  let sources = root + "/sources"
+  let lock = root + "/.lock"
+  let window_archive = cache +
+    "/window-b33c9f0ac85002bca4a9cceccbbcd512d13b7ceb.zip"
+  let async_archive = cache + "/async-0.21.2.zip"
+  let window_sha = "41ff1dc110ff92f27938bc3f5b6dce3d72953dfa7fa9d1896b7f2d05d47b7135"
+  let async_sha = "742ee3d84d33d4602953741fb49f310ae5c8814648079facaa4b595d986c1618"
+
+  if @fs.exists(".work") {
+    let work_real = @fs.realpath(".work")
+    if !is_inside(work_real, repo_root) {
+      fail(".work escaped the repository")
+    }
+  }
+  if !@fs.exists(root) {
+    @fs.mkdir(root, recursive=true)
+  }
+  let root_real = @fs.realpath(root)
+  if !is_inside(root_real, repo_root) {
+    fail("native dependency root escaped the repository")
+  }
+  if !@fs.exists(cache) {
+    @fs.mkdir(cache, recursive=true)
+  }
+  // CreateNew semantics are required here: check-then-write is not a lock.
+  @fs.mkdir(lock) catch {
+    _ => fail("another preparation is already running")
+  }
+  defer (if @fs.exists(lock) { @fs.rmdir(lock) })
+
+  if !offline {
+    download_archive(
+      window_archive, "https://github.com/wzzc-dev/window/archive/b33c9f0ac85002bca4a9cceccbbcd512d13b7ceb.zip",
+      window_sha, repo_root,
+    )
+    download_archive(
+      async_archive, "https://download.mooncakes.io/user/moonbitlang%2Fasync%2F0.21.2.zip",
+      async_sha, repo_root,
+    )
+  }
+  verify_archive(window_archive, window_sha, repo_root)
+  verify_archive(async_archive, async_sha, repo_root)
+
+  let staging = create_staging(root)
+  let staging_real = @fs.realpath(staging)
+  if !is_inside(staging_real, root_real) {
+    fail("staging directory escaped native dependency root")
+  }
+  defer (if @fs.exists(staging) {
+    let current_real = @fs.realpath(staging)
+    if current_real == staging_real &&
+      is_strictly_inside(current_real, root_real) {
+      @fs.rmdir(staging, recursive=true)
+    }
+  })
+  let window_parent = staging + "/window"
+  let async_stage = staging + "/async"
+  @fs.mkdir(window_parent)
+  @fs.mkdir(async_stage)
+  // GitHub's source zip contains three README symlinks. Windows tar cannot
+  // create those links, so materialize the link targets as regular files.
+  ignore(
+    run_checked(
+      "tar.exe",
+      ["-xf", window_archive, "--exclude=*/README.md", "-C", window_parent],
+      repo_root,
+    ),
+  )
+  ignore(
+    run_checked("tar.exe", ["-xf", async_archive, "-C", async_stage], repo_root),
+  )
+  let window_stage = window_parent +
+    "/window-b33c9f0ac85002bca4a9cceccbbcd512d13b7ceb"
+  if !@fs.exists(window_stage) {
+    fail("window archive has unexpected root")
+  }
+  let window_readme = @fs.read_file(
+    window_stage + "/modules/window/README.mbt.md",
+  ).text()
+  @fs.write_file(window_stage + "/README.md", window_readme)
+  @fs.write_file(window_stage + "/modules/window/README.md", window_readme)
+  let windowing_readme = @fs.read_file(
+    window_stage + "/modules/windowing/README.mbt.md",
+  ).text()
+  @fs.write_file(
+    window_stage + "/modules/windowing/README.md",
+    windowing_readme,
+  )
+
+  let window_stage_relative = staging +
+    "/window/window-b33c9f0ac85002bca4a9cceccbbcd512d13b7ceb"
+  let async_stage_relative = staging + "/async"
+  ignore(
+    run_checked(
+      "git",
+      [
+        "apply",
+        "--directory=" + window_stage_relative,
+        "--check",
+        "--verbose",
+        "experiments/window_pump_contract/windows-pump.patch",
+      ],
+      repo_root,
+    ),
+  )
+  ignore(
+    run_checked(
+      "git",
+      [
+        "apply",
+        "--directory=" + window_stage_relative,
+        "--verbose",
+        "experiments/window_pump_contract/windows-pump.patch",
+      ],
+      repo_root,
+    ),
+  )
+  ignore(
+    run_checked(
+      "git",
+      [
+        "apply",
+        "--directory=" + async_stage_relative,
+        "--check",
+        "--verbose",
+        "experiments/async_waiter_handles/windows-waiter.patch",
+      ],
+      repo_root,
+    ),
+  )
+  ignore(
+    run_checked(
+      "git",
+      [
+        "apply",
+        "--directory=" + async_stage_relative,
+        "--verbose",
+        "experiments/async_waiter_handles/windows-waiter.patch",
+      ],
+      repo_root,
+    ),
+  )
+
+  let window_existing = sources + "/window"
+  let async_existing = sources + "/async"
+  // Compare every existing destination before publishing any absent source.
+  compare_sources(window_stage, window_existing, repo_root)
+  compare_sources(async_stage, async_existing, repo_root)
+  if !@fs.exists(sources) {
+    @fs.mkdir(sources, recursive=true)
+  }
+  if !@fs.exists(window_existing) {
+    @fs.rename(window_stage, window_existing, replace=false)
+  }
+  if !@fs.exists(async_existing) {
+    @fs.rename(async_stage, async_existing, replace=false)
+  }
+
+  let work_package = root + "/package.json"
+  @fs.write_file(work_package, "{\"type\":\"commonjs\"}\n")
+  let mooncakes = "native_host/.mooncakes"
+  if !@fs.exists(mooncakes) {
+    @fs.mkdir(mooncakes, recursive=true)
+  }
+  @fs.write_file(mooncakes + "/package.json", "{\"type\":\"commonjs\"}\n")
+  println("native dependencies prepared")
+}
+
+///|
+async fn main {
+  prepare(@env.args()) catch {
+    error => {
+      println(
+        "native dependency preparation failed: " + @debug.to_string(error),
+      )
+      abort("native dependency preparation failed")
+    }
+  }
+}

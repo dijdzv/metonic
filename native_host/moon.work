@@ -1,0 +1,8 @@
+members = [
+  ".",
+  "..",
+  "../experiments/window_gpu_async",
+  "../.work/native-deps/sources/window/modules/window",
+  "../.work/native-deps/sources/window/modules/windowing",
+  "../.work/native-deps/sources/async",
+]
