@@ -1,0 +1,322 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/debug",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+  "moonbitlang/core/string",
+}
+
+///|
+suberror ObserverFailure {
+  Failure(String)
+} derive(Debug)
+
+///|
+fn fail(message : String) -> Unit raise ObserverFailure {
+  raise ObserverFailure::Failure(message)
+}
+
+///|
+/// Keep the probe contract independent of the host path syntax.
+fn absolute(path : String) -> Bool {
+  let chars = path.to_array()
+  let drive = chars.length() >= 3 &&
+    (
+      (chars[0] >= 'A' && chars[0] <= 'Z') ||
+      (chars[0] >= 'a' && chars[0] <= 'z')
+    ) &&
+    chars[1] == ':' &&
+    (chars[2] == '\\' || chars[2] == '/')
+  let unc = chars.length() >= 2 && chars[0] == '\\' && chars[1] == '\\'
+  let unix = chars.length() > 0 && chars[0] == '/'
+  drive || unc || unix
+}
+
+///|
+/// Drain each pipe concurrently and retain at most 64 KiB.
+async fn drain(
+  reader : @process.ReadFromProcess,
+  initial_bytes? : Int = 0,
+) -> String raise Error {
+  let bytes : Array[Byte] = []
+  let mut total = initial_bytes
+  while total <= 65536 {
+    match reader.read_some(max_len=4096) {
+      None => return @utf8.decode_lossy(Bytes::from_array(bytes))
+      Some(chunk) =>
+        for byte in chunk {
+          if total == 65536 {
+            fail("output overflow")
+          }
+          bytes.push(byte)
+          total += 1
+        }
+    }
+  }
+  @utf8.decode_lossy(Bytes::from_array(bytes))
+}
+
+///|
+fn result_line(output : String, mode : String) -> Bool {
+  let mut found = 0
+  let mut valid = false
+  for line in output.split("\n") {
+    let trimmed = line.trim()
+    if trimmed.has_prefix("RESULT ") {
+      found += 1
+      let parsed : Json? = Some(@json.parse(trimmed[7:].to_owned())) catch {
+        _ => None
+      }
+      match parsed {
+        Some(Json::Object(values)) => {
+          let ok = match values.get("ok") {
+            Some(Json::True) => true
+            _ => false
+          }
+          let actual_mode = match values.get("mode") {
+            Some(Json::String(value)) => value
+            _ => ""
+          }
+          valid = valid || (ok && actual_mode == mode)
+        }
+        _ => ()
+      }
+    }
+  }
+  found == 1 && valid
+}
+
+///|
+fn proxy_result(output : String, mode : String) -> (Int64, Int64)? {
+  for line in output.split("\n") {
+    let trimmed = line.trim()
+    if trimmed.has_prefix("RESULT ") {
+      let parsed : Json? = Some(@json.parse(trimmed[7:].to_owned())) catch {
+        _ => None
+      }
+      match parsed {
+        Some(Json::Object(values)) => {
+          let good = match values.get("ok") {
+            Some(Json::True) => true
+            _ => false
+          }
+          let actual_mode = match values.get("mode") {
+            Some(Json::String(value)) => value
+            _ => ""
+          }
+          let proxy_ok = match values.get("proxy") {
+            Some(Json::Number(n, ..)) => n == 1.0
+            _ => false
+          }
+          let good = good &&
+            actual_mode == mode &&
+            (mode != "receiver" || proxy_ok)
+          if good {
+            let first = match values.get("start_ms") {
+              Some(Json::Number(n, ..)) if n.to_int64().to_double() == n =>
+                n.to_int64()
+              _ => -1
+            }
+            let second = match values.get("end_ms") {
+              Some(Json::Number(n, ..)) if n.to_int64().to_double() == n =>
+                n.to_int64()
+              _ => -1
+            }
+            let posted = match values.get("posted_ms") {
+              Some(Json::Number(n, ..)) if n.to_int64().to_double() == n =>
+                n.to_int64()
+              _ => -1
+            }
+            if mode == "receiver" {
+              return Some((first, second))
+            }
+            return Some((posted, posted))
+          }
+        }
+        _ => ()
+      }
+    }
+  }
+  None
+}
+
+///|
+async fn run_mode(executable : String, mode : String) -> Bool {
+  let (stdout_reader, stdout_output) = @process.read_from_process()
+  defer stdout_reader.close()
+  defer stdout_output.close()
+  let (stderr_reader, stderr_output) = @process.read_from_process()
+  defer stderr_reader.close()
+  defer stderr_output.close()
+  try {
+    @async.with_timeout(3000, async fn() {
+      @async.with_task_group() <| group => {
+        let child = @process.spawn(
+          group,
+          executable,
+          [mode],
+          stdout=stdout_output,
+          stderr=stderr_output,
+          no_console_window=true,
+          no_wait=false,
+          cancel_handler=@process.hard_cancel(),
+        )
+        let stdout_task = group.spawn() <| () => { drain(stdout_reader) }
+        let stderr_task = group.spawn() <| () => { drain(stderr_reader) }
+        let exit_code = child.wait()
+        let stdout = stdout_task.wait()
+        let stderr = stderr_task.wait()
+        println("mode=" + mode + " exit=" + exit_code.to_string())
+        println("mode=" + mode + " stdout=" + stdout)
+        if stderr.length() > 0 {
+          println("mode=" + mode + " stderr=" + stderr)
+        }
+        if exit_code != 0 || !result_line(stdout, mode) {
+          fail("invalid probe result: " + mode)
+        }
+      }
+    })
+    true
+  } catch {
+    error => {
+      println("mode=" + mode + " failed=" + @debug.to_string(error))
+      false
+    }
+  }
+}
+
+///|
+/// A receiver announces its positive ticket before entering the pump.
+async fn run_proxy(executable : String) -> Bool {
+  let (receiver_reader, receiver_output) = @process.read_from_process()
+  defer receiver_reader.close()
+  defer receiver_output.close()
+  let (receiver_err_reader, receiver_err_output) = @process.read_from_process()
+  defer receiver_err_reader.close()
+  defer receiver_err_output.close()
+  let (sender_reader, sender_output) = @process.read_from_process()
+  defer sender_reader.close()
+  defer sender_output.close()
+  let (sender_err_reader, sender_err_output) = @process.read_from_process()
+  defer sender_err_reader.close()
+  defer sender_err_output.close()
+  try {
+    @async.with_timeout(3000, async fn() {
+      @async.with_task_group() <| group => {
+        let receiver = @process.spawn(
+          group,
+          executable,
+          ["receiver"],
+          stdout=receiver_output,
+          stderr=receiver_err_output,
+          no_console_window=true,
+          no_wait=false,
+          cancel_handler=@process.hard_cancel(),
+        )
+        let receiver_err_task = group.spawn() <| () => {
+          drain(receiver_err_reader)
+        }
+        let ready_bytes : Array[Byte] = []
+        let mut ready_done = false
+        while ready_bytes.length() <= 65536 && !ready_done {
+          match receiver_reader.read_some(max_len=4096) {
+            None => fail("receiver ended before READY")
+            Some(bytes) =>
+              for byte in bytes {
+                if ready_bytes.length() == 65536 {
+                  fail("receiver stdout overflow")
+                }
+                ready_bytes.push(byte)
+                if byte == 10 {
+                  ready_done = true
+                }
+              }
+          }
+        }
+        let ready = @utf8.decode_lossy(Bytes::from_array(ready_bytes))
+        let lines = ready.split("\n").to_array()
+        guard lines.length() > 0 else { fail("invalid READY line") }
+        let first_line = lines[0]
+        guard first_line.has_prefix("READY ") else {
+          fail("invalid READY line")
+        }
+        let tid = first_line[6:].to_owned().trim().to_owned()
+        let tid_value : UInt = @string.parse_uint(tid) catch {
+          _ => {
+            fail("invalid READY ticket")
+            0U
+          }
+        }
+        guard tid_value > 0U else { fail("invalid READY ticket") }
+        @async.sleep(100)
+        let sender = @process.spawn(
+          group,
+          executable,
+          ["sender", tid],
+          stdout=sender_output,
+          stderr=sender_err_output,
+          no_console_window=true,
+          no_wait=false,
+          cancel_handler=@process.hard_cancel(),
+        )
+        let receiver_out = group.spawn() <| () => {
+          drain(receiver_reader, initial_bytes=ready_bytes.length())
+        }
+        let sender_out = group.spawn() <| () => { drain(sender_reader) }
+        let sender_err = group.spawn() <| () => { drain(sender_err_reader) }
+        let receiver_code = receiver.wait()
+        let sender_code = sender.wait()
+        let receiver_text = ready + receiver_out.wait()
+        let sender_text = sender_out.wait()
+        ignore(receiver_err_task.wait())
+        ignore(sender_err.wait())
+        let receiver_times = proxy_result(receiver_text, "receiver")
+        let sender_times = proxy_result(sender_text, "sender")
+        let times_ok = match (receiver_times, sender_times) {
+          (Some((start_ms, end_ms)), Some((posted_ms, _))) =>
+            start_ms <= posted_ms && posted_ms <= end_ms && end_ms > start_ms
+          _ => false
+        }
+        if receiver_code != 0 ||
+          sender_code != 0 ||
+          !result_line(receiver_text, "receiver") ||
+          !result_line(sender_text, "sender") ||
+          !times_ok {
+          fail("proxy result invalid")
+        }
+        println("proxy receiver=" + receiver_text)
+        println("proxy sender=" + sender_text)
+      }
+    })
+    true
+  } catch {
+    error => {
+      println("mode=proxy failed=" + @debug.to_string(error))
+      false
+    }
+  }
+}
+
+///|
+async fn main {
+  let args = @env.args()
+  guard args.length() == 2 && absolute(args[1]) else {
+    abort("usage: verify-window-pump <absolute-executable>")
+  }
+  let executable = args[1]
+  let mut all_ok = true
+  for mode in ["poll", "proxy", "flood", "wait", "deadline", "past", "quit"] {
+    let ok = run_mode(executable, mode)
+    if !ok {
+      all_ok = false
+    }
+  }
+  if !run_proxy(executable) {
+    all_ok = false
+  }
+  if !all_ok {
+    abort("window pump observation failed")
+  }
+}
