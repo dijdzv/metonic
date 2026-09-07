@@ -24,9 +24,19 @@ oversized-line recovery, and normal shutdown passed. Missing bridge and missing
 capture path returned capture failures without changing state or frame count.
 EOF terminated successfully without an unsolicited response.
 
+On 2026-09-07 the MoonBit verifier passed these scenarios on both adapters.
+Independent pngjs decoding also matched every expected pixel in all eight output
+images: 230400 pixels for each 640x360 capture and 61181 for each resized capture.
+
 ## Reproduction
 
-Install the pinned project dependencies with `pnpm install --frozen-lockfile`.
+The verifier in `tools/verify_native_headless` uses a test-only raw process
+transport. Invalid versions, malformed JSON and oversized lines must reach the
+native parser unchanged; the normal control client rejects these before sending.
+The raw transport bounds response lines and stderr, applies request and shutdown
+deadlines, and rejects trailing output. PNG encoding reuses `mizchi/image`.
+
+Complete the toolchain setup in the [development guide](../development.md).
 Run `mise run native:headless` to build and verify the native probe.
 Set `METONIC_GPU_FALLBACK=1` for the software adapter run.
 PNG images, raw RGBA, adapter diagnostics, and JSON results are written below
