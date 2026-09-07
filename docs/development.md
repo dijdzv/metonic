@@ -302,6 +302,41 @@ this timer experiment and a general asynchronous runtime.
 
 ## Native development control
 
+### Integrated window
+
+`mise run native:window-dev-build` builds the dedicated `window_dev` entry point
+under `.work/native-host-build/native/debug/build/local/native_host/window_dev/`.
+Launch `window_dev.exe` from the repository root with stdin/stdout pipes to control
+the same window implementation as `native:window`. Set `METONIC_DEV_HIDDEN=1` for
+hidden operation. EOF closes the owned window. This is a launch-scoped connection;
+it does not attach to an independently running application.
+
+Send one JSON object per line, with positive, strictly increasing `id` values:
+
+```json
+{"id":1,"op":"snapshot"}
+{"id":2,"op":"insert","text":"日本語","expected_semantic_revision":1}
+{"id":3,"op":"backspace","expected_semantic_revision":2}
+{"id":4,"op":"start_update"}
+{"id":5,"op":"cancel_update"}
+```
+
+Replies include the request ID, an error string (empty on success), text and
+selection state, semantic revision, submitted frame count and task status.
+Edits check the optional expected revision on the UI event path immediately
+before applying the change. Lines are limited to 4095 bytes; malformed/oversized
+requests and duplicate IDs do not prevent subsequent valid requests.
+
+`mise run native:window-control` verifies editing, stale-revision rejection,
+request correlation, malformed/oversized input recovery and EOF cleanup on
+default and fallback GPU adapters. It is part of the local pre-commit gate.
+These hidden checks do not establish physical input or OS accessibility.
+The current MCP commands below still use the separate headless renderer.
+Protocol imports are in `window_dev`; full production exclusion is not yet proven
+because shared UI diagnostic fixtures and capture support still remain.
+
+### Existing headless renderer control
+
 Build with `mise run native:build` first. `mise run native:cli` reads one JSON
 object per line and keeps a dedicated native process alive until stdin closes:
 

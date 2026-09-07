@@ -1,0 +1,79 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/json",
+}
+
+///|
+struct Reply {
+  id : Json
+  error : String
+  text : String?
+  frames : Int?
+  task_status : Int?
+} derive(FromJson)
+
+///|
+async fn verify_case(fallback : Bool) -> Unit {
+  let initial = "日本語の描画を確認します ABC 123"
+  let mut oversized = ""
+  for _ in 0..<4200 {
+    oversized += "x"
+  }
+  let requests = "{\"id\":1,\"op\":\"snapshot\"}\n{\"id\":2,\"op\":\"insert\",\"text\":\"日本\"}\n{\"id\":3,\"op\":\"backspace\"}\n{\"id\":4,\"op\":\"start_update\"}\n{\"id\":5,\"op\":\"cancel_update\"}\ninvalid\n" +
+    oversized +
+    "\n{\"id\":6,\"op\":\"snapshot\"}"
+  let requests = requests +
+    "\n{\"id\":6,\"op\":\"insert\",\"text\":\"wrong\"}\n{\"id\":7,\"op\":\"insert\",\"text\":\"wrong\",\"expected_semantic_revision\":1}\n{\"id\":8,\"op\":\"insert\",\"text\":\"Z\",\"expected_semantic_revision\":3}"
+  @fs.write_file(".work/window-control-input.jsonl", requests)
+  let env : Map[String, String] = Map([])
+  env.set("METONIC_DEV_HIDDEN", "1")
+  env.set("METONIC_WINDOW_TEST", "0")
+  env.set("METONIC_GPU_FALLBACK", if fallback { "1" } else { "0" })
+  let input = @process.redirect_from_file(".work/window-control-input.jsonl")
+  let (code, out, err) = @async.with_timeout(20000, () => {
+    @process.collect_output(
+      ".work/native-host-build/native/debug/build/local/native_host/window_dev/window_dev.exe",
+      [],
+      extra_env=env,
+      stdin=input,
+      no_console_window=true,
+    )
+  })
+  let tag = if fallback { "fallback" } else { "default" }
+  @fs.write_file(".work/window-control-" + tag + "-output.jsonl", out.text())
+  @fs.write_file(".work/window-control-" + tag + "-error.log", err.text())
+  assert_eq(code, 0)
+  let rows = out.text().trim().split("\n").to_array()
+  assert_eq(rows.length(), 11)
+  let replies : Array[Reply] = rows.map(row => {
+    @json.from_json(@json.parse(row.to_owned()))
+  })
+  assert_eq(replies[0].text, Some(initial))
+  assert_eq(replies[1].text, Some(initial + "日本"))
+  assert_eq(replies[2].text, Some(initial + "日"))
+  assert_true(replies[1].frames.unwrap() > replies[0].frames.unwrap())
+  assert_eq(replies[3].task_status, Some(1))
+  assert_eq(replies[4].task_status, Some(4))
+  assert_eq(replies[5].error, "invalid_request")
+  assert_eq(replies[6].error, "line_too_long")
+  assert_eq(replies[7].id, Json::number(6))
+  assert_eq(replies[7].text, Some(initial + "日"))
+  assert_eq(replies[8].error, "duplicate_id")
+  assert_eq(replies[8].text, Some(initial + "日"))
+  assert_eq(replies[9].error, "stale_revision")
+  assert_eq(replies[9].text, Some(initial + "日"))
+  assert_eq(replies[10].error, "")
+  assert_eq(replies[10].text, Some(initial + "日Z"))
+  for index in [0, 1, 2, 3, 4, 7] {
+    assert_eq(replies[index].error, "")
+  }
+  println("WINDOW_CONTROL_OK")
+}
+
+///|
+async fn main {
+  verify_case(false)
+  verify_case(true)
+}
