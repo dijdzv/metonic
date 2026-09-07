@@ -465,6 +465,10 @@ requests and duplicate IDs do not prevent subsequent valid requests.
 request correlation, malformed/oversized input recovery and EOF cleanup on
 default and fallback GPU adapters. It is part of the local pre-commit gate.
 These hidden checks do not establish physical input or OS accessibility.
+The same task also opens a development window briefly on default and fallback
+GPUs and closes only its owned HWND while control stdin remains open. It checks
+normal process exit, stdout EOF and rejection of a later pipe write. This verifies
+idle window-initiated shutdown, not an in-flight capture/edit race.
 For MCP, use the pinned Node executable with the absolute path to
 `tools/devtools/window-mcp.mjs`. This dedicated server exposes `window_snapshot`,
 `window_insert`, `window_backspace`, `window_start_update` and `window_cancel_update`.
