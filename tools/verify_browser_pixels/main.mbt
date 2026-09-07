@@ -314,7 +314,17 @@ fn dpr2(request : Json) -> Json raise VerifyFailure {
 fn verify_checked(request : String) -> String raise Error {
   let value = @json.parse(request)
   let action = string_field(value, "action")
-  let result = if action == "scene" {
+  let result = if action == "ready" {
+    verify_ready(value)
+  } else if action == "browser_result" {
+    verify_browser_result(value)
+  } else if action == "text_counts" {
+    verify_text_counts(value)
+  } else if action == "initialization" {
+    verify_initialization(value)
+  } else if action == "state" {
+    verify_state(value)
+  } else if action == "scene" {
     scene(value)
   } else if action == "crop" {
     crop(value)
