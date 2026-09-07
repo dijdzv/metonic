@@ -11,7 +11,6 @@
 #define MOONBIT_FFI_EXPORT __declspec(dllexport)
 #endif
 
-static int32_t read_status;
 static HMODULE gpu_library;
 static void *gpu_context;
 typedef void *(__cdecl *gpu_create_fn)(int32_t);
@@ -25,48 +24,6 @@ static gpu_destroy_fn gpu_destroy;
 
 static int absolute_path(const wchar_t *path) {
     return path && ((((path[0] >= L'A' && path[0] <= L'Z') || (path[0] >= L'a' && path[0] <= L'z')) && path[1] == L':' && (path[2] == L'\\' || path[2] == L'/')) || (path[0] == L'\\' && path[1] == L'\\'));
-}
-
-MOONBIT_FFI_EXPORT int32_t metonic_read_status(void) { return read_status; }
-
-MOONBIT_FFI_EXPORT moonbit_string_t metonic_read_line(void) {
-    char buffer[4096];
-    size_t length = 0;
-    int oversized = 0;
-    int c;
-    read_status = 0;
-    while ((c = fgetc(stdin)) != EOF && c != '\n') {
-        if (length < sizeof(buffer) - 1) buffer[length++] = (char)c;
-        else oversized = 1;
-    }
-    if (c == EOF && length == 0) { read_status = 1; return moonbit_make_string(0, 0); }
-    if (oversized) { read_status = 2; return moonbit_make_string(0, 0); }
-    if (length && buffer[length - 1] == '\r') --length;
-    if (length == 0) { read_status = 0; return moonbit_make_string(0, 0); }
-    buffer[length] = 0;
-    int wide_len = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, buffer, (int)length, NULL, 0);
-    if (wide_len <= 0) { read_status = 3; return moonbit_make_string(0, 0); }
-    wchar_t *wide = (wchar_t *)malloc((size_t)wide_len * sizeof(wchar_t));
-    if (!wide) { read_status = 3; return moonbit_make_string(0, 0); }
-    MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, buffer, (int)length, wide, wide_len);
-    moonbit_string_t result = moonbit_make_string_raw((size_t)wide_len);
-    memcpy(result, wide, (size_t)wide_len * sizeof(wchar_t));
-    free(wide);
-    read_status = (read_status == 2) ? 2 : 0;
-    return result;
-}
-
-MOONBIT_FFI_EXPORT int32_t metonic_write_line(moonbit_string_t text) {
-    size_t length = Moonbit_array_length(text);
-    int bytes = WideCharToMultiByte(CP_UTF8, 0, (LPCWCH)text, (int)length, NULL, 0, NULL, NULL);
-    if (length && bytes <= 0) return -1;
-    char *utf8 = (char *)malloc((size_t)bytes + 1);
-    if (!utf8) return -1;
-    if (bytes && WideCharToMultiByte(CP_UTF8, 0, (LPCWCH)text, (int)length, utf8, bytes, NULL, NULL) <= 0) { free(utf8); return -1; }
-    utf8[bytes] = '\n';
-    int32_t result = (fwrite(utf8, 1, (size_t)bytes + 1, stdout) == (size_t)bytes + 1 && fflush(stdout) == 0) ? 0 : -1;
-    free(utf8);
-    return result;
 }
 
 static int load_gpu(void) {

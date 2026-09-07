@@ -343,6 +343,7 @@ async fn main {
   let captures : Ref[Array[Json]] = { val: [], }
   @async.with_timeout(20000, async fn() {
     captures.val = verify_session(root, directory, capture_path, bridge)
+    verify_stdio(root, bridge, capture_path)
     verify_failure_session(
       root,
       root + "/.work/native-cargo/release/missing-probe.dll",
@@ -370,6 +371,7 @@ async fn main {
         Json::string("capture-path-failure"),
         Json::string("oversize"),
         Json::string("shutdown"),
+        Json::string("stdio"),
       ]),
     })
     @fs.write_file(directory + "/results.json", results.stringify())

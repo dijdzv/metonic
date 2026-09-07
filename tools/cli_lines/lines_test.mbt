@@ -92,3 +92,97 @@ test "chunking is equivalent" {
   assert_eq(tail.length(), 0)
   assert_eq(whole.length(), 3)
 }
+
+///|
+test "LF-only mode strips fragmented CRLF and preserves internal CR" {
+  let lines = Lines::new(lf_only=true)
+  assert_eq(lines.feed(b"a\r").length(), 0)
+  let output = lines.feed(b"\nb\rc\n")
+  assert_eq(output.length(), 2)
+  assert_line(output[0], b"a")
+  assert_line(output[1], b"b\rc")
+
+  let json = Lines::new(lf_only=true)
+  let json_output = json.feed(b"{\"value\":\r1}\n")
+  assert_eq(json_output.length(), 1)
+  assert_line(json_output[0], b"{\"value\":\r1}")
+}
+
+///|
+test "LF-only mode accepts 4095 body with CRLF and recovers after 4096" {
+  let accepted = Lines::new(lf_only=true)
+  let body : Array[Byte] = Array::make(4095, b'a')
+  body.push(b'\r')
+  body.push(b'\n')
+  let output = accepted.feed(Bytes::from_array(body))
+  assert_eq(output.length(), 1)
+  assert_line(output[0], Bytes::from_array(Array::make(4095, b'a')))
+
+  let lf = Lines::new(lf_only=true)
+  let lf_accepted_body : Array[Byte] = Array::make(4095, b'l')
+  lf_accepted_body.push(b'\n')
+  let lf_accepted_output = lf.feed(Bytes::from_array(lf_accepted_body))
+  assert_eq(lf_accepted_output.length(), 1)
+  assert_line(lf_accepted_output[0], Bytes::from_array(Array::make(4095, b'l')))
+
+  let lf = Lines::new(lf_only=true)
+  let lf_body : Array[Byte] = Array::make(4096, b'l')
+  lf_body.push(b'\n')
+  let lf_output = lf.feed(Bytes::from_array(lf_body))
+  assert_eq(lf_output.length(), 1)
+  match lf_output[0] {
+    TooLong => ()
+    Line(_) => fail("expected TooLong")
+  }
+
+  let lines = Lines::new(lf_only=true)
+  let oversized : Array[Byte] = Array::make(4095, b'x')
+  oversized.push(b'\r')
+  oversized.push(b'y')
+  oversized.push(b'\n')
+  let too_long = lines.feed(Bytes::from_array(oversized))
+  assert_eq(too_long.length(), 1)
+  match too_long[0] {
+    TooLong => ()
+    Line(_) => fail("expected TooLong")
+  }
+  let recovered = lines.feed(b"ok\n")
+  assert_eq(recovered.length(), 1)
+  assert_line(recovered[0], b"ok")
+
+  let eof_oversized = Lines::new(lf_only=true)
+  let eof_body : Array[Byte] = Array::make(4096, b'e')
+  let _ = eof_oversized.feed(Bytes::from_array(eof_body))
+  let eof_output = eof_oversized.finish()
+  assert_eq(eof_output.length(), 1)
+  match eof_output[0] {
+    TooLong => ()
+    Line(_) => fail("expected EOF TooLong")
+  }
+  assert_eq(eof_oversized.finish().length(), 0)
+}
+
+///|
+test "LF-only mode handles EOF CR and empty stream" {
+  let only_cr = Lines::new(lf_only=true)
+  assert_eq(only_cr.feed(b"\r").length(), 0)
+  let empty = only_cr.finish()
+  assert_eq(empty.length(), 1)
+  assert_line(empty[0], b"")
+
+  let final_cr = Lines::new(lf_only=true)
+  let _ = final_cr.feed(b"tail\r")
+  let output = final_cr.finish()
+  assert_eq(output.length(), 1)
+  assert_line(output[0], b"tail")
+
+  let after_line = Lines::new(lf_only=true)
+  let _ = after_line.feed(b"x\n\r")
+  let after_line_output = after_line.finish()
+  assert_eq(after_line_output.length(), 1)
+  assert_line(after_line_output[0], b"")
+  assert_eq(after_line.finish().length(), 0)
+
+  let no_input = Lines::new(lf_only=true)
+  assert_eq(no_input.finish().length(), 0)
+}
