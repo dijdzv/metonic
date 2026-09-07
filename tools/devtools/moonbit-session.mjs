@@ -1,12 +1,15 @@
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { randomUUID } from 'node:crypto';
 
 const MAX_PENDING = 16;
 const MAX_STDOUT = 32 * 1024 * 1024;
 const MAX_STDERR = 16 * 1024;
 
 export async function createMoonBitSession(options = {}) {
+  const windowProtocol = options.protocol === 'window';
+  if (options.protocol !== undefined && !['window', 'headless'].includes(options.protocol)) throw new Error('unknown session protocol');
   const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
   const executable = options.executable ?? path.join(repo, '.tools', 'moonbit', 'bin', 'moonrun.exe');
   const program = path.join(repo, '_build', 'wasm', 'release', 'build', 'tools', 'native_session', 'native_session.wasm');
@@ -23,7 +26,7 @@ export async function createMoonBitSession(options = {}) {
   let lineParts = [];
   let lineBytes = 0;
   let nextId = 1;
-  let sessionId;
+  let sessionId = windowProtocol ? randomUUID() : undefined;
   let fatalError;
   let closing = false;
   let closePromise;
@@ -31,6 +34,7 @@ export async function createMoonBitSession(options = {}) {
   let readyResolve;
   let readyReject;
   const ready = new Promise((resolve, reject) => { readyResolve = resolve; readyReject = reject; });
+  if (windowProtocol) ready.catch(() => {});
   const stderrChunks = [];
   let stderrBytes = 0;
   let exited = false;
@@ -56,6 +60,10 @@ export async function createMoonBitSession(options = {}) {
     void close().catch(error => console.error(error));
   }
   function dispatch(value) {
+    if (windowProtocol) {
+      if (!value || typeof value.error !== 'string') return fail(new Error('invalid window response'));
+      value = { id: value.id, ok: value.error === '', error: value.error, response: value };
+    }
     if (value?.id === 0 && !sessionId) {
       if (value.ok !== true || typeof value.session_id !== 'string' || value.session_id.length === 0) return fail(new Error('invalid session ready response'));
       sessionId = value.session_id;
@@ -76,6 +84,10 @@ export async function createMoonBitSession(options = {}) {
     }
   }
   function validNativeResponse(response) {
+    if (windowProtocol) return response && typeof response.text === 'string' &&
+      Number.isInteger(response.semantic_revision) && response.semantic_revision >= 0 &&
+      Number.isInteger(response.frames) && response.frames >= 0 &&
+      Number.isInteger(response.task_status) && response.task_status >= 0 && response.task_status <= 5;
     const state = response?.state;
     return response && typeof response === 'object' && Number.isInteger(response.version) && response.version === 1 &&
       Number.isInteger(response.id) && response.id > 0 && typeof response.ok === 'boolean' &&
@@ -145,7 +157,7 @@ export async function createMoonBitSession(options = {}) {
     if (id > 2147483647) return Promise.reject(new Error('native session request id exhausted'));
     if (typeof op !== 'string' || !args || typeof args !== 'object' || Array.isArray(args)) return Promise.reject(new Error('invalid native session request'));
     let payload;
-    try { payload = `${JSON.stringify({ id, op, args })}\n`; }
+    try { payload = `${JSON.stringify(windowProtocol ? { ...args, id, op } : { id, op, args })}\n`; }
     catch (error) { return Promise.reject(new Error(`invalid native session request: ${error.message}`)); }
     if (Buffer.byteLength(payload, 'utf8') - 1 > 4095) return Promise.reject(new Error('native session request exceeds 4095 bytes'));
     return new Promise((resolve, reject) => {
@@ -193,7 +205,8 @@ export async function createMoonBitSession(options = {}) {
   }
   let readyTimer;
   try {
-    await Promise.race([ready, new Promise((_, reject) => { readyTimer = setTimeout(() => reject(diagnosticError('native session ready timeout')), readyTimeoutMs); })]);
+    const readiness = windowProtocol ? requestEnvelope('snapshot') : ready;
+    await Promise.race([readiness, new Promise((_, reject) => { readyTimer = setTimeout(() => reject(diagnosticError('native session ready timeout')), readyTimeoutMs); })]);
   } catch (error) {
     try { await close(); }
     catch (cleanupError) { error.cleanupError = cleanupError; }
