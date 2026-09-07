@@ -90,6 +90,13 @@ directory. Inside that directory, its CommonJS `build.js` inherited the parent's
 `type: module` and failed before compilation. A package boundary is needed when
 integrating this prebuild hook; this is not a GPU failure.
 
+With the dependency in the root module, the hook also runs when building a Wasm
+verification tool that does not import `native_gpu`. Keeping the asset override
+only inside the native build subprocess is insufficient: the following Wasm
+build falls back to upstream extraction. Root-module developer commands therefore
+need the prepared asset and override environment even for non-native targets.
+This is a build-time coupling, not a browser runtime dependency on native wgpu.
+
 The hook's Windows PowerShell archive expansion also failed in this environment.
 Downloading the pinned release, verifying its SHA256 and extracting it with `tar`
 allowed use of the existing `MBT_WGPU_NATIVE_ROOT` override. No binding source
@@ -100,6 +107,22 @@ warnings, and an ignored `-lvulkan-1` MSVC option. The tests nevertheless ran;
 warnings must be addressed or scoped before integrating strict project checks.
 
 ## Next acceptance
+
+The root `native_gpu` package now composes the binding with a persistent
+rectangle pipeline and bounded readback. On 2026-09-07 its seven tests passed
+with both the default and forced-fallback DX12 adapters using
+`moon test native_gpu --target native --deny-warn --frozen` in the configured
+MSVC/static-link environment. The suite includes the five callback contracts,
+real GPU timeout/recovery, and renderer lifecycle. One renderer produces full
+RGBA comparisons at 640x360, 317x193 and 1x1, rejects invalid inputs, recovers
+after those errors, and rejects rendering after idempotent close. Adapter-name
+access after close uses the retained string rather than a released native handle.
+
+The native headless release executable also built successfully. These package
+tests and compilation do not alone establish application transport or MCP
+integration. The upstream C4819 source-code-page and ignored `-lvulkan-1`
+warnings remain visible in MSVC output; MoonBit's `--deny-warn` is not an MSVC
+warnings-as-errors policy.
 
 The bounded readback comparison uses a caller-owned registry. Each GPU ticket
 retains native references until its callback reaches a terminal state and clear
@@ -128,6 +151,15 @@ Source inspection on 2026-09-07 found that the synchronous readback helper in
 `src/c/wgpu_stub_map.c` polls until its callback completes without a deadline.
 The Rust baseline bounds device polling and result receipt at ten seconds each.
 Replacing that call directly would lose an existing completion bound.
+
+The resolved 0.16.0 dependency also uses unbounded `done_u32` polling in
+`mbt_wgpu_instance_request_adapter_sync_ptr` and
+`mbt_wgpu_adapter_request_device_sync_ptr` in `src/c/wgpu_stub_helpers_sync.c`.
+The bounded readback operation does not cover these synchronous initialization
+calls. A parent process deadline can terminate an unresponsive headless host;
+an async timeout inside that host cannot interrupt a synchronous FFI call.
+Interactive initialization requires separate event-loop and cancellation
+evaluation. This source finding is not an observed initialization hang.
 
 The candidate also exposes asynchronous submit/map, status, read and clear APIs.
 In upstream commit `5b0608223bc491688a6f0f41492f23682717bc3b`,

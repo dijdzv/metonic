@@ -103,10 +103,24 @@ parent shell's environment is not modified. Toolchain installation remains a
 separate bootstrap step.
 
 Native probe build tasks use `scripts/build-native.mbtx` with explicit headless,
-window or async modes. Each mode builds the locked Rust bridge and headless
-baseline; window/async additionally rebuild their C stub and executable. The
+window or async modes. Each mode builds the MoonBit headless executable;
+window/async additionally build the locked Rust bridge, C stub and executable. The
 script checks output artifacts and rejects unsupported modes before building.
-This migrates build orchestration, not the retained Rust/C implementation.
+Headless rendering uses the existing wgpu binding; the window/worker Rust and C
+implementation remains under comparison.
+
+Bootstrap, verification, pre-commit and native builds run
+`scripts/prepare-wgpu.mbtx` before using the root module's wgpu binding.
+It downloads the pinned Windows x64 MSVC
+wgpu-native archive through `gh`, verifies SHA256 with `certutil`, and extracts
+it with `tar` under `.work/wgpu-assets`. These tools must be available on PATH.
+mise and the toolchain wrapper set `MBT_WGPU_NATIVE_ROOT` and
+`MBT_WGPU_LINK_MODE=static`; the build and verification scripts also configure
+their child processes. The upstream module hook runs for non-native builds too,
+so these settings apply to all root-module targets. The preparation creates an ignored CommonJS package
+boundary under `.mooncakes` for the upstream prebuild hook; the repository root
+remains ESM for generated browser verification modules. It does not patch the
+dependency's source files.
 
 `mise run hooks:install` uses mise's built-in Git hook generator. Run it once per
 clone with the default Git hooks directory; it replaces `.git/hooks/pre-commit`,
@@ -144,14 +158,13 @@ verification tasks. CI must use the same committed pin.
 Node 26.8.1 runs generated JavaScript; it is not a native product dependency.
 pnpm 12.3.4 manages the pinned Playwright and PNG inspection tools used by browser
 verification. Commit `pnpm-lock.yaml` and use `pnpm install --frozen-lockfile` in CI.
-The native GPU probe uses Rust 1.98.1 from `rust-toolchain.toml` and exact wgpu
+The native window/worker probes use Rust 1.98.1 from `rust-toolchain.toml` and exact wgpu
 dependencies in `bridges/wgpu/Cargo.lock`. Install this toolchain through rustup;
 the build uses `--locked` and does not change the global default toolchain.
 
 ## Native headless GPU probe
 
 ```powershell
-rustup toolchain install 1.98.1 --profile minimal --component rustfmt
 mise exec -- pnpm install --frozen-lockfile
 mise run native:headless
 $env:METONIC_GPU_FALLBACK = '1'
@@ -159,9 +172,10 @@ mise run native:headless
 Remove-Item Env:METONIC_GPU_FALLBACK
 ```
 
-This builds the MoonBit executable and Rust/wgpu DLL, then drives the executable
-through JSON lines. MoonBit owns scene state; the DLL owns offscreen DX12
-rendering and readback. PNG captures, adapter diagnostics, and results stay in
+This builds the MoonBit executable with statically linked wgpu-native, then drives
+it through JSON lines. MoonBit owns scene state and persistent GPU composition
+through `Milky2018/wgpu_mbt`; this task does not build the custom Rust DLL.
+PNG captures, adapter diagnostics, and results stay in
 `.work/native-headless/default` or `fallback`. The verifier checks complete pixel
 colors/bounds, stale requests, malformed input, capture failure, and shutdown.
 It opens no window. Window input, IME, accessibility, MCP integration, and

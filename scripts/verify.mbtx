@@ -31,6 +31,9 @@ async fn main {
     let native = @env.get_env_var("METONIC_VERIFY_NATIVE") == Some("1")
     let envmap : Map[String, String] = Map([])
     envmap.set("MOON_HOME", moon_home)
+    run_checked(moon, ["run", "scripts/prepare-wgpu.mbtx"], envmap)
+    envmap.set("MBT_WGPU_NATIVE_ROOT", @fs.realpath(".work/wgpu-assets"))
+    envmap.set("MBT_WGPU_LINK_MODE", "static")
     if native {
       let program_files = @env.get_env_var("ProgramFiles(x86)").unwrap_or(
         "C:/Program Files (x86)",

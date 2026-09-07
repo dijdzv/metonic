@@ -1,7 +1,10 @@
 import {
+  "local/p0/native_gpu" @gpu,
   "local/p0/tools/cli_lines" @lines,
   "moonbitlang/async",
+  "moonbitlang/async/fs",
   "moonbitlang/async/stdio",
+  "moonbitlang/core/env",
   "local/p0/examples/p0/scene",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
@@ -11,7 +14,3 @@ import {
 pkgtype(kind: "executable")
 
 supported_targets = "native"
-
-options(
-  "native-stub": [ "bridge.c" ],
-)

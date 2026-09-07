@@ -4,11 +4,13 @@ node = "26.8.1"
 
 [env]
 MOON_HOME = "{{config_root}}/.tools/moonbit"
+MBT_WGPU_NATIVE_ROOT = "{{config_root}}/.work/wgpu-assets"
+MBT_WGPU_LINK_MODE = "static"
 _.path = ["{{config_root}}/.tools/moonbit/bin"]
 
 [tasks.bootstrap]
 description = "Install the pinned current MoonBit toolchain with SHA256 verification"
-run = ["pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap.ps1", '.\\.tools\\moonbit\\bin\\moon.exe update']
+run = ["pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap.ps1", '.\\.tools\\moonbit\\bin\\moon.exe update', '.\\.tools\\moonbit\\bin\\moon.exe run scripts/prepare-wgpu.mbtx']
 
 [tasks.doctor]
 description = "Check the project toolchain"

@@ -291,7 +291,10 @@ async fn verify_session(
     session.finish()
   })
   @fs.write_file(directory + "/stderr.log", @utf8.encode(stderr))
-  require(stderr.to_lower().contains("dx12"), "DX12 diagnostic")
+  require(
+    stderr.to_lower().contains("backend=dx12 adapter="),
+    "DX12 diagnostic",
+  )
   captures
 }
 
@@ -344,12 +347,21 @@ async fn main {
   @async.with_timeout(20000, async fn() {
     captures.val = verify_session(root, directory, capture_path, bridge)
     verify_stdio(root, bridge, capture_path)
-    verify_failure_session(
-      root,
-      root + "/.work/native-cargo/release/missing-probe.dll",
-      capture_path,
-    )
     verify_failure_session(root, bridge, "")
+    verify_failure_session(root, bridge, "relative.rgba")
+    verify_failure_session(root, bridge, directory)
+    let static_directory = directory + "/static-link-independence"
+    if !@fs.exists(static_directory) {
+      @fs.mkdir(static_directory, recursive=true)
+    }
+    ignore(
+      verify_session(
+        root,
+        static_directory,
+        static_directory + "/capture.rgba",
+        root + "/.work/native-cargo/release/missing-probe.dll",
+      ),
+    )
     let eof_stderr = with_raw(
       root +
       "/_build/native/release/build/examples/p0/native_headless/native_headless.exe",
@@ -367,7 +379,7 @@ async fn main {
         Json::string("captures"),
         Json::string("errors"),
         Json::string("EOF"),
-        Json::string("gpu-failure"),
+        Json::string("static-link-independence"),
         Json::string("capture-path-failure"),
         Json::string("oversize"),
         Json::string("shutdown"),

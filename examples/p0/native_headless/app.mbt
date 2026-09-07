@@ -1,18 +1,4 @@
 ///|
-extern "C" fn capture(
-  width : Int,
-  height : Int,
-  x : Int,
-  y : Int,
-  w : Int,
-  h : Int,
-  active : Int,
-) -> Int = "metonic_capture"
-
-///|
-extern "C" fn finish() -> Unit = "metonic_finish"
-
-///|
 struct NodeTarget {
   session : Int
   window : Int
@@ -234,6 +220,7 @@ async fn handle_line(
   state : @scene.State,
   tree : @semantics.Tree,
   frame : Ref[Int],
+  renderer : Ref[@gpu.Renderer?],
 ) -> Bool {
   let result : Bool = match line {
     @lines.InputLine::TooLong => emit_error(state, tree, frame, "line_too_long")
@@ -303,6 +290,7 @@ async fn handle_line(
                   }
                   "capture" => {
                     let result = capture(
+                      renderer,
                       @scene.field(state, 6),
                       @scene.field(state, 7),
                       @scene.field(state, 0),
@@ -331,7 +319,11 @@ async fn handle_line(
               let emitted = emit(
                 response(state, tree, id, ok, error, frame.val),
               )
-              emitted && !shutdown
+              let poisoned = match renderer.val {
+                Some(value) => value.is_poisoned()
+                None => false
+              }
+              emitted && !shutdown && !poisoned
             }
           }
         }
@@ -346,23 +338,27 @@ async fn main {
   let state = @scene.create()
   let tree = @semantics.create(1, 1)
   let frame : Ref[Int] = { val: 0, }
+  let renderer : Ref[@gpu.Renderer?] = { val: None, }
   defer {
     ignore(@semantics.dispose(tree))
-    finish()
+    match renderer.val {
+      Some(value) => value.close()
+      None => ()
+    }
   }
   let lines = @lines.Lines::new(lf_only=true)
   let mut running = true
   while running && @stdio.stdin.read_some(max_len=4096) is Some(chunk) {
     for line in lines.feed(chunk) {
       if running {
-        running = handle_line(line, state, tree, frame)
+        running = handle_line(line, state, tree, frame, renderer)
       }
     }
   }
   if running {
     for line in lines.finish() {
       if running {
-        running = handle_line(line, state, tree, frame)
+        running = handle_line(line, state, tree, frame, renderer)
       }
     }
   }
