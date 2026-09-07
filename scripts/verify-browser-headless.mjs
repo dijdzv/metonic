@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { chromium } from 'playwright'
-import { PNG } from 'pngjs'
+import { verify as verifyPixels } from '../_build/js/release/build/tools/verify_browser_pixels/verify_browser_pixels.js'
 
 if (process.env.METONIC_BROWSER_SUPERVISED !== '1') throw new Error('Run mise run browser:async/headless')
 
@@ -17,32 +17,11 @@ const targets = ['js', 'wasm-gc']
 let activePage
 let gpuSession
 
-async function readPng(file) {
-  const data = await fs.readFile(file)
-  return PNG.sync.read(data)
+async function pixelVerify(request) {
+  const value = JSON.parse(await verifyPixels(JSON.stringify(request)))
+  assert.equal(value.ok, true, value.error ?? 'browser pixel verification failed')
+  return value.value
 }
-
-function bbox(png, predicate) {
-  let minX = png.width
-  let minY = png.height
-  let maxX = -1
-  let maxY = -1
-  for (let y = 0; y < png.height; y++) {
-    for (let x = 0; x < png.width; x++) {
-      const i = (y * png.width + x) * 4
-      if (predicate(png.data[i], png.data[i + 1], png.data[i + 2], png.data[i + 3])) {
-        minX = Math.min(minX, x)
-        minY = Math.min(minY, y)
-        maxX = Math.max(maxX, x)
-        maxY = Math.max(maxY, y)
-      }
-    }
-  }
-  return maxX < 0 ? null : { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 }
-}
-
-const teal = (r, g, b, a) => a > 180 && r < 80 && g > 100 && b > 100
-const orange = (r, g, b, a) => a > 180 && r > 180 && g >= 50 && g <= 150 && b < 80
 
 async function text(page, selector) {
   return (await page.locator(selector).textContent())?.trim() ?? ''
@@ -89,45 +68,31 @@ async function runTargetUnsafe(browser, target) {
     await canvas.screenshot({ path: file })
     return file
   }
-  const initial = await screenshot('initial')
-  const initialPng = await readPng(initial)
-  const initialBox = bbox(initialPng, teal)
-  if (!initialBox || Math.abs(initialBox.width - 120) > 2 || Math.abs(initialBox.height - 72) > 2) throw new Error(`${target}: invalid initial teal bbox ${JSON.stringify(initialBox)}`)
+  const scene = async (name, stage, previous) => {
+    const file = await screenshot(name)
+    const png = (await fs.readFile(file)).toString('base64')
+    const size = await canvas.evaluate((c) => ({ width: c.width, height: c.height }))
+    return pixelVerify({ action: 'scene', png, stage, canvasWidth: size.width, canvasHeight: size.height, ...(previous ? { previous } : {}) })
+  }
+  const initialBox = await scene('initial', 'initial')
   result.images.initial = initialBox
-  const initialCanvasSize = await canvas.evaluate((c) => ({ width: c.width, height: c.height }))
-  // DPR 1 locator screenshots can round fractional CSS clip edges by one pixel.
-  assert(Math.abs(initialPng.width - initialCanvasSize.width) <= 1)
-  assert(Math.abs(initialPng.height - initialCanvasSize.height) <= 1)
   const beforeActivate = await diagnostic(page)
   await canvas.click({ position: { x: initialBox.x + 60, y: initialBox.y + 36 } })
   await page.waitForFunction((old) => Number(document.querySelector('#revision')?.textContent || 0) > old, beforeActivate.revision)
   await page.waitForFunction((old) => Number(document.querySelector('#submitted')?.textContent || 0) > old, beforeActivate.submitted)
-  const active = await screenshot('active')
-  const activeBox = bbox(await readPng(active), orange)
-  if (!activeBox || Math.abs(activeBox.width - 120) > 2 || Math.abs(activeBox.height - 72) > 2) throw new Error(`${target}: invalid active orange bbox ${JSON.stringify(activeBox)}`)
+  const activeBox = await scene('active', 'active', initialBox)
   result.images.active = activeBox
-  assert(Math.abs(activeBox.x - initialBox.x) <= 2 && Math.abs(activeBox.y - initialBox.y) <= 2)
   const beforeMove = await diagnostic(page)
   await canvas.press('ArrowRight')
   await page.waitForFunction((old) => Number(document.querySelector('#revision')?.textContent || 0) > old, beforeMove.revision)
   await page.waitForFunction((old) => Number(document.querySelector('#submitted')?.textContent || 0) > old, beforeMove.submitted)
-  const moved = await screenshot('moved')
-  result.images.moved = bbox(await readPng(moved), orange)
-  assert(result.images.moved)
-  assert(Math.abs(result.images.moved.x - activeBox.x - 10) <= 1 && Math.abs(result.images.moved.y - activeBox.y) <= 1)
+  result.images.moved = await scene('moved', 'moved', activeBox)
   const beforeResize = await diagnostic(page)
   const beforeDimensions = await text(page, '#dimensions')
   await page.setViewportSize({ width: 800, height: 700 })
   await page.waitForFunction((old) => (document.querySelector('#dimensions')?.textContent || '') !== old, beforeDimensions)
   await page.waitForFunction((old) => Number(document.querySelector('#submitted')?.textContent || 0) > old, beforeResize.submitted)
-  const resized = await screenshot('resized')
-  result.images.resized = bbox(await readPng(resized), orange)
-  const resizedPng = await readPng(resized)
-  const canvasSize = await canvas.evaluate((c) => ({ width: c.width, height: c.height }))
-  // DPR 1 locator screenshots can round fractional CSS clip edges by one pixel.
-  assert(Math.abs(resizedPng.width - canvasSize.width) <= 1)
-  assert(Math.abs(resizedPng.height - canvasSize.height) <= 1)
-  assert(result.images.resized && result.images.resized.x + result.images.resized.width <= canvasSize.width && result.images.resized.y + result.images.resized.height <= canvasSize.height)
+  result.images.resized = await scene('resized', 'resized')
   const idleBefore = await diagnostic(page)
   await new Promise((resolve) => setTimeout(resolve, 250))
   const idleAfter = await diagnostic(page)
@@ -137,9 +102,7 @@ async function runTargetUnsafe(browser, target) {
   await page.locator('#reset').click()
   await waitStatus(page, `Ready: ${target}`)
   await page.waitForFunction((old) => Number(document.querySelector('#submitted')?.textContent || 0) > old, beforeReset.submitted)
-  const reset = await screenshot('reset')
-  result.images.reset = bbox(await readPng(reset), teal)
-  assert(result.images.reset && Math.abs(result.images.reset.width - 120) <= 2 && Math.abs(result.images.reset.height - 72) <= 2)
+  result.images.reset = await scene('reset', 'reset')
   await page.locator('#stop').click()
   await waitStatus(page, 'Stopped.')
   const stopped = await diagnostic(page)
@@ -267,37 +230,30 @@ try {
           const buffer = await canvas.screenshot()
           await fs.writeFile(path.join(outputDir, `${target}-text-${cropIndex}.png`), buffer)
           cropIndex += 1
-          const full = PNG.sync.read(buffer)
-          const width = Math.min(640, Number(await page.locator('#text-width').innerText()))
-          const pixels = Buffer.alloc(width * 96 * 4)
-          for (let y = 0; y < 96; y += 1) full.data.copy(pixels, y * width * 4, ((y + 8) * full.width + 8) * 4, ((y + 8) * full.width + 8 + width) * 4)
-          return { width, fullWidth: full.width, rect, data: pixels }
+          const width = Number(await page.locator('#text-width').innerText())
+          const value = await pixelVerify({ action: 'crop', png: buffer.toString('base64'), width })
+          return { ...value, rect }
         }
         const initial = await crop()
         const initialWidth = Number(await page.locator('#text-width').innerText())
         assert.ok(initialWidth > 0)
-        assert.ok(initial.data.some((value, index) => index % 4 === 0 && value < 32))
-        assert.ok(initial.data.some((value, index) => index % 4 === 0 && value > 240))
+        await pixelVerify({ action: 'text_initial', data: initial.data, width: initial.width })
         const initialRenders = Number(await page.locator('#text-renders').innerText())
         const initialUploaded = Number(await page.locator('#text-uploaded').innerText())
         const submitted = Number(await page.locator('#submitted').innerText())
         await input.fill('ABC 123')
         await page.waitForFunction((old) => Number(document.querySelector('#submitted')?.textContent) > old, submitted)
         const changed = await crop()
-        assert.equal(changed.data.equals(initial.data), false)
+        await pixelVerify({ action: 'text_compare', actual: changed.data, expected: initial.data, equal: false })
         await input.fill('')
         await page.waitForTimeout(200)
         const blank = await crop()
-        for (let i = 0; i < blank.data.length; i += 4) {
-          const x = (i / 4) % blank.width; const y = Math.floor(i / 4 / blank.width)
-          assert.ok(blank.data[i] >= 254 && blank.data[i + 1] >= 254 && blank.data[i + 2] >= 254, `blank pixel index=${i} x=${x} y=${y} rgb=${blank.data[i]},${blank.data[i + 1]},${blank.data[i + 2]} fullWidth=${blank.fullWidth} cropWidth=${blank.width} rect=${JSON.stringify(blank.rect)}`)
-          assert.equal(blank.data[i + 3], 255, `blank alpha index=${i} x=${x} y=${y}`)
-        }
+        await pixelVerify({ action: 'text_blank', data: blank.data, width: blank.width })
         const renders = Number(await page.locator('#text-renders').innerText())
         const uploaded = Number(await page.locator('#text-uploaded').innerText())
         await input.fill(original)
         const restored = await crop()
-        assert.ok(restored.data.equals(initial.data), 'restored text crop differs')
+        await pixelVerify({ action: 'text_compare', actual: restored.data, expected: initial.data, equal: true })
         const restoredRenders = Number(await page.locator('#text-renders').innerText())
         const restoredUploaded = Number(await page.locator('#text-uploaded').innerText())
         assert.ok(restoredRenders > renders)
@@ -312,9 +268,9 @@ try {
         await page.setViewportSize({ width: 400, height: 800 })
         await page.waitForFunction((old) => Number(document.querySelector('#text-width')?.textContent) !== old, initialWidth)
         await page.setViewportSize({ width: 1000, height: 800 })
-        summaries.push({ target, width: initialWidth, renders, pixels: initial.data.length })
+        summaries.push({ target, width: initialWidth, renders, pixels: initial.pixels })
         if (!reference) reference = initial.data
-        else assert.ok(initial.data.equals(reference), `${target} initial text crop differs`)
+        else await pixelVerify({ action: 'text_compare', actual: initial.data, expected: reference, equal: true })
       } finally { await page.close() }
     }
     const dpr = await browser.newPage({ viewport: { width: 1000, height: 800 }, deviceScaleFactor: 2 })
@@ -322,15 +278,7 @@ try {
       await dpr.goto(`${baseUrl}/?target=js`)
       await dpr.waitForFunction(() => document.querySelector('#status')?.textContent?.startsWith('Ready:'), null, { timeout: 60000 })
       await dpr.locator('canvas').evaluate((element) => { element.style.transform = ''; element.style.position = 'relative'; element.style.left = '0px'; element.style.top = '0px'; const rect = element.getBoundingClientRect(); element.style.left = `${Math.ceil(rect.x) - rect.x}px`; element.style.top = `${Math.ceil(rect.y) - rect.y}px` })
-      const image = PNG.sync.read(await dpr.locator('canvas').screenshot())
-      assert.ok(image.width >= 2 * 640)
-      assert.ok(image.height >= 2 * 360)
-      const referencePixels = reference
-      for (let y = 16; y < 16 + 192; y += 1) for (let x = 16; x < 16 + 1280; x += 1) {
-        const actual = (y * image.width + x) * 4
-        const expected = ((Math.floor((y - 16) / 2) * 640 + Math.floor((x - 16) / 2))) * 4
-        for (let channel = 0; channel < 4; channel += 1) assert.equal(image.data[actual + channel], referencePixels[expected + channel], `DPR2 mismatch x=${x} y=${y} channel=${channel}`)
-      }
+      await pixelVerify({ action: 'dpr2', png: (await dpr.locator('canvas').screenshot()).toString('base64'), reference })
     } finally { await dpr.close() }
     return { targets: summaries, dpr2: true }
   }
