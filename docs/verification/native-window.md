@@ -43,10 +43,28 @@ earlier paint was consumed. Each C poll dispatches at most 64 messages. The host
 currently sleeps one millisecond between iterations; idle scheduling has not
 been optimized or benchmarked.
 
-The normal test posts its first key after initial rendering. It does not prove
-input or close delivery while GPU initialization is pending. Those lifecycle
-cases remain separate work. Pending initialization prevents HWND destruction;
-the parent deadline contains cleanup that cannot finish safely.
+The normal test posts its first key after initial rendering. Two additional
+hidden cases run with `METONIC_WINDOW_INIT_TEST=input` and `close`; the verifier
+selects all three cases explicitly for each adapter and records separate reports
+such as `default-input.json` and `fallback-close.json`.
+
+The dedicated cases yield cooperatively until a real initialization ticket is
+retained, then post an own-window key or close message and poll at most 64 times
+without yielding. The target event must be handled while the ticket is still
+retained. The input case preserves x=270 through the first frame, then performs
+the normal resize, pointer and close sequence. The close case cancels and waits
+for initialization, requires no published renderer or rendered frame, and checks
+that no initialization tickets remain before ordered teardown.
+
+On 2026-09-07 both dedicated cases passed on both adapters: each reported
+`WINDOW_INIT_RETAINED=1`, `WINDOW_INIT_REMAINING=0` and its dedicated success
+marker, with child exit 0 and no timeout or output overflow. The verifier rejects
+missing, duplicated or invalid numeric markers. A retained ticket can already
+have received its native callback and be paused before ownership transfer; this
+test does not prove that the driver callback itself is still pending. No artificial
+GPU delay is introduced. Driver stalls and physical device loss remain untested.
+Pending initialization prevents HWND destruction; the parent deadline contains
+cleanup that cannot finish safely.
 
 This test does not read back surface pixels or inspect visible output. Full
 pixel comparisons remain in the separate [offscreen probe](native-headless.md).
