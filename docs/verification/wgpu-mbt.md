@@ -101,6 +101,29 @@ warnings must be addressed or scoped before integrating strict project checks.
 
 ## Next acceptance
 
+The bounded readback comparison uses a caller-owned registry. Each GPU ticket
+retains native references until its callback reaches a terminal state and clear
+completes. A request timeout destroys its staging buffer and starts a separately
+bounded cancellation drain. If completion remains pending, the registry keeps the
+ticket and its native references; an error is not evidence of release. The caller
+must retain and resolve those entries or terminate the owning process before
+discarding that context. This is an experimental integration contract, not a
+published library API.
+
+Request polling yields through MoonBit async between nonblocking GPU polls. The
+request timer and cleanup timer have separate polling budgets. The pinned async
+native clock delegates to wall time, so these bounds are not described as a
+monotonic deadline. A zero request polling budget provides a deterministic timeout
+case without disabling the cleanup budget.
+
+All eleven tests passed on both local adapters on 2026-09-07 after the rectangle
+probe switched to this operation. Its four full-image comparisons remain intact.
+An actual GPU request with zero polling budget times out, drains and clears, then
+a fresh staging buffer reads a different payload on the same device. Callback
+tests verify success, terminal errors, duplicate IDs, unresolved-ticket retention
+and actual task cancellation. The cancellation test observes the original
+cancellation error and exactly one cancel and one clear callback.
+
 Source inspection on 2026-09-07 found that the synchronous readback helper in
 `src/c/wgpu_stub_map.c` polls until its callback completes without a deadline.
 The Rust baseline bounds device polling and result receipt at ten seconds each.
