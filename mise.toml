@@ -160,11 +160,19 @@ env = { METONIC_NATIVE_BUILD = "window-dev" }
 depends = ["native:window-dev-build"]
 run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-window-control.mbtx'
 
+[tasks."native:window-rpc"]
+depends = ["native:window-dev-build"]
+run = [
+  '.\\.tools\\moonbit\\bin\\moon.exe build examples/p0/rpc_server --target wasm --release --frozen --deny-warn',
+  '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-window-rpc.mbtx',
+]
+
 [tasks."native:window-mcp"]
 depends = ["native:window-dev-build"]
 run = [
   '.\\.tools\\moonbit\\bin\\moon.exe build tools/verify_window_mcp --target js --release --deny-warn',
-  'node scripts/verify-window-mcp.mjs',
+  '.\\.tools\\moonbit\\bin\\moon.exe build examples/p0/rpc_server --target wasm --release --frozen --deny-warn',
+  '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-window-mcp.mbtx',
 ]
 
 [tasks."native:window"]

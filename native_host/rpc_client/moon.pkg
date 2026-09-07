@@ -1,0 +1,10 @@
+import {
+  "local/p0/examples/p0/backend/api",
+  "local/p0/rpc/json" @wire,
+  "moonbitlang/async",
+  "moonbitlang/async/http",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/json",
+}
+
+supported_targets = "native"

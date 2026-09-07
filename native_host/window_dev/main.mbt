@@ -3,6 +3,7 @@ struct Request {
   id : Int
   op : String
   text : String?
+  user_id : String?
   expected_semantic_revision : Int?
 } derive(FromJson)
 
@@ -56,6 +57,8 @@ async fn respond(
       "backspace" =>
         error = (handle.edit)(None, request.expected_semantic_revision)
       "start_update" => (handle.apply)(@ui.Action::StartUpdate)
+      "load_user" =>
+        (handle.apply)(@ui.Action::LoadUser(request.user_id.unwrap_or("1")))
       "cancel_update" => (handle.apply)(@ui.Action::CancelUpdate)
       _ => error = "unknown_operation"
     }
@@ -72,6 +75,7 @@ async fn respond(
     "selection_end": state.selection_end,
     "frames": state.frames,
     "task_status": state.task_status,
+    "rpc_result": state.rpc_result,
     "image": captured_image,
   }
   @stdio.stdout.write(response.stringify() + "\n")

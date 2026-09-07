@@ -26,7 +26,39 @@ struct State {
   semantic_revision : Int
   session_id : String
   task_status : Int
+  rpc_result : String
 } derive(FromJson)
+
+///|
+extern "js" fn sleep(milliseconds : Int) -> @js_async.Promise[Unit] =
+  #| (milliseconds) => new Promise(resolve => setTimeout(resolve, milliseconds))
+
+///|
+async fn verify_rpc(
+  client : Client,
+  user_id : String,
+  expected : String,
+  status : Int,
+  text : String,
+) -> Unit {
+  ignore(
+    invoke(client, {
+      "name": "window_load_user",
+      "arguments": { "user_id": user_id },
+    }),
+  )
+  for _ in 0..<150 {
+    sleep(20).wait()
+    let state = invoke(client, { "name": "window_snapshot", "arguments": {} })
+    if state.task_status != 1 {
+      assert_eq(state.task_status, status)
+      assert_eq(state.rpc_result, expected)
+      assert_eq(state.text, text)
+      return
+    }
+  }
+  fail("RPC did not finish")
+}
 
 ///|
 async fn invoke(client : Client, request : Json) -> State {
@@ -112,6 +144,8 @@ pub fn verify(client : Client) -> @js_async.Promise[String] {
       }
     }
     assert_true(dark > 100)
+    verify_rpc(client, "1", "\n月兎", 2, deleted.text)
+    verify_rpc(client, "missing", "\nRPC: domain:not_found", 3, deleted.text)
     "WINDOW_MCP_OK"
   })
 }

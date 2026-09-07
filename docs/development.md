@@ -66,6 +66,24 @@ PowerShell activation or command wrapper is unnecessary. Bootstrap remains a
 PowerShell installation boundary because MoonBit is not yet available on a fresh
 checkout.
 
+## Integrated window HTTP requests
+
+The native window uses F7 to fetch user `1` through the standard HTTP/JSON
+adapter. Set `METONIC_RPC_BASE` to the server origin (default
+`http://127.0.0.1:4174`). The response or error appears below the editor without
+replacing its text. Requests share the existing replace/cancel task scope;
+F6 cancels the active task.
+
+The development protocol accepts `load_user` with an optional `user_id`.
+MCP exposes the same action as `window_load_user`; `window_snapshot` includes
+`rpc_result` and `task_status`. Both operate on the ordinary window state.
+
+Run `mise run native:window-rpc` for real HTTP success/domain-error checks
+through the development protocol, or `mise run native:window-mcp` for the same
+checks through the MCP SDK. Each verifier owns a loopback server and hidden
+native window. These checks establish result state and preservation of editor
+text; they do not yet establish the full HTTP failure matrix or browser parity.
+
 ## MoonBit scripts
 
 Development scripts, verification and CLI logic use MoonBit by default. Standalone

@@ -5,6 +5,7 @@ pub(all) enum Action {
   Insert(String)
   Backspace
   StartUpdate
+  LoadUser(String)
   CancelUpdate
   Close
 }
@@ -21,6 +22,7 @@ pub struct Snapshot {
   selection_end : Int
   frames : Int
   task_status : Int
+  rpc_result : String
   closed : Bool
 }
 
@@ -80,6 +82,7 @@ fn App::handle(self : App) -> Handle {
         selection_end: node.selection_end,
         frames: self.frames,
         task_status: @task_scope.field(self.scope, 0),
+        rpc_result: self.rpc_result,
         closed: self.closed,
       }
     },
@@ -91,6 +94,7 @@ fn App::handle(self : App) -> Handle {
         Insert(text) => Commit(text)
         Backspace => Event::Backspace
         StartUpdate => Event::StartUpdate
+        LoadUser(id) => Event::LoadUser(id)
         CancelUpdate => Event::CancelUpdate
         Close => Event::Close
       }

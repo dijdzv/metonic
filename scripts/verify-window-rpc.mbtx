@@ -1,0 +1,93 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/core/json",
+}
+
+///|
+struct Reply {
+  task_status : Int
+  rpc_result : String
+  text : String
+} derive(FromJson)
+
+///|
+async fn main {
+  @async.with_timeout(20000, () => {
+    @async.with_task_group(group => {
+      let (server_out, server_stdout) = @process.read_from_process()
+      defer server_out.close()
+      let server = @process.spawn(
+        group,
+        ".tools/moonbit/bin/moonrun.exe",
+        ["_build/wasm/release/build/examples/p0/rpc_server/rpc_server.wasm"],
+        stdout=server_stdout,
+        no_console_window=true,
+        cancel_handler=@process.hard_cancel(),
+      )
+      defer server.cancel()
+      let ready = server_out.read_until("\n").unwrap().trim().to_owned()
+      assert_true(ready.has_prefix("RPC_READY 127.0.0.1:"))
+      let env : Map[String, String] = Map([])
+      env.set("METONIC_RPC_BASE", "http://" + ready[10:].to_owned())
+      env.set("METONIC_DEV_HIDDEN", "1")
+      env.set("METONIC_WINDOW_TEST", "0")
+      let (stdin, writer) = @process.write_to_process()
+      defer writer.close()
+      let (reader, stdout) = @process.read_from_process()
+      defer reader.close()
+      let ui = @process.spawn(
+        group,
+        ".work/native-host-build/native/debug/build/local/native_host/window_dev/window_dev.exe",
+        [],
+        stdin~,
+        stdout~,
+        extra_env=env,
+        no_console_window=true,
+      )
+      defer ui.cancel()
+      writer.write("{\"id\":1,\"op\":\"load_user\"}\n")
+      ignore(reader.read_until("\n"))
+      let mut result = ""
+      for id in 2..<100 {
+        @async.sleep(20)
+        writer.write("{\"id\":" + id.to_string() + ",\"op\":\"snapshot\"}\n")
+        let line = reader.read_until("\n").unwrap()
+        let reply : Reply = @json.from_json(@json.parse(line))
+        if reply.task_status != 1 {
+          @fs.write_file(".work/ui-rpc-result.json", line)
+          assert_eq(reply.task_status, 2)
+          assert_eq(reply.rpc_result, "\n月兎")
+          assert_eq(reply.text, "日本語の描画を確認します ABC 123")
+          result = reply.rpc_result
+          break
+        }
+      }
+      assert_eq(result, "\n月兎")
+      writer.write(
+        "{\"id\":100,\"op\":\"load_user\",\"user_id\":\"missing\"}\n",
+      )
+      ignore(reader.read_until("\n"))
+      let mut failed = false
+      for id in 101..<200 {
+        @async.sleep(20)
+        writer.write("{\"id\":" + id.to_string() + ",\"op\":\"snapshot\"}\n")
+        let line = reader.read_until("\n").unwrap()
+        let reply : Reply = @json.from_json(@json.parse(line))
+        if reply.task_status != 1 {
+          assert_eq(reply.task_status, 3)
+          assert_eq(reply.rpc_result, "\nRPC: domain:not_found")
+          assert_eq(reply.text, "日本語の描画を確認します ABC 123")
+          @fs.write_file(".work/ui-rpc-domain-error.json", line)
+          failed = true
+          break
+        }
+      }
+      assert_true(failed)
+      writer.close()
+      assert_eq(ui.wait(), 0)
+      println("UI_RPC_OK")
+    })
+  })
+}
