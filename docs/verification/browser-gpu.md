@@ -36,7 +36,7 @@ Chrome for Testing 153.0.8010.12 with Playwright 1.63.0 and Node 26.8.1:
 | ArrowRight pixels | 10 px right | 10 px right |
 | Viewport resize and in-bounds rectangle | pass | pass |
 | Idle observation, 250 ms | no additional submissions | no additional submissions |
-| Reset | original position/color | original position/color |
+| Reset | original size/color | original size/color |
 | Stop, then input and resize | no state or submission changes | no state or submission changes |
 | Resource HTTP 503 | visible error, zero frames | visible error, zero frames |
 
@@ -76,6 +76,35 @@ with `moon test tools/verify_browser_artifacts --target js --frozen --deny-warn`
 using the pinned toolchain; the normal local verification gate includes them.
 This check exercises generated artifacts in Node, separately from the real
 WebGPU pixel and input checks above.
+
+## Headless pixel verifier ownership
+
+`tools/verify_browser_pixels` decodes screenshots with the existing MoonBit
+`mizchi/image` dependency. It owns rectangle color thresholds, bounds and movement
+tolerances, text crop extraction and byte comparisons, blank-text checks, and
+the exact nearest-neighbor DPR-2 comparison. The host passes screenshot bytes as
+base64 and receives a JSON result. Only an explicit `ok: true` is accepted by the
+JavaScript adapter; parsing or validation failures fail the browser check.
+
+Cropping uses the text width capped at 640 pixels, an origin of (8, 8), and 96
+rows. Crop bounds are checked before reading pixels. The DPR-2 reference is a
+640-by-96 RGBA crop and is compared against the doubled region starting at
+(16, 16), including every alpha channel. These are screenshot comparison rules,
+not an additional rendering implementation.
+
+Playwright operations, browser/page lifetime, state polling, resource-failure
+scenarios and result-file writing remain in `scripts/verify-browser-headless.mjs`.
+Moving the pixel checks does not establish that all browser verification is
+implemented in MoonBit. `mise run browser:headless` builds and tests the pixel
+verifier before starting the browser supervisor.
+
+On 2026-09-07, seven pixel-verifier tests passed, covering success and rejection
+for scene movement, crop bounds, text equality expectations, blank alpha/RGB
+changes and DPR comparisons. A patterned DPR-2 image passed and a single-channel
+mutation in its comparison region failed. The exported result rejects malformed
+JSON and PNG input. Both default and SwiftShader headless runs passed for the JS
+and WasmGC applications with their existing state and resource-failure checks.
+The now-unused `pngjs` npm dependency was removed.
 
 ## Limits and next gate
 

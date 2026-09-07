@@ -55,6 +55,8 @@ run = "pnpm exec playwright install chromium"
 [tasks."browser:headless"]
 depends = ["browser:build"]
 run = [
+  '.\\.tools\\moonbit\\bin\\moon.exe build tools/verify_browser_pixels --target js --release --frozen --deny-warn',
+  '.\\.tools\\moonbit\\bin\\moon.exe test tools/verify_browser_pixels --target js --release --frozen --deny-warn',
   '.\\.tools\\moonbit\\bin\\moon.exe build tools/browser_supervisor --target wasm --release --frozen --deny-warn',
   '.\\.tools\\moonbit\\bin\\moonrun.exe _build/wasm/release/build/tools/browser_supervisor/browser_supervisor.wasm headless',
 ]

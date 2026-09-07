@@ -1,0 +1,13 @@
+import {
+  "moonbitlang/core/json",
+  "moonbitlang/core/encoding/base64",
+  "mizchi/image",
+}
+
+pkgtype(kind: "foreign_library")
+
+supported_targets = "+js"
+
+options(
+  link: { "js": { "format": "esm" } },
+)

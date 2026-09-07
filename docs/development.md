@@ -181,8 +181,8 @@ run `bootstrap`, migrate source/configuration where necessary, then run both
 verification tasks. CI must use the same committed pin.
 
 Node 26.8.1 runs generated JavaScript; it is not a native product dependency.
-pnpm 12.3.4 manages the pinned Playwright and PNG inspection tools used by browser
-verification. Commit `pnpm-lock.yaml` and use `pnpm install --frozen-lockfile` in CI.
+pnpm 12.3.4 manages the pinned Playwright and MCP SDK development tools.
+Commit `pnpm-lock.yaml` and use `pnpm install --frozen-lockfile` in CI.
 Native probes use the pinned prebuilt wgpu-native library through the MoonBit
 binding and require the Visual Studio C++ build tools. Building the project does
 not require a Rust toolchain; the upstream GPU implementation still contains Rust.
