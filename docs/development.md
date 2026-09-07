@@ -2,20 +2,36 @@
 
 ## Work tracking
 
-Use Issues for current status, intermediate investigation results, blockers and
-next steps. Update them when meaningful evidence or a linked PR changes the state
-of the work. Distinguish local experiments from merged behavior and keep acceptance
-criteria open until their full scope is verified. Keep design decisions in ADRs
-and reproducible verification records in docs; do not use them as running task logs.
+Use one executable outcome per Issue. Split independently deliverable changes or
+investigations before starting them; put task-specific evidence and acceptance
+criteria on the smaller Issue. A broad historical Issue is not a work queue.
 
-Before starting a new workstream, create or identify its Issue with scope,
-acceptance criteria, priority and dependencies. Track requested migrations and
-deferred investigations explicitly; do not leave them only in prose documents.
-An explicit user priority takes precedence over opportunistic feature work.
-Record priority changes and their reasons in the tracking Issue. At meaningful
-validation results and PR integration, update the affected Issues with evidence,
-remaining work and the next action. Use comments for intermediate results and
-edit the body for the current scope or acceptance criteria.
+Each active task has exactly one priority label: `priority:p0` for urgent blockers,
+`priority:p1` for the current work, `priority:p2` for subsequent work, or
+`priority:p3` for optional/deferred work. These labels are independent of the P0
+product milestone. Do not maintain a separate priority-order Issue or duplicate
+the order in prose. Use labels to select priority and GitHub blocked-by/blocking
+relationships for actual prerequisites. Related work alone is not a dependency;
+use a link for context. Parent/sub-issue relationships describe decomposition,
+not execution order.
+
+The Issue body is the current task summary: outcome, acceptance criteria, present
+state, unresolved questions and links to evidence. Edit it when those facts
+change, distinguishing local verification from merged behavior. Close the task
+only when its acceptance criteria hold; use the linked PR for implementation and
+merge details.
+
+Add a comment only for an unresolved discussion, a decision needing a response,
+or unique evidence whose chronology matters. Incorporate resolved conclusions
+into the body. Do not post routine start/progress/merge reports, repeated test
+summaries, clean-worktree reports, or the same update on several linked Issues.
+Link to tests, commits, PRs and verification records instead of copying them.
+Preserve historical comments with unique evidence or incoming links; comment
+count alone is not a reason to delete history. Retire obsolete trackers with
+links to their replacement tasks, without marking unfinished work completed.
+
+Keep durable design decisions in ADRs and reproducible verification in docs.
+Issue-local notes belong on the task that needs them, not in public handoff logs.
 
 ## Windows x64 setup
 
@@ -99,8 +115,10 @@ failure contract and reproduction commands.
 
 `native_host/moon.work` isolates the external-loop adoption workspace while
 importing the existing root renderer and integration fixture directly. The
-ordinary native window/async commands remain the product baseline until runtime
-parity is established in [Issue 77](https://github.com/dijdzv/metonic/issues/77).
+ordinary native window command remains on its existing C boundary.
+`native:async` uses the shared adapter and structured MoonBit jobs after comparison
+with the old C worker scenario. Full host adoption remains tracked in
+[Issue 77](https://github.com/dijdzv/metonic/issues/77).
 
 `mise run native:host-build` prepares pinned source archives, applies the reviewed
 window and async patches, and builds the existing GPU integration fixture. The
@@ -140,9 +158,11 @@ parent shell's environment is not modified. Toolchain installation remains a
 separate bootstrap step.
 
 Native probe build tasks use `scripts/build-native.mbtx` with explicit headless,
-window, async or surface modes. Each mode builds the MoonBit headless executable;
-window, worker and surface rendering use the published MoonBit binding. All three
-windowed probes build a C stub. The
+window, async or surface modes. Async builds the dedicated native host workspace;
+the other product modes also build the MoonBit headless executable. Window,
+async and surface rendering use the published MoonBit binding. The window and
+surface probes retain the C HWND stub; async uses the prepared window dependency
+and a context-free C wake thunk. The
 script checks output artifacts and rejects unsupported modes before building.
 Headless rendering also uses the binding. The shared Win32 C boundary remains
 under comparison; application-owned GPU composition is MoonBit.
@@ -329,6 +349,13 @@ AbortSignal behavior at the SDK boundary. See the
 package namespace or stable API commitment.
 
 ## Recording experiments
+
+Reuse the configured build directory for repeated runs of the same experiment.
+Create a separate output directory only when a comparison needs isolation.
+After preserving results and reproduction instructions, remove obsolete generated
+build outputs. Keep logs separate from binaries so cleanup does not erase evidence;
+do not treat patched source checkouts or verified offline dependency archives as
+disposable build output.
 
 Keep a concise technical record: purpose, versions, commands, observed results,
 unexecuted checks, and consequences. Prefer reproducible tests over a transcript

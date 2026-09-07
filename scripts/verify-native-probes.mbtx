@@ -79,6 +79,17 @@ fn exact_line(text : String, expected : String) -> Bool {
 }
 
 ///|
+fn exact_line_count(text : String, expected : String) -> Int {
+  let mut count = 0
+  for line in lines(text) {
+    if line == expected {
+      count += 1
+    }
+  }
+  count
+}
+
+///|
 fn shutdown_ms(text : String) -> Int? {
   let prefix = "NATIVE_ASYNC_SHUTDOWN_MS="
   let mut found : Int? = None
@@ -140,6 +151,97 @@ fn json_null() -> Json {
 }
 
 ///|
+fn require_json_int(
+  values : Map[String, Json],
+  name : String,
+  expected : Int64,
+) -> Unit raise Error {
+  match values.get(name) {
+    Some(Json::Number(value, ..)) if value.to_int64().to_double() == value &&
+      value.to_int64() == expected => ()
+    _ => fail("invalid integer field: " + name)
+  }
+}
+
+///|
+fn require_json_min_int(
+  values : Map[String, Json],
+  name : String,
+  minimum : Int64,
+) -> Unit raise Error {
+  match values.get(name) {
+    Some(Json::Number(value, ..)) if value.to_int64().to_double() == value &&
+      value.to_int64() >= minimum => ()
+    _ => fail("invalid integer field: " + name)
+  }
+}
+
+///|
+fn require_json_true(
+  values : Map[String, Json],
+  name : String,
+) -> Unit raise Error {
+  match values.get(name) {
+    Some(Json::True) => ()
+    _ => fail("invalid boolean field: " + name)
+  }
+}
+
+///|
+fn require_json_string(
+  values : Map[String, Json],
+  name : String,
+) -> Unit raise Error {
+  match values.get(name) {
+    Some(Json::String(value)) if value != "" => ()
+    _ => fail("invalid string field: " + name)
+  }
+}
+
+///|
+fn require_native_async_result(text : String) -> Unit raise Error {
+  let mut found : Json? = None
+  for line in lines(text) {
+    if line.has_prefix("NATIVE_ASYNC_RESULT ") {
+      if found is Some(_) {
+        fail("duplicate NATIVE_ASYNC_RESULT")
+      }
+      found = Some(
+        @json.parse(line[20:].to_owned()) catch {
+          _ => raise ProbeFailure("malformed NATIVE_ASYNC_RESULT JSON")
+        },
+      )
+    }
+  }
+  match found {
+    Some(Json::Object(values)) => {
+      require_json_true(values, "ok")
+      require_json_true(values, "responsive")
+      require_json_int(values, "rejected", 3L)
+      require_json_int(values, "stage", 6L)
+      require_json_int(values, "scene_x", 90L)
+      require_json_int(values, "status", 5L)
+      require_json_int(values, "pending", 0L)
+      require_json_int(values, "active", 0L)
+      require_json_true(values, "closed")
+      require_json_string(values, "adapter")
+      require_json_min_int(values, "frames", 4L)
+      require_json_min_int(values, "io_wakes", 1L)
+      require_json_min_int(values, "io_proxies", 1L)
+      require_json_min_int(values, "io_indefinite", 1L)
+      require_json_true(values, "hwnd_destroyed")
+      require_json_true(values, "message_hwnd_destroyed")
+      match values.get("original_error") {
+        Some(Json::Null) => ()
+        _ => fail("invalid original_error field")
+      }
+    }
+    Some(_) => fail("NATIVE_ASYNC_RESULT is not an object")
+    None => fail("missing NATIVE_ASYNC_RESULT")
+  }
+}
+
+///|
 async fn run_probe(
   root : String,
   kind : String,
@@ -151,15 +253,15 @@ async fn run_probe(
     @env.get_env_var("METONIC_SURFACE_RAW") == Some("1")
   let fresh_surface = kind == "surface" &&
     (!raw_surface || @env.get_env_var("METONIC_SURFACE_FRESH") == Some("1"))
-  let executable = if kind == "surface" {
+  let executable = if kind == "async" {
+    root +
+    "/.work/native-host-build/native/debug/build/local/native_host/async_app/async_app.exe"
+  } else if kind == "surface" {
     root +
     "/_build/native/release/build/tools/native_surface_probe/native_surface_probe.exe"
-  } else if kind == "window" {
-    root +
-    "/_build/native/release/build/examples/p0/native_window/native_window.exe"
   } else {
     root +
-    "/_build/native/release/build/examples/p0/native_async/native_async.exe"
+    "/_build/native/release/build/examples/p0/native_window/native_window.exe"
   }
   let bridge = if kind == "window" || kind == "surface" {
     root + "/.work/native-cargo/missing-surface-bridge.dll"
@@ -195,6 +297,13 @@ async fn run_probe(
           env_map.set("METONIC_WINDOW_TEST", "1")
           env_map.set("METONIC_WINDOW_INIT_TEST", case_name)
           env_map.set("METONIC_GPU_FALLBACK", fallback)
+          if kind == "async" {
+            let input = @env.get_env_var("METONIC_ASYNC_INPUT").unwrap_or(
+              root.replace_all(old="\\", new="/") +
+              "/experiments/window_async_contract/input.txt",
+            )
+            env_map.set("METONIC_ASYNC_INPUT", input)
+          }
           let child = @process.spawn(
             group,
             executable,
@@ -266,6 +375,8 @@ async fn run_probe(
         } else {
           "MoonBit surface renderer with own-window message dispatch; not visible UI, IME, accessibility or desktop automation"
         }
+      } else if kind == "async" {
+        "async library real file I/O with hidden owned-HWND synthetic key/close"
       } else {
         "worker completion through hidden HWND; not network, visible input, IME or general closure FFI"
       },
@@ -329,11 +440,18 @@ async fn run_probe(
     kind + " success marker",
   )
   if kind == "async" {
+    require(
+      exact_line_count(stdout, "NATIVE_ASYNC_OK") == 1,
+      "async success marker count",
+    )
+  }
+  if kind == "async" {
     match shutdown {
       Some(value) =>
-        require(value >= 0 && value < 4000, "async shutdown timing")
+        require(value >= 0 && value < 1000, "async shutdown timing")
       None => fail("async shutdown timing missing or duplicated")
     }
+    require_native_async_result(stdout)
   }
 }
 

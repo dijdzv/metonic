@@ -25,11 +25,8 @@ static int enqueue(int32_t type, int32_t x, int32_t y) {
   return 1;
 }
 
-#include "async_workers.h"
-
 static LRESULT CALLBACK window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam) {
   switch (message) {
-    case WM_APP + 1: async_deliver((int32_t)wparam); return 0;
     case WM_PAINT: {
       PAINTSTRUCT paint; BeginPaint(hwnd, &paint); EndPaint(hwnd, &paint); enqueue(1, 0, 0); return 0;
     }
@@ -92,8 +89,6 @@ __declspec(dllexport) int32_t metonic_window_event_x(void) { LONG tail = (ring_t
 __declspec(dllexport) int32_t metonic_window_event_y(void) { LONG tail = (ring_tail - 1) & 63; return ring[tail].y; }
 
 __declspec(dllexport) void metonic_window_destroy(void) {
-  metonic_async_shutdown();
-  if (metonic_async_pending() != 0) { fatal("worker join failed; retaining HWND"); return; }
   if (window_handle) DestroyWindow(window_handle); window_handle = NULL;
 }
 __declspec(dllexport) int32_t metonic_window_test_mode(void) { return test_mode_enabled; }

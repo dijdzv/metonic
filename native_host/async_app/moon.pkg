@@ -2,16 +2,20 @@ import {
   "local/p0/examples/p0/scene",
   "local/p0/examples/p0/task_scope",
   "local/p0/native_gpu" @gpu,
+  "local/native_host/windows_loop" @loop,
   "Milky2018/wgpu_mbt" @wgpu,
   "Milky2018/wgpu_mbt/c",
   "moonbitlang/async",
+  "moonbitlang/async/aqueue",
+  "moonbitlang/async/external_loop_integration" @external,
+  "moonbitlang/async/fs",
+  "moonbitlang/core/debug",
   "moonbitlang/core/env",
+  "wzzc-dev/window/core",
+  "wzzc-dev/window/dpi",
+  "wzzc-dev/window/windows",
 }
 
 pkgtype(kind: "executable")
 
 supported_targets = "native"
-
-options(
-  "native-stub": [ "bridge.c" ],
-)
