@@ -243,6 +243,9 @@ try {
     switch (request.op) {
       case 'release': {
         const page = await browser.newPage({ viewport: { width: 1000, height: 800 }, deviceScaleFactor: 1 });
+        const fixture = process.env.METONIC_RPC_FIXTURE;
+        if (!fixture || !/^http:\/\/127\.0\.0\.1:\d+$/.test(fixture)) throw new Error('Missing supervised HTTP fixture');
+        const faultRoute = (route) => route.continue({ url: `${fixture}/rpc` });
         const errors = [], resources = [];
         page.on('pageerror', (error) => errors.push(error.message));
         page.on('request', (request) => resources.push(new URL(request.url()).pathname));
@@ -250,6 +253,10 @@ try {
         try {
           return JSON.parse(await runRelease(async (command) => {
             switch (command.op) {
+              case 'fault-route': await page.route('**/rpc', faultRoute); break;
+              case 'fault-route-off': await page.unroute('**/rpc', faultRoute); break;
+              case 'fixture-active': return Number(await (await page.request.get(`${fixture}/active`)).text());
+              case 'sleep': await page.waitForTimeout(command.milliseconds); break;
               case 'goto': await page.goto(`${baseUrl}/release/`); break;
               case 'wait-text': await page.waitForFunction(({ selector, text }) => document.querySelector(selector)?.textContent?.trim() === text, command); break;
               case 'fill': await page.locator(command.selector).fill(command.value); await settle(); break;

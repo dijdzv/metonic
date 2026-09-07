@@ -66,13 +66,12 @@ pub fn[I : FromJson, O : ToJson, E] endpoint(
 // The pinned parser exposes its depth limit through a deprecated label; omitting it would relax the protocol bound.
 
 ///|
-#warnings("-deprecated")
 pub fn dispatch(endpoint : Endpoint, body : String) -> Reply {
   if @utf8.encode(body).length() > 65536 {
     reject(413, "request_too_large")
   } else {
     try {
-      match @codec.parse(body, max_nesting_depth=32) {
+      match parse_bounded(body) {
         Json::Object(fields) =>
           match
             (

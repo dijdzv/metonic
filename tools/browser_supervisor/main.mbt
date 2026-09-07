@@ -106,6 +106,7 @@ async fn run_session(
   verifier_args : Array[String],
   deadline_ms : Int,
   readiness_ms? : Int = 10000,
+  fault_server? : Bool = false,
   server_capture~ : @ref.Ref[Array[Byte]],
   server_err_capture~ : @ref.Ref[Array[Byte]],
   verifier_capture~ : @ref.Ref[Array[Byte]],
@@ -177,13 +178,46 @@ async fn run_session(
       ignore(
         group.spawn(() => drain(server_reader, "server stdout", server_capture)),
       )
+      let verifier_env = Map([("METONIC_BROWSER_SUPERVISED", "1")])
+      let (fault_reader, fault_stdout) = @process.read_from_process()
+      defer fault_reader.close()
+      defer fault_stdout.close()
+      let fault = if fault_server {
+        Some(
+          @process.spawn(
+            group,
+            ".tools/moonbit/bin/moonrun.exe",
+            [
+              "_build/wasm/release/build/tools/rpc_fault_server/rpc_fault_server.wasm",
+            ],
+            stdout=fault_stdout,
+            no_console_window=true,
+            cancel_handler=@process.hard_cancel(),
+          ),
+        )
+      } else {
+        None
+      }
+      defer (if fault is Some(child) { child.cancel() })
+      if fault is Some(_) {
+        let line = @async.with_timeout(10000, () => {
+          fault_reader.read_until("\n").unwrap().trim().to_owned()
+        })
+        if !line.has_prefix("RPC_FAULT_READY 127.0.0.1:") {
+          fail("invalid fault server readiness")
+        }
+        verifier_env.set(
+          "METONIC_RPC_FIXTURE",
+          "http://" + line[16:].to_owned(),
+        )
+      }
       let verifier = @process.spawn(
         group,
         verifier_command,
         verifier_args,
         stdout=verifier_stdout,
         stderr=verifier_stderr,
-        extra_env=Map([("METONIC_BROWSER_SUPERVISED", "1")]),
+        extra_env=verifier_env,
         no_console_window=true,
         cancel_handler=windows_tree_cancel(cleanup_capture),
       )
@@ -256,6 +290,7 @@ async fn main {
     "node",
     [verifier],
     300000,
+    fault_server=mode == "headless",
     server_capture~,
     server_err_capture~,
     verifier_capture~,
