@@ -13,7 +13,7 @@ Recorded: 2026-09-06.
 | Chrome for Testing | 153.0.8010.12 / Playwright chromium 1243 | Headless WebGPU test browser | Downloaded by Playwright; not redistributed |
 | MSVC / Windows SDK | environment.md | Native build prerequisites | Not redistributed by this repository |
 | moonbitlang/async | 0.21.2 | Host-side process, file and HTTP development tools | Apache-2.0; native/Wasm host use does not establish browser WasmGC support |
-| mizchi/image / mizchi/zlib | 0.4.3 / 0.4.8 | PNG output for native development captures | Both Apache-2.0; Wasm PNG interoperability checked against pngjs; other image formats are outside this adoption |
+| mizchi/image / mizchi/zlib | 0.4.3 / 0.4.8 | Native PNG captures and MoonBit PNG validation in MCP/browser async verifiers | Both Apache-2.0; Wasm PNG interoperability checked against pngjs; other image formats are outside this adoption |
 | Milky2018/moon_cosmic | 0.3.3 | Shared text shaping/layout and raster experiments | Apache-2.0 module; transitive modules and font notices remain separate |
 | Milky2018/wgpu_mbt | 0.16.0 | Native offscreen, window and worker rendering; isolated binding comparison | See the [binding record](wgpu-mbt.md) for its pinned native library boundary and notices |
 

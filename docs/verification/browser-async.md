@@ -1,6 +1,6 @@
 # Browser asynchronous completion probe
 
-Date: 2026-09-06.
+Initial probe: 2026-09-06. MoonBit verifier migration: 2026-09-07.
 
 ## Contract
 
@@ -36,6 +36,22 @@ Run `mise run browser:async`; set `METONIC_GPU_BACKEND=swiftshader` for the soft
 run. Images and target-specific results are under `.work/browser-async/<backend>`.
 This uses the same pinned MoonBit and Chromium versions as the browser GPU probe.
 
+The verification sequence, snapshot checks, polling conditions and PNG decoding
+run in `tools/verify_browser_async`, compiled to JavaScript. Direct Playwright
+operations cross small foreign-function adapters. The entry point retains
+server/browser lifecycle, page readiness, page-error collection and artifact
+writing; this is not yet a complete migration of browser verification tooling.
+Polling uses 25-millisecond delays and a three-second condition deadline. That
+deadline does not establish a hard bound on every external Playwright call.
+The verifier runs in Node as JavaScript while Chromium loads each application
+target. Its use of MoonBit async does not establish a browser WasmGC runtime path
+for that library.
+
+Five verifier tests cover malformed snapshots, invalid bounds, decoded PNG
+acceptance and rejection, invalid numeric fields, and rejection through the
+exported Promise. A resolved Promise fails the rejection test. The real browser
+sequence remains the positive integration check for both application targets.
+
 ## Limits
 
 This proves timer-driven completion and explicit result/error transfer. It does
@@ -43,4 +59,5 @@ not implement a general async runtime, network cancellation, worker-thread wakeu
 or a native interactive event loop. The host retains numeric tokens rather than
 MoonBit closure objects, so it does not establish arbitrary callback/closure FFI
 lifetime support. The diagnostic global belongs to the development harness;
-production exclusion still needs separate build evidence. CI integration is pending.
+production exclusion still needs separate build evidence. The local pre-commit
+gate runs this verification; automatic PR/push CI does not duplicate it.

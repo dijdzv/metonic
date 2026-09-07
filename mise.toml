@@ -58,7 +58,11 @@ run = "node scripts/verify-browser-headless.mjs"
 
 [tasks."browser:async"]
 depends = ["browser:build"]
-run = "node scripts/verify-browser-async.mjs"
+run = [
+  '.\\.tools\\moonbit\\bin\\moon.exe build tools/verify_browser_async --target js --release --frozen --deny-warn',
+  '.\\.tools\\moonbit\\bin\\moon.exe test tools/verify_browser_async --target js --release --frozen --deny-warn',
+  'node scripts/verify-browser-async.mjs',
+]
 
 [tasks."browser:server-test"]
 depends = ["browser:build"]
