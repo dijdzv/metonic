@@ -1,0 +1,222 @@
+diff --git a/modules/window/windows/app_state.mbt b/modules/window/windows/app_state.mbt
+index ee56141..9ed7657 100644
+--- a/modules/window/windows/app_state.mbt
++++ b/modules/window/windows/app_state.mbt
+@@ -2,6 +2,7 @@
+ priv enum DeferredCallback {
+   NewEvents(@core.StartCause)
+   CanCreateSurfaces
++  ProxyWakeUp
+   AboutToWait
+   WindowEvent(@core.WindowId, @core.WindowEvent)
+   ScaleFactorChanged(@core.WindowId, Double, @dpi.PhysicalSize)
+@@ -178,6 +179,7 @@ fn[A : ApplicationHandler] app_state_dispatch_callback(
+   match callback {
+     NewEvents(cause) => app.new_events(active_loop, cause)
+     CanCreateSurfaces => app.can_create_surfaces(active_loop)
++    ProxyWakeUp => app.proxy_wake_up(active_loop)
+     AboutToWait => app.about_to_wait(active_loop)
+     WindowEvent(window_id, event) =>
+       app.window_event(active_loop, window_id, event)
+@@ -216,6 +218,10 @@ fn app_state_queue_window_event(
+   app_state_queue_callback(WindowEvent(window_id, event))
+ }
+ 
++fn app_state_queue_proxy_wake_up() -> Unit {
++  app_state_queue_callback(ProxyWakeUp)
++}
++
+ ///|
+ fn app_state_queue_redraw(raw_id : Int) -> Unit {
+   match app_state_window_handle(raw_id) {
+diff --git a/modules/window/windows/event_loop.mbt b/modules/window/windows/event_loop.mbt
+index 0520ec3..8b74019 100644
+--- a/modules/window/windows/event_loop.mbt
++++ b/modules/window/windows/event_loop.mbt
+@@ -478,41 +478,44 @@ fn EventLoop::run_message_loop(
+ ) -> Unit {
+   let mut continue_loop = true
+   while continue_loop {
+-    let has_msg = match app_state_control_flow() {
+-      Poll =>
+-        native_process_one_message((0 : Int).to_uint64(), 0, 0, pm_remove) != 0
+-      Wait =>
+-        if blocking {
+-          native_wait_and_process_message((0 : Int).to_uint64(), 0, 0) > 0
+-        } else {
+-          native_process_one_message((0 : Int).to_uint64(), 0, 0, pm_remove) !=
+-          0
+-        }
+-      WaitUntil(_) =>
+-        match timeout_ms {
+-          Some(t) if t <= 0 =>
+-            native_process_one_message((0 : Int).to_uint64(), 0, 0, pm_remove) !=
+-            0
+-          Some(t) =>
+-            native_wait_timeout_and_process(t.reinterpret_as_uint()) != 0
+-          None =>
+-            native_wait_and_process_message((0 : Int).to_uint64(), 0, 0) > 0
++    let wait_timeout = match app_state_control_flow() {
++      Poll => Some(0)
++      Wait => timeout_ms
++      WaitUntil(deadline) => {
++        let now = native_now_ms()
++        let clamped = if deadline <= now { 0 } else {
++          let remaining = deadline - now
++          if remaining > 2147483647L { 2147483647 } else { remaining.to_int() }
+         }
++        match timeout_ms { Some(value) if value < clamped => Some(value); _ => Some(clamped) }
++      }
++    }
++    let first = match wait_timeout {
++      Some(value) if value <= 0 => native_process_one_message((0 : Int).to_uint64(), 0, 0, pm_remove)
++      Some(value) => native_wait_timeout_and_process(value.reinterpret_as_uint())
++      None => native_wait_and_process_message((0 : Int).to_uint64(), 0, 0)
++    }
++    let mut count = 0
++    let mut code = first
++    while count < 64 && code != 0 && !app_state_exit_requested() {
++      if code == 2 { app_state_queue_proxy_wake_up() }
++      if code == -2 { app_state_set_exit(native_last_quit_code()); break }
++      if code < 0 { app_state_set_exit(-1); break }
++      count += 1
++      self.dispatch_events()
++      if app_state_exit_requested() { break }
++      if count == 64 { break }
++      code = native_process_one_message((0 : Int).to_uint64(), 0, 0, pm_remove)
++    }
++    if count == 0 && first == 0 { self.dispatch_events() }
++    if !app_state_exit_requested() {
++      app_state_queue_callback(AboutToWait)
++      app_state_dispatch_deferred_callbacks()
+     }
+-    self.dispatch_events()
+-    app_state_queue_callback(AboutToWait)
+-    app_state_dispatch_deferred_callbacks()
+     if app_state_exit_requested() {
+       continue_loop = false
+     }
+-    match app_state_control_flow() {
+-      Poll => continue
+-      Wait => if has_msg == false && blocking == false { continue_loop = false }
+-      WaitUntil(_) =>
+-        if has_msg == false && blocking == false {
+-          continue_loop = false
+-        }
+-    }
++    if !blocking { continue_loop = false }
+   }
+ }
+ 
+diff --git a/modules/window/windows/ffi.mbt b/modules/window/windows/ffi.mbt
+index 72dad89..6abf7a5 100644
+--- a/modules/window/windows/ffi.mbt
++++ b/modules/window/windows/ffi.mbt
+@@ -70,6 +70,12 @@ extern "C" fn native_wait_and_process_message(
+ ///|
+ extern "C" fn native_wait_timeout_and_process(timeout_ms : UInt) -> Int = "mbw_wait_timeout_and_process"
+ 
++///|
++extern "C" fn native_last_quit_code() -> Int = "mbw_last_quit_code"
++
++///|
++extern "C" fn native_now_ms() -> Int64 = "mbw_now_ms"
++
+ ///|
+ #borrow(key_path, value_name)
+ extern "C" fn native_read_registry_dword_bytes(
+diff --git a/modules/window/windows/native_window.c b/modules/window/windows/native_window.c
+index dc3059c..ca70308 100644
+--- a/modules/window/windows/native_window.c
++++ b/modules/window/windows/native_window.c
+@@ -59,6 +59,7 @@ static void *g_input_event_closure = NULL;
+ static mbw_sync_query_trampoline_t g_sync_query_trampoline = NULL;
+ static void *g_sync_query_closure = NULL;
+ static mbw_native_message_hook_t g_native_message_hook = NULL;
++static int32_t g_mbw_last_quit_code = 0;
+ static void *g_native_message_hook_context = NULL;
+ 
+ static const wchar_t *g_class_name = L"MBWWindowClass";
+@@ -68,7 +69,18 @@ static HWND g_msg_window = NULL;
+ static DWORD g_main_thread_id = 0;
+ static BOOL g_class_registered = FALSE;
+ 
+-#define MBW_WM_PROXY_WAKEUP (WM_USER + 0x100)
++#define MBW_WM_PROXY_WAKEUP (WM_APP + 0x100)
++
++static int32_t mbw_classify_message(const MSG *msg) {
++  if (msg->message == WM_QUIT) {
++    g_mbw_last_quit_code = (int32_t)msg->wParam;
++    return -2;
++  }
++  if (msg->hwnd == NULL && msg->message == MBW_WM_PROXY_WAKEUP) return 2;
++  TranslateMessage(msg);
++  DispatchMessageW(msg);
++  return 1;
++}
+ 
+ typedef HIMC(WINAPI *mbw_imm_get_context_t)(HWND);
+ typedef BOOL(WINAPI *mbw_imm_release_context_t)(HWND, HIMC);
+@@ -1063,8 +1075,7 @@ int32_t mbw_process_one_message(uint64_t hwnd, uint32_t min_msg,
+   int32_t has_msg = (int32_t)PeekMessageW(&msg, (HWND)hwnd, min_msg, max_msg,
+                                            remove_msg);
+   if (has_msg) {
+-    TranslateMessage(&msg);
+-    DispatchMessageW(&msg);
++    return mbw_classify_message(&msg);
+   }
+   return has_msg;
+ }
+@@ -1074,11 +1085,12 @@ int32_t mbw_wait_and_process_message(uint64_t hwnd, uint32_t min_msg,
+                                      uint32_t max_msg) {
+   MSG msg;
+   int32_t result = (int32_t)GetMessageW(&msg, (HWND)hwnd, min_msg, max_msg);
+-  if (result > 0) {
+-    TranslateMessage(&msg);
+-    DispatchMessageW(&msg);
++  if (result == 0) {
++    g_mbw_last_quit_code = (int32_t)msg.wParam;
++    return -2;
+   }
+-  return result;
++  if (result < 0) return -1;
++  return mbw_classify_message(&msg);
+ }
+ 
+ MOONBIT_FFI_EXPORT
+@@ -1088,14 +1100,16 @@ int32_t mbw_wait_timeout_and_process(uint32_t timeout_ms) {
+   if (result == WAIT_TIMEOUT) {
+     return 0;
+   }
+-  MSG msg;
+-  while (PeekMessageW(&msg, NULL, 0, 0, PM_REMOVE)) {
+-    TranslateMessage(&msg);
+-    DispatchMessageW(&msg);
+-  }
+-  return 1;
++  if (result == WAIT_FAILED) return -1;
++  return mbw_process_one_message(0, 0, 0, PM_REMOVE);
+ }
+ 
++MOONBIT_FFI_EXPORT
++int32_t mbw_last_quit_code(void) { return g_mbw_last_quit_code; }
++
++MOONBIT_FFI_EXPORT
++int64_t mbw_now_ms(void) { return (int64_t)GetTickCount64(); }
++
+ MOONBIT_FFI_EXPORT
+ moonbit_bytes_t mbw_read_registry_utf8(const uint16_t *key_path,
+                                         const uint16_t *value_name) {
+@@ -1273,6 +1287,12 @@ int32_t mbw_wait_timeout_and_process(uint32_t timeout_ms) {
+   return 0;
+ }
+ 
++MOONBIT_FFI_EXPORT
++int32_t mbw_last_quit_code(void) { return 0; }
++
++MOONBIT_FFI_EXPORT
++int64_t mbw_now_ms(void) { return 0; }
++
+ MOONBIT_FFI_EXPORT
+ moonbit_bytes_t mbw_read_registry_utf8(const uint16_t *key_path,
+                                        const uint16_t *value_name) {

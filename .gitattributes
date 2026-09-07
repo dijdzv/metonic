@@ -1,2 +1,4 @@
 * text=auto eol=lf
 *.zip binary
+# Unified diffs encode an empty context line as a single space.
+experiments/window_pump_contract/windows-pump.patch whitespace=-blank-at-eol
