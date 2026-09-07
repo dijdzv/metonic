@@ -124,6 +124,9 @@ pinned Noto Sans JP asset. Its build prepares and verifies that asset directly.
 Committed text replaces the selection; Backspace deletes the selection or one
 Unicode scalar. Grapheme navigation, selection visualization and real IME
 composition are not yet integrated. Arrow keys still control the rectangle.
+F5 starts a delayed move to the left; F6 cancels it. A new F5 replaces the pending
+job. The ordinary window uses the shared task-scope model to reject obsolete
+results and joins canceled work before releasing GPU/window resources.
 
 The hidden window verification injects character messages, replaces Japanese
 text, inserts and deletes a supplementary character, and checks caret state.
