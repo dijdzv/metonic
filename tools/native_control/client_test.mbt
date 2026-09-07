@@ -7,14 +7,7 @@ async fn fixture_config(
   let fixture = @fs.realpath(
     "_build/wasm/release/build/tools/control_fixture/control_fixture.wasm",
   )
-  Config::new(
-    moonrun,
-    [fixture],
-    "C:/bridge.dll",
-    "C:/capture.rgba",
-    timeout_ms,
-    max_pending,
-  )
+  Config::new(moonrun, [fixture], "C:/capture.rgba", timeout_ms, max_pending)
 }
 
 ///|

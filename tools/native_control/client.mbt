@@ -3,7 +3,6 @@
 pub struct Config {
   executable : String
   args : Array[String]
-  bridge : String
   capture_path : String
   timeout_ms : Int
   max_pending : Int
@@ -13,12 +12,11 @@ pub struct Config {
 pub fn Config::new(
   executable : String,
   args : Array[String],
-  bridge : String,
   capture_path : String,
   timeout_ms : Int,
   max_pending : Int,
 ) -> Config {
-  { executable, args, bridge, capture_path, timeout_ms, max_pending, }
+  { executable, args, capture_path, timeout_ms, max_pending, }
 }
 
 ///|
@@ -78,9 +76,6 @@ fn absolute(path : String) -> Bool {
 fn validate_config(config : Config) -> Unit raise {
   if !absolute(config.executable) {
     fail("executable must be absolute")
-  }
-  if !absolute(config.bridge) {
-    fail("bridge must be absolute")
   }
   if !absolute(config.capture_path) {
     fail("capture_path must be absolute")
@@ -368,7 +363,6 @@ pub async fn with_client(
       stderr_reader.close()
     })
     let env : Map[String, String] = Map([])
-    env.set("METONIC_GPU_BRIDGE", config.bridge)
     env.set("METONIC_CAPTURE_PATH", config.capture_path)
     let process = @process.spawn(
       group,
