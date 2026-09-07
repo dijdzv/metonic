@@ -24,6 +24,7 @@ extern "js" fn incomplete_dpr_host() -> BrowserHost =
   #|   switch (request.op) {
   #|     case 'scene': return { target: request.target, pageerrors: [] };
   #|     case 'failures': return [];
+  #|     case 'rpc': return { text: request.text, result: request.mode === 'cancel' ? '' : request.mode === 'replace' || request.user !== '1' ? '\nRPC: domain:not_found' : '\n月兎', status: request.mode === 'cancel' ? 4 : request.mode === 'replace' || request.user !== '1' ? 3 : 2 };
   #|     case 'text': return { summary: { target: request.target }, reference: 'reference' };
   #|     case 'dpr': return false;
   #|     default: throw new Error('suite continued past failed DPR');

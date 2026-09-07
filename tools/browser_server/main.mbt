@@ -13,12 +13,21 @@ async fn fail_response(
 
 ///|
 async fn main {
+  let endpoint = @wire.endpoint(@handlers.binding(), error => {
+    match error {
+      NotFound => "not_found"
+    }
+  })
   let server = @http.Server(@socket.Addr::parse("127.0.0.1:4173"))
   defer server.close()
   println("http://127.0.0.1:4173/")
   server.run_forever(
-    async fn(req, _body, conn) {
+    async fn(req, body, conn) {
       defer conn.close()
+      if req.path == "/rpc" {
+        @transport.serve(endpoint, req, body, conn)
+        return
+      }
       let request_method = req.meth
       if request_method != @http.Get && request_method != @http.Head {
         let headers : Map[@http.CaseInsensitiveString, String] = Map([])

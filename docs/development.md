@@ -109,7 +109,9 @@ remain in their host adapters.
 `browser:build` also builds the MoonBit development HTTP server in
 `tools/browser_server` for the Wasm runtime. `browser:serve` and browser verifiers
 launch that artifact directly through the pinned `moonrun`. It binds loopback
-port 4173 and serves only a fixed asset list with GET/HEAD and `no-store`.
+port 4173 and serves a fixed asset list with GET/HEAD and `no-store`.
+POST `/rpc` uses the same bounded `rpc/http_host` handler as the standalone
+RPC server. It exposes only the sample typed user lookup, not arbitrary handlers.
 The server reads each allowed file into memory before sending it and limits
 concurrent connections to eight; it is a local development server, not a general
 file host. Browser UI execution still compares JS and WasmGC independently.
@@ -310,8 +312,22 @@ a physical GPU result. `browser:server-test` checks the local server's asset bou
 
 For direct inspection, `mise run browser:serve` serves the diagnostic harness at
 `http://127.0.0.1:4173/`; choose `?target=js` or `?target=wasm-gc`. Only the explicit
-distribution file list is served. These commands are prototype development tools,
+distribution file list and sample `/rpc` endpoint are served. These commands are prototype development tools,
 not a production UI, semantic adapter, or MCP server.
+
+Use **Load user** to request user `1`, or another ID to observe the domain error.
+The MoonBit JSON contract encodes and decodes requests on both JS and WasmGC;
+fetch owns browser HTTP I/O and abort signals. Responses update the shared task
+scope and append result text to the GPU text layer without replacing the editor.
+Cancel, replacement and reset abort the pending request. The browser transport
+bounds responses to 64 KiB and uses a three-second timeout.
+
+`browser:headless` checks real same-origin success and domain errors, editor
+preservation, and cancellation/replacement with an intercepted pending request
+on both targets. MoonBit tests separately deliver late responses after task
+replacement, cancellation and disposal. These checks do not yet establish the
+complete real-network timeout/disconnect/size-limit matrix or native/browser
+editing, IME and accessibility parity.
 
 `mise run browser:async` checks delayed completion while input remains responsive,
 superseded results, cancellation, failure, reset, and stop on both JS and WasmGC.

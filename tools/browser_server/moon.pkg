@@ -1,4 +1,7 @@
 import {
+  "local/p0/rpc/http_host" @transport,
+  "local/p0/rpc/json" @wire,
+  "local/p0/examples/p0/backend/handlers",
   "moonbitlang/async/http",
   "moonbitlang/async/socket",
   "moonbitlang/async/fs",

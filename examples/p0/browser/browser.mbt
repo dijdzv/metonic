@@ -7,6 +7,7 @@ pub fn reset_state() -> Unit {
   ignore(@task_scope.dispose(taskScope.val))
   taskScope.val = @task_scope.create()
   state.val = @scene.create()
+  rpc_result.val = b""
 }
 
 ///|

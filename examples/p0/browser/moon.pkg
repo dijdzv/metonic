@@ -1,4 +1,8 @@
 import {
+  "local/p0/rpc/json" @wire,
+  "local/p0/examples/p0/backend/api",
+  "moonbitlang/core/json",
+  "moonbitlang/core/encoding/utf8",
   "local/p0/text_raster" @raster,
   "local/p0/examples/p0/task_scope",
   "local/p0/examples/p0/scene",
