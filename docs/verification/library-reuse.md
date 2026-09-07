@@ -9,7 +9,7 @@ remain comparison baselines until equivalent requirements pass.
 | Existing code | Responsibility | Reuse comparison |
 | --- | --- | --- |
 | `native_gpu/surface_renderer.mbt` | Shared HWND presentation and GPU resource lifetime | Adopted `Milky2018/wgpu_mbt`; custom Rust renderer removed |
-| `examples/p0/native_window/bridge.c` | HWND, bounded event queue and lifetime | `wzzc-dev/window/windows`, raw handle compatibility |
+| `tools/native_surface_probe/window.c` | Isolated device-replacement diagnostic HWND | Ordinary window migrated to `wzzc-dev/window/windows`; diagnostic retained for comparison |
 | `native_host/async_app`, `native_host/windows_loop` | Async jobs, cancellation, completion delivery and UI wakeup | Adopted `moonbitlang/async` structured tasks and external-loop API with the prepared window library; custom C workers replaced after [comparison](native-async.md); context-free C wake thunk retained |
 | `native_gpu`, `examples/p0/native_headless` | Persistent offscreen GPU resources, readback and capture | Adopted `Milky2018/wgpu_mbt@0.16.0`; headless C stub removed, stdio and file writing use MoonBit async |
 | `examples/p0/browser/host/*.mjs` | WebGPU, DOM/input and host scheduling | Compare required calls against `mizchi/js_browser` and `bikallem/webapi` |

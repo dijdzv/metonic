@@ -261,7 +261,7 @@ async fn run_probe(
     "/_build/native/release/build/tools/native_surface_probe/native_surface_probe.exe"
   } else {
     root +
-    "/_build/native/release/build/examples/p0/native_window/native_window.exe"
+    "/.work/native-host-build/native/debug/build/local/native_host/window_app/window_app.exe"
   }
   let bridge = if kind == "window" || kind == "surface" {
     root + "/.work/native-cargo/missing-surface-bridge.dll"
@@ -408,6 +408,12 @@ async fn run_probe(
     !stdout_state.val.overflow && !stderr_state.val.overflow,
     kind + " output overflow",
   )
+  if kind == "window" {
+    require(
+      exact_line_count(stdout, "WINDOW_CLEANUP_OK") == 1,
+      "window cleanup marker missing or duplicated",
+    )
+  }
   if kind == "window" && case_name != "normal" {
     let retained = marker_number(stdout, "WINDOW_INIT_RETAINED=")
     let remaining = marker_number(stdout, "WINDOW_INIT_REMAINING=")

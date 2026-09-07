@@ -1,4 +1,4 @@
-#include "../../examples/p0/native_window/bridge.c"
+#include "window.c"
 
 __declspec(dllexport) void *metonic_binding_hwnd(void) {
   return window_handle;
