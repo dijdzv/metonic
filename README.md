@@ -32,7 +32,7 @@ user-lookup endpoint; this is not synchronized editing between windows.
 
 The browser defaults to WasmGC; JS remains available for comparison. The
 [backend selection record](docs/verification/browser-target.md) explains the
-measured tradeoff and the remaining production-packaging work.
+measured tradeoff and the separate browser package.
 
 On Windows x64, install [mise](https://mise.jdx.dev/), PowerShell 7 (`pwsh`), and
 Visual Studio C++ build tools with the Windows SDK, then run:
@@ -51,8 +51,8 @@ updates. Closing the native window stops the shared server. The browser tab is
 user-owned and stays open; its **Stop** button disposes that browser UI only.
 
 The [demo walkthrough](docs/verification/integrated-demo.md) gives the common
-operation sequence and current platform differences. The browser still uses its
-development host, and neither target is a finished product.
+operation sequence and current platform differences. The demo uses the packaged
+browser UI; neither target is a finished product.
 
 The bootstrap installs the pinned MoonBit toolchain into `.tools/moonbit`,
 verifies download hashes, and bundles the standard library. It does not depend

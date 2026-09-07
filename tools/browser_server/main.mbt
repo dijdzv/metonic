@@ -42,6 +42,8 @@ async fn main {
           Some(i) => raw_path[:i].to_owned()
           None => raw_path
         }
+        let release = path.has_prefix("/release/")
+        let path = if release { path[8:].to_owned() } else { path }
         let entry = match path {
           "/" => Some(("index.html", "text/html; charset=utf-8"))
           "/index.html" => Some(("index.html", "text/html; charset=utf-8"))
@@ -49,19 +51,35 @@ async fn main {
           "/host.mjs" => Some(("host.mjs", "text/javascript; charset=utf-8"))
           "/loader.mjs" =>
             Some(("loader.mjs", "text/javascript; charset=utf-8"))
+          "/loader-common.mjs" =>
+            Some(("loader-common.mjs", "text/javascript; charset=utf-8"))
+          "/environment.mjs" =>
+            Some(("environment.mjs", "text/javascript; charset=utf-8"))
           "/text-renderer.mjs" =>
             Some(("text-renderer.mjs", "text/javascript; charset=utf-8"))
-          "/app.mjs" => Some(("app.mjs", "text/javascript; charset=utf-8"))
+          "/app.mjs" if !release =>
+            Some(("app.mjs", "text/javascript; charset=utf-8"))
           "/app.wasm" => Some(("app.wasm", "application/wasm"))
           "/NotoSansJP.ttf" => Some(("NotoSansJP.ttf", "font/ttf"))
           "/OFL.txt" => Some(("OFL.txt", "text/plain; charset=utf-8"))
+          "/LICENSE-MIT" if release =>
+            Some(("LICENSE-MIT", "text/plain; charset=utf-8"))
+          "/LICENSE-APACHE" if release =>
+            Some(("LICENSE-APACHE", "text/plain; charset=utf-8"))
           _ => None
         }
         match entry {
           None => fail_response(conn, 404, "Not Found")
           Some((filename, content_type)) => {
             let content = Some(
-              @fs.read_file(".work/browser-dist/" + filename).binary(),
+              @fs.read_file(
+                (if release {
+                  ".work/browser-release/"
+                } else {
+                  ".work/browser-dist/"
+                }) +
+                filename,
+              ).binary(),
             ) catch {
               _ => None
             }

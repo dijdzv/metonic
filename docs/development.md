@@ -119,11 +119,17 @@ launch that artifact directly through the pinned `moonrun`. It binds loopback
 port 4173 and serves a fixed asset list with GET/HEAD and `no-store`.
 POST `/rpc` uses the same bounded `rpc/http_host` handler as the standalone
 RPC server. It exposes only the sample typed user lookup, not arbitrary handlers.
+`browser:package` stages the selected WasmGC UI and a fixed-list ZIP separately
+from the comparison assets. `browser:release-serve` serves it at `/release/`;
+`demo` points users at that packaged page. The local server retains comparison
+assets at `/`, but they are not shipped in the ZIP. See the
+[package record](verification/browser-target.md) for deployment and exclusion scope.
+
 The server reads each allowed file into memory before sending it and limits
 concurrent connections to eight; it is a local development server, not a general
 file host. WasmGC is the P0 default; verification still compares JS and WasmGC
 independently. [The backend selection record](verification/browser-target.md)
-documents artifact sizes and the unfinished production-packaging boundary.
+documents artifact sizes and the production-packaging boundary.
 
 `browser:server-test` uses `scripts/verify-browser-server.mbtx` to launch the
 server and verify asset MIME types, cache policy, GET/HEAD, method rejection and

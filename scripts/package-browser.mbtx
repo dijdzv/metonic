@@ -1,0 +1,77 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+}
+
+///|
+async fn main {
+  let dist = ".work/browser-release"
+  if !@fs.exists(dist) {
+    @fs.mkdir(dist, recursive=true)
+  }
+  let entries = [
+    ("examples/p0/browser/host/release.html", "index.html"),
+    ("examples/p0/browser/host/style.css", "style.css"),
+    ("examples/p0/browser/host/host.mjs", "host.mjs"),
+    ("examples/p0/browser/host/loader-release.mjs", "loader.mjs"),
+    ("examples/p0/browser/host/loader-common.mjs", "loader-common.mjs"),
+    ("examples/p0/browser/host/environment-release.mjs", "environment.mjs"),
+    ("examples/p0/browser/host/text-renderer.mjs", "text-renderer.mjs"),
+    (".work/browser-dist/app.wasm", "app.wasm"),
+    (".work/browser-dist/NotoSansJP.ttf", "NotoSansJP.ttf"),
+    (".work/browser-dist/OFL.txt", "OFL.txt"),
+    ("LICENSE-MIT", "LICENSE-MIT"),
+    ("LICENSE-APACHE", "LICENSE-APACHE"),
+  ]
+  let names = entries.map(entry => entry.1)
+  for name in @fs.readdir(dist) {
+    assert_true(names.contains(name), msg="unexpected release file: " + name)
+  }
+  for entry in entries {
+    let (source, name) = entry
+    let data = @fs.read_file(source)
+    if name.has_suffix(".mjs") || name.has_suffix(".html") {
+      for
+        forbidden in [
+          "metonicAsyncProbe", "task-fail", "artifact-bytes", "environment-dev",
+          "?target=", "app.mjs",
+        ] {
+        assert_true(
+          !data.text().contains(forbidden),
+          msg="development content in " + name + ": " + forbidden,
+        )
+      }
+    }
+    @fs.write_file(dist + "/" + name, data.binary())
+  }
+  assert_true(
+    @fs.read_file(".work/browser-dist/environment.mjs")
+    .text()
+    .contains("metonicAsyncProbe"),
+    msg="missing development positive control",
+  )
+  let args = ["-a", "-cf", ".work/metonic-browser-p0.zip", "-C", dist]
+  for name in names {
+    args.push(name)
+  }
+  assert_eq(@process.run("tar", args, no_console_window=true), 0)
+  let (code, listing, _) = @process.collect_output(
+    "tar",
+    ["-tf", ".work/metonic-browser-p0.zip"],
+    no_console_window=true,
+  )
+  assert_eq(code, 0)
+  let archived = listing
+    .text()
+    .trim()
+    .to_owned()
+    .split("\n")
+    .map(line => line.trim().to_owned())
+    .collect()
+  assert_eq(archived.length(), names.length())
+  for name in names {
+    assert_true(archived.contains(name))
+  }
+  println("BROWSER_PACKAGE_OK fixed_assets development_adapter_excluded")
+}

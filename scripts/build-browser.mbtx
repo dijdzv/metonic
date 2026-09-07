@@ -48,7 +48,11 @@ async fn main {
   if wasm_code != 0 {
     fail("WasmGC build failed")
   }
-  for host in ["host.mjs", "loader.mjs", "text-renderer.mjs"] {
+  for
+    host in [
+      "host.mjs", "loader.mjs", "loader-common.mjs", "loader-release.mjs", "environment-dev.mjs",
+      "environment-release.mjs", "text-renderer.mjs",
+    ] {
     let (check_code, check_out, check_err) = @process.collect_output(
       "node",
       ["--check", "examples/p0/browser/host/" + host],
@@ -69,6 +73,12 @@ async fn main {
     ("examples/p0/browser/host/style.css", ".work/browser-dist/style.css"),
     ("examples/p0/browser/host/host.mjs", ".work/browser-dist/host.mjs"),
     ("examples/p0/browser/host/loader.mjs", ".work/browser-dist/loader.mjs"),
+    (
+      "examples/p0/browser/host/loader-common.mjs", ".work/browser-dist/loader-common.mjs",
+    ),
+    (
+      "examples/p0/browser/host/environment-dev.mjs", ".work/browser-dist/environment.mjs",
+    ),
     (
       "examples/p0/browser/host/text-renderer.mjs", ".work/browser-dist/text-renderer.mjs",
     ),

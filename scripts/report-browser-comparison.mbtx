@@ -69,8 +69,8 @@ async fn main {
   let mut shared_bytes = 0
   for
     path in [
-      "index.html", "style.css", "host.mjs", "loader.mjs", "text-renderer.mjs", "NotoSansJP.ttf",
-      "OFL.txt",
+      "index.html", "style.css", "host.mjs", "loader.mjs", "loader-common.mjs", "environment.mjs",
+      "text-renderer.mjs", "NotoSansJP.ttf", "OFL.txt",
     ] {
     shared_bytes += @fs.read_file(".work/browser-dist/" + path)
       .binary()

@@ -1,11 +1,11 @@
 import { loadApp } from './loader.mjs';
 import { createTextRenderer } from './text-renderer.mjs';
+import * as environment from './environment.mjs';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('canvas');
 const status = $('status');
-const target = new URLSearchParams(location.search).get('target') || 'wasm-gc';
-const els = { target: $('target'), bytes: $('artifact-bytes'), load: $('load-ms'), adapter: $('adapter'), dimensions: $('dimensions'), revision: $('revision'), submitted: $('submitted'), transferred: $('transferred') };
+const target = environment.target;
 let app, device, context, pipeline, uniform, bindGroup, observer, raf = 0, disposed = false, dirty = false;
 let cssW = 0, cssH = 0, backingW = 0, backingH = 0, submitted = 0, transferred = 0, format;
 const textInput = $('text-input');
@@ -28,7 +28,7 @@ function onCompositionEnd() {
   app.editor_composition_end();
   onTextInput();
 }
-const taskButtons = [$('task-start'), $('task-fail'), $('task-cancel'), $('rpc-load')];
+const taskButtons = [$('task-start'), $('task-cancel'), $('rpc-load')];
 let rpcController;
 function rpcOutput(kind) {
   return new TextDecoder('utf-8', { fatal: true }).decode(Uint8Array.from({ length: Number(app.rpc_output_length(kind)) }, (_, i) => Number(app.rpc_output_byte(kind, i))));
@@ -104,9 +104,7 @@ function taskField(index) { return Number(app.task_field(index)); }
 function updateTaskDiagnostics() {
   const values = [];
   for (let index = 0; index < 6; index += 1) values.push(taskField(index));
-  $('task-state').textContent = JSON.stringify(values);
-  $('task-pending').textContent = String(taskTimers.size);
-  $('task-rejected').textContent = String(rejectedCallbacks);
+  environment.task(values, taskTimers.size, rejectedCallbacks);
 }
 function dispatchTask(delayMs, value, fail = false) {
   if (disposed || !app || !Number.isInteger(delayMs) || delayMs < 0 || delayMs > 5000
@@ -139,7 +137,6 @@ function resetTasks() {
   if (app) updateTaskDiagnostics();
 }
 function onTaskStart() { dispatchTask(250, 40); }
-function onTaskFail() { dispatchTask(250, 0, true); }
 function onTaskCancel() { cancelTask(); }
 
 function setStatus(message, error = false) {
@@ -152,14 +149,10 @@ function field(index) {
 }
 
 function renderStats() {
-  els.revision.textContent = String(field(5));
-  els.submitted.textContent = String(submitted);
-  els.transferred.textContent = `${transferred} bytes`;
+  environment.frame(field(5), submitted, transferred);
   if (textRenderer) {
     const stats = textRenderer.stats();
-    $('text-width').textContent = String(stats.width);
-    $('text-renders').textContent = String(stats.renders);
-    $('text-uploaded').textContent = String(stats.uploaded);
+    environment.text(stats);
   }
 }
 
@@ -209,7 +202,7 @@ function resize(force = false) {
   context.configure({ device, format, alphaMode: 'opaque' });
   app.resize(cssW, cssH);
   textRenderer?.rasterText(editorText() + rpcOutput(1), cssW);
-  els.dimensions.textContent = `${cssW} × ${cssH} CSS / ${backingW} × ${backingH} backing`;
+  environment.dimensions(cssW, cssH, backingW, backingH);
   dirty = true;
   schedule();
 }
@@ -280,9 +273,7 @@ function renderEditor() {
   try {
     textRenderer.rasterText(editorText() + rpcOutput(1), cssW);
     const stats = textRenderer.stats();
-    $('text-width').textContent = String(stats.width);
-    $('text-renders').textContent = String(stats.renders);
-    $('text-uploaded').textContent = String(stats.uploaded);
+    environment.text(stats);
     dirty = true;
     schedule();
   } catch (error) {
@@ -325,7 +316,7 @@ function stop(reason = 'Stopped.', error = false) {
   $('reset').disabled = true;
   for (const button of taskButtons) button.disabled = true;
   $('task-start').removeEventListener('click', onTaskStart);
-  $('task-fail').removeEventListener('click', onTaskFail);
+  environment.detach();
   $('task-cancel').removeEventListener('click', onTaskCancel);
   try { context?.unconfigure?.(); } catch {}
   try { uniform?.destroy(); } catch {}
@@ -392,10 +383,7 @@ struct U { rect: vec4f, viewport: vec2f, enabled: f32, pad: f32 };
   app = loaded.app;
   textRenderer = await createTextRenderer({ app, device, format, disposed: () => disposed });
   if (disposed) return;
-  els.target.textContent = target;
-  els.bytes.textContent = String(loaded.artifactBytes);
-  els.load.textContent = loaded.loadMs.toFixed(2);
-  els.adapter.textContent = adapter.info?.description || adapter.info?.vendor || 'available';
+  environment.loaded(loaded, adapter);
   syncEditor();
   resize(true);
   if (disposed) return;
@@ -414,17 +402,15 @@ struct U { rect: vec4f, viewport: vec2f, enabled: f32, pad: f32 };
   $('task-start').addEventListener('click', onTaskStart);
   $('rpc-load').addEventListener('click', loadUser);
   $('rpc-user').disabled = false;
-  $('task-fail').addEventListener('click', onTaskFail);
   $('task-cancel').addEventListener('click', onTaskCancel);
   for (const button of taskButtons) button.disabled = false;
   updateTaskDiagnostics();
-  window.metonicAsyncProbe = {
-    editor: () => ({ text: Array.from({ length: Math.max(0, Number(app.editor_field(0))) }, (_, i) => String.fromCharCode(Number(app.editor_unit(i)))).join(''), display: editorText(), start: Number(app.editor_field(1)), end: Number(app.editor_field(2)), composing: Number(app.editor_field(5)), disposed }),
-    start: (delayMs, value, fail = false) => dispatchTask(delayMs, value, fail),
-    cancel: cancelTask,
-    snapshot: () => ({ task: Array.from({ length: 6 }, (_, index) => taskField(index)), pending: taskTimers.size, rejected: rejectedCallbacks, disposed }),
-  };
-  setStatus(`Ready: ${target}`);
+  environment.attach({
+    app, dispatchTask, cancelTask, taskTimers,
+    get rejectedCallbacks() { return rejectedCallbacks; },
+    get disposed() { return disposed; },
+  });
+  setStatus(environment.ready);
 }
 const onStop = () => stop();
 $('stop').addEventListener('click', onStop);

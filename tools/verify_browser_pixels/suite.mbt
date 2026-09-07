@@ -122,6 +122,7 @@ async fn run_suite(host : BrowserHost, metadata : String) -> String {
     "DPR scenario did not complete",
   )
   let font_failures = command(host, { "op": "font-failures" })
+  let release = command(host, { "op": "release" })
   Json::object({
     "backend": Json::string(backend),
     "browser": Json::string(string_field(config, "browser")),
@@ -130,6 +131,7 @@ async fn run_suite(host : BrowserHost, metadata : String) -> String {
     "negative": negative,
     "text": { "targets": Json::array(summaries), "dpr2": true },
     "textFailures": font_failures,
+    "release": release,
   }).stringify()
 }
 
