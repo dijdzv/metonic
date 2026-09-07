@@ -1,14 +1,4 @@
 ///|
-extern "C" fn read_line() -> String = "metonic_read_line"
-
-///|
-extern "C" fn read_status() -> Int = "metonic_read_status"
-
-///|
-#borrow(text)
-extern "C" fn write_line(text : String) -> Int = "metonic_write_line"
-
-///|
 extern "C" fn capture(
   width : Int,
   height : Int,
@@ -219,121 +209,161 @@ fn response(
 }
 
 ///|
-fn emit(value : Response) -> Bool {
-  write_line(@json.to_json(value).stringify()) == 0
+async fn emit(value : Response) -> Bool {
+  try {
+    @stdio.stdout.write(@json.to_json(value).stringify() + "\n")
+    true
+  } catch {
+    _ => false
+  }
 }
 
 ///|
-fn main {
-  let state = @scene.create()
-  let tree = @semantics.create(1, 1)
-  let mut frame = 0
-  let mut running = true
-  while running {
-    let line = read_line()
-    let status = read_status()
-    if status != 0 {
-      if status == 1 {
-        running = false
-      } else {
-        let error = if status == 2 { "line_too_long" } else { "invalid_utf8" }
-        if !emit(response(state, tree, -1, false, Some(error), frame)) {
-          running = false
-        }
-      }
-      continue
-    }
-    let parsed = try {
-      let req : Request = @json.from_json(@json.parse(line))
-      Some(req)
-    } catch {
-      _ => None
-    }
-    match parsed {
-      None =>
-        if !emit(response(state, tree, -1, false, Some("parse_error"), frame)) {
-          running = false
-        }
-      Some(req) => {
-        let id = if req.id >= 0 { req.id } else { -1 }
-        let mut ok = true
-        let mut error : String? = None
-        if req.version != 1 {
-          ok = false
-          error = Some("unsupported_version")
-        } else if req.id < 0 {
-          ok = false
-          error = Some("invalid_id")
-        } else if req.expected_revision is Some(expected) &&
-          expected != @scene.field(state, 5) {
-          ok = false
-          error = Some("stale_revision")
-        } else if req.expected_semantic_revision is Some(expected) &&
-          expected != @semantics.revision(tree) {
-          ok = false
-          error = Some("stale_semantic_revision")
-        } else {
-          match req.op {
-            "snapshot" => ()
-            "move" =>
-              if req.x is Some(x) && req.y is Some(y) {
-                ignore(@scene.move_to(state, x, y))
-              } else {
+async fn emit_error(
+  state : @scene.State,
+  tree : @semantics.Tree,
+  frame : Ref[Int],
+  error : String,
+) -> Bool {
+  emit(response(state, tree, -1, false, Some(error), frame.val))
+}
+
+///|
+async fn handle_line(
+  line : @lines.InputLine,
+  state : @scene.State,
+  tree : @semantics.Tree,
+  frame : Ref[Int],
+) -> Bool {
+  let result : Bool = match line {
+    @lines.InputLine::TooLong => emit_error(state, tree, frame, "line_too_long")
+    @lines.InputLine::Line(bytes) => {
+      let decoded = Some(@utf8.decode(bytes)) catch { _ => None }
+      match decoded {
+        None => emit_error(state, tree, frame, "invalid_utf8")
+        Some(text) => {
+          let parsed = try {
+            let req : Request = @json.from_json(@json.parse(text))
+            Some(req)
+          } catch {
+            _ => None
+          }
+          match parsed {
+            None => emit_error(state, tree, frame, "parse_error")
+            Some(req) => {
+              let id = if req.id >= 0 { req.id } else { -1 }
+              let mut ok = true
+              let mut error : String? = None
+              let mut shutdown = false
+              if req.version != 1 {
                 ok = false
-                error = Some("missing_argument")
-              }
-            "resize" =>
-              if req.width is Some(width) && req.height is Some(height) {
-                if width < 1 || width > 2048 || height < 1 || height > 2048 {
-                  ok = false
-                  error = Some("invalid_dimensions")
-                } else {
-                  ignore(@scene.resize(state, width, height))
+                error = Some("unsupported_version")
+              } else if req.id < 0 {
+                ok = false
+                error = Some("invalid_id")
+              } else if req.expected_revision is Some(expected) &&
+                expected != @scene.field(state, 5) {
+                ok = false
+                error = Some("stale_revision")
+              } else if req.expected_semantic_revision is Some(expected) &&
+                expected != @semantics.revision(tree) {
+                ok = false
+                error = Some("stale_semantic_revision")
+              } else {
+                match req.op {
+                  "snapshot" => ()
+                  "move" =>
+                    if req.x is Some(x) && req.y is Some(y) {
+                      ignore(@scene.move_to(state, x, y))
+                    } else {
+                      ok = false
+                      error = Some("missing_argument")
+                    }
+                  "resize" =>
+                    if req.width is Some(width) && req.height is Some(height) {
+                      if width < 1 ||
+                        width > 2048 ||
+                        height < 1 ||
+                        height > 2048 {
+                        ok = false
+                        error = Some("invalid_dimensions")
+                      } else {
+                        ignore(@scene.resize(state, width, height))
+                      }
+                    } else {
+                      ok = false
+                      error = Some("missing_argument")
+                    }
+                  "activate" => {
+                    let result = activate_button(tree, state)
+                    if result != "" {
+                      ok = false
+                      error = Some(result)
+                    }
+                  }
+                  "capture" => {
+                    let result = capture(
+                      @scene.field(state, 6),
+                      @scene.field(state, 7),
+                      @scene.field(state, 0),
+                      @scene.field(state, 1),
+                      @scene.field(state, 2),
+                      @scene.field(state, 3),
+                      @scene.field(state, 4),
+                    )
+                    if result == 0 {
+                      frame.val += 1
+                    } else {
+                      ok = false
+                      error = Some("capture_failed")
+                    }
+                  }
+                  "shutdown" => shutdown = true
+                  _ => {
+                    let semantic_error = semantic_dispatch(tree, state, req)
+                    if semantic_error != "" {
+                      ok = false
+                      error = Some(semantic_error)
+                    }
+                  }
                 }
-              } else {
-                ok = false
-                error = Some("missing_argument")
               }
-            "activate" => {
-              let result = activate_button(tree, state)
-              if result != "" {
-                ok = false
-                error = Some(result)
-              }
-            }
-            "capture" => {
-              let result = capture(
-                @scene.field(state, 6),
-                @scene.field(state, 7),
-                @scene.field(state, 0),
-                @scene.field(state, 1),
-                @scene.field(state, 2),
-                @scene.field(state, 3),
-                @scene.field(state, 4),
+              let emitted = emit(
+                response(state, tree, id, ok, error, frame.val),
               )
-              if result == 0 {
-                frame += 1
-              } else {
-                ok = false
-                error = Some("capture_failed")
-              }
-            }
-            "shutdown" => running = false
-            _ => {
-              let semantic_error = semantic_dispatch(tree, state, req)
-              if semantic_error != "" {
-                ok = false
-                error = Some(semantic_error)
-              }
+              emitted && !shutdown
             }
           }
-        }
-        if !emit(response(state, tree, id, ok, error, frame)) {
-          running = false
         }
       }
     }
   }
-  ignore(@semantics.dispose(tree))
-  finish()
+  result
+}
+
+///|
+async fn main {
+  let state = @scene.create()
+  let tree = @semantics.create(1, 1)
+  let frame : Ref[Int] = { val: 0, }
+  defer {
+    ignore(@semantics.dispose(tree))
+    finish()
+  }
+  let lines = @lines.Lines::new(lf_only=true)
+  let mut running = true
+  while running && @stdio.stdin.read_some(max_len=4096) is Some(chunk) {
+    for line in lines.feed(chunk) {
+      if running {
+        running = handle_line(line, state, tree, frame)
+      }
+    }
+  }
+  if running {
+    for line in lines.finish() {
+      if running {
+        running = handle_line(line, state, tree, frame)
+      }
+    }
+  }
 }

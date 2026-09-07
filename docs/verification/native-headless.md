@@ -42,6 +42,30 @@ Set `METONIC_GPU_FALLBACK=1` for the software adapter run.
 PNG images, raw RGBA, adapter diagnostics, and JSON results are written below
 `.work/native-headless/` and are not committed.
 
+## Native standard I/O
+
+The native probe uses the pinned MoonBit async stdio implementation and the shared
+bounded line framer. Its LF mode accepts LF and CRLF, preserves CR inside JSON
+whitespace, and limits the body to 4095 bytes. Oversized lines are drained before
+the next request; invalid UTF-8 is rejected separately from invalid JSON. A final
+unterminated request is processed once at EOF.
+
+Successful shutdown stops buffered requests as well as further reads. A rejected
+shutdown request leaves the session available. GPU and semantic resources are
+released through `defer` when the loop ends. The removed C functions handled line
+reading, UTF-8 conversion and response writing; the retained C boundary loads the
+GPU DLL and performs capture and release operations.
+
+The LF framing changes passed all nine framing tests. The native verifier passed
+on both GPU modes with 4095-byte LF/CRLF requests, 4096-byte rejection and recovery,
+invalid UTF-8 recovery, fragmented CRLF, embedded CR whitespace, batched requests,
+an unterminated final request and rejected shutdown recovery. A shutdown followed
+by another buffered request produces only the shutdown response. After a capture,
+closing stdout and requesting another response ends the process with exit code
+zero while stdin is still open; this checks the output-error exit path separately
+from ordinary EOF. The original four GPU captures and failure cases remain in
+the same verification run.
+
 ## Limits
 
 This verifies offscreen rendering and command transport. It does not verify
