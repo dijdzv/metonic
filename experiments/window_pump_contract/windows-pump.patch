@@ -1,5 +1,5 @@
 diff --git a/modules/window/windows/app_state.mbt b/modules/window/windows/app_state.mbt
-index ee56141..e9726f4 100644
+index ee56141..2d4dee7 100644
 --- a/modules/window/windows/app_state.mbt
 +++ b/modules/window/windows/app_state.mbt
 @@ -2,6 +2,7 @@
@@ -70,8 +70,20 @@ index ee56141..e9726f4 100644
  ///|
  fn app_state_queue_redraw(raw_id : Int) -> Unit {
    match app_state_window_handle(raw_id) {
+@@ -242,6 +265,11 @@ fn app_state_clear_pending_redraw(raw_id : Int) -> Unit {
+   app_state_runtime.val.pending_redraw_window_ids = next
+ }
+ 
++///|
++fn app_state_has_pending_redraws() -> Bool {
++  app_state_runtime.val.pending_redraw_window_ids.length() > 0
++}
++
+ ///|
+ fn app_state_dispatch_deferred_callbacks() -> Unit {
+   let callbacks = app_state_runtime.val.deferred_callbacks
 diff --git a/modules/window/windows/event_loop.mbt b/modules/window/windows/event_loop.mbt
-index 0520ec3..540a4d8 100644
+index 0520ec3..b81a65d 100644
 --- a/modules/window/windows/event_loop.mbt
 +++ b/modules/window/windows/event_loop.mbt
 @@ -12,6 +12,7 @@ pub fn EventLoopProxy::wake_up(self : EventLoopProxy) -> Unit {
@@ -160,7 +172,7 @@ index 0520ec3..540a4d8 100644
  }
  
  ///|
-@@ -478,40 +512,70 @@ fn EventLoop::run_message_loop(
+@@ -478,40 +512,74 @@ fn EventLoop::run_message_loop(
  ) -> Unit {
    let mut continue_loop = true
    while continue_loop {
@@ -172,32 +184,38 @@ index 0520ec3..540a4d8 100644
 -          native_wait_and_process_message((0 : Int).to_uint64(), 0, 0) > 0
 -        } else {
 -          native_process_one_message((0 : Int).to_uint64(), 0, 0, pm_remove) !=
-+    let wait_timeout = match app_state_control_flow() {
-+      Poll => Some(0)
-+      Wait => timeout_ms
-+      WaitUntil(deadline) => {
-+        let now = native_now_ms()
-+        let clamped = if deadline <= now {
-           0
-+        } else {
-+          let remaining = deadline - now
-+          if remaining > 2147483647L {
-+            2147483647
-+          } else {
-+            remaining.to_int()
-+          }
-         }
+-          0
+-        }
 -      WaitUntil(_) =>
-         match timeout_ms {
+-        match timeout_ms {
 -          Some(t) if t <= 0 =>
 -            native_process_one_message((0 : Int).to_uint64(), 0, 0, pm_remove) !=
--            0
++    let wait_timeout = if app_state_has_pending_redraws() {
++      Some(0)
++    } else {
++      match app_state_control_flow() {
++        Poll => Some(0)
++        Wait => timeout_ms
++        WaitUntil(deadline) => {
++          let now = native_now_ms()
++          let clamped = if deadline <= now {
+             0
 -          Some(t) =>
 -            native_wait_timeout_and_process(t.reinterpret_as_uint()) != 0
 -          None =>
 -            native_wait_and_process_message((0 : Int).to_uint64(), 0, 0) > 0
-+          Some(value) if value < clamped => Some(value)
-+          _ => Some(clamped)
++          } else {
++            let remaining = deadline - now
++            if remaining > 2147483647L {
++              2147483647
++            } else {
++              remaining.to_int()
++            }
++          }
++          match timeout_ms {
++            Some(value) if value < clamped => Some(value)
++            _ => Some(clamped)
++          }
          }
 +      }
 +    }
@@ -257,7 +275,7 @@ index 0520ec3..540a4d8 100644
      }
    }
  }
-@@ -529,6 +593,9 @@ pub fn[A : ApplicationHandler] EventLoop::try_run_app(
+@@ -529,6 +597,9 @@ pub fn[A : ApplicationHandler] EventLoop::try_run_app(
    self : EventLoop,
    app : A,
  ) -> Unit raise @core.EventLoopError {
@@ -267,7 +285,7 @@ index 0520ec3..540a4d8 100644
    if app_state_is_running() {
      raise @core.EventLoopError::RecreationAttempt
    }
-@@ -553,6 +620,9 @@ pub fn[A : ApplicationHandler] EventLoop::try_run_app_on_demand(
+@@ -553,6 +624,9 @@ pub fn[A : ApplicationHandler] EventLoop::try_run_app_on_demand(
    self : EventLoop,
    app : A,
  ) -> Unit raise @core.EventLoopError {
@@ -277,7 +295,7 @@ index 0520ec3..540a4d8 100644
    if app_state_is_running() {
      raise @core.EventLoopError::RecreationAttempt
    }
-@@ -580,6 +650,9 @@ pub fn[A : ApplicationHandler] EventLoop::try_pump_app_events(
+@@ -580,6 +654,9 @@ pub fn[A : ApplicationHandler] EventLoop::try_pump_app_events(
    timeout_ms : Int?,
    app : A,
  ) -> @core.PumpStatus {
@@ -288,7 +306,7 @@ index 0520ec3..540a4d8 100644
      app_state_set_running(true)
      app_state_set_dispatch_handler(app, self.as_active())
 diff --git a/modules/window/windows/ffi.mbt b/modules/window/windows/ffi.mbt
-index 72dad89..ba3bfab 100644
+index 72dad89..7ad0cfd 100644
 --- a/modules/window/windows/ffi.mbt
 +++ b/modules/window/windows/ffi.mbt
 @@ -7,6 +7,9 @@ extern "C" fn native_hinstance_handle() -> UInt64 = "mbw_hinstance_handle"
@@ -314,6 +332,28 @@ index 72dad89..ba3bfab 100644
  ///|
  #borrow(key_path, value_name)
  extern "C" fn native_read_registry_dword_bytes(
+@@ -107,6 +116,21 @@ extern "C" fn native_set_window_pos(
+   flags : UInt64,
+ ) -> Int = "mbw_set_window_pos"
+ 
++///|
++// Use a fixed four-Int buffer for RECT's four 32-bit LONG fields instead of
++// relying on a MoonBit struct's native layout.
++#borrow(rect)
++extern "C" fn native_adjust_window_rect_ex_for_dpi(
++  rect : FixedArray[Int],
++  style : UInt,
++  has_menu : Int,
++  ex_style : UInt,
++  dpi : UInt,
++) -> Int = "AdjustWindowRectExForDpi"
++
++///|
++extern "C" fn native_get_menu(hwnd : UInt64) -> UInt64 = "GetMenu"
++
+ ///|
+ extern "C" fn native_show_window(hwnd : UInt64, cmd : Int) -> Int = "mbw_show_window"
+ 
 diff --git a/modules/window/windows/native_window.c b/modules/window/windows/native_window.c
 index dc3059c..0c6511d 100644
 --- a/modules/window/windows/native_window.c
@@ -462,7 +502,7 @@ index dc3059c..0c6511d 100644
  moonbit_bytes_t mbw_read_registry_utf8(const uint16_t *key_path,
                                         const uint16_t *value_name) {
 diff --git a/modules/window/windows/window.mbt b/modules/window/windows/window.mbt
-index a75c26d..ce03197 100644
+index a75c26d..19169f1 100644
 --- a/modules/window/windows/window.mbt
 +++ b/modules/window/windows/window.mbt
 @@ -181,7 +181,9 @@ pub fn Window::new(
@@ -476,3 +516,73 @@ index a75c26d..ce03197 100644
    let raw_id = app_state_next_window_id()
    let window_id = @core.WindowId::from_raw(raw_id)
    let style = compute_window_style(attributes)
+@@ -366,18 +368,49 @@ pub fn Window::request_inner_size(
+   size : @dpi.Size,
+ ) -> @dpi.PhysicalSize? {
+   let physical = size.to_physical(self.scale_factor())
+-  ignore(
+-    native_set_window_pos(
+-      self.hwnd,
+-      hwnd_top,
+-      0,
+-      0,
+-      physical.width,
+-      physical.height,
+-      swp_nomove | swp_nozorder,
+-    ),
+-  )
+-  None
++  if physical.width <= 0 || physical.height <= 0 {
++    return None
++  }
++  match app_state_window_handle(self.id.into_raw()) {
++    None => None
++    Some(_) => {
++      let rect : FixedArray[Int] = FixedArray::make(4, 0)
++      rect[2] = physical.width
++      rect[3] = physical.height
++      let style = native_get_window_long_style(self.hwnd).to_uint()
++      let ex_style = native_get_window_long_ex_style(self.hwnd).to_uint()
++      let has_menu = if native_get_menu(self.hwnd) != 0UL { 1 } else { 0 }
++      let dpi = native_get_dpi_for_window(self.hwnd)
++      if native_adjust_window_rect_ex_for_dpi(
++          rect, style, has_menu, ex_style, dpi,
++        ) ==
++        0 {
++        None
++      } else {
++        let width = rect[2].to_int64() - rect[0].to_int64()
++        let height = rect[3].to_int64() - rect[1].to_int64()
++        if width <= 0L ||
++          height <= 0L ||
++          width > 2147483647L ||
++          height > 2147483647L {
++          None
++        } else {
++          ignore(
++            native_set_window_pos(
++              self.hwnd,
++              hwnd_top,
++              0,
++              0,
++              width.to_int(),
++              height.to_int(),
++              swp_nomove | swp_nozorder | swp_noactivate,
++            ),
++          )
++          None
++        }
++      }
++    }
++  }
+ }
+ 
+ ///|
+@@ -401,6 +434,7 @@ pub fn Window::surface_position(self : Window) -> @dpi.PhysicalPosition {
+ ///|
+ pub fn Window::request_redraw(self : Window) -> Unit {
+   ignore(native_invalidate_rect(self.hwnd, false))
++  app_state_queue_redraw(self.id.into_raw())
+ }
+ 
+ ///|

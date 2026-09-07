@@ -75,7 +75,8 @@ This opt-in candidate evaluation is separate from the normal application gate.
 against the same pinned source revision. It changes only the candidate's Windows
 event loop, callback dispatch, FFI declarations and native message helpers. The
 current patch also guards window creation after loop destruction and includes
-the [resource lifetime correction](native-resource-cleanup.md). Apply it once
+the [resource lifetime correction](native-resource-cleanup.md), explicit queued
+redraws and [client-size adjustment](windows-gpu-external-loop.md). Apply it once
 to the pinned source; it replaces the earlier pump-only patch. It
 does not replace the application's existing window/worker boundary.
 The patch includes context from

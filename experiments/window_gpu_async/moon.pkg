@@ -1,0 +1,22 @@
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/external_loop_integration",
+  "moonbitlang/async/fs",
+  "moonbitlang/core/debug",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+  "moonbitlang/core/string",
+  "Milky2018/wgpu_mbt" @wgpu,
+  "Milky2018/wgpu_mbt/c" @c,
+  "local/p0/native_gpu" @gpu,
+  "wzzc-dev/window/core",
+  "wzzc-dev/window/dpi" @dpi,
+  "wzzc-dev/window/windows",
+}
+
+supported_targets = "native"
+pkgtype(kind: "executable")
+options(
+  "native-stub": ["wake.c"],
+  targets: {"main.mbt": ["native"]},
+)

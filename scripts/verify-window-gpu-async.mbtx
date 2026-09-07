@@ -1,0 +1,269 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/debug",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+}
+
+///|
+suberror ObserverFailure {
+  Failure(String)
+} derive(Debug)
+
+///|
+fn fail(message : String) -> Unit raise ObserverFailure {
+  raise ObserverFailure::Failure(message)
+}
+
+///|
+fn absolute(path : String) -> Bool {
+  let chars = path.to_array()
+  let drive = chars.length() >= 3 &&
+    (
+      (chars[0] >= 'A' && chars[0] <= 'Z') ||
+      (chars[0] >= 'a' && chars[0] <= 'z')
+    ) &&
+    chars[1] == ':' &&
+    (chars[2] == '\\' || chars[2] == '/')
+  let unc = chars.length() >= 2 && chars[0] == '\\' && chars[1] == '\\'
+  let unix = chars.length() > 0 && chars[0] == '/'
+  drive || unc || unix
+}
+
+///|
+async fn drain(reader : @process.ReadFromProcess) -> String raise Error {
+  let bytes : Array[Byte] = []
+  while bytes.length() <= 65536 {
+    match reader.read_some(max_len=4096) {
+      None => return @utf8.decode_lossy(Bytes::from_array(bytes))
+      Some(chunk) =>
+        for byte in chunk {
+          if bytes.length() == 65536 {
+            fail("output overflow")
+          }
+          bytes.push(byte)
+        }
+    }
+  }
+  fail("output overflow")
+  ""
+}
+
+///|
+fn integer(
+  values : Map[String, Json],
+  name : String,
+) -> Int64 raise ObserverFailure {
+  match values.get(name) {
+    Some(Json::Number(value, ..)) if value.to_int64().to_double() == value =>
+      value.to_int64()
+    _ => raise ObserverFailure::Failure("missing or non-integer field: " + name)
+  }
+}
+
+///|
+fn nonnegative(
+  values : Map[String, Json],
+  name : String,
+) -> Int64 raise ObserverFailure {
+  let value = integer(values, name)
+  if value < 0L {
+    raise ObserverFailure::Failure(name + " is negative")
+  }
+  value
+}
+
+///|
+fn boolean(
+  values : Map[String, Json],
+  name : String,
+) -> Bool raise ObserverFailure {
+  match values.get(name) {
+    Some(Json::True) => true
+    Some(Json::False) => false
+    _ => raise ObserverFailure::Failure("missing boolean field: " + name)
+  }
+}
+
+///|
+fn check_result(
+  output : String,
+  fixture : String,
+  expect_error : Bool,
+) -> Unit raise ObserverFailure {
+  let mut found = 0
+  let mut result : Json? = None
+  for line in output.replace_all(old="\r\n", new="\n").split("\n") {
+    let trimmed = line.trim()
+    if trimmed != "" {
+      if !trimmed.has_prefix("RESULT ") {
+        fail("unexpected child output")
+      }
+      found += 1
+      if found != 1 {
+        fail("duplicate RESULT")
+      }
+      result = Some(
+        @json.parse(trimmed[7:].to_owned()) catch {
+          _ => raise ObserverFailure::Failure("malformed RESULT JSON")
+        },
+      )
+    }
+  }
+  if found != 1 {
+    fail("missing RESULT")
+  }
+  match result {
+    Some(Json::Object(values)) => {
+      match values.get("mode") {
+        Some(Json::String(value)) if value == "gpu_async" => ()
+        _ => fail("RESULT mode is not gpu_async")
+      }
+      if boolean(values, "ok") != !expect_error {
+        fail("RESULT ok has unexpected value")
+      }
+      if nonnegative(values, "pending") != 0L ||
+        nonnegative(values, "initialization_pending") != 0L {
+        fail("pending work remains")
+      }
+      match values.get("hwnd_destroyed") {
+        Some(Json::True) => ()
+        _ => fail("hwnd_destroyed is false")
+      }
+      match values.get("message_hwnd_destroyed") {
+        Some(Json::True) => ()
+        _ => fail("message_hwnd_destroyed is false")
+      }
+      match values.get("original_error") {
+        Some(Json::String(error)) =>
+          if expect_error {
+            if error == "" ||
+              !error.contains("@fs.open()") ||
+              !error.contains(fixture) {
+              fail("original_error does not identify the input open failure")
+            }
+          } else {
+            fail("original_error is not null")
+          }
+        Some(Json::Null) if !expect_error => ()
+        _ => fail("original_error has unexpected value")
+      }
+      match values.get("adapter") {
+        Some(Json::String(value)) if value != "" => ()
+        _ => fail("adapter is empty")
+      }
+      if nonnegative(values, "frames") < 3L ||
+        nonnegative(values, "redraws") <= 0L ||
+        nonnegative(values, "resizes") <= 0L ||
+        integer(values, "width") != 800L ||
+        integer(values, "height") != 450L {
+        fail("gpu frame or resize result is invalid")
+      }
+      if !expect_error {
+        if nonnegative(values, "cleanup") != 16L ||
+          nonnegative(values, "zero") <= 0L ||
+          nonnegative(values, "finite") <= 0L ||
+          nonnegative(values, "indefinite") <= 0L ||
+          nonnegative(values, "io_wakes") <= 0L ||
+          nonnegative(values, "io_proxies") <= 0L ||
+          nonnegative(values, "io_indefinite") <= 0L ||
+          nonnegative(values, "wakes") <= 0L ||
+          nonnegative(values, "proxies") <= 0L ||
+          integer(values, "timer_ms") < 80L ||
+          integer(values, "timer_ms") > 1000L ||
+          integer(values, "shutdown_ms") < 0L ||
+          integer(values, "shutdown_ms") > 999L {
+          fail("gpu async counters are invalid")
+        }
+      }
+    }
+    _ => fail("RESULT is not an object")
+  }
+}
+
+///|
+async fn observe(
+  executable : String,
+  fixture : String,
+  expect_error : Bool,
+) -> Unit raise Error {
+  let (stdout_reader, stdout_output) = @process.read_from_process()
+  defer stdout_reader.close()
+  defer stdout_output.close()
+  let (stderr_reader, stderr_output) = @process.read_from_process()
+  defer stderr_reader.close()
+  defer stderr_output.close()
+  @async.with_timeout(30000, async fn() {
+    @async.with_task_group() <| group => {
+      let child = @process.spawn(
+        group,
+        executable,
+        [fixture],
+        stdout=stdout_output,
+        stderr=stderr_output,
+        no_console_window=true,
+        no_wait=false,
+        cancel_handler=@process.hard_cancel(),
+      )
+      let stdout_task = group.spawn() <| () => { drain(stdout_reader) }
+      let stderr_task = group.spawn() <| () => { drain(stderr_reader) }
+      let exit_code = child.wait()
+      let stdout = stdout_task.wait()
+      let stderr = stderr_task.wait()
+      if !expect_error && exit_code != 0 {
+        fail(
+          "child exited with code " +
+          exit_code.to_string() +
+          "\nstdout:\n" +
+          stdout +
+          "\nstderr:\n" +
+          stderr,
+        )
+      }
+      if expect_error && exit_code == 0 {
+        fail("expected child failure")
+      }
+      check_result(stdout, fixture, expect_error) catch {
+        error =>
+          fail(
+            @debug.to_string(error) +
+            "\nstdout:\n" +
+            stdout +
+            "\nstderr:\n" +
+            stderr,
+          )
+      }
+      println(stdout.trim())
+    }
+  })
+}
+
+///|
+async fn main {
+  let args = @env.args()
+  let expect_error = match args.length() {
+    3 => false
+    4 if args[3] == "--expect-input-error" => true
+    _ =>
+      abort(
+        "usage: verify-window-gpu-async <absolute-exe> <absolute-input> [--expect-input-error]",
+      )
+  }
+  if !absolute(args[1]) ||
+    !absolute(args[2]) ||
+    (args.length() == 4 && !expect_error) {
+    abort(
+      "usage: verify-window-gpu-async <absolute-exe> <absolute-input> [--expect-input-error]",
+    )
+  }
+  observe(args[1], args[2], expect_error) catch {
+    error => {
+      let message = "window gpu async observation failed: " +
+        @debug.to_string(error)
+      println(message)
+      abort("window gpu async observation failed")
+    }
+  }
+}
