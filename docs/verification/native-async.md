@@ -47,6 +47,11 @@ than four seconds, separately from GPU startup, to detect waiting for the full
 five-second worker delay instead of cancelling it. This is a watchdog assertion,
 not a performance benchmark.
 
+The process verifier is `scripts/verify-native-probes.mbtx`, shared with the
+hidden-window probe. It uses the pinned MoonBit async process API, drains stdout
+and stderr concurrently, and limits each stream to 64 KiB while reading. The
+native worker implementation remains unchanged by this tooling migration.
+
 ## Scope
 
 On 2026-09-06, local Windows x64 runs passed with NVIDIA GeForce RTX 3060
