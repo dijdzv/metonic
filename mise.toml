@@ -43,6 +43,25 @@ run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/build-browser.mbtx'
 depends = ["browser:build"]
 run = ".\\.tools\\moonbit\\bin\\moonrun.exe _build/wasm/release/build/tools/browser_server/browser_server.wasm"
 
+[tasks."demo:build"]
+description = "Build both UI targets and their shared local HTTP server"
+run = [
+  'mise run browser:build',
+  'mise run native:window-release-build',
+  '.\\.tools\\moonbit\\bin\\moon.exe build tools/demo --target wasm --release --frozen --deny-warn',
+]
+
+[tasks.demo]
+description = "Run native and browser UI against one local HTTP server"
+depends = ["demo:build"]
+run = '.\\.tools\\moonbit\\bin\\moonrun.exe _build/wasm/release/build/tools/demo/demo.wasm'
+
+[tasks."demo:test"]
+run = [
+  '.\\.tools\\moonbit\\bin\\moon.exe build tools/browser_supervisor_fixture --target wasm --release --frozen --deny-warn',
+  '.\\.tools\\moonbit\\bin\\moon.exe test tools/demo --target wasm --release --frozen --deny-warn',
+]
+
 [tasks."browser:verify"]
 depends = ["browser:build"]
 run = [

@@ -68,6 +68,13 @@ checkout.
 
 ## Integrated window HTTP requests
 
+For an interactive session, run `mise run demo`. It builds the browser host and
+ordinary native release window, then runs both against the browser server's
+HTTP endpoint. Closing native stops the owned server. Follow the
+[integrated demo walkthrough](verification/integrated-demo.md) for controls and
+current interaction differences. `demo:test` verifies launcher process ownership
+and failure handling and is included in pre-commit.
+
 The native window uses F7 to fetch user `1` through the standard HTTP/JSON
 adapter. Set `METONIC_RPC_BASE` to the server origin (default
 `http://127.0.0.1:4174`). The response or error appears below the editor without
@@ -175,8 +182,9 @@ resize and GPU initialization through the prepared window dependency.
 The window also renders the shared semantic editor using `text_raster` and the
 pinned Noto Sans JP asset. Its build prepares and verifies that asset directly.
 Committed text replaces the selection; Backspace deletes the selection or one
-Unicode scalar. Grapheme navigation, selection visualization and real IME
-composition are not yet integrated. Arrow keys still control the rectangle.
+Unicode scalar. Selection highlights and staged composition use the shared text
+layout; grapheme navigation and physical IME verification remain incomplete.
+Arrow keys still control the rectangle.
 F5 starts a delayed move to the left; F6 cancels it. A new F5 replaces the pending
 job. The ordinary window uses the shared task-scope model to reject obsolete
 results and joins canceled work before releasing GPU/window resources.
@@ -443,8 +451,10 @@ It owns the launched window and uses the same JSON control path. Set
 rejection and cancellation; its assertions run in MoonBit. Request abort or timeout
 closes the owned session rather than promising rollback of an already applied edit.
 The older `native_*` MCP commands below still use the separate headless renderer.
-Protocol imports are in `window_dev`; full production exclusion is not yet proven
-because shared UI diagnostic fixtures and capture support still remain.
+Protocol imports are in `window_dev`; release package file selection excludes
+development handlers and capture support. The generated-code/link-input checks
+and remaining production behavior verification are described under Native host
+workspace above.
 
 ### Existing headless renderer control
 

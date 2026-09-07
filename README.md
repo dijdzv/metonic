@@ -6,9 +6,10 @@ metonic aims to let one MoonBit application run as a native Windows UI and in a
 WebGPU browser. The UI runtime and RPC libraries are independent, so either can
 be used without the other.
 
-**Work in progress — not ready for use.** The current code is limited to technical
-prototypes; a usable GPU UI framework and network RPC transport are not implemented
-yet. Public APIs may change substantially.
+**Work in progress — not ready for production.** The current prototype connects
+GPU rendering, text editing and HTTP/JSON RPC on Windows and in a browser. It is
+not yet a usable UI framework; real IME, accessibility and distribution work
+remain incomplete. Public APIs may change substantially.
 
 ## Direction
 
@@ -25,11 +26,9 @@ separate responsibilities.
 
 ## Try the current prototype
 
-The current prototypes check typed procedure contracts on native, JavaScript,
-and WasmGC, and render an interactive rectangle through browser WebGPU with
-MoonBit-owned state. A native headless probe renders the same scene through
-DX12 and exposes JSON-line operations for automated verification. RPC handlers
-bind in-process; there are no network requests.
+The integrated demo runs a native GPU window and serves the browser UI from one
+local HTTP server. Each UI owns its own editing state and uses the same typed
+user-lookup endpoint; this is not synchronized editing between windows.
 
 On Windows x64, install [mise](https://mise.jdx.dev/), PowerShell 7 (`pwsh`), and
 Visual Studio C++ build tools with the Windows SDK, then run:
@@ -38,9 +37,18 @@ Visual Studio C++ build tools with the Windows SDK, then run:
 mise trust
 mise install
 mise run bootstrap
-mise run verify
-mise run verify-native
+mise run demo
 ```
+
+Open the printed browser URL while the native window is running. Edit the text,
+use **Load user** in the browser or **F7** in native, then resize the window. Use
+**Move after delay / Cancel** in the browser or **F5 / F6** in native to try async
+updates. Closing the native window stops the shared server. The browser tab is
+user-owned and stays open; its **Stop** button disposes that browser UI only.
+
+The [demo walkthrough](docs/verification/integrated-demo.md) gives the common
+operation sequence and current platform differences. The browser still uses its
+development host, and neither target is a finished product.
 
 The bootstrap installs the pinned MoonBit toolchain into `.tools/moonbit`,
 verifies download hashes, and bundles the standard library. It does not depend
