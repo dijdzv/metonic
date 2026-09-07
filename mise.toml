@@ -35,7 +35,7 @@ description = "Install the mise-managed Git pre-commit hook"
 run = "mise generate git-pre-commit --write --task pre-commit"
 
 [tasks.fmt]
-run = "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/moon.ps1 fmt"
+run = '.\\.tools\\moonbit\\bin\\moon.exe fmt'
 [tasks."browser:build"]
 run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/build-browser.mbtx'
 

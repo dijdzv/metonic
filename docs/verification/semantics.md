@@ -43,6 +43,6 @@ Model and command tests do not establish
 Windows UIA/AccessKit behavior, a browser accessibility tree, actual text rendering,
 IME composition, or production exclusion of development adapters.
 
-Run `scripts/moon.ps1 test examples/p0/semantics --target js` or `--target wasm-gc`
+Run `mise exec -- ./.tools/moonbit/bin/moon.exe test examples/p0/semantics --target js` or `--target wasm-gc`
 with the pinned toolchain. The public architectural boundaries remain those in
 [ADR 023](../adr/023-development-automation.md); AccessKit is not yet adopted.
