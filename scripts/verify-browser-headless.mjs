@@ -241,6 +241,44 @@ try {
   }
   const output = await runSuite(async (request) => {
     switch (request.op) {
+      case 'editor-flow': {
+        const page = await browser.newPage();
+        try {
+          await page.goto(`${baseUrl}/?target=${encodeURIComponent(request.target)}`);
+          await waitStatus(page, `Ready: ${request.target}`);
+          await page.locator('#text-input').fill('A😀B');
+          const preview = await page.evaluate(() => {
+            const input = document.querySelector('#text-input');
+            input.setSelectionRange(1, 3);
+            input.dispatchEvent(new Event('select'));
+            input.dispatchEvent(new CompositionEvent('compositionstart', { data: '' }));
+            input.dispatchEvent(new CompositionEvent('compositionupdate', { data: '日本' }));
+            return window.metonicAsyncProbe.editor();
+          });
+          await page.evaluate(() => {
+            const input = document.querySelector('#text-input');
+            input.value = 'A日本B';
+            input.setSelectionRange(3, 3);
+            input.dispatchEvent(new CompositionEvent('compositionend', { data: '日本' }));
+          });
+          await page.locator('#rpc-load').click();
+          await page.waitForFunction(() => document.querySelector('#rpc-result').textContent !== '');
+          await page.setViewportSize({ width: 900, height: 700 });
+          await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+          const committed = await page.evaluate(() => window.metonicAsyncProbe.editor());
+          await page.locator('#reset').click();
+          const reset = await page.evaluate(() => window.metonicAsyncProbe.editor());
+          await page.locator('#stop').click();
+          const stopped = await page.evaluate(() => {
+            const input = document.querySelector('#text-input');
+            input.value = 'late';
+            input.dispatchEvent(new Event('input'));
+            input.dispatchEvent(new CompositionEvent('compositionend', { data: 'late' }));
+            return window.metonicAsyncProbe.editor();
+          });
+          return { preview, committed, reset, stopped };
+        } finally { await page.close(); }
+      }
       case 'rpc': {
         const page = await browser.newPage();
         let release;

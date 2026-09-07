@@ -20,6 +20,39 @@ async fn run_suite(host : BrowserHost, metadata : String) -> String {
   }
   let negative = command(host, { "op": "failures" })
   for target in ["js", "wasm-gc"] {
+    let flow = command(host, {
+      "op": "editor-flow",
+      "target": Json::string(target),
+    })
+    let preview = object_field(flow, "preview")
+    require(
+      string_field(preview, "text") == "A😀B",
+      "preedit committed prematurely",
+    )
+    require(
+      string_field(preview, "display") == "A日本B",
+      "preedit missing from shared display",
+    )
+    let committed = object_field(flow, "committed")
+    require(
+      string_field(committed, "text") == "A日本B",
+      "RPC or resize replaced committed text",
+    )
+    require(
+      int_field(committed, "start") == 3 && int_field(committed, "end") == 3,
+      "composition selection mismatch",
+    )
+    require(
+      string_field(object_field(flow, "reset"), "text") ==
+      "日本語の描画を確認します ABC 123",
+      "reset lost initial editor",
+    )
+    require(
+      string_field(object_field(flow, "stopped"), "text") == "",
+      "late input revived disposed editor",
+    )
+  }
+  for target in ["js", "wasm-gc"] {
     for
       scenario in [
         ("1", "\n月兎", 2),

@@ -11,6 +11,23 @@ let cssW = 0, cssH = 0, backingW = 0, backingH = 0, submitted = 0, transferred =
 const textInput = $('text-input');
 const DEFAULT_TEXT = textInput.value;
 let textRenderer;
+let composing = false;
+function onCompositionStart() {
+  if (disposed) return;
+  syncEditor();
+  composing = Number(app.editor_composition_start()) === 1;
+}
+function onCompositionUpdate(event) {
+  if (disposed || !composing) return;
+  sendEditorText(event.data);
+  if (Number(app.editor_composition_update()) === 1) renderEditor();
+}
+function onCompositionEnd() {
+  if (disposed || !composing) return;
+  composing = false;
+  app.editor_composition_end();
+  onTextInput();
+}
 const taskButtons = [$('task-start'), $('task-fail'), $('task-cancel'), $('rpc-load')];
 let rpcController;
 function rpcOutput(kind) {
@@ -22,8 +39,19 @@ function rpcInput(bytes) {
 }
 function renderRpc() {
   $('rpc-result').textContent = rpcOutput(1);
-  onTextInput();
+  renderEditor();
   updateTaskDiagnostics();
+}
+function editorText() {
+  return Array.from({ length: Math.max(0, Number(app.editor_field(4))) }, (_, i) => String.fromCharCode(Number(app.editor_display_unit(i)))).join('');
+}
+function sendEditorText(value) {
+  if (Number(app.text_begin(value.length)) !== 1) throw new Error('Editor input limit');
+  for (let i = 0; i < value.length; i += 1) if (Number(app.text_put(value.charCodeAt(i))) !== 1) throw new Error('Editor input rejected');
+}
+function syncEditor() {
+  sendEditorText(textInput.value);
+  if (Number(app.editor_commit(textInput.selectionStart, textInput.selectionEnd)) !== 1) throw new Error('Editor selection rejected');
 }
 async function loadUser() {
   if (disposed || !app) return;
@@ -180,7 +208,7 @@ function resize(force = false) {
   canvas.height = backingH;
   context.configure({ device, format, alphaMode: 'opaque' });
   app.resize(cssW, cssH);
-  textRenderer?.rasterText(textInput.value + rpcOutput(1), cssW);
+  textRenderer?.rasterText(editorText() + rpcOutput(1), cssW);
   els.dimensions.textContent = `${cssW} × ${cssH} CSS / ${backingW} × ${backingH} backing`;
   dirty = true;
   schedule();
@@ -233,6 +261,8 @@ function onReset() {
   app.init();
   $('rpc-result').textContent = '';
   textInput.value = DEFAULT_TEXT;
+  composing = false;
+  syncEditor();
   textRenderer?.rasterText(DEFAULT_TEXT, cssW);
   updateTaskDiagnostics();
   resize(true);
@@ -240,10 +270,15 @@ function onReset() {
   schedule();
 }
 
-function onTextInput() {
+function onTextInput(event) {
+  if (disposed || !textRenderer || composing || event?.isComposing) return;
+  try { syncEditor(); renderEditor(); }
+  catch (error) { stop(error?.message || String(error), true); }
+}
+function renderEditor() {
   if (disposed || !textRenderer) return;
   try {
-    textRenderer.rasterText(textInput.value + rpcOutput(1), cssW);
+    textRenderer.rasterText(editorText() + rpcOutput(1), cssW);
     const stats = textRenderer.stats();
     $('text-width').textContent = String(stats.width);
     $('text-renders').textContent = String(stats.renders);
@@ -266,6 +301,11 @@ function stop(reason = 'Stopped.', error = false) {
   try { app?.text_dispose?.(); } catch {}
   textInput.disabled = true;
   textInput.removeEventListener('input', onTextInput);
+  textInput.removeEventListener('select', onTextInput);
+  textInput.removeEventListener('compositionstart', onCompositionStart);
+  textInput.removeEventListener('compositionupdate', onCompositionUpdate);
+  textInput.removeEventListener('compositionend', onCompositionEnd);
+  try { app?.editor_dispose?.(); } catch {}
   for (const timer of taskTimers.values()) clearTimeout(timer);
   taskTimers.clear();
   taskEpoch += 1;
@@ -356,6 +396,7 @@ struct U { rect: vec4f, viewport: vec2f, enabled: f32, pad: f32 };
   els.bytes.textContent = String(loaded.artifactBytes);
   els.load.textContent = loaded.loadMs.toFixed(2);
   els.adapter.textContent = adapter.info?.description || adapter.info?.vendor || 'available';
+  syncEditor();
   resize(true);
   if (disposed) return;
   observer = new ResizeObserver(onResize);
@@ -365,6 +406,10 @@ struct U { rect: vec4f, viewport: vec2f, enabled: f32, pad: f32 };
   canvas.addEventListener('keydown', onKey);
   $('reset').addEventListener('click', onReset);
   textInput.addEventListener('input', onTextInput);
+  textInput.addEventListener('select', onTextInput);
+  textInput.addEventListener('compositionstart', onCompositionStart);
+  textInput.addEventListener('compositionupdate', onCompositionUpdate);
+  textInput.addEventListener('compositionend', onCompositionEnd);
   textInput.disabled = false;
   $('task-start').addEventListener('click', onTaskStart);
   $('rpc-load').addEventListener('click', loadUser);
@@ -374,6 +419,7 @@ struct U { rect: vec4f, viewport: vec2f, enabled: f32, pad: f32 };
   for (const button of taskButtons) button.disabled = false;
   updateTaskDiagnostics();
   window.metonicAsyncProbe = {
+    editor: () => ({ text: Array.from({ length: Math.max(0, Number(app.editor_field(0))) }, (_, i) => String.fromCharCode(Number(app.editor_unit(i)))).join(''), display: editorText(), start: Number(app.editor_field(1)), end: Number(app.editor_field(2)), composing: Number(app.editor_field(5)), disposed }),
     start: (delayMs, value, fail = false) => dispatchTask(delayMs, value, fail),
     cancel: cancelTask,
     snapshot: () => ({ task: Array.from({ length: 6 }, (_, index) => taskField(index)), pending: taskTimers.size, rejected: rejectedCallbacks, disposed }),
