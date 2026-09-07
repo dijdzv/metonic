@@ -18,7 +18,10 @@ async fn main {
       Some(value) => value
       None => "headless"
     }
-    if mode != "headless" && mode != "window" && mode != "async" {
+    if mode != "headless" &&
+      mode != "window" &&
+      mode != "async" &&
+      mode != "surface" {
       fail("invalid native build mode: " + mode)
     }
     let moon = @fs.realpath(".tools/moonbit/bin/moon.exe")
@@ -91,7 +94,7 @@ async fn main {
     envmap.set("VSLANG", "1033")
     envmap.set("MBT_WGPU_NATIVE_ROOT", @fs.realpath(".work/wgpu-assets"))
     envmap.set("MBT_WGPU_LINK_MODE", "static")
-    if mode != "headless" {
+    if mode == "window" || mode == "async" {
       let cargo = [
         "+1.98.1", "build", "--manifest-path", "bridges/wgpu/Cargo.toml", "--locked",
         "--release", "--target-dir", ".work/native-cargo",
@@ -103,6 +106,8 @@ async fn main {
     }
     let package_name = if mode == "headless" {
       "native_headless"
+    } else if mode == "surface" {
+      "native_surface_probe"
     } else if mode == "window" {
       "native_window"
     } else {
@@ -122,17 +127,27 @@ async fn main {
     }
     let dll = ".work/native-cargo/release/metonic_wgpu_probe.dll"
     let headless_exe = "_build/native/release/build/examples/p0/native_headless/native_headless.exe"
-    if !@fs.exists(headless_exe) {
-      fail("native headless artifact missing")
+    let required_exe = if mode == "surface" {
+      "_build/native/release/build/tools/native_surface_probe/native_surface_probe.exe"
+    } else if mode == "window" {
+      "_build/native/release/build/examples/p0/native_window/native_window.exe"
+    } else if mode == "async" {
+      "_build/native/release/build/examples/p0/native_async/native_async.exe"
+    } else {
+      headless_exe
     }
-    if mode != "headless" && !@fs.exists(dll) {
+    if (mode == "window" || mode == "async") && !@fs.exists(dll) {
       fail("native bridge artifact missing")
     }
-    if mode != "headless" {
+    if mode == "window" || mode == "async" || mode == "surface" {
       // Included headers may not invalidate the cached C stub.
-      let stale = "_build/native/release/build/examples/p0/" +
+      let stale = if mode == "surface" {
+        "_build/native/release/build/tools/native_surface_probe/bridge.obj"
+      } else {
+        "_build/native/release/build/examples/p0/" +
         package_name +
         "/bridge.obj"
+      }
       if @fs.exists(stale) {
         @fs.remove(stale)
       }
@@ -140,7 +155,11 @@ async fn main {
           moon,
           [
             "build",
-            "examples/p0/" + package_name,
+            if mode == "surface" {
+              "tools/native_surface_probe"
+            } else {
+              "examples/p0/" + package_name
+            },
             "--target",
             "native",
             "--release",
@@ -152,14 +171,12 @@ async fn main {
         0 {
         fail("MoonBit native build failed")
       }
-      let exe = "_build/native/release/build/examples/p0/" +
-        package_name +
-        "/" +
-        package_name +
-        ".exe"
-      if !@fs.exists(exe) {
+      if !@fs.exists(required_exe) {
         fail("native build artifact missing")
       }
+    }
+    if !@fs.exists(headless_exe) {
+      fail("native headless artifact missing")
     }
     println("NATIVE_BUILD_OK mode=" + mode)
   })
