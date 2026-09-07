@@ -7,13 +7,31 @@ import {
 ///|
 async fn main {
   // A blocked COM call cannot yield to the native client's async timeout.
-  @async.with_timeout(25000, async fn() {
+  @async.with_timeout(65000, async fn() {
     @async.with_task_group() <| group => {
       let root = @fs.realpath(".work/native-host-build/native")
+      let (server_out, server_stdout) = @process.read_from_process()
+      defer server_out.close()
+      let server = @process.spawn(
+        group,
+        ".tools/moonbit/bin/moonrun.exe",
+        ["_build/wasm/release/build/examples/p0/rpc_server/rpc_server.wasm"],
+        stdout=server_stdout,
+        no_console_window=true,
+        cancel_handler=@process.hard_cancel(),
+      )
+      defer server.cancel()
+      let ready = server_out.read_until("\n").unwrap().trim().to_owned()
+      guard ready.has_prefix("RPC_READY 127.0.0.1:") else {
+        fail("production flow HTTP server did not become ready")
+      }
+      let env : Map[String, String] = Map([])
+      env.set("METONIC_RPC_BASE", "http://" + ready[10:].to_owned())
       let app = @process.spawn(
         group,
         root + "/release/build/local/native_host/window_app/window_app.exe",
         [],
+        extra_env=env,
         no_console_window=true,
       )
       let client = @process.spawn(

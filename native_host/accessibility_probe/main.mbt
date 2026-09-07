@@ -17,6 +17,29 @@ extern "C" fn visible(hwnd : UInt64) -> Int = "IsWindowVisible"
 extern "C" fn is_window(hwnd : UInt64) -> Int = "IsWindow"
 
 ///|
+extern "C" fn resize_window(
+  hwnd : UInt64,
+  after : UInt64,
+  x : Int,
+  y : Int,
+  width : Int,
+  height : Int,
+  flags : UInt,
+) -> Int = "SetWindowPos"
+
+///|
+#borrow(rect)
+extern "C" fn client_rect(hwnd : UInt64, rect : FixedArray[Int]) -> Int = "GetClientRect"
+
+///|
+#borrow(index, output)
+extern "C" fn array_number(
+  array : UInt64,
+  index : FixedArray[Int],
+  output : FixedArray[Double],
+) -> Int = "SafeArrayGetElement"
+
+///|
 extern "C" fn post(
   hwnd : UInt64,
   message : UInt,
@@ -29,6 +52,15 @@ extern "C" fn initialize(reserved : UInt64, kind : UInt) -> Int = "CoInitializeE
 
 ///|
 extern "C" fn uninitialize() -> Unit = "CoUninitialize"
+
+///|
+extern "C" fn flush(stream : UInt64) -> Int = "fflush"
+
+///|
+fn stage(name : String) -> Unit {
+  println("production flow: " + name)
+  ignore(flush(0UL))
+}
 
 ///|
 #borrow(result)
@@ -150,6 +182,23 @@ fn utf16z(text : String) -> FixedArray[Byte] {
 }
 
 ///|
+fn bounds_width(node : UInt64) -> Double {
+  let value = FixedArray::make(3, 0UL)
+  if property(node, 30001, value) != 0 {
+    return -1
+  }
+  defer ignore(clear(value))
+  if value[0] != 8197UL {
+    return -1
+  }
+  let output = FixedArray::make(1, 0.0)
+  if array_number(value[1], FixedArray::make(1, 2), output) != 0 {
+    return -1
+  }
+  output[0]
+}
+
+///|
 async fn expect_text(node : UInt64, expected : String) -> Unit {
   for _ in 0..<500 {
     if text_is(node, 30045, expected) {
@@ -182,7 +231,7 @@ fn child_named(parent : UInt64, name : String) -> UInt64 {
 
 ///|
 async fn main {
-  @async.with_timeout(20000, async fn() {
+  @async.with_timeout(60000, async fn() {
     guard initialize(0UL, 0U) >= 0 else {
       fail("UIA COM initialization failed")
     }
@@ -198,6 +247,7 @@ async fn main {
       fail("production UIA root missing")
     }
     defer ignore(release_node(root[0]))
+    stage("window attached")
     guard text_is(root[0], 30005, "Metonic") else {
       fail("production UIA root name mismatch")
     }
@@ -277,6 +327,50 @@ async fn main {
       fail("ordinary backspace message failed")
     }
     expect_text(editor, "再入力 🚀")
+    guard post(hwnd, 0x0100U, 0x76UL, 0L) != 0 else {
+      fail("ordinary F7 request failed")
+    }
+    let mut result_node = 0UL
+    stage("HTTP requested")
+    for _ in 0..<500 {
+      result_node = child_named(root[0], "月兎")
+      if result_node != 0UL {
+        break
+      }
+      @async.sleep(20)
+    }
+    guard result_node != 0UL else { fail("production HTTP result missing") }
+    defer ignore(release_node(result_node))
+    stage("HTTP result observed")
+    expect_text(editor, "再入力 🚀")
+    let before = FixedArray::make(4, 0)
+    guard client_rect(hwnd, before) != 0 else {
+      fail("initial client bounds missing")
+    }
+    guard resize_window(hwnd, 0UL, 0, 0, 480, 300, 22U) != 0 else {
+      fail("production resize failed")
+    }
+    let rect = FixedArray::make(4, 0)
+    let mut resized = false
+    for _ in 0..<500 {
+      if client_rect(hwnd, rect) != 0 &&
+        rect[2] != before[2] &&
+        bounds_width(editor) == (rect[2] - 16).max(1).min(640).to_double() {
+        resized = true
+        break
+      }
+      @async.sleep(20)
+    }
+    guard resized else {
+      fail("production resize did not update semantic layout")
+    }
+    guard text_is(result_node, 30005, "月兎") && integer(button, 30086) == 1 else {
+      fail("resize changed HTTP result or scene")
+    }
+    guard post(hwnd, 0x0102U, 0x51UL, 0L) != 0 else {
+      fail("editing after HTTP and resize failed")
+    }
+    expect_text(editor, "再入力 🚀Q")
     guard post(hwnd, 0x0010U, 0UL, 0L) != 0 else {
       fail("production close failed")
     }
@@ -294,7 +388,7 @@ async fn main {
       fail("closed editor accepted Value request")
     }
     println(
-      "WINDOW_PRODUCTION_UIA_OK shared_text toggle_update value_roundtrip=4 ordinary_edit close stale_provider",
+      "WINDOW_PRODUCTION_UIA_OK shared_text toggle_update value_roundtrip=4 ordinary_edit http_result resize edit_after_resize close stale_provider",
     )
   })
 }

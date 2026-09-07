@@ -56,6 +56,13 @@ prove user interaction or rendering. Existing `browser:headless`,
 respective UI paths. `native:release-lifecycle` checks the production window's
 startup and close, not its editor or pixels.
 
+`native:accessibility` exercises the ordinary release executable through OS
+accessibility and messages sent to its own window: replace text, invoke F7
+against an owned real HTTP server, observe the result, resize, continue editing
+and close. It checks editor preservation and updated accessible layout. This
+connects the production session's semantic behavior; it does not establish
+presented pixels, physical keyboard input or real IME.
+
 The packaged browser omits the development adapter and comparison artifact.
 Native uses the release artifact with the existing development-code exclusion
 check. Physical Japanese

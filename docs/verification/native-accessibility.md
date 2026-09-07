@@ -3,7 +3,8 @@
 Run `mise run native:accessibility` after the Windows setup in the
 [development guide](../development.md). It builds the ordinary release window
 and an external MoonBit UIA client, then a MoonBit supervisor owns both processes
-under a 25-second deadline. The window is visible briefly. The client selects
+and a real loopback HTTP server under a 65-second deadline. The window is visible
+briefly. The client selects
 only the supervisor's child PID; it does not inspect other applications.
 
 The normal pre-commit gate includes this check. No automatic PR/push CI is added.
@@ -12,8 +13,10 @@ The normal pre-commit gate includes this check. No automatic PR/push CI is added
 
 The ordinary window attaches official AccessKit C 0.22.3 before becoming visible.
 The adapter maps the shared semantic model into a Window root, Toggle button and
-Text editor. Scene activation synchronizes the button's semantic toggle value;
-draw/resize publishes current values and physical bounds. Accessibility Click
+Text editor. Scene activation synchronizes the button's semantic toggle value.
+the current RPC result is a separate Label populated from the same result used
+by GPU rendering. It has no editing actions and does not replace editor text.
+Draw/resize publishes current values and physical bounds. Accessibility Click
 and Focus requests rejoin the ordinary UI event queue. Focus requests also ask
 the window library to focus the window. Active IME composition currently rejects
 these application actions.
@@ -58,7 +61,10 @@ The production check verifies the exact root/button/editor names, Button/Edit
 roles, the initial Japanese/Latin editor value, the toggle's off-to-on change
 after an external Toggle request, editor preservation, normal process exit,
 four Value round trips (Japanese/Latin, supplementary characters and empty text),
-ordinary posted character/backspace messages after replacement, HWND destruction
+ordinary posted character/backspace messages after replacement, a posted F7
+request to the owned HTTP server and exact `月兎` result, actual window resize
+with updated accessible editor bounds, continued editing without losing the
+result or toggle state, HWND destruction
 and rejection by retained Toggle/Value providers after close. Success emits
 `WINDOW_PRODUCTION_UIA_OK` and `WINDOW_PRODUCTION_UIA_PROCESSES_OK`.
 

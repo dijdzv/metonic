@@ -210,6 +210,7 @@ fn App::draw(self : App) -> Unit raise Error {
       @scene.field(self.state, 0),
       @scene.field(self.state, 1),
       self.composition is Some(_),
+      self.rpc_result,
     )
   }
   match self.renderer {
