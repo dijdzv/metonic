@@ -32,6 +32,21 @@ Versions: Node 26.8.1, MCP server/client SDK 2.0.0, Zod 4.5.4; native versions a
 recorded in the [GPU probe record](native-headless.md). SDK tests establish
 interoperability with that client, not every MCP host or legacy protocol revision.
 
+The official-SDK verifier's tool sequence, JSON response checks and PNG pixel
+checks live in the JS-target MoonBit package `tools/verify_native_mcp`. It uses
+the pinned async library's Promise bridge and `mizchi/image`. Its exported
+entry point returns a Promise that rejects on validation failure. Node retains
+SDK connection/close, the outer 30-second deadline and filesystem output; the
+test still talks through the official SDK to the external stdio server.
+The migrated verifier passed in both default and fallback GPU modes. It checks
+the PNG signature, first IHDR dimensions and response dimensions before decoding,
+then compares every RGBA channel with the expected scene (tolerance one).
+The existing independent codec checks remain separate.
+Five MoonBit whitebox tests passed for missing/invalid response text, valid and
+incorrect pixels, mismatched and oversized PNG dimensions, and Promise rejection
+with the expected tool-list diagnostic. The rejection test has a two-second
+deadline; timeout is a failure. These tests run in the normal local gate.
+
 ## Reproduction
 
 After the setup in the [development guide](../development.md):
