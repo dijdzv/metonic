@@ -92,11 +92,26 @@ rows. Crop bounds are checked before reading pixels. The DPR-2 reference is a
 (16, 16), including every alpha channel. These are screenshot comparison rules,
 not an additional rendering implementation.
 
-Playwright operations, browser/page lifetime, state polling, resource-failure
-scenarios and result-file writing remain in `scripts/verify-browser-headless.mjs`.
-Moving the pixel checks does not establish that all browser verification is
-implemented in MoonBit. `mise run browser:headless` builds and tests the pixel
-verifier before starting the browser supervisor.
+MoonBit also owns the normal scene, initialization failure, font failure,
+text editing and DPR scenario sequences. Async exported entry points send
+individual JSON commands to Playwright adapters; errors reject the exported
+Promise. State, readiness, adapter selection and page-error assertions run in
+MoonBit alongside pixel checks. The stopped-input scenario requires the input
+operations to succeed rather than suppressing their errors.
+
+`scripts/verify-browser-headless.mjs` retains browser/page lifetime, direct
+Playwright calls and DOM observations, request interception, screenshot/file
+I/O, target iteration and final result aggregation. The latter two remain
+portable orchestration, not an unavoidable browser API boundary. Page cleanup
+and release of held requests run in `finally`; observing a held request has a
+30-second deadline. The existing MoonBit supervisor continues to bound the
+overall child process. The JSON/Promise bridge does not establish cancellation
+of an in-flight Playwright operation.
+
+`mise run browser:headless` builds and tests the verifier before starting the
+browser supervisor. Additional tests cover state changes after stop, invalid
+counters, missing error observations, text upload invariants, host-call failure
+propagation and a frame submitted after releasing a stopped initialization.
 
 On 2026-09-07, seven pixel-verifier tests passed, covering success and rejection
 for scene movement, crop bounds, text equality expectations, blank alpha/RGB
