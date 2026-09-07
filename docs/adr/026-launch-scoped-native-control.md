@@ -7,8 +7,8 @@ gates in [ADR 023](023-development-automation.md) remain open.
 
 ## Composition
 
-The CLI uses the MoonBit native-control client; the external MCP stdio adapter
-continues to use the Node client. Each
+The CLI and MCP session host use the MoonBit native-control client. The external
+MCP stdio adapter retains the official Node SDK. Each
 launch owns one dedicated native headless process and a private temporary capture
 directory. The client selects absolute executable, DLL, and capture paths. There
 is no attach discovery or listening TCP endpoint. This inherited-stdio experiment
@@ -18,8 +18,10 @@ The MoonBit client in `tools/native_control` provides the same launch-scoped
 transport for migrated development verification. Its pure JSON envelope and
 bounded line framing live in `tools/native_wire`; process scheduling and pipe
 ownership use the existing MoonBit async library on native/Wasm host runtimes.
-The Node client remains for MCP consumers until their behavior is migrated
-and verified. This host runtime choice does not establish browser WasmGC support.
+The earlier Node client remains with its fixture tests while their remaining
+coverage is migrated. The MCP session boundary is described in
+[ADR 029](029-moonbit-development-session.md).
+This host runtime choice does not establish browser WasmGC support.
 
 The CLI in `tools/native_cli` uses the Wasm host runtime, not browser WasmGC.
 It accepts `{op,args}` JSON lines and preserves the capture envelope containing

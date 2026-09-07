@@ -1,0 +1,51 @@
+# Native development session verification
+
+The session host uses MoonBit's Wasm host runtime, the existing native-control
+client and `mizchi/image` PNG encoder. Node retains the official MCP SDK and a
+subprocess/AbortSignal adapter. See [ADR 029](../adr/029-moonbit-development-session.md).
+
+## Reproduction
+
+From a configured repository, run:
+
+```text
+mise run native:session-test
+mise run devtools:test
+mise run native:mcp-test
+```
+
+Repeat with `METONIC_GPU_FALLBACK=1` to request the software adapter. The ordinary
+pre-commit gate includes these checks. The session verifier writes mode-specific
+results to ignored `.work/native-session`; the existing MCP verifier writes its
+decoded image and result to `.work/native-mcp`.
+
+## Observed scope
+
+The MoonBit verifier passed on both the default and fallback GPU paths. It checks
+the ready envelope, the eight-element initial state, move and activation
+revisions, a PNG capture against every expected pixel, stale mutation rejection,
+and unchanged state after rejection. It observes the capture file before closing
+stdin and checks that the host removed its temporary directory. A separate case
+closes stdin immediately after readiness.
+
+The SDK-side tests exercise sixteen simultaneous pending requests, rejection of a
+seventeenth, exclusive capture, a pre-aborted call that leaves the session usable,
+dispatch followed immediately by cancellation, and repeated close. The cancellation
+test proves rejection and teardown at the adapter boundary; it does not prove
+that a GPU operation had begun or that cancellation can undo a mutation.
+
+The existing official-SDK verifier checks the five MCP tools, scene mutations,
+capture image decoding and pixels, stale revisions and invalid resize rejection.
+This additionally tests the composition through the real SDK rather than only
+the internal session protocol.
+
+## Limits
+
+The session wire is an internal development boundary, not a stable public API.
+The old native-client fixture suite remains while its remaining coverage is
+migrated. Forced termination cannot establish cleanup; successful adapter close
+must report a normal host exit. Input-flood, malformed-host-output and process
+startup-failure cases need dedicated adapter fixtures beyond the renderer checks.
+
+These checks do not establish live-window attachment, physical input, Japanese
+IME composition, OS accessibility or exclusion from a production artifact.
