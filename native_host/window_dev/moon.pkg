@@ -6,6 +6,8 @@ import {
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
   "moonbitlang/core/env",
+  "moonbitlang/core/encoding/base64",
+  "mizchi/image",
 }
 
 pkgtype(kind: "executable")

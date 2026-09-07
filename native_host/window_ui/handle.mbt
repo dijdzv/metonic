@@ -29,11 +29,33 @@ pub struct Handle {
   inspect : () -> Snapshot
   apply : async (Action) -> Unit
   edit : async (String?, Int?) -> String
+  capture : async () -> Captured
+}
+
+///|
+pub struct Captured {
+  pixels : Bytes
+  width : Int
+  height : Int
+  frame : Int
 }
 
 ///|
 fn App::handle(self : App) -> Handle {
   {
+    capture: () => {
+      require(!self.closed, "window closed")
+      let result : Ref[Result[Captured, Error]?] = Ref(None)
+      self.events.put(Capture(result))
+      while result.val is None && !self.closed {
+        @async.sleep(1)
+      }
+      match result.val {
+        Some(Ok(value)) => value
+        Some(Err(error)) => raise error
+        None => raise WindowFailure::Failure("window closed")
+      }
+    },
     edit: (text, expected) => {
       if self.closed {
         return "closed"

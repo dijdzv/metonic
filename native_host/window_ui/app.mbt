@@ -32,6 +32,7 @@ priv enum Event {
   CancelUpdate
   Updated(Int, Int)
   Barrier(Ref[Bool])
+  Capture(Ref[Result[Captured, Error]?])
   Edit(String?, Int?, Ref[String?])
   Close
 }
@@ -348,6 +349,20 @@ pub async fn run(
         while !app.closed && app.events.try_get() is Some(event) {
           match event {
             Barrier(applied) => applied.val = true
+            Capture(result) =>
+              result.val = Some(
+                try {
+                  let pixels = app.renderer.unwrap().capture_frame()
+                  Ok(Captured::{
+                    pixels,
+                    width: @scene.field(app.state, 6),
+                    height: @scene.field(app.state, 7),
+                    frame: app.frames,
+                  })
+                } catch {
+                  error => Err(error)
+                },
+              )
             Edit(text, expected, result) =>
               if expected is Some(revision) &&
                 revision != @semantics.revision(app.editor) {

@@ -19,6 +19,7 @@ async fn respond(
     }
   }
   let mut error = ""
+  let mut captured_image : Json = Json::null()
   if request.id < 1 {
     error = "invalid_id"
   } else if request.id <= last_id.val {
@@ -27,6 +28,22 @@ async fn respond(
     last_id.val = request.id
     match request.op {
       "snapshot" => ()
+      "capture" => {
+        let captured = (handle.capture)()
+        let png = @image.encode_png(@image.ImageData::{
+          width: captured.width,
+          height: captured.height,
+          data: captured.pixels,
+        })
+        captured_image = {
+          "data": @base64.encode(png),
+          "mimeType": "image/png",
+          "width": captured.width,
+          "height": captured.height,
+          "frame": captured.frame,
+          "source": "shared_offscreen_pass",
+        }
+      }
       "insert" =>
         match request.text {
           Some(text) =>
@@ -55,6 +72,7 @@ async fn respond(
     "selection_end": state.selection_end,
     "frames": state.frames,
     "task_status": state.task_status,
+    "image": captured_image,
   }
   @stdio.stdout.write(response.stringify() + "\n")
 }

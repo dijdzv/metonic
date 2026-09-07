@@ -133,7 +133,8 @@ text, inserts and deletes a supplementary character, and checks caret state.
 It renders through the same pass into an offscreen texture to check glyph
 presence and complete clearing of the text area after an empty update. This is
 not a swap-chain screenshot or a test of physical input, glyph-shape accuracy,
-IME or OS accessibility. Capture bytes retain the surface's native format.
+IME or OS accessibility. Capture normalizes channel order to RGBA while retaining
+the surface's encoded color values.
 
 `mise run native:host-build` prepares pinned source archives, applies the reviewed
 window and async patches, and builds the existing GPU integration fixture. The
@@ -334,6 +335,9 @@ These hidden checks do not establish physical input or OS accessibility.
 For MCP, use the pinned Node executable with the absolute path to
 `tools/devtools/window-mcp.mjs`. This dedicated server exposes `window_snapshot`,
 `window_insert`, `window_backspace`, `window_start_update` and `window_cancel_update`.
+`window_capture` returns a PNG image plus pixel dimensions, the submitted frame
+number and `source: shared_offscreen_pass`. It reuses the current window's render
+pass; it is not a desktop or swap-chain screenshot. PNG encoding runs in MoonBit.
 It owns the launched window and uses the same JSON control path. Set
 `METONIC_DEV_HIDDEN=1` in the MCP launch environment for hidden operation.
 `mise run native:window-mcp` verifies the SDK connection, edits, stale revision

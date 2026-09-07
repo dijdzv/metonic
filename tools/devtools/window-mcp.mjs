@@ -16,6 +16,7 @@ function factory() {
   const server = new McpServer({ name: 'metonic-window', version: '0.0.0' });
   const definitions = [
     ['snapshot', 'Read the integrated window state.', z.object({}).strict(), true],
+    ['capture', 'Capture the integrated UI through its shared offscreen GPU pass.', z.object({}).strict(), true],
     ['insert', 'Insert text into the integrated window editor.', z.object({ text: z.string(), expected_semantic_revision: revision }).strict(), false],
     ['backspace', 'Delete the selection or preceding Unicode scalar.', z.object({ expected_semantic_revision: revision }).strict(), false],
     ['start_update', 'Start or replace the delayed scene update.', z.object({}).strict(), false],
@@ -25,7 +26,13 @@ function factory() {
     server.registerTool(`window_${op}`, { description, inputSchema, annotations: { readOnlyHint } }, async (args, ctx) => {
       try {
         const state = await session.client.request(op, args, { signal: ctx.mcpReq.signal });
-        return { content: [{ type: 'text', text: JSON.stringify({ session_id: session.client.session, ...state }) }] };
+        const { image, ...metadata } = state;
+        const content = [{ type: 'text', text: JSON.stringify({ session_id: session.client.session, ...metadata }) }];
+        if (image) {
+          content.push({ type: 'image', data: image.data, mimeType: image.mimeType });
+          content.push({ type: 'text', text: JSON.stringify({ width: image.width, height: image.height, frame: image.frame, source: image.source }) });
+        }
+        return { content };
       } catch (error) {
         return { isError: true, content: [{ type: 'text', text: error instanceof Error ? error.message : String(error) }] };
       }
