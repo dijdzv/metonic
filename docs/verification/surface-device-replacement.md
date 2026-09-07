@@ -82,7 +82,7 @@ reuses an existing swapchain through `ResizeBuffers` when configuring it again.
 That branch does not compare device identity. This is a candidate explanation,
 not a verified causal fix.
 
-The existing Rust window renderer remains necessary until the MoonBit path's
-lifetime and replacement contract is verified and integrated with event pumping.
+The ordinary window host now uses the MoonBit renderer and bounded event polling.
+The worker-completion probe retains the Rust renderer pending its migration.
 These hidden-window observations do not verify real input, IME, OS accessibility
 or recovery from physical GPU loss.

@@ -94,7 +94,7 @@ async fn main {
     envmap.set("VSLANG", "1033")
     envmap.set("MBT_WGPU_NATIVE_ROOT", @fs.realpath(".work/wgpu-assets"))
     envmap.set("MBT_WGPU_LINK_MODE", "static")
-    if mode == "window" || mode == "async" {
+    if mode == "async" {
       let cargo = [
         "+1.98.1", "build", "--manifest-path", "bridges/wgpu/Cargo.toml", "--locked",
         "--release", "--target-dir", ".work/native-cargo",
@@ -136,7 +136,7 @@ async fn main {
     } else {
       headless_exe
     }
-    if (mode == "window" || mode == "async") && !@fs.exists(dll) {
+    if mode == "async" && !@fs.exists(dll) {
       fail("native bridge artifact missing")
     }
     if mode == "window" || mode == "async" || mode == "surface" {
