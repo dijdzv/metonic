@@ -8,6 +8,9 @@ briefly. The client selects
 only the supervisor's child PID; it does not inspect other applications.
 
 The normal pre-commit gate includes this check. No automatic PR/push CI is added.
+The optional [presentation check](native-presentation.md) captures the same owned
+window through the official winapp CLI and checks color transitions separately
+from UIA state.
 
 ## Implemented behavior
 

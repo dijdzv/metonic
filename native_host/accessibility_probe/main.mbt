@@ -17,6 +17,14 @@ extern "C" fn visible(hwnd : UInt64) -> Int = "IsWindowVisible"
 extern "C" fn is_window(hwnd : UInt64) -> Int = "IsWindow"
 
 ///|
+#borrow(text)
+extern "C" fn window_title(
+  hwnd : UInt64,
+  text : FixedArray[Byte],
+  capacity : Int,
+) -> Int = "GetWindowTextW"
+
+///|
 extern "C" fn resize_window(
   hwnd : UInt64,
   after : UInt64,
@@ -256,6 +264,10 @@ async fn main {
       fail("owned window did not close")
     }
     let root = FixedArray::make(1, 0UL)
+    let title = FixedArray::make(16, b'\x00')
+    guard window_title(hwnd, title, 8) == 7 && title == utf16z("Metonic") else {
+      fail("native title differs from application name")
+    }
     guard node_from_handle(hwnd, root) == 0 && root[0] != 0UL else {
       fail("production UIA root missing")
     }
@@ -288,6 +300,7 @@ async fn main {
     guard integer(button, 30086) == 0 else {
       fail("production initial toggle mismatch")
     }
+    capture_presentation(hwnd, "initial")
     let provider = FixedArray::make(1, 0UL)
     guard pattern(button, 10015, provider) == 0 && provider[0] != 0UL else {
       fail("production Toggle pattern missing")
@@ -308,6 +321,7 @@ async fn main {
     guard text_is(editor, 30045, "日本語の描画を確認します ABC 123") else {
       fail("UIA action changed editor")
     }
+    capture_presentation(hwnd, "toggled")
     let value_provider = FixedArray::make(1, 0UL)
     guard pattern(editor, 10002, value_provider) == 0 &&
       value_provider[0] != 0UL else {
@@ -384,6 +398,7 @@ async fn main {
       fail("editing after HTTP and resize failed")
     }
     expect_text(editor, "再入力 🚀Q")
+    capture_presentation(hwnd, "resized")
     guard post(hwnd, 0x0010U, 0UL, 0L) != 0 else {
       fail("production close failed")
     }

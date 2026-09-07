@@ -90,6 +90,7 @@ pub impl @windows.ApplicationHandler for App with fn can_create_surfaces(
 ) {
   let window = event_loop.create_window(
     @core.WindowAttributes::default()
+    .with_title("Metonic")
     .with_visible(false)
     .with_inner_size(@dpi.PhysicalSize(640, 360).into_size()),
   )

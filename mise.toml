@@ -210,6 +210,13 @@ run = [
   '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-native-accessibility.mbtx',
 ]
 
+[tasks."native:presentation"]
+run = [
+  '.\\.tools\\moonbit\\bin\\moon.exe run scripts/prepare-winapp.mbtx',
+  'mise run native:accessibility',
+]
+env = { METONIC_PRESENTATION_CAPTURE = "1", WINAPP_CLI_TELEMETRY_OPTOUT = "1" }
+
 [tasks."native:window-dev-build"]
 run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/build-native.mbtx'
 env = { METONIC_NATIVE_BUILD = "window-dev" }
