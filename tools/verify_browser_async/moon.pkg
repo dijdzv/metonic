@@ -1,0 +1,20 @@
+import {
+  "moonbitlang/async/js_async",
+  "moonbitlang/core/json",
+  "moonbitlang/core/string",
+  "moonbitlang/core/debug",
+  "moonbitlang/core/encoding/base64",
+  "mizchi/image",
+}
+
+import {
+  "moonbitlang/async",
+} for "wbtest"
+
+pkgtype(kind: "foreign_library")
+
+supported_targets = "+js"
+
+options(
+  link: { "js": { "format": "esm" } },
+)
