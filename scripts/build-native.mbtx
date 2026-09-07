@@ -27,6 +27,19 @@ async fn main {
     }
     let moon = @fs.realpath(".tools/moonbit/bin/moon.exe")
     let moon_home = @fs.realpath(".tools/moonbit")
+    if mode == "window" {
+      let asset_env : Map[String, String] = Map([])
+      asset_env.set("METONIC_TEXT_ASSETS_ONLY", "1")
+      if @process.run(
+          moon,
+          ["run", "scripts/verify-text-layout.mbtx"],
+          extra_env=asset_env,
+          no_console_window=true,
+        ) !=
+        0 {
+        fail("native text asset preparation failed")
+      }
+    }
     if @process.run(
         moon,
         ["run", "scripts/prepare-wgpu.mbtx"],

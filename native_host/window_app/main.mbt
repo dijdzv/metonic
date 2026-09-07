@@ -26,6 +26,8 @@ enum Event {
   Redraw
   Resize(@dpi.PhysicalSize)
   Input(@scene.Action)
+  Commit(String)
+  Backspace
   Close
 }
 
@@ -34,6 +36,10 @@ struct App {
   event_loop : @windows.EventLoop
   events : @aqueue.Queue[Event]
   state : @scene.State
+  editor : @semantics.Tree
+  mut raster : @raster.Engine?
+  mut rendered_text : String?
+  mut text_width : Int
   is_test : Bool
   mut window : @windows.Window?
   mut error : Error?
@@ -99,9 +105,14 @@ pub impl @windows.ApplicationHandler for App with fn window_event(
     @core.WindowEvent::RedrawRequested => self.queue(Redraw)
     @core.WindowEvent::SurfaceResized(size) => self.queue(Resize(size))
     @core.WindowEvent::CloseRequested => self.queue(Close)
+    @core.WindowEvent::Ime(@core.Ime::Commit(value)) =>
+      if value != "\u{0008}" && value != "\r" && value != "\n" && value != "\t" {
+        self.queue(Commit(value))
+      }
     @core.WindowEvent::KeyboardInput(_, key, false) =>
       if key.state() is @core.ElementState::Pressed {
         match key.logical_key() {
+          @core.Key::Named(@core.NamedKey::Backspace) => self.queue(Backspace)
           @core.Key::Named(@core.NamedKey::ArrowLeft) =>
             self.queue(Input(Move(-10, 0)))
           @core.Key::Named(@core.NamedKey::ArrowRight) =>
@@ -130,6 +141,14 @@ pub impl @windows.ApplicationHandler for App with fn window_event(
 fn App::draw(self : App) -> Unit raise Error {
   match self.renderer {
     Some(renderer) => {
+      let text = @semantics.snapshot(self.editor)[1].value
+      let width = (@scene.field(self.state, 6) - 16).max(1).min(640)
+      if self.rendered_text != Some(text) || self.text_width != width {
+        let pixels = @raster.render(self.raster.unwrap(), text, width, 96)
+        renderer.set_text_pixels(width, 96, pixels)
+        self.rendered_text = Some(text)
+        self.text_width = width
+      }
       renderer.present(
         @scene.field(self.state, 6),
         @scene.field(self.state, 7),
@@ -216,6 +235,10 @@ async fn main {
     event_loop,
     events: @aqueue.Queue::Queue(kind=@aqueue.Blocking(64)),
     state: @scene.create(),
+    editor: @semantics.create(1, 1),
+    raster: None,
+    rendered_text: None,
+    text_width: 0,
     is_test: @env.get_env_var("METONIC_WINDOW_TEST") == Some("1"),
     window: None,
     error: None,
@@ -248,6 +271,23 @@ async fn main {
     )
     app.pump(driver)
     app.message_hwnd = driver.message_window_handle()
+    app.raster = @raster.create(
+      @fs.read_file(
+        @env.get_env_var("METONIC_FONT_PATH").unwrap_or(
+          ".work/text-assets/NotoSansJP.ttf",
+        ),
+      ).binary(),
+    )
+    require(app.raster is Some(_), "font could not be loaded")
+    require(
+      @semantics.set_text(
+        app.editor,
+        @semantics.snapshot(app.editor)[1].reference,
+        "日本語の描画を確認します ABC 123",
+      ) ==
+      "",
+      "initial editor text rejected",
+    )
     let window = app.window.unwrap()
     ignore(window.request_inner_size(@dpi.PhysicalSize(640, 360).into_size()))
     app.pump(driver)
@@ -293,6 +333,22 @@ async fn main {
                 }
               }
             Redraw => app.draw()
+            Commit(value) => {
+              let reference = @semantics.snapshot(app.editor)[1].reference
+              require(
+                @semantics.replace_selection(app.editor, reference, value) == "",
+                "committed text rejected",
+              )
+              app.draw()
+            }
+            Backspace => {
+              let reference = @semantics.snapshot(app.editor)[1].reference
+              require(
+                @semantics.delete_backward(app.editor, reference) == "",
+                "backspace rejected",
+              )
+              app.draw()
+            }
             Input(action) =>
               if @scene.dispatch(app.state, action) {
                 app.draw()
@@ -350,6 +406,71 @@ async fn main {
             app.post(0x0201U, 1UL, packed.to_int64())
           } else if stage == 2 && @scene.field(app.state, 4) == 1 {
             stage = 3
+            let reference = @semantics.snapshot(app.editor)[1].reference
+            require(
+              @semantics.set_selection(app.editor, reference, 0, 3) == "",
+              "test selection rejected",
+            )
+            app.post(0x0102U, 0x8A9EUL, 0L)
+            app.post(0x0102U, 0xD83DUL, 0L)
+            app.post(0x0102U, 0xDE00UL, 0L)
+          } else if stage == 3 &&
+            @semantics.snapshot(app.editor)[1].value ==
+            "語😀の描画を確認します ABC 123" {
+            let node = @semantics.snapshot(app.editor)[1]
+            require(
+              node.selection_start == 3 && node.selection_end == 3,
+              "committed text caret mismatch",
+            )
+            require(
+              app.rendered_text == Some(node.value),
+              "committed text was not rendered",
+            )
+            stage = 4
+            app.post(0x0100U, 0x08UL, 0L)
+          } else if stage == 4 &&
+            @semantics.snapshot(app.editor)[1].value ==
+            "語の描画を確認します ABC 123" {
+            require(
+              @semantics.snapshot(app.editor)[1].selection_start == 1,
+              "backspace caret mismatch",
+            )
+            stage = 5
+            let pixels = app.renderer.unwrap().capture_frame()
+            let mut dark = 0
+            for y in 8..<104 {
+              for x in 8..<309 {
+                let offset = (y * 317 + x) * 4
+                require(
+                  pixels[offset + 3] == 255,
+                  "text capture alpha mismatch",
+                )
+                if pixels[offset] < 128 &&
+                  pixels[offset + 1] < 128 &&
+                  pixels[offset + 2] < 128 {
+                  dark += 1
+                }
+              }
+            }
+            require(dark > 100, "text capture has no glyphs")
+            let reference = @semantics.snapshot(app.editor)[1].reference
+            require(
+              @semantics.set_text(app.editor, reference, "") == "",
+              "empty text rejected",
+            )
+            app.draw()
+            let empty = app.renderer.unwrap().capture_frame()
+            for y in 8..<104 {
+              for x in 8..<309 {
+                let offset = (y * 317 + x) * 4
+                for channel in 0..<4 {
+                  require(
+                    empty[offset + channel] == 255,
+                    "empty text retained glyph pixels",
+                  )
+                }
+              }
+            }
             app.post(0x0010U, 0UL, 0L)
           }
         }
@@ -384,7 +505,7 @@ async fn main {
           app.success = "WINDOW_INIT_CLOSE_OK"
         } else {
           require(
-            stage == 3 &&
+            stage == 5 &&
             app.frames >= 3 &&
             @scene.field(app.state, 4) == 1 &&
             @scene.field(app.state, 6) == 317 &&

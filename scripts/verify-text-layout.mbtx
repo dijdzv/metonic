@@ -3,6 +3,7 @@ import {
   "moonbitlang/async@0.21.2/fs",
   "moonbitlang/async@0.21.2/process",
   "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/env",
   "Milky2018/moon_cosmic@0.3.3" @cosmic,
 }
 
@@ -71,6 +72,10 @@ async fn main {
     "C2F3B4D463500A2DDCD3849CDED1FCEEB9FD6D1C32E6CBECD568453BA50FC68F"
   })
   assert_true(hash_ok, "NotoSansJP SHA256 mismatch")
+  if @env.get_env_var("METONIC_TEXT_ASSETS_ONLY") == Some("1") {
+    println("TEXT_ASSETS_OK")
+    return
+  }
   let font_bytes = @fs.read_file(font_path).binary()
   let font_system = @cosmic.FontSystem::new_with_locale("ja-JP").load_font_data(
     font_bytes,
