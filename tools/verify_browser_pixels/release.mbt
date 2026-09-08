@@ -29,6 +29,71 @@ async fn release_result(host : BrowserHost, name : String) -> Bytes {
 }
 
 ///|
+async fn navigation_pixels(
+  host : BrowserHost,
+  query : Bool,
+  name : String,
+) -> Bytes {
+  let image = decode_png(
+    { "png": command(host, { "op": "image", "name": name }) },
+    "png",
+  )
+  let x = if query { 224 } else { 8 }
+  let y = if query { 104 } else { 8 }
+  let width = if query { 200 } else { 640 }
+  let height = if query { 32 } else { 96 }
+  require(
+    image.width >= x + width && image.height >= y + height,
+    "navigation image bounds",
+  )
+  Bytes::makei(width * height * 4, index => {
+    let pixel = index / 4
+    image.data[((y + pixel / width) * image.width + x + pixel % width) * 4 +
+    index % 4]
+  })
+}
+
+///|
+async fn verify_navigation(host : BrowserHost) -> Unit {
+  for query in [false, true] {
+    let selector = if query { "#rpc-user" } else { "#text-input" }
+    let prefix = if query { "query-caret-" } else { "editor-caret-" }
+    let original = command(host, { "op": "value", "selector": selector })
+    ignore(
+      command(host, { "op": "fill", "selector": selector, "value": "ABCDE" }),
+    )
+    ignore(command(host, { "op": "press", "selector": selector, "key": "End" }))
+    let end = navigation_pixels(host, query, prefix + "end")
+    ignore(
+      command(host, { "op": "press", "selector": selector, "key": "ArrowLeft" }),
+    )
+    let left = navigation_pixels(host, query, prefix + "left")
+    require(left != end, "ArrowLeft did not update visible caret " + selector)
+    ignore(
+      command(host, { "op": "press", "selector": selector, "key": "Home" }),
+    )
+    let home = navigation_pixels(host, query, prefix + "home")
+    require(
+      home != left && home != end,
+      "Home did not update visible caret " + selector,
+    )
+    ignore(command(host, { "op": "press", "selector": selector, "key": "End" }))
+    require(
+      navigation_pixels(host, query, prefix + "returned") == end,
+      "End did not restore visible caret " + selector,
+    )
+    require(
+      command(host, { "op": "value", "selector": selector }) ==
+      Json::string("ABCDE"),
+      "navigation changed text",
+    )
+    ignore(
+      command(host, { "op": "fill", "selector": selector, "value": original }),
+    )
+  }
+}
+
+///|
 async fn run_release(host : BrowserHost) -> String {
   ignore(command(host, { "op": "goto" }))
   ignore(
@@ -43,6 +108,7 @@ async fn run_release(host : BrowserHost) -> String {
   verify_shared_view(host)
   verify_query_composition(host)
   verify_query_pointer(host)
+  verify_navigation(host)
   ignore(
     command(host, {
       "op": "fill",
@@ -51,6 +117,13 @@ async fn run_release(host : BrowserHost) -> String {
     }),
   )
   let edited = release_crop(host, "edited")
+  let movement_before = colour_box(
+    decode_png(
+      { "png": command(host, { "op": "image", "name": "movement-before" }) },
+      "png",
+    ),
+    true,
+  )
   ignore(command(host, { "op": "click", "selector": "#task-start" }))
   ignore(
     command(host, {
@@ -75,6 +148,17 @@ async fn run_release(host : BrowserHost) -> String {
       "text": "Canceled",
     }),
   )
+  let movement_canceled = colour_box(
+    decode_png(
+      { "png": command(host, { "op": "image", "name": "movement-canceled" }) },
+      "png",
+    ),
+    true,
+  )
+  require(
+    movement_canceled == movement_before,
+    "canceled movement changed presented position",
+  )
   ignore(
     command(host, { "op": "press", "selector": "#task-start", "key": "Enter" }),
   )
@@ -84,6 +168,20 @@ async fn run_release(host : BrowserHost) -> String {
       "selector": "#task-state",
       "text": "Completed",
     }),
+  )
+  let movement_after = colour_box(
+    decode_png(
+      { "png": command(host, { "op": "image", "name": "movement-after" }) },
+      "png",
+    ),
+    true,
+  )
+  require(
+    movement_after.0 == (movement_before.0 - 10).max(0) &&
+    movement_after.1 == movement_before.1 &&
+    movement_after.2 == movement_before.2 &&
+    movement_after.3 == movement_before.3,
+    "delayed movement must shift presented rectangle left by ten pixels",
   )
   require(
     command(host, { "op": "value", "selector": "#text-input" }) ==

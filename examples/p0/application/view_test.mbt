@@ -1,4 +1,26 @@
 ///|
+test "query preedit presents its range and cursor without changing committed input" {
+  let app = create(1, 1)
+  assert_eq(@semantics.set_text(app.editor, app.query_input, "AB"), "")
+  assert_eq(@semantics.set_selection(app.editor, app.query_input, 1, 1), "")
+  assert_eq(@semantics.focus(app.editor, app.query_input), "")
+  let preview = app.view(query_preview="A日本B", query_preedit=(1, 3, 2))
+  assert_eq(preview.query.text, "A日本B")
+  assert_eq(preview.query_selection, (1, 3))
+  assert_eq(preview.query_caret, Some(2))
+  assert_eq(app.query(), "AB")
+  let canceled = app.view()
+  assert_eq(canceled.query.text, "AB")
+  assert_eq(canceled.query_selection, (1, 1))
+  assert_eq(canceled.query_caret, Some(1))
+  assert_eq(@semantics.focus(app.editor, app.request_button), "")
+  assert_eq(
+    app.view(query_preview="A日本B", query_preedit=(1, 3, 2)).query_caret,
+    None,
+  )
+}
+
+///|
 test "lookup failure has a readable label while details survive late replies and recovery" {
   let app = create(1, 1)
   let previous = app.begin_update()

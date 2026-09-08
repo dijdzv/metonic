@@ -59,6 +59,11 @@ pub fn Model::cancel_update(self : Model) -> Bool {
 }
 
 ///|
+pub fn Model::movement_target(self : Model) -> Int {
+  (@scene.field(self.scene, 0) - 10).max(0)
+}
+
+///|
 pub fn Model::complete_movement(self : Model, id : Int, x : Int) -> Bool {
   if !@task_scope.complete(self.tasks, id, x) {
     return false

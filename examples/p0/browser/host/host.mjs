@@ -138,7 +138,7 @@ function resetTasks() {
   taskEpoch += 1;
   if (app) updateTaskDiagnostics();
 }
-function onTaskStart() { dispatchTask(1000, 40); }
+function onTaskStart() { if (!disposed && app) dispatchTask(1000, Number(app.task_movement_target())); }
 function onTaskCancel() { cancelTask(); }
 
 function setStatus(message, error = false) {
@@ -340,6 +340,7 @@ function stop(reason = 'Stopped.', error = false) {
   $('rpc-user').removeEventListener('focus', onQueryFocus);
   $('rpc-user').removeEventListener('input', onQueryInput);
   $('rpc-user').removeEventListener('select', onQueryInput);
+  $('rpc-user').removeEventListener('selectionchange', onQueryInput);
   $('rpc-user').removeEventListener('compositionstart', onQueryCompositionStart);
   $('rpc-user').removeEventListener('compositionupdate', onQueryCompositionUpdate);
   $('rpc-user').removeEventListener('compositionend', onQueryCompositionEnd);
@@ -353,6 +354,7 @@ function stop(reason = 'Stopped.', error = false) {
   textInput.disabled = true;
   textInput.removeEventListener('input', onTextInput);
   textInput.removeEventListener('select', onTextInput);
+  textInput.removeEventListener('selectionchange', onTextInput);
   textInput.removeEventListener('compositionstart', onCompositionStart);
   textInput.removeEventListener('compositionupdate', onCompositionUpdate);
   textInput.removeEventListener('compositionend', onCompositionEnd);
@@ -455,6 +457,7 @@ struct U { rect: vec4f, viewport: vec2f, enabled: f32, pad: f32 };
   $('reset').addEventListener('click', onReset);
   textInput.addEventListener('input', onTextInput);
   textInput.addEventListener('select', onTextInput);
+  textInput.addEventListener('selectionchange', onTextInput);
   textInput.addEventListener('compositionstart', onCompositionStart);
   textInput.addEventListener('compositionupdate', onCompositionUpdate);
   textInput.addEventListener('compositionend', onCompositionEnd);
@@ -468,6 +471,7 @@ struct U { rect: vec4f, viewport: vec2f, enabled: f32, pad: f32 };
   $('rpc-user').addEventListener('focus', onQueryFocus);
   $('rpc-user').addEventListener('input', onQueryInput);
   $('rpc-user').addEventListener('select', onQueryInput);
+  $('rpc-user').addEventListener('selectionchange', onQueryInput);
   $('rpc-user').addEventListener('compositionstart', onQueryCompositionStart);
   $('rpc-user').addEventListener('compositionupdate', onQueryCompositionUpdate);
   $('rpc-user').addEventListener('compositionend', onQueryCompositionEnd);

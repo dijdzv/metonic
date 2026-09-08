@@ -1,4 +1,23 @@
 ///|
+test "delayed movement repeats relative to its starting position and stops at the left edge" {
+  let app = create(1, 1)
+  ignore(@scene.move_to(app.scene, 25, 50))
+  for expected in [15, 5, 0, 0] {
+    let target = app.movement_target()
+    let id = app.begin_update()
+    assert_true(app.complete_movement(id, target))
+    assert_eq(@scene.field(app.scene, 0), expected)
+    assert_eq(@scene.field(app.scene, 1), 50)
+  }
+  ignore(@scene.move_to(app.scene, 25, 50))
+  let target = app.movement_target()
+  let canceled = app.begin_update()
+  assert_true(app.cancel_update())
+  assert_false(app.complete_movement(canceled, target))
+  assert_eq(@scene.field(app.scene, 0), 25)
+}
+
+///|
 test "editing survives request replacement, failure recovery and resize" {
   let app = create(1, 1)
   assert_eq(app.query(), "1")

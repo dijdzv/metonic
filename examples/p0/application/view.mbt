@@ -37,7 +37,11 @@ pub struct View {
 }
 
 ///|
-pub fn Model::view(self : Model, query_preview? : String) -> View {
+pub fn Model::view(
+  self : Model,
+  query_preview? : String,
+  query_preedit? : (Int, Int, Int),
+) -> View {
   let nodes = @semantics.snapshot(self.editor)
   let width = (@scene.field(self.scene, 6) - 16).max(1).min(640)
   let compact = @scene.field(self.scene, 7) < 352 && width >= 384
@@ -50,9 +54,15 @@ pub fn Model::view(self : Model, query_preview? : String) -> View {
   let request = nodes[2]
   let query = nodes[5]
   {
-    query_selection: (query.selection_start, query.selection_end),
+    query_selection: match query_preedit {
+      Some((start, end, _)) if query_preview is Some(_) => (start, end)
+      _ => (query.selection_start, query.selection_end)
+    },
     query_caret: if query.focused &&
-      query.selection_start == query.selection_end {
+      query_preview is Some(_) &&
+      query_preedit is Some((_, _, caret)) {
+      Some(caret)
+    } else if query.focused && query.selection_start == query.selection_end {
       Some(@semantics.caret(query))
     } else {
       None
