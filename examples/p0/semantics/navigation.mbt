@@ -18,10 +18,10 @@ pub fn navigate(
   if kind < 0 {
     return error
   }
-  if kind != 2 {
+  if input_node(tree, kind) is None {
     return "unsupported_action"
   }
-  let node = tree.input.unwrap()
+  let node = input_node(tree, kind).unwrap()
   if !node.enabled {
     return "disabled"
   }

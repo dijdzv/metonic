@@ -308,7 +308,7 @@ async fn verify_task_layout(
   name : String,
 ) -> Unit {
   let actual = command(host, { "op": "view-bounds" })
-  guard actual is Json::Array(elements) && elements.length() == 4 else {
+  guard actual is Json::Array(elements) && elements.length() == 5 else {
     fail("task bounds missing")
   }
   let start_y = if compact { 216 } else { 224 }

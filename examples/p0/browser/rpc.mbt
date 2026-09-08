@@ -48,6 +48,14 @@ pub fn rpc_request() -> Int {
     Some(value) => value
     None => return 0
   }
+  if @semantics.set_text(
+      application.val.editor,
+      application.val.query_input,
+      user_id,
+    ) !=
+    "" {
+    return 0
+  }
   let encoded = @utf8.encode(
     @wire.request(@api.get_user(), @api.GetUserInput::{ id: user_id, }).stringify(),
   )

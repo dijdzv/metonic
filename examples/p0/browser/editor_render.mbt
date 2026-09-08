@@ -1,6 +1,22 @@
 ///|
 let rendered_editor : Ref[
-  (String, Bytes, Int, Bool, Int, Int, Bool, Int, Bool, Bool, Int)?,
+  (
+    String,
+    Bytes,
+    Int,
+    Bool,
+    Int,
+    Int,
+    Bool,
+    Int,
+    Bool,
+    Bool,
+    Int,
+    String,
+    Bool,
+    (Int, Int),
+    Int?,
+  )?,
 ] = Ref(None)
 
 ///|
@@ -36,6 +52,10 @@ pub fn editor_render(viewport_width : Int) -> Int {
     view.start.focused,
     view.cancel.focused,
     @scene.field(application.val.scene, 7),
+    view.query.text,
+    view.query.focused,
+    view.query_selection,
+    view.query_caret,
   )
   if rendered_editor.val == Some(key) {
     return 2
@@ -49,7 +69,20 @@ pub fn editor_render(viewport_width : Int) -> Int {
   )
   view_layers.val = layers
   let editor = layers[0].pixels
-  let status = if view.result.text != "" { layers[2].pixels } else { b"" }
+  let status = if view.result.text != "" {
+    let source = layers[2].pixels
+    Bytes::makei(view.editor.bounds.width * view.result.bounds.height * 4, i => {
+      let x = i / 4 % view.editor.bounds.width
+      let y = i / 4 / view.editor.bounds.width
+      if x < view.result.bounds.width {
+        source[(y * view.result.bounds.width + x) * 4 + i % 4]
+      } else {
+        b'\x00'
+      }
+    })
+  } else {
+    b""
+  }
   bridge.output = Some(
     Bytes::makei(editor.length() + status.length(), i => {
       if i < editor.length() {
@@ -126,6 +159,7 @@ pub fn view_field(element : Int, field : Int) -> Int {
     3 => view.start
     4 => view.cancel
     5 => view.task_status
+    6 => view.query
     _ => return -1
   }
   match field {
@@ -163,6 +197,7 @@ pub fn view_focus(element : Int) -> Int {
     2 => nodes[0]
     3 => nodes[3]
     4 => nodes[4]
+    6 => nodes[5]
     _ => return 0
   }
   if @semantics.focus(model.editor, node.reference) == "" {

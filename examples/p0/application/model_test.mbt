@@ -1,6 +1,8 @@
 ///|
 test "editing survives request replacement, failure recovery and resize" {
   let app = create(1, 1)
+  assert_eq(app.query(), "1")
+  assert_eq(@semantics.set_text(app.editor, app.query_input, "missing"), "")
   let input = @semantics.snapshot(app.editor)[1].reference
   assert_eq(@semantics.set_text(app.editor, input, "日本 ABC"), "")
   assert_eq(@semantics.set_selection(app.editor, input, 3, 6), "")
@@ -20,6 +22,7 @@ test "editing survives request replacement, failure recovery and resize" {
   assert_eq(@scene.field(app.scene, 6), 480)
   assert_eq(@semantics.snapshot(app.editor)[1].value, "日本 XYZ")
   assert_eq(app.result, "\n月兎")
+  assert_eq(app.query(), "missing")
 }
 
 ///|

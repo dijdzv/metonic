@@ -1,11 +1,22 @@
 ///|
 async fn verify_shared_view(host : BrowserHost) -> Unit {
   let actual = command(host, { "op": "view-bounds" })
-  guard actual is Json::Array(elements) && elements.length() == 4 else {
+  guard actual is Json::Array(elements) && elements.length() == 5 else {
     fail("shared input and request bounds missing")
   }
   let editor = elements[0]
   let request = elements[1]
+  near_coordinate(elements[4], "x", 224.0)
+  near_coordinate(elements[4], "y", 104.0)
+  require(
+    int_field(elements[4], "width") == 424 &&
+    int_field(elements[4], "height") == 32,
+    "shared query dimensions",
+  )
+  require(
+    string_field(elements[4], "opacity") == "0",
+    "visible DOM duplicates GPU query",
+  )
   require(
     int_field(editor, "width") == 640 && int_field(editor, "height") == 96,
     "shared editor dimensions",

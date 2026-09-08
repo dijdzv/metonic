@@ -433,6 +433,7 @@ async fn main {
       fail("request Invoke pattern missing")
     }
     defer ignore(release_pattern(request_provider[0]))
+    verify_query(hwnd, root[0], editor, request, request_provider[0])
     let scene_y = bounds_component(button, 1)
     request_action(hwnd, request, request_provider[0])
     let mut result_node = 0UL

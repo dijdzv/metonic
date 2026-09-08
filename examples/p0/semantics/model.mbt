@@ -30,7 +30,7 @@ pub struct Tree {
   session : Int
   window : Int
   mut next_id : Int
-  mut extra_buttons : Array[Node]
+  mut extra_nodes : Array[Node]
   mut next_generation : Int
   mut button : Node?
   mut input : Node?
@@ -46,7 +46,7 @@ pub fn create(session : Int, window : Int) -> Tree {
     session,
     window,
     next_id: 3,
-    extra_buttons: [],
+    extra_nodes: [],
     next_generation: 3,
     button: Some({
       reference: button_ref,
@@ -86,7 +86,7 @@ pub fn snapshot(tree : Tree) -> Array[Node] {
       (None, Some(input)) => [input]
       (None, None) => []
     }
-    nodes.append(tree.extra_buttons)
+    nodes.append(tree.extra_nodes)
     nodes
   }
 }
@@ -103,7 +103,7 @@ fn resolve(tree : Tree, reference : NodeRef) -> (Int, String) {
   } else if reference.session != tree.session || reference.window != tree.window {
     (-1, "stale_target")
   } else {
-    for node in tree.extra_buttons {
+    for node in tree.extra_nodes {
       if node.reference == reference {
         return (node.reference.id, "")
       }
@@ -156,7 +156,7 @@ pub fn focus(tree : Tree, reference : NodeRef) -> String {
     } else if kind == 2 {
       tree.input
     } else {
-      extra_button(tree, kind)
+      extra_node(tree, kind)
     }
     match target {
       Some(node) =>
@@ -173,7 +173,7 @@ pub fn focus(tree : Tree, reference : NodeRef) -> String {
             Some(other) => tree.input = Some({ ..other, focused: kind == 2, })
             None => ()
           }
-          tree.extra_buttons = tree.extra_buttons.map(other => {
+          tree.extra_nodes = tree.extra_nodes.map(other => {
             ..other,
             focused: other.reference.id == kind,
           })
@@ -190,10 +190,10 @@ pub fn set_text(tree : Tree, reference : NodeRef, value : String) -> String {
   let (kind, error) = resolve(tree, reference)
   if kind < 0 {
     error
-  } else if kind != 2 {
+  } else if input_node(tree, kind) is None {
     "unsupported_action"
   } else {
-    match tree.input {
+    match input_node(tree, kind) {
       Some(node) =>
         if !node.enabled {
           "disabled"
@@ -203,7 +203,7 @@ pub fn set_text(tree : Tree, reference : NodeRef, value : String) -> String {
           ""
         } else {
           let length = value.length()
-          tree.input = Some({
+          store_input(tree, {
             ..node,
             value,
             selection_start: length,
@@ -228,10 +228,10 @@ pub fn replace_selection(
   if kind < 0 {
     return error
   }
-  if kind != 2 {
+  if input_node(tree, kind) is None {
     return "unsupported_action"
   }
-  match tree.input {
+  match input_node(tree, kind) {
     None => "stale_target"
     Some(node) => {
       if !node.enabled {
@@ -252,7 +252,7 @@ pub fn replace_selection(
         insertion_end + 1
       }
       if value != node.value || start != caret || end != caret {
-        tree.input = Some({
+        store_input(tree, {
           ..node,
           value,
           selection_start: caret,
@@ -272,10 +272,10 @@ pub fn delete_backward(tree : Tree, reference : NodeRef) -> String {
   if kind < 0 {
     return error
   }
-  if kind != 2 {
+  if input_node(tree, kind) is None {
     return "unsupported_action"
   }
-  let node = tree.input.unwrap()
+  let node = input_node(tree, kind).unwrap()
   if !node.enabled {
     return "disabled"
   }
@@ -292,7 +292,7 @@ pub fn delete_backward(tree : Tree, reference : NodeRef) -> String {
   let value = node.value[:start].to_owned() +
     node.value[node.selection_end:].to_owned()
   let caret = if selection_boundary(value, start) { start } else { start + 1 }
-  tree.input = Some({
+  store_input(tree, {
     ..node,
     value,
     selection_start: caret,
@@ -324,7 +324,7 @@ pub fn set_enabled(tree : Tree, reference : NodeRef, enabled : Bool) -> String {
     } else if kind == 2 {
       tree.input
     } else {
-      extra_button(tree, kind)
+      extra_node(tree, kind)
     }
     match target {
       Some(node) =>
@@ -345,7 +345,7 @@ pub fn set_enabled(tree : Tree, reference : NodeRef, enabled : Bool) -> String {
           } else if kind == 2 {
             tree.input = Some(updated)
           } else {
-            tree.extra_buttons = tree.extra_buttons.map(other => {
+            tree.extra_nodes = tree.extra_nodes.map(other => {
               if other.reference.id == kind {
                 updated
               } else {
@@ -386,10 +386,10 @@ pub fn set_selection_directed(
   let (kind, error) = resolve(tree, reference)
   if kind < 0 {
     error
-  } else if kind != 2 {
+  } else if input_node(tree, kind) is None {
     "unsupported_action"
   } else {
-    match tree.input {
+    match input_node(tree, kind) {
       Some(node) => {
         let length = node.value.length()
         if !node.enabled {
@@ -405,7 +405,7 @@ pub fn set_selection_directed(
           node.selection_anchor == anchor {
           ""
         } else {
-          tree.input = Some({
+          store_input(tree, {
             ..node,
             selection_start: start,
             selection_end: end,
@@ -431,7 +431,7 @@ pub fn remove(tree : Tree, reference : NodeRef) -> String {
     } else if kind == 2 {
       tree.input = None
     } else {
-      tree.extra_buttons = tree.extra_buttons.filter(node => {
+      tree.extra_nodes = tree.extra_nodes.filter(node => {
         node.reference.id != kind
       })
     }
@@ -475,7 +475,7 @@ pub fn dispose(tree : Tree) -> Bool {
   } else {
     tree.button = None
     tree.input = None
-    tree.extra_buttons = []
+    tree.extra_nodes = []
     tree.closed = true
     tree.revision += 1
     true
@@ -483,8 +483,8 @@ pub fn dispose(tree : Tree) -> Bool {
 }
 
 ///|
-fn extra_button(tree : Tree, id : Int) -> Node? {
-  for node in tree.extra_buttons {
+fn extra_node(tree : Tree, id : Int) -> Node? {
+  for node in tree.extra_nodes {
     if node.reference.id == id {
       return Some(node)
     }
@@ -494,6 +494,16 @@ fn extra_button(tree : Tree, id : Int) -> Node? {
 
 ///|
 pub fn add_button(tree : Tree, name : String) -> NodeRef? {
+  add_node(tree, name, Button, "")
+}
+
+///|
+fn add_node(
+  tree : Tree,
+  name : String,
+  role : Role,
+  value : String,
+) -> NodeRef? {
   if tree.closed ||
     tree.next_id == 2147483647 ||
     tree.next_generation == 2147483647 {
@@ -507,16 +517,16 @@ pub fn add_button(tree : Tree, name : String) -> NodeRef? {
   }
   tree.next_id += 1
   tree.next_generation += 1
-  tree.extra_buttons.push({
+  tree.extra_nodes.push({
     reference,
-    role: Button,
+    role,
     name,
-    value: "",
+    value,
     enabled: true,
     focused: false,
-    selection_start: 0,
-    selection_end: 0,
-    selection_anchor: 0,
+    selection_start: value.length(),
+    selection_end: value.length(),
+    selection_anchor: value.length(),
   })
   tree.revision += 1
   Some(reference)

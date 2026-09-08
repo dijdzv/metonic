@@ -5,6 +5,7 @@ pub struct Model {
   request_button : @semantics.NodeRef
   start_button : @semantics.NodeRef
   cancel_button : @semantics.NodeRef
+  query_input : @semantics.NodeRef
   tasks : @task_scope.Scope
   mut result : String
   mut result_utf8 : Bytes
@@ -16,16 +17,28 @@ pub fn create(session : Int, window : Int) -> Model {
   let request_button = @semantics.add_button(editor, "Load user").unwrap()
   let start_button = @semantics.add_button(editor, "Move after delay").unwrap()
   let cancel_button = @semantics.add_button(editor, "Cancel").unwrap()
+  let query_input = @semantics.add_input(editor, "User ID", "1").unwrap()
   {
     scene: @scene.create(),
     editor,
     request_button,
     start_button,
     cancel_button,
+    query_input,
     tasks: @task_scope.create(),
     result: "",
     result_utf8: b"",
   }
+}
+
+///|
+pub fn Model::query(self : Model) -> String {
+  for node in @semantics.snapshot(self.editor) {
+    if node.reference == self.query_input {
+      return node.value
+    }
+  }
+  ""
 }
 
 ///|

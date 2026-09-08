@@ -258,6 +258,7 @@ function onReset() {
   app.init();
   $('rpc-result').textContent = '';
   textInput.value = DEFAULT_TEXT;
+  $('rpc-user').value = '1';
   composing = false;
   syncEditor();
   textRenderer?.rasterText(cssW);
@@ -268,8 +269,9 @@ function onReset() {
 }
 
 function placeView() {
-  for (const [element, target] of [[0, textInput], [1, $('rpc-load')], [3, $('task-start')], [4, $('task-cancel')]]) {
-    if (element !== 0) target.classList.add('gpu-button');
+  for (const [element, target] of [[0, textInput], [1, $('rpc-load')], [3, $('task-start')], [4, $('task-cancel')], [6, $('rpc-user')]]) {
+    if (element === 6) target.classList.add('gpu-input');
+    else if (element !== 0) target.classList.add('gpu-button');
     target.style.left = (canvas.offsetLeft + Number(app.view_field(element, 0))) + 'px';
     target.style.top = (canvas.offsetTop + Number(app.view_field(element, 1))) + 'px';
     target.style.width = Number(app.view_field(element, 2)) + 'px';
@@ -278,6 +280,14 @@ function placeView() {
   $('rpc-load').textContent = String.fromCharCode(...Array.from({ length: Number(app.view_field(1, 4)) }, (_, i) => Number(app.view_label_unit(i))));
 }
 function onEditorFocus() { if (!disposed && app) { app.view_focus(0); renderEditor(); } }
+function onQueryInput() {
+  if (disposed || !app) return;
+  const input = $('rpc-user');
+  sendEditorText(input.value);
+  if (Number(app.query_commit(input.selectionStart, input.selectionEnd)) !== 1) throw new Error('Query input rejected');
+  renderEditor();
+}
+function onQueryFocus() { if (!disposed && app) { app.view_focus(6); onQueryInput(); } }
 function onRequestFocus() { if (!disposed && app) { app.view_focus(1); renderEditor(); } }
 function onStartFocus() { if (!disposed && app) { app.view_focus(3); renderEditor(); } }
 function onCancelFocus() { if (!disposed && app) { app.view_focus(4); renderEditor(); } }
@@ -309,6 +319,9 @@ function stop(reason = 'Stopped.', error = false) {
   $('task-start').removeEventListener('focus', onStartFocus);
   $('task-cancel').removeEventListener('focus', onCancelFocus);
   textInput.removeEventListener('focus', onEditorFocus);
+  $('rpc-user').removeEventListener('focus', onQueryFocus);
+  $('rpc-user').removeEventListener('input', onQueryInput);
+  $('rpc-user').removeEventListener('select', onQueryInput);
   canvas.removeEventListener('focus', onSceneFocus);
   $('rpc-user').disabled = true;
   textRenderer?.dispose();
@@ -429,6 +442,9 @@ struct U { rect: vec4f, viewport: vec2f, enabled: f32, pad: f32 };
   $('task-start').addEventListener('focus', onStartFocus);
   $('task-cancel').addEventListener('focus', onCancelFocus);
   textInput.addEventListener('focus', onEditorFocus);
+  $('rpc-user').addEventListener('focus', onQueryFocus);
+  $('rpc-user').addEventListener('input', onQueryInput);
+  $('rpc-user').addEventListener('select', onQueryInput);
   canvas.addEventListener('focus', onSceneFocus);
   $('rpc-user').disabled = false;
   $('task-cancel').addEventListener('click', onTaskCancel);
