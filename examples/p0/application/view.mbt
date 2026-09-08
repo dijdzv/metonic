@@ -83,7 +83,7 @@ pub fn Model::view(self : Model, query_preview? : String) -> View {
     },
     result: {
       bounds: { x: 8, y: 104, width: width.min(176), height: 32, },
-      text: self.result.trim().to_owned(),
+      text: self.result_label,
       reference: None,
       focused: false,
     },

@@ -1,4 +1,20 @@
 ///|
+async fn capture_query(
+  hwnd : UInt64,
+  editor : UInt64,
+  phase : String,
+  text : String,
+  result? : String? = None,
+) -> Unit {
+  if @env.get_env_var("METONIC_PRESENTATION_CAPTURE") != Some("1") {
+    return
+  }
+  assert_eq(focus_node(editor), 0)
+  expect_focus(editor)
+  capture_presentation(hwnd, phase, query_text=Some(text), result_text=result)
+}
+
+///|
 async fn verify_query(
   hwnd : UInt64,
   root : UInt64,
@@ -18,16 +34,21 @@ async fn verify_query(
   expect_focus(query)
   assert_true(post(hwnd, 0x0100U, 0x08UL, 0L) != 0)
   expect_text(query, "")
+  capture_query(hwnd, editor, "query-empty", "")
+  assert_eq(focus_node(query), 0)
+  expect_focus(query)
   assert_true(post(hwnd, 0x0102U, 0x31UL, 0L) != 0)
   expect_text(query, "1")
   expect_text(editor, "再入力 🚀")
+  capture_query(hwnd, editor, "query-typed", "1")
+  let mut sequence = 0
   for
     entry in [
-      ("1", "月兎"),
-      ("missing", "RPC: domain:not_found"),
-      ("1", "月兎"),
+      ("1", "月兎", "月兎"),
+      ("missing", "RPC: domain:not_found", "Not found"),
+      ("1", "月兎", "月兎"),
     ] {
-    let (id, expected) = entry
+    let (id, expected, visible) = entry
     assert_eq(set_value(value[0], utf16z(id)), 0)
     expect_text(query, id)
     request_action(hwnd, request, provider)
@@ -44,6 +65,14 @@ async fn verify_query(
     guard observed else { fail("query result missing: " + expected) }
     expect_text(query, id)
     expect_text(editor, "再入力 🚀")
+    sequence += 1
+    capture_query(
+      hwnd,
+      editor,
+      "query-result-" + sequence.to_string(),
+      id,
+      result=Some(visible),
+    )
   }
   stage("query success, domain error and retry preserved editor")
 }

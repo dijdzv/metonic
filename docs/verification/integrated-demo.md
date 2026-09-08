@@ -46,7 +46,10 @@ button through AccessKit. Development snapshots include the shared view and its
 
 For a domain error, enter `missing` in User ID and activate Load user. Change it
 back to `1` to retry successfully. Both hosts retain the separate editor contents;
-the native F7 shortcut also uses the current User ID. Each app instance owns its
+the visible result reads `Not found` on this failure. Compact error labels keep
+failures readable in the result row; the semantic output and development
+diagnostics retain the detailed RPC error.
+The native F7 shortcut also uses the current User ID. Each app instance owns its
 query value. The ID field occupies the right side of the result row.
 Native and browser HTTP results use a dedicated row below the GPU editor, so multiline editor
 contents do not push the result out of its viewport. The editor itself remains
