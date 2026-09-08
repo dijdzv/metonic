@@ -55,16 +55,29 @@ async fn main {
       "accesskit_windows-0.34.0", "https://static.crates.io/crates/accesskit_windows/accesskit_windows-0.34.0.crate",
       "106c2b961215864d1c2e703ee63269c25c4e80a577ffb2c1017b9c17dcdf83a1",
     )
-    let directory = ".work/accesskit-focus-source/accesskit_windows-0.34.0"
-    let patch = "patches/accesskit-windows-focus.patch"
-    run("git", ["apply", "--check", "--directory=" + directory, patch])
-    run("git", ["apply", "--directory=" + directory, patch])
+    source(
+      "accesskit_consumer-0.38.0", "https://static.crates.io/crates/accesskit_consumer/accesskit_consumer-0.38.0.crate",
+      "5d10a236f96f87d70732e44520046785431ef01d5bcd6b041317bfadd2f88245",
+    )
+    for
+      item in [
+        ("accesskit_windows-0.34.0", "patches/accesskit-windows-focus.patch"),
+        ("accesskit_windows-0.34.0", "patches/accesskit-windows-clipping.patch"),
+        (
+          "accesskit_consumer-0.38.0", "patches/accesskit-consumer-clipping.patch",
+        ),
+      ] {
+      let (name, patch) = item
+      let directory = ".work/accesskit-focus-source/" + name
+      run("git", ["apply", "--check", "--directory=" + directory, patch])
+      run("git", ["apply", "--directory=" + directory, patch])
+    }
     let root = ".work/accesskit-focus-source/accesskit-c-0.22.3"
     let manifest = @fs.read_file(root + "/Cargo.toml").text()
     @fs.write_file(
       root + "/Cargo.toml",
       manifest +
-      "\n[patch.crates-io]\naccesskit_windows = { path = \"../accesskit_windows-0.34.0\" }\n",
+      "\n[patch.crates-io]\naccesskit_windows = { path = \"../accesskit_windows-0.34.0\" }\naccesskit_consumer = { path = \"../accesskit_consumer-0.38.0\" }\n",
     )
     let original = @fs.read_file(root + "/Cargo.lock").text()
     let mut lock = ""
@@ -74,7 +87,8 @@ async fn main {
       if line == "[[package]]" {
         windows = false
       }
-      if line == "name = \"accesskit_windows\"" {
+      if line == "name = \"accesskit_windows\"" ||
+        line == "name = \"accesskit_consumer\"" {
         windows = true
       }
       if windows &&
@@ -84,7 +98,7 @@ async fn main {
         lock += line.to_owned() + "\n"
       }
     }
-    guard removed == 2 else { fail("unexpected AccessKit lockfile") }
+    guard removed == 4 else { fail("unexpected AccessKit lockfile") }
     @fs.write_file(root + "/Cargo.lock", lock)
     run("cargo", [
       "build",

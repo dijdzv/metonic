@@ -400,6 +400,7 @@ async fn main {
       (read_only_property[1] & 65535UL) == 0UL
     ignore(clear(read_only_property))
     guard writable else { fail("production editor remains read-only") }
+    verify_geometry(editor, value_provider[0], hwnd)
     verify_selection(editor, value_provider[0], hwnd)
     for
       text in ["日本語 ABC 😀", "変更後 XYZ 123", "", "再入力 🚀"] {
@@ -494,6 +495,9 @@ async fn main {
     guard resized else {
       fail("production resize did not update semantic layout")
     }
+    verify_geometry(editor, value_provider[0], hwnd)
+    assert_eq(set_value(value_provider[0], utf16z("再入力 🚀")), 0)
+    expect_text(editor, "再入力 🚀")
     guard text_is(result_node, 30005, "月兎") && integer(button, 30086) == 1 else {
       fail("resize changed HTTP result or scene")
     }

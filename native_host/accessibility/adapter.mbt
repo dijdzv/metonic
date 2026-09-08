@@ -201,6 +201,7 @@ fn tree(_data : UInt64) -> UInt64 {
         box.width.to_double(),
         box.height.to_double(),
       )
+      clips_children(node)
       for fragment in bridge.fragments {
         let run = node_new(1)
         let text = @utf8.encode(fragment.text)
@@ -210,6 +211,7 @@ fn tree(_data : UInt64) -> UInt64 {
           fragment.units.lengths.length().to_uint64(),
           fragment.units.lengths,
         )
+        publish_geometry(run, fragment)
         bounds(
           run,
           box.x.to_double(),

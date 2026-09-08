@@ -102,12 +102,21 @@ Requests retain raw IDs until application so a later tree cannot reuse cached
 offsets from an earlier layout. Forced queue interleavings still need separate
 evidence.
 
+Character positions and widths now come from retained shaped-run highlights,
+with explicit selectable-unit alignment. The production probe checks Japanese,
+Latin, digits, supplementary text, CRLF and wrapped ranges before and after
+resize against client coordinates. Empty and offscreen ranges have no rectangle;
+replaced ranges reject coordinate queries. Combining clusters omit unsupported
+per-scalar geometry. The [AccessKit clipping correction](../../patches/accesskit-clipping.md)
+preserves document text outside the editor viewport and shares the existing
+source build with the focus correction.
+
 Existing six native scenarios still exercise shared input/rendering after
 attachment; a staged-composition check rejects a queued accessibility value
 replacement without changing committed text. This is not a real IME run.
 UIA properties and posted messages do not prove presented GPU pixels, real keyboard or
 pointer delivery, Japanese IME behavior, or screen-reader usability. Forced queue
 overflow, action/close races and adapter recreation need dedicated evidence;
-the current normal-close check does not claim to cover those races. Full character
+the current normal-close check does not claim to cover those races. Complex-cluster
 geometry, composition-aware focus and assistive-technology testing
 remain required. See [ADR 023](../adr/023-development-automation.md) for selection.
