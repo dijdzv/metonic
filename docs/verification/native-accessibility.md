@@ -36,15 +36,20 @@ admission; MoonBit decodes the owned bytes on the UI thread. During composition
 the adapter advertises read-only and the UI handler rejects queued external
 mutations. Value calls return before the application applies the queued request;
 clients must observe resulting state rather than treating a successful return as
-an application completion barrier. Full Text/selection patterns are not yet
-implemented, so this remains incomplete accessibility.
+an application completion barrier. Shared-editor Text/selection patterns and
+their automated coverage are described below. Actual assistive-technology use
+and real IME remain unverified, so this is not complete accessibility acceptance.
 
 `prepare-accesskit.mbtx` pins the official archive and verifies SHA256
 `b652e380fb78efe6721ad892f15b2224f38f661c3fb20436ef4c5b3ce0fe8177` before extracting
 the header, Windows x64 MSVC import library/DLL, and licenses. The window build
 copies the DLL and both AccessKit licenses beside the executable. The compiler's
 INCLUDE/LIB environment is scoped to that build. This is a Windows x64 MSVC
-configuration; no additional Rust toolchain or custom Rust bridge is required.
+configuration. The active window build then prepares the pinned AccessKit sources
+and applies the focus and clipping corrections using
+`scripts/prepare-accesskit-focus.mbtx`. That step requires Rust 1.93.0 and Cargo
+on PATH and builds the DLL used by the window. Rust compiles the dependency;
+application state and the UI host remain MoonBit, with the C ABI boundary below.
 
 ## Boundary and lifetime
 

@@ -20,8 +20,9 @@ remain incomplete. Public APIs may change substantially.
 - First-class development automation through a CLI and MCP, excluded from production builds.
 - MIT OR Apache-2.0.
 
-The native prototype uses the official AccessKit adapter for initial production
-accessibility nodes and actions. Full text/selection support remains incomplete;
+The native prototype uses the official AccessKit adapter for production
+accessibility nodes, actions and shared-editor text/selection patterns. Actual
+assistive-technology usability and real IME acceptance remain incomplete;
 see the [verification record](docs/verification/native-accessibility.md).
 Development automation and production accessibility have separate responsibilities.
 
@@ -36,7 +37,12 @@ The browser defaults to WasmGC; JS remains available for comparison. The
 measured tradeoff and the separate browser package.
 
 On Windows x64, install [mise](https://mise.jdx.dev/), PowerShell 7 (`pwsh`), and
-Visual Studio C++ build tools with the Windows SDK, then run:
+Visual Studio C++ x64 build tools with the Windows SDK. Native builds also require
+Rust 1.93.0 (`rustc` and `cargo`) on PATH to build the pinned AccessKit dependency
+with the reviewed local corrections. Select that toolchain before running the
+commands below; the build rejects a different Rust version. See the
+[Windows setup](docs/development.md#windows-x64-setup) for the full requirements.
+From a checkout of this repository, run:
 
 ```powershell
 mise trust
@@ -45,10 +51,15 @@ mise run bootstrap
 mise run demo
 ```
 
-Open the printed browser URL while the native window is running. Edit the text,
-use the GPU-rendered **Load user** button in either UI, then resize the window. Use
-**Move after delay / Cancel** in the browser or **F5 / F6** in native to try async
-updates. Closing the native window stops the shared server. The browser tab is
+Open the printed browser URL while the native window is running. In each UI:
+
+1. Edit the main text and the **User ID** field (initially `1`).
+2. Choose **Load user** and confirm `月兎` appears without replacing the editor.
+3. Set User ID to `missing` to observe a domain error, then restore `1` and retry.
+4. Try **Move after delay / Cancel**, resize, and continue editing. Native also
+   provides **F5 / F6** for the delayed update and cancellation.
+
+Closing the native window stops the shared server. The browser tab is
 user-owned and stays open; its **Stop** button disposes that browser UI only.
 
 The [demo walkthrough](docs/verification/integrated-demo.md) gives the common
