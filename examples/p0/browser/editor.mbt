@@ -40,9 +40,8 @@ pub fn editor_composition_update() -> Int {
     None
   }
   clear_text()
-  match (editor_composition.val, text) {
-    (Some(composition), Some(text)) =>
-      stage_preedit(composition, text, editor_preview, editor_preedit_geometry)
+  match text {
+    Some(text) => input_preedit(false, text)
     _ => 0
   }
 }
@@ -99,7 +98,7 @@ pub fn editor_commit(start : Int, end : Int) -> Int {
   }
   clear_text()
   match value {
-    Some(value) if accept_editor(value, start, end) => 1
+    Some(value) => input_commit(false, value, start, end)
     _ => 0
   }
 }

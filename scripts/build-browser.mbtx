@@ -14,6 +14,14 @@ fn fail(message : String) -> Unit {
 ///|
 async fn main {
   let moon = @fs.realpath(".tools/moonbit/bin/moon.exe")
+  assert_eq(
+    @process.run(
+      moon,
+      ["run", "scripts/prepare-browser-deps.mbtx"],
+      no_console_window=true,
+    ),
+    0,
+  )
   let server_code = @process.run(
     moon,
     [
@@ -27,7 +35,7 @@ async fn main {
   let (js_code, js_out, js_err) = @process.collect_output(
     moon,
     [
-      "build", "examples/p0/browser", "--target", "js", "--release", "--deny-warn",
+      "-C", "browser_host", "build", "app", "--target", "js", "--release", "--deny-warn",
     ],
     no_console_window=true,
   )
@@ -39,7 +47,7 @@ async fn main {
   let (wasm_code, wasm_out, wasm_err) = @process.collect_output(
     moon,
     [
-      "build", "examples/p0/browser", "--target", "wasm-gc", "--release", "--deny-warn",
+      "-C", "browser_host", "build", "app", "--target", "wasm-gc", "--release", "--deny-warn",
     ],
     no_console_window=true,
   )
@@ -69,6 +77,10 @@ async fn main {
     @fs.mkdir(dist, recursive=true)
   }
   let copies = [
+    (
+      ".work/browser-deps/webapi-input/webapi.mjs", ".work/browser-dist/webapi.mjs",
+    ),
+    (".work/browser-deps/LICENSE-webapi", ".work/browser-dist/LICENSE-webapi"),
     ("examples/p0/browser/host/index.html", ".work/browser-dist/index.html"),
     ("examples/p0/browser/host/style.css", ".work/browser-dist/style.css"),
     ("examples/p0/browser/host/host.mjs", ".work/browser-dist/host.mjs"),
@@ -83,10 +95,12 @@ async fn main {
       "examples/p0/browser/host/text-renderer.mjs", ".work/browser-dist/text-renderer.mjs",
     ),
     (
-      "_build/js/release/build/examples/p0/browser/browser.js", ".work/browser-dist/app.mjs",
+      "browser_host/_build/js/release/build/local/browser_host/browser_host.js",
+      ".work/browser-dist/app.mjs",
     ),
     (
-      "_build/wasm-gc/release/build/examples/p0/browser/browser.wasm", ".work/browser-dist/app.wasm",
+      "browser_host/_build/wasm-gc/release/build/local/browser_host/browser_host.wasm",
+      ".work/browser-dist/app.wasm",
     ),
     (".work/text-assets/NotoSansJP.ttf", ".work/browser-dist/NotoSansJP.ttf"),
     (".work/text-assets/OFL.txt", ".work/browser-dist/OFL.txt"),

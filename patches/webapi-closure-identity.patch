@@ -1,0 +1,23 @@
+diff --git a/webapi/webapi.mjs b/webapi/webapi.mjs
+--- a/webapi/webapi.mjs
++++ b/webapi/webapi.mjs
+@@ -7,3 +7,18 @@
+   "moonbit:ffi": {
+-    make_closure: (funcref, closure) => funcref.bind(null, closure)
++    make_closure: (() => {
++      const functions = new WeakMap();
++      return (funcref, closure) => {
++        let closures = functions.get(funcref);
++        if (!closures) {
++          closures = new WeakMap();
++          functions.set(funcref, closures);
++        }
++        let wrapped = closures.get(closure);
++        if (!wrapped) {
++          wrapped = funcref.bind(null, closure);
++          closures.set(closure, wrapped);
++        }
++        return wrapped;
++      };
++    })()
+   },

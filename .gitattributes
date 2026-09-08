@@ -4,3 +4,4 @@
 experiments/window_pump_contract/windows-pump.patch whitespace=-blank-at-eol
 experiments/async_waiter_handles/windows-waiter.patch whitespace=-blank-at-eol
 patches/window-ime-position.patch whitespace=-blank-at-eol
+patches/webapi-compiler-warnings.patch whitespace=-blank-at-eol

@@ -122,6 +122,11 @@ scenarios described in [UI HTTP failures](verification/ui-rpc-failures.md).
 
 ## MoonBit scripts
 
+Browser input ownership and the pinned DOM binding are described in
+[Browser input host](verification/browser-input.md). `browser:build` prepares the
+dependency and builds the dedicated browser workspace; root and native build
+paths keep their existing layout.
+
 Development scripts, verification and CLI logic use MoonBit by default. Standalone
 tools use `.mbtx`; `scripts/doctor.mbtx` is the first migrated tool and runs through
 `mise run doctor`. It pins `moonbitlang/async@0.21.2` (Apache-2.0) for file/process

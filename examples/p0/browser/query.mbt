@@ -43,9 +43,8 @@ pub fn query_composition_update() -> Int {
     None
   }
   clear_text()
-  match (query_composition.val, text) {
-    (Some(composition), Some(text)) =>
-      stage_preedit(composition, text, query_preview, query_preedit_geometry)
+  match text {
+    Some(text) => input_preedit(true, text)
     _ => 0
   }
 }
@@ -60,10 +59,15 @@ pub fn query_commit(start : Int, end : Int) -> Int {
     None
   }
   clear_text()
+  guard value is Some(value) else { return 0 }
+  input_commit(true, value, start, end)
+}
+
+///|
+fn accept_query(value : String, start : Int, end : Int) -> Int {
   if query_composition.val is Some(_) {
     return 0
   }
-  guard value is Some(value) else { return 0 }
   let model = application.val
   if start > end ||
     @text_position.utf16_to_scalar(value, start) is None ||

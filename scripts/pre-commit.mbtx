@@ -44,9 +44,11 @@ async fn main {
   run("git", ["diff", "--cached", "--check"])
   let moon = ".tools/moonbit/bin/moon.exe"
   run(moon, ["run", "scripts/prepare-wgpu.mbtx"])
+  run(moon, ["run", "scripts/prepare-browser-deps.mbtx"])
   run(moon, ["fmt"])
   run(moon, ["run", "scripts/format-scripts.mbtx"])
   run(moon, ["-C", "experiments/wgpu_binding", "fmt"])
+  run(moon, ["-C", "browser_host", "fmt", "app"])
   expect_clean(
     ["diff", "--exit-code"],
     "formatting changed files; review and stage explicitly",

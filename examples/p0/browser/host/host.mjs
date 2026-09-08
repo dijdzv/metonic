@@ -11,24 +11,6 @@ let cssW = 0, cssH = 0, backingW = 0, backingH = 0, submitted = 0, transferred =
 const textInput = $('text-input');
 const DEFAULT_TEXT = textInput.value;
 let textRenderer;
-let composing = false;
-let queryComposing = false;
-function onCompositionStart() {
-  if (disposed) return;
-  syncEditor();
-  composing = Number(app.editor_composition_start()) === 1;
-}
-function onCompositionUpdate(event) {
-  if (disposed || !composing) return;
-  sendEditorText(event.data);
-  if (Number(app.editor_composition_update()) === 1) renderEditor();
-}
-function onCompositionEnd() {
-  if (disposed || !composing) return;
-  composing = false;
-  app.editor_composition_end();
-  onTextInput();
-}
 const taskButtons = [$('task-start'), $('task-cancel'), $('rpc-load')];
 let rpcController;
 function rpcOutput(kind) {
@@ -43,16 +25,8 @@ function renderRpc() {
   renderEditor();
   updateTaskDiagnostics();
 }
-function sendEditorText(value) {
-  if (Number(app.text_begin(value.length)) !== 1) throw new Error('Editor input limit');
-  for (let i = 0; i < value.length; i += 1) if (Number(app.text_put(value.charCodeAt(i))) !== 1) throw new Error('Editor input rejected');
-}
-function syncEditor() {
-  sendEditorText(textInput.value);
-  if (Number(app.editor_commit(textInput.selectionStart, textInput.selectionEnd)) !== 1) throw new Error('Editor selection rejected');
-}
 async function loadUser() {
-  if (disposed || !app || composing || queryComposing) return;
+  if (disposed || !app || app.inputs_composing() !== 0) return;
   app.view_focus(1);
   renderEditor();
   rpcInput(new TextEncoder().encode($('rpc-user').value));
@@ -256,13 +230,12 @@ function onKey(event) {
 function onReset() {
   if (disposed || !app) return;
   resetTasks();
+  app.inputs_stop();
   app.init();
   $('rpc-result').textContent = '';
   textInput.value = DEFAULT_TEXT;
   $('rpc-user').value = '1';
-  composing = false;
-  syncEditor();
-  queryComposing = false;
+  app.inputs_start();
   textRenderer?.rasterText(cssW);
   updateTaskDiagnostics();
   resize(true);
@@ -281,43 +254,14 @@ function placeView() {
   }
   $('rpc-load').textContent = String.fromCharCode(...Array.from({ length: Number(app.view_field(1, 4)) }, (_, i) => Number(app.view_label_unit(i))));
 }
-function onEditorFocus() { if (!disposed && app) { app.view_focus(0); renderEditor(); } }
-function onQueryInput(event) {
-  if (disposed || !app) return;
-  if (queryComposing) { syncCompositionCursor($('rpc-user'), true); return; }
-  if (event?.isComposing) return;
-  const input = $('rpc-user');
-  sendEditorText(input.value);
-  if (Number(app.query_commit(input.selectionStart, input.selectionEnd)) !== 1) throw new Error('Query input rejected');
-  renderEditor();
-}
-function onQueryFocus() { if (!disposed && app) { app.view_focus(6); onQueryInput(); } }
-function onQueryCompositionStart() {
-  if (disposed || !app) return;
-  onQueryInput();
-  queryComposing = Number(app.query_composition_start()) === 1;
-}
-function onQueryCompositionUpdate(event) {
-  if (disposed || !queryComposing) return;
-  sendEditorText(event.data);
-  if (Number(app.query_composition_update()) === 1) renderEditor();
-}
-function onQueryCompositionEnd() {
-  if (disposed || !queryComposing) return;
-  queryComposing = false;
-  app.query_composition_end();
-  onQueryInput();
-}
 function onRequestFocus() { if (!disposed && app) { app.view_focus(1); renderEditor(); } }
 function onStartFocus() { if (!disposed && app) { app.view_focus(3); renderEditor(); } }
 function onCancelFocus() { if (!disposed && app) { app.view_focus(4); renderEditor(); } }
 function onSceneFocus() { if (!disposed && app) { app.view_focus(2); renderEditor(); } }
-function onTextInput(event) {
-  if (disposed || !textRenderer) return;
-  if (composing) { syncCompositionCursor(textInput, false); return; }
-  if (event?.isComposing) return;
-  try { syncEditor(); renderEditor(); }
-  catch (error) { stop(error?.message || String(error), true); }
+function onInputChanged() {
+  if (disposed || !app) return;
+  if (app.inputs_error() !== 0) { stop('Text input rejected', true); return; }
+  renderEditor();
 }
 function renderEditor() {
   if (disposed || !textRenderer) return;
@@ -331,42 +275,23 @@ function renderEditor() {
     stop(error?.message || String(error), true);
   }
 }
-function syncCompositionCursor(input, query) {
-  sendEditorText(input.value);
-  const cursor = input.selectionDirection === 'backward' ? input.selectionStart : input.selectionEnd;
-  if (Number(app.composition_cursor(query, cursor)) === 1) renderEditor();
-}
 function stop(reason = 'Stopped.', error = false) {
   if (disposed) return;
   disposed = true;
+  document.removeEventListener('metonic-input', onInputChanged);
+  app?.inputs_stop?.();
   rpcController?.abort();
   rpcController = undefined;
   $('rpc-load').removeEventListener('click', loadUser);
   $('rpc-load').removeEventListener('focus', onRequestFocus);
   $('task-start').removeEventListener('focus', onStartFocus);
   $('task-cancel').removeEventListener('focus', onCancelFocus);
-  textInput.removeEventListener('focus', onEditorFocus);
-  $('rpc-user').removeEventListener('focus', onQueryFocus);
-  $('rpc-user').removeEventListener('input', onQueryInput);
-  $('rpc-user').removeEventListener('select', onQueryInput);
-  $('rpc-user').removeEventListener('selectionchange', onQueryInput);
-  $('rpc-user').removeEventListener('compositionstart', onQueryCompositionStart);
-  $('rpc-user').removeEventListener('compositionupdate', onQueryCompositionUpdate);
-  $('rpc-user').removeEventListener('compositionend', onQueryCompositionEnd);
-  app?.query_composition_end?.();
-  queryComposing = false;
   canvas.removeEventListener('focus', onSceneFocus);
   $('rpc-user').disabled = true;
   textRenderer?.dispose();
   textRenderer = undefined;
   try { app?.text_dispose?.(); } catch {}
   textInput.disabled = true;
-  textInput.removeEventListener('input', onTextInput);
-  textInput.removeEventListener('select', onTextInput);
-  textInput.removeEventListener('selectionchange', onTextInput);
-  textInput.removeEventListener('compositionstart', onCompositionStart);
-  textInput.removeEventListener('compositionupdate', onCompositionUpdate);
-  textInput.removeEventListener('compositionend', onCompositionEnd);
   try { app?.editor_dispose?.(); } catch {}
   for (const timer of taskTimers.values()) clearTimeout(timer);
   taskTimers.clear();
@@ -455,35 +380,23 @@ struct U { rect: vec4f, viewport: vec2f, enabled: f32, pad: f32 };
   textRenderer = await createTextRenderer({ app, device, format, disposed: () => disposed });
   if (disposed) return;
   environment.loaded(loaded, adapter);
-  syncEditor();
+  app.inputs_start();
+  if (app.inputs_error() !== 0) throw new Error('Initial text input rejected');
   resize(true);
   if (disposed) return;
+  document.addEventListener('metonic-input', onInputChanged);
   observer = new ResizeObserver(onResize);
   observer.observe(canvas);
   window.addEventListener('resize', onResize);
   canvas.addEventListener('pointerdown', onPointer);
   canvas.addEventListener('keydown', onKey);
   $('reset').addEventListener('click', onReset);
-  textInput.addEventListener('input', onTextInput);
-  textInput.addEventListener('select', onTextInput);
-  textInput.addEventListener('selectionchange', onTextInput);
-  textInput.addEventListener('compositionstart', onCompositionStart);
-  textInput.addEventListener('compositionupdate', onCompositionUpdate);
-  textInput.addEventListener('compositionend', onCompositionEnd);
   textInput.disabled = false;
   $('task-start').addEventListener('click', onTaskStart);
   $('rpc-load').addEventListener('click', loadUser);
   $('rpc-load').addEventListener('focus', onRequestFocus);
   $('task-start').addEventListener('focus', onStartFocus);
   $('task-cancel').addEventListener('focus', onCancelFocus);
-  textInput.addEventListener('focus', onEditorFocus);
-  $('rpc-user').addEventListener('focus', onQueryFocus);
-  $('rpc-user').addEventListener('input', onQueryInput);
-  $('rpc-user').addEventListener('select', onQueryInput);
-  $('rpc-user').addEventListener('selectionchange', onQueryInput);
-  $('rpc-user').addEventListener('compositionstart', onQueryCompositionStart);
-  $('rpc-user').addEventListener('compositionupdate', onQueryCompositionUpdate);
-  $('rpc-user').addEventListener('compositionend', onQueryCompositionEnd);
   canvas.addEventListener('focus', onSceneFocus);
   $('rpc-user').disabled = false;
   $('task-cancel').addEventListener('click', onTaskCancel);
