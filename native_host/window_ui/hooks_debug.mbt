@@ -13,6 +13,47 @@ priv struct Diagnostics {
   mut input : InputObservation
   mut frames : Int
   mut rejected_updates : Int
+  mut ime_events : Array[Json]
+  mut ime_sequence : Int64
+  mut ime_dropped : Int64
+}
+
+///|
+extern "C" fn native_ime_trace_get(
+  hwnd : UInt64,
+  row : Int,
+  column : Int,
+) -> Int64 = "mbw_ime_trace_get"
+
+///|
+extern "C" fn native_tick_count() -> UInt64 = "GetTickCount64"
+
+///|
+fn App::raw_ime_events(self : App) -> Array[Json] {
+  if self.window is None {
+    return []
+  }
+  let total = native_ime_trace_get(self.hwnd, -1, 0)
+  let result : Array[Json] = []
+  for row = 0; row < total.min(128L).to_int(); row = row + 1 {
+    result.push({
+      "sequence": native_ime_trace_get(self.hwnd, row, 0),
+      "tick_ms": native_ime_trace_get(self.hwnd, row, 1),
+      "message": native_ime_trace_get(self.hwnd, row, 2),
+      "flags": native_ime_trace_get(self.hwnd, row, 3),
+      "cursor_queried": native_ime_trace_get(self.hwnd, row, 4) == 1L,
+      "cursor_result": native_ime_trace_get(self.hwnd, row, 5),
+    })
+  }
+  result
+}
+
+///|
+fn App::raw_ime_dropped(self : App) -> Int64 {
+  if self.window is None {
+    return 0L
+  }
+  (native_ime_trace_get(self.hwnd, -1, 0) - 128L).max(0L)
 }
 
 ///|
@@ -20,6 +61,9 @@ fn Diagnostics::new() -> Diagnostics {
   {
     frames: 0,
     rejected_updates: 0,
+    ime_events: [],
+    ime_sequence: 0L,
+    ime_dropped: 0L,
     input: {
       key_presses: 0,
       pointer_presses: 0,
@@ -78,6 +122,55 @@ fn Diagnostics::observe_input(
 ///|
 fn Diagnostics::presented(self : Diagnostics) -> Unit {
   self.frames += 1
+}
+
+///|
+fn Hooks::processed(_self : Hooks, event : Event, app : App) -> Unit {
+  let (kind, supplied, length) : (String, Int?, Int) = match event {
+    CompositionStart => ("start", None, 0)
+    CompositionUpdate(value, cursor) => ("update", cursor, value.length())
+    CompositionCancel => ("cancel", None, 0)
+    Commit(value) => ("commit", None, value.length())
+    _ => return
+  }
+  let diagnostics = app.diagnostics
+  diagnostics.ime_sequence += 1L
+  if diagnostics.ime_events.length() == 128 {
+    let retained : Array[Json] = []
+    for i = 1; i < diagnostics.ime_events.length(); i = i + 1 {
+      retained.push(diagnostics.ime_events[i])
+    }
+    diagnostics.ime_events = retained
+    diagnostics.ime_dropped += 1L
+  }
+  let node = app.input_node()
+  let applied : Int? = if app.composition is Some(_) {
+    Some(app.preedit_cursor)
+  } else {
+    None
+  }
+  diagnostics.ime_events.push({
+    "sequence": diagnostics.ime_sequence,
+    "tick_ms": native_tick_count(),
+    "kind": kind,
+    "field": if app.model.request_focused() {
+      "query"
+    } else {
+      "editor"
+    },
+    "utf16_length": length,
+    "supplied_cursor": match supplied {
+      Some(value) => value.to_json()
+      None => Json::null()
+    },
+    "applied_cursor": match applied {
+      Some(value) => value.to_json()
+      None => Json::null()
+    },
+    "selection_start": node.selection_start,
+    "selection_end": node.selection_end,
+    "composing": app.composition is Some(_),
+  })
 }
 
 ///|

@@ -1,6 +1,7 @@
 import {
   "moonbitlang/async@0.21.2",
   "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/core/encoding/utf8",
 }
 
 ///|
@@ -12,9 +13,16 @@ async fn main {
   let development = @fs.read_file(
     root + "debug/build/local/native_host/window_dev/window_dev.c",
   ).text()
+  let ime_probe = @fs.read_file(
+    root + "debug/build/local/native_host/window_probe/window_probe.c",
+  ).text()
+  assert_true(ime_probe.contains("mbw_ime_trace_probe_cursor"))
+  assert_false(development.contains("mbw_ime_trace_probe_cursor"))
+  assert_false(production.contains("mbw_ime_trace_probe_cursor"))
   for
     marker in [
-      "App_3a_3ahandle", "capture__frame", "Captured", "InputObservation",
+      "App_3a_3ahandle", "capture__frame", "Captured", "InputObservation", "ime__events",
+      "ime__dropped", "mbw_ime_trace_get",
     ] {
     guard development.contains(marker) else {
       abort("development positive control missing: " + marker)
@@ -58,5 +66,16 @@ async fn main {
       abort("production links development package: " + dependency)
     }
   }
-  println("WINDOW_PRODUCTION_EXCLUSION_OK generated_c_and_link_inputs")
+  for profile in ["debug", "release"] {
+    let object = @utf8.decode_lossy(
+      @fs.read_file(
+        root + profile + "/build/wzzc-dev/window/windows/native_window.obj",
+      ).binary(),
+    )
+    assert_eq(object.contains("mbw_ime_trace_get"), profile == "debug")
+    assert_false(object.contains("mbw_ime_trace_probe_cursor"))
+  }
+  println(
+    "WINDOW_PRODUCTION_EXCLUSION_OK generated_c_link_inputs_and_ime_object",
+  )
 }

@@ -1,0 +1,93 @@
+diff --git a/modules/window/windows/native_window.c b/modules/window/windows/native_window.c
+index 9f1c689..7b9e483 100644
+--- a/modules/window/windows/native_window.c
++++ b/modules/window/windows/native_window.c
+@@ -96,6 +96,10 @@ typedef struct {
+   HCURSOR cursor;
+   CANDIDATEFORM ime_area;
+   BOOL has_ime_area;
++#ifdef METONIC_IME_TRACE
++  int64_t ime_trace_seq;
++  int64_t ime_trace[128][6];
++#endif
+ } MBWWindowState;
+ 
+ static HCURSOR mbw_default_cursor(void) {
+@@ -167,6 +171,48 @@ int32_t mbw_set_ime_cursor_area(uint64_t raw_hwnd, int32_t x, int32_t y,
+   return mbw_apply_ime_area(hwnd, state);
+ }
+ 
++#ifdef METONIC_IME_TRACE
++static void mbw_ime_trace_begin(MBWWindowState *state, UINT message, LPARAM flags) {
++  if (!state) return;
++  int64_t sequence = ++state->ime_trace_seq;
++  int64_t *entry = state->ime_trace[(sequence - 1) % 128];
++  entry[0] = sequence;
++  entry[1] = (int64_t)GetTickCount64();
++  entry[2] = message;
++  entry[3] = (int64_t)flags;
++  entry[4] = 0;
++  entry[5] = 0;
++}
++static void mbw_ime_trace_cursor(HWND hwnd, LONG cursor) {
++  MBWWindowState *state = mbw_window_state(hwnd);
++  if (!state || state->ime_trace_seq == 0) return;
++  int64_t *entry = state->ime_trace[(state->ime_trace_seq - 1) % 128];
++  entry[4] = 1;
++  entry[5] = cursor;
++}
++int64_t mbw_ime_trace_get(uint64_t raw_hwnd, int32_t row, int32_t column) {
++  MBWWindowState *state = mbw_window_state((HWND)(uintptr_t)raw_hwnd);
++  if (!state) return 0;
++  if (row == -1) return state->ime_trace_seq;
++  int64_t length = state->ime_trace_seq < 128 ? state->ime_trace_seq : 128;
++  if (row < 0 || row >= length || column < 0 || column >= 6) return 0;
++  return state->ime_trace[(state->ime_trace_seq - length + row) % 128][column];
++}
++#ifdef METONIC_IME_TRACE_TEST
++int32_t mbw_ime_trace_probe_cursor(uint64_t raw_hwnd, int32_t cursor) {
++  HWND hwnd = (HWND)(uintptr_t)raw_hwnd;
++  MBWWindowState *state = mbw_window_state(hwnd);
++  if (!state) return 0;
++  mbw_ime_trace_begin(state, WM_IME_COMPOSITION, GCS_CURSORPOS);
++  mbw_ime_trace_cursor(hwnd, (LONG)cursor);
++  return 1;
++}
++#endif
++#else
++#define mbw_ime_trace_begin(state, message, flags) ((void)0)
++#define mbw_ime_trace_cursor(hwnd, cursor) ((void)0)
++#endif
++
+ static char *mbw_wide_to_utf8_alloc(const wchar_t *wide, int32_t wide_len,
+                                     int32_t *out_len) {
+   *out_len = 0;
+@@ -205,6 +241,7 @@ static char *mbw_copy_ime_string_utf8(HWND hwnd, DWORD kind, int32_t *out_len, i
+   LONG byte_len = g_imm_get_composition_string(himc, kind, NULL, 0);
+   if (kind == GCS_COMPSTR) {
+     LONG cursor = g_imm_get_composition_string(himc, GCS_CURSORPOS, NULL, 0);
++    mbw_ime_trace_cursor(hwnd, cursor);
+     if (cursor >= 0) *out_cursor = cursor;
+   }
+   if (byte_len <= 0) {
+@@ -499,11 +536,13 @@ static LRESULT CALLBACK mbw_wnd_proc(HWND hwnd, UINT msg, WPARAM wparam,
+       return 0;
+ 
+     case WM_IME_STARTCOMPOSITION:
++      mbw_ime_trace_begin(state, msg, lparam);
+       mbw_apply_ime_area(hwnd, state);
+       g_input_event_trampoline(g_input_event_closure, state->raw_id, 35, 0, 0);
+       return 0;
+ 
+     case WM_IME_COMPOSITION:
++      mbw_ime_trace_begin(state, msg, lparam);
+       if ((lparam & GCS_RESULTSTR) != 0) {
+         mbw_queue_ime_text(hwnd, state, 37, GCS_RESULTSTR);
+       }
+@@ -513,5 +552,6 @@ static LRESULT CALLBACK mbw_wnd_proc(HWND hwnd, UINT msg, WPARAM wparam,
+       return 0;
+ 
+     case WM_IME_ENDCOMPOSITION:
++      mbw_ime_trace_begin(state, msg, lparam);
+       g_input_event_trampoline(g_input_event_closure, state->raw_id, 36, 0, 0);
+       return 0;

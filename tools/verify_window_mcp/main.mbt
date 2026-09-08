@@ -22,6 +22,10 @@ struct Reply {
 
 ///|
 struct State {
+  ime_events : Array[Json]
+  raw_ime_events : Array[Json]
+  raw_ime_dropped : Int64
+  ime_dropped : Int64
   host_input_events : HostInputEvents
   view : Array[ViewNode]
   text : String
@@ -98,6 +102,10 @@ async fn invoke(client : Client, request : Json) -> State {
 pub fn verify(client : Client) -> @js_async.Promise[String] {
   @js_async.Promise::from_async(async fn() {
     let before = invoke(client, { "name": "window_snapshot", "arguments": {} })
+    assert_true(before.ime_events.length() <= 128)
+    assert_true(before.raw_ime_events.length() <= 128)
+    assert_eq(before.ime_dropped, 0L)
+    assert_eq(before.raw_ime_dropped, 0L)
     assert_eq(before.view.length(), 7)
     assert_eq(before.view[6].id, Json::number(6))
     assert_eq(before.view[6].role, "text_input")
@@ -128,6 +136,9 @@ pub fn verify(client : Client) -> @js_async.Promise[String] {
     assert_eq(after.text, before.text + "日本")
     assert_eq(after.semantic_revision, before.semantic_revision + 1)
     assert_eq(after.host_input_events, before.host_input_events)
+    assert_eq(after.ime_events, before.ime_events)
+    assert_eq(after.raw_ime_events, before.raw_ime_events)
+    assert_eq(after.ime_dropped, before.ime_dropped)
     assert_eq(after.session_id, before.session_id)
     let deleted = invoke(client, {
       "name": "window_backspace",

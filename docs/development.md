@@ -177,6 +177,9 @@ failure contract and reproduction commands.
 
 ## Native host workspace
 
+Development input snapshots include bounded [IME diagnostic histories](verification/native-ime-trace.md)
+for comparing original Windows messages with processed cursor decisions.
+
 For the current native build policy, debug hosts include development adapters;
 the ordinary `window_app` release build excludes `handle`, `observation`, and
 development request processing through package file selection. Release uses
