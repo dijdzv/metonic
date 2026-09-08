@@ -127,7 +127,7 @@ proves the mailbox boundary under the fixture's schedule, not actual SDK
 provider destruction or application-state mutation during a physical close.
 The fixture is a separate build target; generated production code and link
 inputs exclude it, with the fixture artifact as a positive control. The task
-is part of pre-commit. Remaining SDK/application interleavings stay in #128.
+is part of pre-commit. The SDK and application checks below cover the subsequent boundaries.
 
 `mise run native:sdk-mailbox` adds a real-SDK control. Its dedicated executable
 creates its own windows and uses the installed AccessKit DLL and UIA Invoke
@@ -147,12 +147,23 @@ Generated-code/link checks exclude this fixture from production with a positive
 control. This establishes a delayed real callback across adapter recreation,
 not application model mutation after close or physical-input acceptance.
 
+The integrated `native:window` probe separately queues a Value change, Close,
+another Value change and an asynchronous result while an update is active. Its
+completion observer verifies that only the pre-close text is applied, the late
+result does not change the scene, and the application queue is closed and empty.
+Normal and error shutdown close the async queue with `clear=true`, releasing
+buffered MoonBit events rather than keeping them until the host is collected.
+`WINDOW_CLOSE_QUEUE_OK before_applied after_discarded closed_empty` reports this
+controlled application schedule. The observation/injection hooks are debug-only;
+this is distinct from the real SDK callback fixture above and is not an exhaustive
+proof of every possible thread schedule.
+
 The six integrated native scenarios also exercise shared input/rendering after
 attachment; a staged-composition check rejects a queued accessibility value
 replacement without changing committed text. This is not a real IME run.
 UIA properties and posted messages do not prove presented GPU pixels, real keyboard or
-pointer delivery, Japanese IME behavior, or screen-reader usability. Forced queue
-overflow, action/close races and adapter recreation need dedicated evidence;
-the current normal-close check does not claim to cover those races. Complex-cluster
+pointer delivery, Japanese IME behavior, or screen-reader usability. The dedicated
+probes above establish their stated overflow, close and recreation schedules;
+ordinary UIA close alone does not establish those properties. Complex-cluster
 geometry, composition-aware focus and assistive-technology testing
 remain required. See [ADR 023](../adr/023-development-automation.md) for selection.

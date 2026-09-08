@@ -1,5 +1,6 @@
 ///|
 pub(all) enum Injected {
+  Close
   CompositionStart
   CompositionUpdate(String, Int?)
   CompositionCancel
@@ -10,6 +11,7 @@ pub(all) enum Injected {
 
 ///|
 pub struct Observation {
+  closed_queue_empty : Bool
   frames : Int
   pending_initialization : Int
   has_renderer : Bool
@@ -34,6 +36,17 @@ pub struct Observation {
 ///|
 fn App::observation(self : App) -> Observation {
   {
+    closed_queue_empty: if self.closed {
+      try {
+        ignore(self.events.try_get())
+        false
+      } catch {
+        @aqueue.QueueAlreadyClosed => true
+        _ => false
+      }
+    } else {
+      false
+    },
     frames: self.diagnostics.frames,
     pending_initialization: self.owner.pending_count(),
     has_renderer: self.renderer is Some(_),
@@ -76,6 +89,7 @@ fn App::observation(self : App) -> Observation {
     inject: action => {
       self.queue(
         match action {
+          Close => Close
           CompositionStart => CompositionStart
           CompositionUpdate(text, cursor) => CompositionUpdate(text, cursor)
           CompositionCancel => CompositionCancel
