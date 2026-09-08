@@ -37,6 +37,15 @@ The initial local run and a repeat with `METONIC_GPU_FALLBACK=1` passed these
 assertions. This records the two requested adapter modes on the current display,
 not coverage of every GPU or display configuration.
 
+The initial 624x96 editor region also compares the shared rasterizer's opaque
+black glyph interiors and white background at exact client coordinates. The
+reference uses the pinned font and the initial Japanese/Latin/digit sample.
+Captured channels must remain within two byte levels of black or white, and
+the reference must contain both ink and background. This checks transfer and
+placement agreement, including unexpected marks in blank space. Antialiased
+edge values are excluded because surface color conversion changes them; the
+check does not independently validate the shaping engine or font design.
+
 PNG artifacts are `.work/presentation-initial.png`,
 `.work/presentation-toggled.png` and `.work/presentation-resized.png`. These include
 window chrome. Inspection of the initial local images showed Japanese/Latin text,
