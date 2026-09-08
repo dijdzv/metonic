@@ -78,10 +78,12 @@ async fn main {
   verify_case(true)
   verify_window_close(false)
   verify_window_close(true)
+  verify_window_close(false, pending=true)
+  verify_window_close(true, pending=true)
 }
 
 ///|
-async fn verify_window_close(fallback : Bool) -> Unit {
+async fn verify_window_close(fallback : Bool, pending? : Bool = false) -> Unit {
   @async.with_timeout(20000, async fn() {
     @async.with_task_group() <| group => {
       let (stdin, writer) = @process.write_to_process()
@@ -105,6 +107,11 @@ async fn verify_window_close(fallback : Bool) -> Unit {
         @json.parse(reader.read_until("\n").unwrap()),
       )
       assert_eq(ready.error, "")
+      if pending {
+        writer.write("{\"id\":2,\"op\":\"capture\"}\n")
+        assert_eq(reader.read_some(max_len=1).unwrap(), b"{")
+        writer.write("{\"id\":3,\"op\":\"insert\",\"text\":\"queued\"}\n")
+      }
       let closer = @process.spawn(
         group,
         ".work/native-host-build/native/debug/build/local/native_host/accessibility_probe/accessibility_probe.exe",
@@ -113,6 +120,16 @@ async fn verify_window_close(fallback : Bool) -> Unit {
       )
       assert_eq(closer.wait(), 0)
       assert_eq(@async.with_timeout(2000, () => ui.wait()), 0)
+      if pending {
+        let tail = reader.read_until("\n").unwrap()
+        let incomplete = try {
+          ignore(@json.parse("{" + tail))
+          false
+        } catch {
+          _ => true
+        }
+        assert_true(incomplete, msg="capture response completed before close")
+      }
       assert_eq(reader.read_until("\n"), None)
       let rejected = try {
         writer.write("{\"id\":2,\"op\":\"insert\",\"text\":\"late\"}\n")
@@ -125,6 +142,11 @@ async fn verify_window_close(fallback : Bool) -> Unit {
         "WINDOW_CONTROL_CLOSE_OK stdin_open late_write_rejected fallback=" +
         fallback.to_string(),
       )
+      if pending {
+        println(
+          "WINDOW_CONTROL_PENDING_CLOSE_OK truncated_response queued_request",
+        )
+      }
     }
   })
 }
