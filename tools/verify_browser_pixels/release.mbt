@@ -4,6 +4,30 @@ async fn release_crop(host : BrowserHost, name : String) -> Json {
 }
 
 ///|
+async fn release_result(host : BrowserHost, name : String) -> Bytes {
+  let image = decode_png(
+    { "png": command(host, { "op": "image", "name": name }) },
+    "png",
+  )
+  require(image.width >= 648 && image.height >= 136, "release result bounds")
+  let pixels = Bytes::makei(640 * 32 * 4, index => {
+    let pixel = index / 4
+    image.data[((pixel / 640 + 104) * image.width + pixel % 640 + 8) * 4 +
+    index % 4]
+  })
+  let mut ink = 0
+  for pixel in 0..<(640 * 32) {
+    if pixels[pixel * 4].to_int() < 128 &&
+      pixels[pixel * 4 + 1].to_int() < 128 &&
+      pixels[pixel * 4 + 2].to_int() < 128 {
+      ink += 1
+    }
+  }
+  require(ink > 20, "release HTTP result has no visible text")
+  pixels
+}
+
+///|
 async fn run_release(host : BrowserHost) -> String {
   ignore(command(host, { "op": "goto" }))
   ignore(
@@ -49,7 +73,45 @@ async fn run_release(host : BrowserHost) -> String {
     text_compare({
       "actual": field(loaded, "data").unwrap(),
       "expected": field(edited, "data").unwrap(),
-      "equal": false,
+      "equal": true,
+    }),
+  )
+  let result_pixels = release_result(host, "result-row")
+  let maximum_text = String::from_array(Array::make(1024, 'A'))
+  ignore(
+    command(host, {
+      "op": "fill",
+      "selector": "#text-input",
+      "value": maximum_text,
+    }),
+  )
+  let maximum_disabled = command(host, {
+    "op": "disabled",
+    "selector": "#text-input",
+  })
+  println(
+    "release maximum-length editor disabled: " + maximum_disabled.stringify(),
+  )
+  require(
+    maximum_disabled == Json::boolean(false),
+    "HTTP result disabled editing of a valid maximum-length value",
+  )
+  require(
+    release_result(host, "long-result-row") == result_pixels,
+    "long editor changed result pixels",
+  )
+  ignore(command(host, { "op": "viewport", "width": 740 }))
+  require(
+    command(host, { "op": "value", "selector": "#text-input" }) ==
+    Json::string(maximum_text),
+    "resize changed maximum-length editor",
+  )
+  ignore(command(host, { "op": "viewport", "width": 1000 }))
+  ignore(
+    command(host, {
+      "op": "fill",
+      "selector": "#text-input",
+      "value": "配布版 ABC 😀",
     }),
   )
   ignore(

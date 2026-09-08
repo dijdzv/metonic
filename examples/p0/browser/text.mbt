@@ -47,6 +47,7 @@ fn clear_text() -> Unit {
 ///|
 #export_name("font_begin")
 pub fn font_begin(length : Int) -> Int {
+  rendered_editor.val = None
   clear_font()
   clear_text()
   bridge.engine = None
@@ -173,6 +174,7 @@ fn decode_text() -> String? {
 ///|
 #export_name("text_commit")
 pub fn text_commit(width : Int) -> Int {
+  rendered_editor.val = None
   if !bridge.text_pending ||
     bridge.text_received != bridge.text_expected ||
     width < 1 ||
@@ -228,6 +230,7 @@ pub fn text_width() -> Int {
 ///|
 #export_name("text_dispose")
 pub fn text_dispose() -> Unit {
+  rendered_editor.val = None
   clear_font()
   clear_text()
   bridge.engine = None
