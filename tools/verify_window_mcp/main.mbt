@@ -3,6 +3,57 @@
 pub type Client
 
 ///|
+#export_name("verify_sdk_cancel")
+pub fn verify_sdk_cancel(
+  client : Client,
+  rejected : Bool,
+  notified : Bool,
+) -> @js_async.Promise[String] {
+  @js_async.Promise::from_async(async fn() {
+    assert_true(rejected)
+    assert_true(notified)
+    for _ in 0..<40 {
+      let request : Json = { "name": "window_snapshot", "arguments": {} }
+      let reply : Reply = @json.from_json(
+        @json.parse(call(client, request.stringify()).wait()),
+      )
+      if reply.isError == Some(true) {
+        assert_true(
+          reply.content[0].text.contains("closed") ||
+          reply.content[0].text.contains("aborted"),
+        )
+        return "WINDOW_MCP_SDK_CANCEL_OK"
+      }
+      sleep(25).wait()
+    }
+    fail("SDK cancellation did not close the attached control session")
+  })
+}
+
+///|
+struct CancellationResult {
+  statuses : Array[String]
+  session : String
+  pending : Int
+  forced_kill : Bool
+  exit_code : Int
+} derive(FromJson)
+
+///|
+#export_name("verify_cancel_result")
+pub fn verify_cancel_result(
+  raw : String,
+  expected_session : String,
+) -> Unit raise {
+  let result : CancellationResult = @json.from_json(@json.parse(raw))
+  assert_eq(result.statuses, ["rejected", "rejected"])
+  assert_eq(result.session, expected_session)
+  assert_eq(result.pending, 0)
+  assert_false(result.forced_kill)
+  assert_eq(result.exit_code, 0)
+}
+
+///|
 #export_name("verify_attachment")
 pub fn verify_attachment(
   client : Client,

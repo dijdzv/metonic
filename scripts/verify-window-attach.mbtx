@@ -175,6 +175,8 @@ async fn main {
         )
         assert_eq(mcp_code, 0, msg=mcp_error.text())
         assert_true(mcp_output.text().contains("WINDOW_MCP_ATTACH_OK"))
+        assert_true(mcp_output.text().contains("WINDOW_ATTACH_CANCEL_OK"))
+        assert_true(mcp_output.text().contains("WINDOW_MCP_SDK_CANCEL_OK"))
         assert_true(child.try_wait() is None, msg="MCP closed the app")
         let second = connect(discovery.pipe)
         defer second.close()
