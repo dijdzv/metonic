@@ -1,4 +1,41 @@
 ///|
+test "lookup failure has a readable label while details survive late replies and recovery" {
+  let app = create(1, 1)
+  let previous = app.begin_update()
+  let current = app.begin_update()
+  assert_eq(app.complete_user(current, Err("domain:not_found")), true)
+  assert_eq(app.view().result.text, "Not found")
+  assert_eq(app.result, "\nRPC: domain:not_found")
+  assert_eq(app.complete_user(previous, Ok("Stale")), false)
+  assert_eq(app.view().result.text, "Not found")
+  let recovery = app.begin_update()
+  assert_eq(app.complete_user(recovery, Ok("月兎")), true)
+  assert_eq(app.view().result.text, "月兎")
+  let canceled = app.begin_update()
+  assert_eq(app.cancel_update(), true)
+  assert_eq(app.complete_user(canceled, Err("timeout")), false)
+  assert_eq(app.view().result.text, "月兎")
+}
+
+///|
+test "request failures remain distinguishable in the compact result label" {
+  let app = create(1, 1)
+  for
+    entry in [
+      ("timeout", "Timed out"),
+      ("response_too_large", "Too large"),
+      ("transport_error", "Unavailable"),
+      ("remote:invalid_input", "Invalid ID"),
+      ("protocol:bad_envelope", "Failed"),
+    ] {
+    let (error, label) = entry
+    assert_eq(app.complete_user(app.begin_update(), Err(error)), true)
+    assert_eq(app.view().result.text, label)
+    assert_eq(app.result, "\nRPC: " + error)
+  }
+}
+
+///|
 test "request focus preserves edited content and shares resized hit bounds" {
   let app = create(1, 1)
   let input = @semantics.snapshot(app.editor)[1].reference

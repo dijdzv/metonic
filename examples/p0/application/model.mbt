@@ -8,6 +8,7 @@ pub struct Model {
   query_input : @semantics.NodeRef
   tasks : @task_scope.Scope
   mut result : String
+  mut result_label : String
   mut result_utf8 : Bytes
 }
 
@@ -27,6 +28,7 @@ pub fn create(session : Int, window : Int) -> Model {
     query_input,
     tasks: @task_scope.create(),
     result: "",
+    result_label: "",
     result_utf8: b"",
   }
 }
@@ -82,6 +84,15 @@ pub fn Model::complete_user(
     }
   }
   self.result = text
+  self.result_label = match response {
+    Ok(name) => name
+    Err("domain:not_found") => "Not found"
+    Err("timeout") => "Timed out"
+    Err("response_too_large") => "Too large"
+    Err("transport_error") => "Unavailable"
+    Err("remote:invalid_input") => "Invalid ID"
+    Err(_) => "Failed"
+  }
   self.result_utf8 = @utf8.encode(text)
   true
 }

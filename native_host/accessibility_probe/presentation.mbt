@@ -28,6 +28,8 @@ async fn capture_presentation(
   phase : String,
   editor_text? : String? = None,
   caret? : Int? = None,
+  query_text? : String? = None,
+  result_text? : String? = None,
 ) -> Unit {
   if @env.get_env_var("METONIC_PRESENTATION_CAPTURE") != Some("1") {
     return
@@ -160,6 +162,53 @@ async fn capture_presentation(
       assert_true(black > 100)
     }
     stage("editor glyph interiors, caret and background match raster " + phase)
+  }
+  let client = FixedArray::make(4, 0)
+  assert_true(client_rect(hwnd, client) != 0)
+  let editor_width = (client[2] - 16).max(1).min(640)
+  for region in [
+    ("query", query_text, 232, 106, (editor_width - 232).max(1), 28),
+    ("result", result_text, 8, 104, editor_width.min(176), 32),
+  ] {
+    let (name, text, x, y, width, height) = region
+    if text is Some(text) {
+      let engine = @raster.create(
+        @fs.read_file(".work/text-assets/NotoSansJP.ttf").binary(),
+      ).unwrap()
+      let expected = @raster.render(engine, text, width, 32)
+      let x0 = origin[0] - frame[0] + x
+      let y0 = origin[1] - frame[1] + y
+      assert_true(x0 >= 0 && y0 >= 0 && x0 + width <= image.width &&
+        y0 + height <= image.height)
+      let mut ink = 0
+      let mut background = 0
+      // Query borders clip the final four raster rows; compare only its interior.
+      // Surface color conversion prevents exact antialiased-edge comparisons.
+      for row in 0..<height {
+        for column in 0..<width {
+          let source = (row * width + column) * 4
+          let target = ((y0 + row) * image.width + x0 + column) * 4
+          let black = expected[source] == b'\x00' &&
+            expected[source + 1] == b'\x00' && expected[source + 2] == b'\x00'
+          let white = expected[source] == b'\xFF' &&
+            expected[source + 1] == b'\xFF' && expected[source + 2] == b'\xFF'
+          if black || white {
+            if black { ink += 1 } else { background += 1 }
+            for channel in 0..<3 {
+              assert_true(
+                if black { image.data[target + channel] <= b'\x02' }
+                else { image.data[target + channel] >= b'\xFD' },
+                msg=name + " presented pixels differ at " + column.to_string() +
+                  "," + row.to_string() + " during " + phase,
+              )
+            }
+          }
+        }
+      }
+      assert_true(background > width * height / 3)
+      if text != "" { assert_true(ink > 0) }
+      stage(name + " glyph interiors and background match raster " + phase)
+    }
   }
   if phase == "long-editor" || phase == "result" {
     let mut status_ink = 0

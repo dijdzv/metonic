@@ -513,6 +513,8 @@ async fn main {
       "resized",
       editor_text=Some("再入力 🚀Q"),
       caret=Some("再入力 🚀Q".length()),
+      query_text=Some("1"),
+      result_text=Some("月兎"),
     )
     verify_task_controls(hwnd, root[0], editor, expected_text="再入力 🚀Q")
     guard text_is(result_node, 30005, "月兎") else {

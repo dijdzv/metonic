@@ -62,6 +62,16 @@ shaping correctness or physical input. Additional captures are
 `.work/presentation-edited-editor.png` and `.work/presentation-empty-editor.png`;
 the existing `resized` capture checks the post-resize edit.
 
+The lookup-row check compares cleared/retyped User ID text, success, domain
+failure and recovery in the same production session, then repeats query/result
+comparison after resize. It checks opaque text/background against the rasterizer
+within the query's clipped interior and the result row. Detailed error strings
+previously wrapped out of the single-line result viewport, leaving only `RPC:`
+visible. Both hosts now render compact shared error labels, including `Not found`,
+while retaining full error details in semantic/diagnostic output. An intentionally
+incorrect query expectation was rejected by the pixel comparison. These checks
+do not establish real keyboard input or independent shaping correctness.
+
 PNG artifacts are `.work/presentation-initial.png`,
 `.work/presentation-toggled.png` and `.work/presentation-resized.png`. These include
 window chrome. Inspection of the initial local images showed Japanese/Latin text,

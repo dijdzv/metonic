@@ -61,6 +61,7 @@ async fn verify_rpc(
   expected : String,
   status : Int,
   text : String,
+  label? : String = expected.trim().to_owned(),
 ) -> Unit {
   ignore(
     invoke(client, {
@@ -76,7 +77,7 @@ async fn verify_rpc(
       assert_eq(state.rpc_result, expected)
       assert_eq(state.text, text)
       assert_eq(state.view[0].text, text)
-      assert_eq(state.view[2].text, expected.trim().to_owned())
+      assert_eq(state.view[2].text, label)
       return
     }
   }
@@ -189,7 +190,14 @@ pub fn verify(client : Client) -> @js_async.Promise[String] {
     }
     assert_true(dark > 100)
     verify_rpc(client, "1", "\n月兎", 2, deleted.text)
-    verify_rpc(client, "missing", "\nRPC: domain:not_found", 3, deleted.text)
+    verify_rpc(
+      client,
+      "missing",
+      "\nRPC: domain:not_found",
+      3,
+      deleted.text,
+      label="Not found",
+    )
     let selected = invoke(client, {
       "name": "window_select",
       "arguments": {
