@@ -16,6 +16,7 @@ let rendered_editor : Ref[
     Bool,
     (Int, Int),
     Int?,
+    Int?,
   )?,
 ] = Ref(None)
 
@@ -36,12 +37,21 @@ pub fn editor_render(viewport_width : Int) -> Int {
       @scene.field(application.val.scene, 7),
     ),
   )
-  let view = application.val.view(
-    query_preview=query_preview.val.unwrap_or(application.val.query()),
-  )
+  let view = match (query_preview.val, query_preedit_geometry.val) {
+    (Some(text), Some(geometry)) =>
+      application.val.view(query_preview=text, query_preedit=geometry)
+    _ => application.val.view()
+  }
   let text = editor_display()
-  let start = editor_field(1)
-  let end = editor_field(2)
+  let (start, end, cursor) = editor_preedit_geometry.val.unwrap_or(
+    (editor_field(1), editor_field(2), editor_field(2)),
+  )
+  let caret = if view.editor.focused &&
+    (editor_preedit_geometry.val is Some(_) || start == end) {
+    Some(cursor)
+  } else {
+    None
+  }
   let key = (
     text,
     application.val.result_utf8,
@@ -58,6 +68,7 @@ pub fn editor_render(viewport_width : Int) -> Int {
     view.query.focused,
     view.query_selection,
     view.query_caret,
+    caret,
   )
   if rendered_editor.val == Some(key) {
     return 2
@@ -67,7 +78,7 @@ pub fn editor_render(viewport_width : Int) -> Int {
     view,
     text,
     selection=(start, end),
-    caret=if view.editor.focused && start == end { Some(end) } else { None },
+    caret~,
   )
   view_layers.val = layers
   let editor = layers[0].pixels

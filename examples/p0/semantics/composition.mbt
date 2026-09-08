@@ -54,6 +54,20 @@ pub fn Composition::commit(self : Composition, text : String) -> String {
 }
 
 ///|
+pub fn Composition::presentation(
+  self : Composition,
+  preedit : String,
+  cursor : Int,
+) -> (String, Int, Int, Int)? {
+  guard @text_position.utf16_to_scalar(preedit, cursor) is Some(_) else {
+    return None
+  }
+  guard self.preview(preedit) is Some(text) else { return None }
+  let start = self.node.selection_start
+  Some((text, start, start + preedit.length(), start + cursor))
+}
+
+///|
 pub fn Composition::cancel(self : Composition) -> Unit {
   self.active = false
 }

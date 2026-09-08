@@ -5,6 +5,9 @@ let query_composition : Ref[@semantics.Composition?] = Ref(None)
 let query_preview : Ref[String?] = Ref(None)
 
 ///|
+let query_preedit_geometry : Ref[(Int, Int, Int)?] = Ref(None)
+
+///|
 #export_name("query_composition_end")
 pub fn query_composition_end() -> Unit {
   if query_composition.val is Some(value) {
@@ -12,6 +15,7 @@ pub fn query_composition_end() -> Unit {
   }
   query_composition.val = None
   query_preview.val = None
+  query_preedit_geometry.val = None
 }
 
 ///|
@@ -40,14 +44,8 @@ pub fn query_composition_update() -> Int {
   }
   clear_text()
   match (query_composition.val, text) {
-    (Some(composition), Some(text)) => {
-      query_preview.val = composition.preview(text)
-      if query_preview.val is Some(_) {
-        1
-      } else {
-        0
-      }
-    }
+    (Some(composition), Some(text)) =>
+      stage_preedit(composition, text, query_preview, query_preedit_geometry)
     _ => 0
   }
 }

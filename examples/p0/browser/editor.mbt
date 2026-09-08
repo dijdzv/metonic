@@ -5,6 +5,9 @@ let editor_composition : Ref[@semantics.Composition?] = Ref(None)
 let editor_preview : Ref[String?] = Ref(None)
 
 ///|
+let editor_preedit_geometry : Ref[(Int, Int, Int)?] = Ref(None)
+
+///|
 #export_name("editor_composition_end")
 pub fn editor_composition_end() -> Unit {
   if editor_composition.val is Some(value) {
@@ -12,6 +15,7 @@ pub fn editor_composition_end() -> Unit {
   }
   editor_composition.val = None
   editor_preview.val = None
+  editor_preedit_geometry.val = None
 }
 
 ///|
@@ -37,14 +41,8 @@ pub fn editor_composition_update() -> Int {
   }
   clear_text()
   match (editor_composition.val, text) {
-    (Some(composition), Some(text)) => {
-      editor_preview.val = composition.preview(text)
-      if editor_preview.val is Some(_) {
-        1
-      } else {
-        0
-      }
-    }
+    (Some(composition), Some(text)) =>
+      stage_preedit(composition, text, editor_preview, editor_preedit_geometry)
     _ => 0
   }
 }

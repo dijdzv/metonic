@@ -109,6 +109,7 @@ async fn run_release(host : BrowserHost) -> String {
   verify_query_composition(host)
   verify_query_pointer(host)
   verify_navigation(host)
+  verify_composition_presentation(host)
   ignore(
     command(host, {
       "op": "fill",

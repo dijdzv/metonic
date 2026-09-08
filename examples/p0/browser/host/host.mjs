@@ -283,7 +283,9 @@ function placeView() {
 }
 function onEditorFocus() { if (!disposed && app) { app.view_focus(0); renderEditor(); } }
 function onQueryInput(event) {
-  if (disposed || !app || queryComposing || event?.isComposing) return;
+  if (disposed || !app) return;
+  if (queryComposing) { syncCompositionCursor($('rpc-user'), true); return; }
+  if (event?.isComposing) return;
   const input = $('rpc-user');
   sendEditorText(input.value);
   if (Number(app.query_commit(input.selectionStart, input.selectionEnd)) !== 1) throw new Error('Query input rejected');
@@ -311,7 +313,9 @@ function onStartFocus() { if (!disposed && app) { app.view_focus(3); renderEdito
 function onCancelFocus() { if (!disposed && app) { app.view_focus(4); renderEditor(); } }
 function onSceneFocus() { if (!disposed && app) { app.view_focus(2); renderEditor(); } }
 function onTextInput(event) {
-  if (disposed || !textRenderer || composing || event?.isComposing) return;
+  if (disposed || !textRenderer) return;
+  if (composing) { syncCompositionCursor(textInput, false); return; }
+  if (event?.isComposing) return;
   try { syncEditor(); renderEditor(); }
   catch (error) { stop(error?.message || String(error), true); }
 }
@@ -326,6 +330,11 @@ function renderEditor() {
   } catch (error) {
     stop(error?.message || String(error), true);
   }
+}
+function syncCompositionCursor(input, query) {
+  sendEditorText(input.value);
+  const cursor = input.selectionDirection === 'backward' ? input.selectionStart : input.selectionEnd;
+  if (Number(app.composition_cursor(query, cursor)) === 1) renderEditor();
 }
 function stop(reason = 'Stopped.', error = false) {
   if (disposed) return;
