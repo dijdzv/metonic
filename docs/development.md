@@ -75,11 +75,11 @@ HTTP endpoint. Closing native stops the owned server. Follow the
 current interaction differences. `demo:test` verifies launcher process ownership
 and failure handling and is included in pre-commit.
 
-The native window uses F7 to fetch user `1` through the standard HTTP/JSON
+Both hosts provide a GPU-rendered Load user button to fetch user `1` through the standard HTTP/JSON
 adapter. Set `METONIC_RPC_BASE` to the server origin (default
 `http://127.0.0.1:4174`). The response or error appears below the editor without
 replacing its text. Requests share the existing replace/cancel task scope;
-F6 cancels the active task.
+F7 remains a native shortcut; F6 cancels the active task.
 
 The development protocol accepts `load_user` with an optional `user_id`.
 MCP exposes the same action as `window_load_user`; `window_snapshot` includes

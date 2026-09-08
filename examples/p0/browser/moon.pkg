@@ -1,4 +1,5 @@
 import {
+  "local/p0/examples/p0/view_renderer",
   "local/p0/examples/p0/application",
   "local/p0/examples/p0/semantics",
   "local/p0/examples/p0/text_position",

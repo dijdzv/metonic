@@ -53,6 +53,7 @@ struct App {
   mut shift_pressed : Bool
   mut raster : @raster.Engine?
   mut rendered_text : String?
+  mut rendered_request_focus : Bool
   mut rendered_result : String
   mut rendered_selection : (Int, Int)
   mut rendered_caret : Int?
@@ -97,6 +98,7 @@ pub impl @windows.ApplicationHandler for App with fn can_create_surfaces(
   self.accessibility = @accessibility.open(
     self.hwnd,
     @semantics.snapshot(self.model.editor),
+    self.model.view(),
   )
   if self.accessibility is None {
     self.error = Some(WindowFailure::Failure("accessibility attachment failed"))
@@ -225,47 +227,31 @@ fn App::draw(self : App) -> Unit raise Error {
       } else {
         None
       }
-      let width = (@scene.field(self.model.scene, 6) - 16).max(1).min(640)
+      let view = self.model.view()
+      let width = view.editor.bounds.width
       if self.rendered_text != Some(text) ||
         self.rendered_result != self.model.result ||
+        self.rendered_request_focus != view.request.focused ||
         self.text_width != width ||
         self.rendered_selection != selection ||
         self.rendered_caret != visible_caret {
-        // Rendering the result last would replace the editor layout used by IME and hit testing.
-        let status = if self.model.result == "" {
-          b""
-        } else {
-          @raster.render(
-            self.raster.unwrap(),
-            self.model.result.trim().to_owned(),
-            width,
-            32,
-          )
-        }
-        let editor_pixels = @raster.render(
+        let layers = @view_renderer.render(
           self.raster.unwrap(),
+          view,
           text,
-          width,
-          96,
           selection~,
           caret=visible_caret,
         )
-        let pixels = Bytes::makei(editor_pixels.length() + status.length(), index => {
-          if index < editor_pixels.length() {
-            editor_pixels[index]
-          } else {
-            status[index - editor_pixels.length()]
-          }
-        })
-        renderer.set_text_pixels(
-          width,
-          if status.length() == 0 {
-            96
-          } else {
-            128
-          },
-          pixels,
+        renderer.set_text_layers(
+          layers.map(layer => @gpu.TextLayer::{
+            x: layer.bounds.x,
+            y: layer.bounds.y,
+            width: layer.bounds.width,
+            height: layer.bounds.height,
+            pixels: layer.pixels,
+          }),
         )
+        self.rendered_request_focus = view.request.focused
         self.rendered_text = Some(text)
         self.rendered_result = self.model.result
         self.rendered_selection = selection
@@ -304,6 +290,7 @@ fn App::draw(self : App) -> Unit raise Error {
       self.composition is Some(_),
       self.model.result,
       self.raster.bind(engine => @raster.text_runs(engine, nodes[1].value)),
+      self.model.view(),
     )
   }
 }
@@ -382,6 +369,7 @@ async fn run_loop(
     raster: None,
     rendered_text: None,
     rendered_result: "",
+    rendered_request_focus: false,
     rendered_selection: (-1, -1),
     rendered_caret: None,
     text_width: 0,
@@ -480,6 +468,12 @@ async fn run_loop(
                   )
                   app.draw()
                 }
+                @accessibility.Click(target) if target ==
+                  app.model.request_button.id => {
+                  ignore(app.model.focus_request())
+                  app.queue(LoadUser("1"))
+                  app.draw()
+                }
                 @accessibility.Click(1) => {
                   ignore(@scene.dispatch(app.model.scene, Activate))
                   app.draw()
@@ -518,10 +512,18 @@ async fn run_loop(
               is Some(_) => ()
             ToggleFocus => {
               let nodes = @semantics.snapshot(app.model.editor)
-              let target = if nodes[1].focused { nodes[0] } else { nodes[1] }
+              let target = if nodes[1].focused {
+                nodes[0]
+              } else if nodes[0].focused {
+                nodes[2]
+              } else {
+                nodes[1]
+              }
               ignore(@semantics.focus(app.model.editor, target.reference))
               app.draw()
             }
+            Navigate(_, _) | SelectBoundary(_, _) if app.model.request_focused() =>
+              ()
             Navigate(forward, extend_selection) => {
               let node = @semantics.snapshot(app.model.editor)[1]
               if node.focused {
@@ -685,6 +687,14 @@ async fn run_loop(
               app.draw()
             }
             TextPointer(_, _, _) if app.composition is Some(_) => ()
+            TextPointer(x, y, _) if app.model.view().request.bounds.contains(
+                x, y,
+              ) &&
+              app.composition is None => {
+              ignore(app.model.focus_request())
+              app.queue(LoadUser("1"))
+              app.draw()
+            }
             TextPointer(x, y, extend_selection) =>
               if x >= 8 && x < 8 + app.text_width && y >= 8 && y < 104 {
                 if app.raster is Some(engine) {
@@ -718,7 +728,10 @@ async fn run_loop(
                 ignore(@scene.dispatch(app.model.scene, Click(x, y)))
                 app.draw()
               }
+            Input(Activate) if app.model.request_focused() &&
+              app.composition is None => app.queue(LoadUser("1"))
             Input(_) if app.composition is Some(_) ||
+              app.model.request_focused() ||
               @semantics.snapshot(app.model.editor)[1].focused => ()
             Input(action) =>
               if @scene.dispatch(app.model.scene, action) {

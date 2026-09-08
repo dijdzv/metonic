@@ -55,7 +55,7 @@ fn editor_display() -> String {
     return text
   }
   let nodes = @semantics.snapshot(application.val.editor)
-  if nodes.length() == 2 {
+  if nodes.length() >= 2 {
     nodes[1].value
   } else {
     ""
@@ -79,7 +79,7 @@ fn accept_editor(value : String, start : Int, end : Int) -> Bool {
     return false
   }
   let nodes = @semantics.snapshot(application.val.editor)
-  if nodes.length() != 2 ||
+  if nodes.length() < 2 ||
     start > end ||
     @text_position.utf16_to_scalar(value, start) is None ||
     @text_position.utf16_to_scalar(value, end) is None {
@@ -110,7 +110,7 @@ pub fn editor_commit(start : Int, end : Int) -> Int {
 #export_name("editor_field")
 pub fn editor_field(index : Int) -> Int {
   let nodes = @semantics.snapshot(application.val.editor)
-  if nodes.length() != 2 {
+  if nodes.length() < 2 {
     return -1
   }
   let node = nodes[1]
@@ -129,7 +129,7 @@ pub fn editor_field(index : Int) -> Int {
 #export_name("editor_unit")
 pub fn editor_unit(index : Int) -> Int {
   let nodes = @semantics.snapshot(application.val.editor)
-  if nodes.length() != 2 || index < 0 || index >= nodes[1].value.length() {
+  if nodes.length() < 2 || index < 0 || index >= nodes[1].value.length() {
     -1
   } else {
     nodes[1].value.code_unit_at(index).to_int()

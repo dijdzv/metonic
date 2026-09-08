@@ -108,6 +108,7 @@ pub struct TextFragment {
 
 ///|
 pub struct Bridge {
+  mut view : @application.View
   mut adapter : UInt64
   mut nodes : Array[@semantics.Node]
   mut width : Int
@@ -165,15 +166,33 @@ fn tree(_data : UInt64) -> UInt64 {
     add_action(node, 1)
     if semantic.role is @semantics.Button {
       add_action(node, 0)
-      toggled(node, if semantic.value == "on" { 1 } else { 0 })
-      bounds(node, bridge.x.to_double(), bridge.y.to_double(), 120, 72)
+      if id == 1UL {
+        toggled(node, if semantic.value == "on" { 1 } else { 0 })
+        bounds(node, bridge.x.to_double(), bridge.y.to_double(), 120, 72)
+      } else {
+        let box = bridge.view.request.bounds
+        bounds(
+          node,
+          box.x.to_double(),
+          box.y.to_double(),
+          box.width.to_double(),
+          box.height.to_double(),
+        )
+      }
     } else {
       if bridge.composing {
         read_only(node)
       } else {
         add_value_action(node)
       }
-      bounds(node, 8, 8, (bridge.width - 16).max(1).min(640).to_double(), 96)
+      let box = bridge.view.editor.bounds
+      bounds(
+        node,
+        box.x.to_double(),
+        box.y.to_double(),
+        box.width.to_double(),
+        box.height.to_double(),
+      )
       for fragment in bridge.fragments {
         let run = node_new(1)
         let text = @utf8.encode(fragment.text)
@@ -185,8 +204,8 @@ fn tree(_data : UInt64) -> UInt64 {
         )
         bounds(
           run,
-          8,
-          8 + fragment.layout.top.to_double(),
+          box.x.to_double(),
+          box.y.to_double() + fragment.layout.top.to_double(),
           fragment.layout.width.to_double(),
           fragment.layout.height.to_double(),
         )
@@ -214,18 +233,31 @@ fn tree(_data : UInt64) -> UInt64 {
     let status = node_new(3)
     let text = @utf8.encode(bridge.rpc_result.trim().to_owned())
     value(status, text, text.length().to_uint64())
-    push_child(root, 3UL)
-    push_node(result, 3UL, status)
+    let box = bridge.view.result.bounds
+    bounds(
+      status,
+      box.x.to_double(),
+      box.y.to_double(),
+      box.width.to_double(),
+      box.height.to_double(),
+    )
+    push_child(root, 4294967295UL)
+    push_node(result, 4294967295UL, status)
   }
   push_node(result, 0UL, root)
   result
 }
 
 ///|
-pub fn open(hwnd : UInt64, nodes : Array[@semantics.Node]) -> Bridge? {
+pub fn open(
+  hwnd : UInt64,
+  nodes : Array[@semantics.Node],
+  view : @application.View,
+) -> Bridge? {
   guard current.val is None else { return None }
   let bridge = Bridge::{
     adapter: 0UL,
+    view,
     nodes,
     width: 640,
     height: 360,
@@ -234,7 +266,7 @@ pub fn open(hwnd : UInt64, nodes : Array[@semantics.Node]) -> Bridge? {
     composing: false,
     rpc_result: "",
     fragments: [],
-    next_text_id: 4UL,
+    next_text_id: 4294967296UL,
   }
   current.val = Some(bridge)
   bridge.adapter = native_open(hwnd, data => tree(data))
@@ -257,6 +289,7 @@ pub fn Bridge::update(
   composing : Bool,
   rpc_result : String,
   layout : Array[@raster.TextRun]?,
+  view : @application.View,
 ) -> Unit {
   if self.adapter == 0UL {
     return
@@ -279,6 +312,7 @@ pub fn Bridge::update(
     }
     self.fragments = fragments
   }
+  self.view = view
   self.nodes = nodes
   self.width = width
   self.height = height
@@ -304,7 +338,7 @@ pub fn Bridge::poll(self : Bridge) -> Array[Request] {
       break
     }
     let id = target(request)
-    if id == 1UL || id == 2UL {
+    if bridge_node_exists(self.nodes, id) {
       match action(request) {
         0 => result.push(Click(id.to_int()))
         1 => result.push(Focus(id.to_int()))
@@ -345,4 +379,14 @@ pub fn Bridge::close(self : Bridge) -> Unit {
     self.adapter = 0UL
     current.val = None
   }
+}
+
+///|
+fn bridge_node_exists(nodes : Array[@semantics.Node], id : UInt64) -> Bool {
+  for node in nodes {
+    if node.reference.id.to_uint64() == id {
+      return true
+    }
+  }
+  false
 }

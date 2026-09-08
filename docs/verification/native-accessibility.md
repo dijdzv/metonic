@@ -15,9 +15,10 @@ from UIA state.
 ## Implemented behavior
 
 The ordinary window attaches official AccessKit C 0.22.3 before becoming visible.
-The adapter maps the shared semantic model into a Window root, Toggle button and
-Text editor. Scene activation synchronizes the button's semantic toggle value.
-the current RPC result is a separate Label populated from the same result used
+The adapter maps the shared semantic model into a Window root, Toggle button,
+Text editor and Load user button. The request button uses the common view's label
+and bounds and exposes Invoke. Scene activation synchronizes the Toggle value.
+The current RPC result is a separate Label populated from the same result used
 by GPU rendering. It has no editing actions and does not replace editor text.
 Draw/resize publishes current values and physical bounds. Accessibility Click
 and Focus requests rejoin the ordinary UI event queue. Focus requests also ask
@@ -64,12 +65,19 @@ The production check verifies the exact root/button/editor names, Button/Edit
 roles, the initial Japanese/Latin editor value, the toggle's off-to-on change
 after an external Toggle request, editor preservation, normal process exit,
 four Value round trips (Japanese/Latin, supplementary characters and empty text),
-ordinary posted character/backspace messages after replacement, a posted F7
-request to the owned HTTP server and exact `月兎` result, actual window resize
+ordinary posted character/backspace messages after replacement, an Invoke request
+from the Load user button to the owned HTTP server and exact `月兎` result, actual window resize
 with updated accessible editor bounds, continued editing without losing the
 result or toggle state, HWND destruction
 and rejection by retained Toggle/Value providers after close. Success emits
 `WINDOW_PRODUCTION_UIA_OK` and `WINDOW_PRODUCTION_UIA_PROCESSES_OK`.
+
+The same command accepts `METONIC_VIEW_ACTION=pointer` to post a click at the
+button's observed UIA bounds, or `METONIC_VIEW_ACTION=keyboard` to focus it through
+UIA and post Down/Enter. The keyboard case verifies that Down does not move the
+scene while the request button is focused. These are automated OS-message paths,
+not evidence of physical input. `native:presentation` may be combined with a mode
+to capture the owned production window through the official CLI.
 
 Text runs come from the retained editor layout, including wrapped and offscreen
 lines. Run-local AccessKit character indices map explicitly to editor UTF-16

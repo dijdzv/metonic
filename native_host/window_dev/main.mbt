@@ -90,6 +90,7 @@ async fn respond(
     "frames": state.frames,
     "task_status": state.task_status,
     "rpc_result": state.rpc_result,
+    "view": state.view.snapshot(),
     "composing": state.composing,
     "preedit": state.preedit,
     "preedit_cursor": state.preedit_cursor,

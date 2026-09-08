@@ -86,8 +86,9 @@ fn verify_text_counts(request : Json) -> Json raise VerifyFailure {
   require(width > 0 && width <= 640, "text width")
   require(int_field(request, "initialRenders") == 1, "initial text renders")
   require(
-    int_field(request, "initialUploaded") == width * 96 * 4,
-    "initial text upload size",
+    int_field(request, "initialUploaded") ==
+    (width * 96 + width.min(176) * 40) * 4,
+    "initial editor and request upload size",
   )
   let renders = int_field(request, "renders")
   let uploaded = int_field(request, "uploaded")

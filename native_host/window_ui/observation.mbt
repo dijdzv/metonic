@@ -17,6 +17,7 @@ pub struct Observation {
   scene : (Int) -> Int
   task : (Int) -> Int
   editor : @semantics.Node
+  request_focused : Bool
   accessibility_runs : Array[UInt64]
   rendered_text : String?
   preedit_cursor : Int
@@ -40,6 +41,7 @@ fn App::observation(self : App) -> Observation {
     scene: index => @scene.field(self.model.scene, index),
     task: index => self.model.task_field(index),
     editor: @semantics.snapshot(self.model.editor)[1],
+    request_focused: self.model.request_focused(),
     accessibility_runs: self.accessibility
     .map(bridge => bridge.fragments.map(fragment => fragment.id))
     .unwrap_or([]),

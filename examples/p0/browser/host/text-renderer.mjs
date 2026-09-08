@@ -32,22 +32,48 @@ struct VertexOut { @builtin(position) position: vec4f, @location(0) uv: vec2f };
 @vertex fn vs(@builtin(vertex_index) i:u32)->VertexOut { var p=array<vec2f,6>(vec2f(0,0),vec2f(1,0),vec2f(0,1),vec2f(0,1),vec2f(1,0),vec2f(1,1)); let q=u.origin+p[i]*u.size; var out:VertexOut; out.position=vec4f(q.x/u.viewport.x*2-1,1-q.y/u.viewport.y*2,0,1); out.uv=p[i]; return out; }
 @fragment fn fs(in:VertexOut)->@location(0) vec4f { let dims=vec2i(textureDimensions(text_tex)); let pos=min(vec2i(in.uv*vec2f(dims)),dims-vec2i(1)); return textureLoad(text_tex,pos,0); }` });
   const pipeline = device.createRenderPipeline({ layout: 'auto', vertex: { module: shader, entryPoint: 'vs' }, fragment: { module: shader, entryPoint: 'fs', targets: [{ format }] }, primitive: { topology: 'triangle-list' } });
-  let texture;
-  let bindGroup;
-  let uniform;
+  let layers = [];
   let uploaded = 0;
   let renders = 0;
-  uniform = device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+  function releaseLayers(values) { for (const layer of values) { layer.texture.destroy(); layer.uniform.destroy(); } }
   function rasterText(cssWidth) {
     const result = app.editor_render(Math.trunc(cssWidth));
     if (result === 2) return;
     if (result !== 1) throw new Error('MoonBit editor_render rejected input');
-    const textWidth = app.text_width();
-    const height = app.text_height();
-    const pixels = new Uint8Array(textWidth * height * 4);
-    for (let index = 0; index < textWidth * height; index += 1) { const packed = app.text_pixel(index); pixels[index * 4] = packed & 255; pixels[index * 4 + 1] = (packed >>> 8) & 255; pixels[index * 4 + 2] = (packed >>> 16) & 255; pixels[index * 4 + 3] = (packed >>> 24) & 255; }
-    texture?.destroy(); texture = device.createTexture({ size: { width: textWidth, height }, format: 'rgba8unorm', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST }); device.queue.writeTexture({ texture }, pixels, { bytesPerRow: textWidth * 4 }, { width: textWidth, height });
-    bindGroup = device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: uniform } }, { binding: 1, resource: texture.createView() }] }); uploaded += pixels.byteLength; renders += 1;
+    const next = [];
+    try {
+      for (let index = 0; index < app.view_layer_count(); index += 1) {
+        const x = app.view_layer_field(index, 0), y = app.view_layer_field(index, 1);
+        const width = app.view_layer_field(index, 2), height = app.view_layer_field(index, 3);
+        const pixels = new Uint8Array(width * height * 4);
+        for (let at = 0; at < width * height; at += 1) {
+          const packed = app.view_layer_pixel(index, at);
+          pixels[at * 4] = packed & 255; pixels[at * 4 + 1] = (packed >>> 8) & 255;
+          pixels[at * 4 + 2] = (packed >>> 16) & 255; pixels[at * 4 + 3] = (packed >>> 24) & 255;
+        }
+        const texture = device.createTexture({ size: { width, height }, format: 'rgba8unorm', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
+        const uniform = device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+        const layer = { x, y, width, height, texture, uniform };
+        next.push(layer);
+        device.queue.writeTexture({ texture }, pixels, { bytesPerRow: width * 4 }, { width, height });
+        layer.bindGroup = device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: uniform } }, { binding: 1, resource: texture.createView() }] });
+        uploaded += pixels.byteLength;
+      }
+    } catch (error) { releaseLayers(next); throw error; }
+    releaseLayers(layers);
+    layers = next;
+    renders += 1;
   }
-  return { rasterText, record(pass, cssW, cssH) { if (!texture) return; device.queue.writeBuffer(uniform, 0, new Float32Array([cssW, cssH, 8, 8, app.text_width(), app.text_height(), 0, 0])); pass.setPipeline(pipeline); pass.setBindGroup(0, bindGroup); pass.draw(6); }, stats: () => ({ width: app.text_width(), renders, uploaded }), dispose() { texture?.destroy(); uniform?.destroy(); app.text_dispose(); } };
+  return {
+    rasterText,
+    record(pass, cssW, cssH) {
+      pass.setPipeline(pipeline);
+      for (const layer of layers) {
+        device.queue.writeBuffer(layer.uniform, 0, new Float32Array([cssW, cssH, layer.x, layer.y, layer.width, layer.height, 0, 0]));
+        pass.setBindGroup(0, layer.bindGroup); pass.draw(6);
+      }
+    },
+    stats: () => ({ width: app.text_width(), renders, uploaded }),
+    dispose() { releaseLayers(layers); layers = []; app.text_dispose(); },
+  };
 }

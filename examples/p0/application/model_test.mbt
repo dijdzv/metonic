@@ -39,7 +39,7 @@ test "cancel and shutdown preserve the last application snapshot" {
   assert_eq(@scene.field(app.scene, 0), x)
   assert_eq(app.result, "\nretained")
   assert_eq(@utf8.decode(app.result_utf8), app.result)
-  assert_eq(@semantics.snapshot(app.editor).length(), 2)
+  assert_eq(@semantics.snapshot(app.editor).length(), 3)
 }
 
 ///|

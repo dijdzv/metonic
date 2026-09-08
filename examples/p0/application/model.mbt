@@ -2,6 +2,7 @@
 pub struct Model {
   scene : @scene.State
   editor : @semantics.Tree
+  request_button : @semantics.NodeRef
   tasks : @task_scope.Scope
   mut result : String
   mut result_utf8 : Bytes
@@ -9,9 +10,12 @@ pub struct Model {
 
 ///|
 pub fn create(session : Int, window : Int) -> Model {
+  let editor = @semantics.create(session, window)
+  let request_button = @semantics.add_button(editor, "Load user").unwrap()
   {
     scene: @scene.create(),
-    editor: @semantics.create(session, window),
+    editor,
+    request_button,
     tasks: @task_scope.create(),
     result: "",
     result_utf8: b"",

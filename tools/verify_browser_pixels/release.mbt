@@ -1,5 +1,6 @@
 ///|
 async fn release_crop(host : BrowserHost, name : String) -> Json {
+  ignore(command(host, { "op": "focus", "selector": "#canvas" }))
   crop({ "png": command(host, { "op": "image", "name": name }), "width": 640 })
 }
 
@@ -39,6 +40,7 @@ async fn run_release(host : BrowserHost) -> String {
   )
   let initial = release_crop(host, "initial")
   ignore(text_initial(initial))
+  verify_shared_view(host)
   ignore(
     command(host, {
       "op": "fill",
@@ -55,7 +57,9 @@ async fn run_release(host : BrowserHost) -> String {
       "equal": false,
     }),
   )
-  ignore(command(host, { "op": "click", "selector": "#rpc-load" }))
+  ignore(
+    command(host, { "op": "press", "selector": "#rpc-load", "key": "Enter" }),
+  )
   ignore(
     command(host, {
       "op": "wait-text",
