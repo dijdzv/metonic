@@ -1,4 +1,30 @@
 ///|
+test "composition presentation uses the captured range and rejects invalid or expired cursors" {
+  let tree = create(1, 1)
+  let input = snapshot(tree)[1].reference
+  assert_eq(set_text(tree, input, "A日本B"), "")
+  assert_eq(set_selection(tree, input, 1, 3), "")
+  let composition = begin_composition(tree).unwrap()
+  assert_eq(
+    composition.presentation("に😀", 1),
+    Some(("Aに😀B", 1, 4, 2)),
+  )
+  assert_eq(
+    composition.presentation("に😀", 3),
+    Some(("Aに😀B", 1, 4, 4)),
+  )
+  assert_eq(composition.presentation("に😀", 2), None)
+  assert_eq(composition.presentation("に😀", -1), None)
+  assert_eq(composition.presentation("に😀", 4), None)
+  assert_eq(snapshot(tree)[1].value, "A日本B")
+  composition.cancel()
+  assert_eq(composition.presentation("に😀", 1), None)
+  let stale = begin_composition(tree).unwrap()
+  assert_eq(set_text(tree, input, "changed"), "")
+  assert_eq(stale.presentation("に😀", 1), None)
+}
+
+///|
 test "preedit preserves committed text and selection until one commit" {
   let tree = create(1, 1)
   let input = snapshot(tree)[1].reference
