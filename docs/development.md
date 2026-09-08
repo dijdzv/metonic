@@ -44,7 +44,9 @@ Issue-local notes belong on the task that needs them, not in public handoff logs
 
 ## Windows x64 setup
 
-Install mise, PowerShell 7 (`pwsh`), and Visual Studio C++ x64 build tools with the Windows SDK.
+Install mise, PowerShell 7 (`pwsh`), Git for Windows, GitHub CLI (`gh`), and
+Visual Studio C++ x64 build tools with the Windows SDK. Keep the Windows
+`curl.exe`, `tar.exe`, `certutil.exe` and `cmd.exe` available on PATH.
 Native AccessKit source preparation additionally requires Rust 1.93.0 (`rustc`
 and `cargo`) on PATH; it checks the compiler version before building the
 [focus-ownership patch](../patches/accesskit-windows-focus.md).
@@ -53,12 +55,25 @@ From the repository root:
 ```powershell
 mise trust
 mise install
+gh auth login
 mise run bootstrap
+mise run prerequisites
 mise run doctor
 mise run hooks:install
 mise run verify
 mise run verify-native
 ```
+
+`gh auth login` is unnecessary when a valid `GH_TOKEN` is already configured.
+The current public-release download commands use GitHub CLI authentication.
+`bootstrap` runs the MoonBit download-prerequisite check after the compiler is
+installed and before preparing GPU assets. `demo:build` runs the full check
+before either UI build: executable availability, GitHub authentication when
+release archives must be downloaded, the
+required Rust version, and Visual Studio's compiler/linker/Windows SDK tool
+discovery. Failures include installation or configuration guidance. The check
+does not install tools, print credentials, or prove SDK linking and network
+downloads will succeed; the actual builds and pinned asset checks do that.
 
 `bootstrap` installs the exact compiler/core pair in `toolchain.json` with SHA256
 verification. `doctor` rejects a different version. Tool binaries, caches, and

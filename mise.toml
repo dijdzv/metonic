@@ -10,7 +10,14 @@ _.path = ["{{config_root}}/.tools/moonbit/bin"]
 
 [tasks.bootstrap]
 description = "Install the pinned current MoonBit toolchain with SHA256 verification"
-run = ["pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap.ps1", '.\\.tools\\moonbit\\bin\\moon.exe update', '.\\.tools\\moonbit\\bin\\moon.exe run scripts/prepare-wgpu.mbtx']
+run = ["pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap.ps1", '.\\.tools\\moonbit\\bin\\moon.exe update', '.\\.tools\\moonbit\\bin\\moon.exe run scripts/check-prerequisites.mbtx -- bootstrap', '.\\.tools\\moonbit\\bin\\moon.exe run scripts/prepare-wgpu.mbtx']
+
+[tasks.prerequisites]
+description = "Check tools and authentication required by the integrated Windows demo"
+run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/check-prerequisites.mbtx -- demo'
+
+[tasks."prerequisites:test"]
+run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-prerequisites.mbtx'
 
 [tasks.doctor]
 description = "Check the project toolchain"
@@ -55,6 +62,7 @@ run = '.\\.tools\\moonbit\\bin\\moonrun.exe _build/wasm/release/build/tools/brow
 [tasks."demo:build"]
 description = "Build both UI targets and their shared local HTTP server"
 run = [
+  'mise run prerequisites',
   'mise run browser:package',
   'mise run native:window-release-build',
   '.\\.tools\\moonbit\\bin\\moon.exe build tools/demo --target wasm --release --frozen --deny-warn',

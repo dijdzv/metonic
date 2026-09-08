@@ -36,7 +36,8 @@ The browser defaults to WasmGC; JS remains available for comparison. The
 [backend selection record](docs/verification/browser-target.md) explains the
 measured tradeoff and the separate browser package.
 
-On Windows x64, install [mise](https://mise.jdx.dev/), PowerShell 7 (`pwsh`), and
+On Windows x64, install [mise](https://mise.jdx.dev/), PowerShell 7 (`pwsh`),
+Git for Windows, GitHub CLI (`gh`), and
 Visual Studio C++ x64 build tools with the Windows SDK. Native builds also require
 Rust 1.93.0 (`rustc` and `cargo`) on PATH to build the pinned AccessKit dependency
 with the reviewed local corrections. Select that toolchain before running the
@@ -47,9 +48,16 @@ From a checkout of this repository, run:
 ```powershell
 mise trust
 mise install
+gh auth login
 mise run bootstrap
 mise run demo
 ```
+
+Release downloads currently use GitHub CLI authentication; an existing valid
+`GH_TOKEN` can replace interactive login. Windows `curl.exe`, `tar.exe` and
+`certutil.exe` must be available on PATH. Bootstrap checks download prerequisites
+after installing MoonBit; the demo checks native build prerequisites before
+building either UI. Run `mise run prerequisites` to repeat that check.
 
 Open the printed browser URL while the native window is running. In each UI:
 

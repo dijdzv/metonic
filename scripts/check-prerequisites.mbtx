@@ -1,0 +1,158 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/env",
+}
+
+///|
+fn fail(message : String) -> Unit {
+  println(message)
+  abort(message)
+}
+
+///|
+async fn available(command : String) -> Bool {
+  let system = @env.get_env_var("SystemRoot").unwrap_or("C:/Windows")
+  let (code, _, _) = @process.collect_output(
+    system + "/System32/where.exe",
+    [command],
+    no_console_window=true,
+  )
+  code == 0
+}
+
+///|
+async fn check(native : Bool) -> Unit {
+  let required = [
+    ("git.exe", "Install Git for Windows and put git on PATH."),
+    (
+      "gh.exe", "Install GitHub CLI and run gh auth login for public release downloads.",
+    ),
+    ("curl.exe", "Restore the Windows curl executable on PATH."),
+    ("tar.exe", "Restore the Windows tar executable on PATH."),
+    (
+      "certutil.exe", "Restore Windows System32 on PATH for SHA256 verification.",
+    ),
+  ]
+  if native {
+    required.push(
+      ("node.exe", "Run mise install, then invoke the demo through mise."),
+    )
+    required.push(
+      (
+        "rustc.exe", "Install/select Rust 1.93.0 and put rustc and cargo on PATH.",
+      ),
+    )
+    required.push(
+      (
+        "cargo.exe", "Install/select Rust 1.93.0 and put rustc and cargo on PATH.",
+      ),
+    )
+    required.push(("cmd.exe", "Restore Windows System32 on PATH."))
+  }
+  let missing : Array[String] = []
+  for requirement in required {
+    let (command, guidance) = requirement
+    if !available(command) {
+      missing.push(command + ": " + guidance)
+    }
+  }
+  if !missing.is_empty() {
+    for message in missing {
+      println(message)
+    }
+    fail("Prerequisites missing; see docs/development.md#windows-x64-setup")
+  }
+  // A cached demo build must not require a network authentication round trip.
+  if !native ||
+    !@fs.exists(".work/wgpu-assets/wgpu-windows-x86_64-msvc-release.zip") ||
+    !@fs.exists(".work/accesskit-assets/accesskit-c-0.22.3.zip") {
+    let (auth, _, _) = @process.collect_output(
+      "gh",
+      ["auth", "status", "--hostname", "github.com"],
+      no_console_window=true,
+    )
+    guard auth == 0 else {
+      fail(
+        "GitHub release authentication unavailable. Run gh auth login or configure GH_TOKEN, then retry. Check network access if already authenticated.",
+      )
+    }
+  }
+  if native {
+    let (rust, version, _) = @process.collect_output(
+      "rustc",
+      ["--version"],
+      no_console_window=true,
+    )
+    guard rust == 0 && version.text().has_prefix("rustc 1.93.0 ") else {
+      fail(
+        "The native AccessKit build requires Rust 1.93.0 on PATH; select that toolchain before mise run demo.",
+      )
+    }
+    let program_files = @env.get_env_var("ProgramFiles(x86)").unwrap_or(
+      "C:/Program Files (x86)",
+    )
+    let vswhere = program_files +
+      "/Microsoft Visual Studio/Installer/vswhere.exe"
+    guard @fs.exists(vswhere) else {
+      fail(
+        "Install Visual Studio C++ x64 build tools and the Windows SDK (vswhere.exe is missing).",
+      )
+    }
+    let (code, output, _) = @process.collect_output(
+      vswhere,
+      [
+        "-utf8", "-latest", "-products", "*", "-requires", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+        "-property", "installationPath",
+      ],
+      no_console_window=true,
+    )
+    let install = output.text().trim().to_owned()
+    guard code == 0 &&
+      install != "" &&
+      !install.contains("\"") &&
+      !install.contains("\r") &&
+      !install.contains("\n") &&
+      !install.contains("%") else {
+      fail(
+        "Visual Studio C++ x64 tools were not found. Install the Desktop development with C++ workload and Windows SDK.",
+      )
+    }
+    if !@fs.exists(".work/prerequisites") {
+      @fs.mkdir(".work/prerequisites", recursive=true)
+    }
+    @fs.write_file(
+      ".work/prerequisites/native-tools.cmd",
+      "@echo off\r\ncall \"" +
+      install +
+      "/Common7/Tools/VsDevCmd.bat\" -no_logo -arch=x64 -host_arch=x64 >nul\r\nif errorlevel 1 exit /b 1\r\nwhere cl.exe >nul\r\nif errorlevel 1 exit /b 1\r\nwhere link.exe >nul\r\nif errorlevel 1 exit /b 1\r\nwhere rc.exe >nul\r\nif errorlevel 1 exit /b 1\r\n",
+    )
+    let (tools, _, _) = @process.collect_output(
+      "cmd.exe",
+      ["/d", "/c", ".work\\prerequisites\\native-tools.cmd"],
+      no_console_window=true,
+    )
+    guard tools == 0 else {
+      fail(
+        "Visual Studio could not provide cl.exe, link.exe and Windows SDK rc.exe. Repair the C++ x64 workload and Windows SDK.",
+      )
+    }
+  }
+  println(
+    if native {
+      "DEMO_PREREQUISITES_OK"
+    } else {
+      "BOOTSTRAP_PREREQUISITES_OK"
+    },
+  )
+}
+
+///|
+async fn main {
+  let args = @env.args()
+  guard args.length() == 2 && (args[1] == "bootstrap" || args[1] == "demo") else {
+    fail("usage: check-prerequisites bootstrap|demo")
+  }
+  @async.with_timeout(30000, () => check(args[1] == "demo"))
+}
