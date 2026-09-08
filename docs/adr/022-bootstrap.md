@@ -9,15 +9,11 @@ and a low-overhead release process during early development.
 
 ## Decision
 
-Use main as the integration branch, short-lived branches, and squash-merged PRs.
-Use version tags for releases. Introduce maintenance branches only when parallel
-supported versions require them. Main requires a PR, disallows force pushes and
-deletion, and applies protection to administrators. External approval is optional.
-The `Windows verification` CI check must pass against the current base branch.
-It validates documentation on every PR and adds compiler/runtime verification
-for implementation, configuration, or unknown changes. Manual dispatch runs all
-checks. Ordinary pushes do not repeat the PR checks; future release-tag tasks
-will package or publish artifacts separately.
+Use main as the integration branch, short-lived branches, squash-merged PRs and
+version tags for releases. The current Git, local pre-commit and manual-CI rules
+are maintained in the [development guide](../development.md#work-and-release-flow).
+The earlier required `Windows verification` PR check has been retired; do not
+interpret the original ADR as requiring duplicate automated PR validation.
 
 Use mise as the command entry point and to pin Node for generated-JS verification.
 Pin MoonBit archives and their hashes in `toolchain.json`; install them into
@@ -38,6 +34,30 @@ workload. Native product builds do not depend on these development tools.
 - A global MoonBit install can silently differ between development environments.
 - A third-party installer plugin adds a dependency while official fixed archives are available.
 - Automatic latest-on-every-build updates make compiler regressions hard to reproduce.
+
+### Windows installer boundary review
+
+The installed mise 2026.8.5 registry has no `moonbit` shorthand. This does not
+rule out a custom backend: the [HTTP backend](https://mise.jdx.dev/dev-tools/backends/http.html)
+supports fixed archive URLs and checksums. It can acquire compiler and core
+archives, but acquisition alone does not assemble core under the compiler's
+`lib` directory, bundle it, verify the pair and switch the project-local install.
+Those steps would still need orchestration. A new installer plugin would move
+that boundary to another implementation language rather than remove it.
+
+The [official Windows installer](https://cli.moonbitlang.com/install/powershell.ps1)
+accepts an explicit version and installs/bundles core, but the reviewed script
+does not verify this project's two pinned hashes or retain the previous install
+before overwriting it. It is not an equivalent replacement for this contract.
+
+Retain `scripts/bootstrap.ps1` for compiler acquisition and installation before
+MoonBit is available. Subsequent development automation remains MoonBit. The
+current script stages downloads and verifies their hashes, bundles core and
+checks versions before moving the existing installation to a backup. Keeping
+that backup is recovery material, not proof of automatic rollback if the final
+directory move fails. This source-level comparison is not a fresh-machine or
+failure-injection test. Revisit the boundary when an existing installer can
+satisfy the complete pinned-pair contract. Investigation evidence is in #82.
 
 ## Consequences
 
