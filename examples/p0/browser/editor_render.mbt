@@ -36,7 +36,9 @@ pub fn editor_render(viewport_width : Int) -> Int {
       @scene.field(application.val.scene, 7),
     ),
   )
-  let view = application.val.view()
+  let view = application.val.view(
+    query_preview=query_preview.val.unwrap_or(application.val.query()),
+  )
   let text = editor_display()
   let start = editor_field(1)
   let end = editor_field(2)

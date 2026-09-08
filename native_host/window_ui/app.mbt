@@ -675,6 +675,7 @@ async fn run_loop(
               )
               app.draw()
             }
+            LoadUser(_) if app.composition is Some(_) => ()
             StartUpdate | LoadUser(_) => {
               let user_id = match event {
                 LoadUser(value) => Some(value)

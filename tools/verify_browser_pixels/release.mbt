@@ -41,6 +41,7 @@ async fn run_release(host : BrowserHost) -> String {
   let initial = release_crop(host, "initial")
   ignore(text_initial(initial))
   verify_shared_view(host)
+  verify_query_composition(host)
   ignore(
     command(host, {
       "op": "fill",
