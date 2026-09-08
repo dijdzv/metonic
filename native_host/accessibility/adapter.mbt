@@ -91,6 +91,22 @@ extern "C" fn update_active(
 extern "C" fn raise_events(events : UInt64) -> Unit = "accesskit_windows_queued_events_raise"
 
 ///|
+#borrow(lengths)
+extern "C" fn character_lengths(
+  node : UInt64,
+  count : UInt64,
+  lengths : Bytes,
+) -> Unit = "accesskit_node_set_character_lengths"
+
+///|
+pub struct TextFragment {
+  id : UInt64
+  layout : @raster.TextRun
+  text : String
+  units : TextUnits
+}
+
+///|
 pub struct Bridge {
   mut adapter : UInt64
   mut nodes : Array[@semantics.Node]
@@ -100,6 +116,8 @@ pub struct Bridge {
   mut y : Int
   mut composing : Bool
   mut rpc_result : String
+  mut fragments : Array[TextFragment]
+  mut next_text_id : UInt64
 }
 
 ///|
@@ -107,6 +125,7 @@ pub(all) enum Request {
   Click(Int)
   Focus(Int)
   SetValue(Int, String)
+  Select(UInt64, UInt64, UInt64, UInt64)
 }
 
 ///|
@@ -155,6 +174,38 @@ fn tree(_data : UInt64) -> UInt64 {
         add_value_action(node)
       }
       bounds(node, 8, 8, (bridge.width - 16).max(1).min(640).to_double(), 96)
+      for fragment in bridge.fragments {
+        let run = node_new(1)
+        let text = @utf8.encode(fragment.text)
+        value(run, text, text.length().to_uint64())
+        character_lengths(
+          run,
+          fragment.units.lengths.length().to_uint64(),
+          fragment.units.lengths,
+        )
+        bounds(
+          run,
+          8,
+          8 + fragment.layout.top.to_double(),
+          fragment.layout.width.to_double(),
+          fragment.layout.height.to_double(),
+        )
+        push_child(node, fragment.id)
+        push_node(result, fragment.id, run)
+      }
+      if !bridge.composing {
+        match
+          (
+            bridge.text_position(semantic.selection_anchor),
+            bridge.text_position(@semantics.caret(semantic)),
+          ) {
+          (Some((anchor_node, anchor_index)), Some((focus_node, focus_index))) =>
+            publish_selection(
+              node, anchor_node, anchor_index, focus_node, focus_index,
+            )
+          _ => ()
+        }
+      }
     }
     push_child(root, id)
     push_node(result, id, node)
@@ -182,6 +233,8 @@ pub fn open(hwnd : UInt64, nodes : Array[@semantics.Node]) -> Bridge? {
     y: 144,
     composing: false,
     rpc_result: "",
+    fragments: [],
+    next_text_id: 4UL,
   }
   current.val = Some(bridge)
   bridge.adapter = native_open(hwnd, data => tree(data))
@@ -203,9 +256,28 @@ pub fn Bridge::update(
   y : Int,
   composing : Bool,
   rpc_result : String,
+  layout : Array[@raster.TextRun]?,
 ) -> Unit {
   if self.adapter == 0UL {
     return
+  }
+  if layout is None {
+    self.fragments = []
+  } else if self.fragments.is_empty() ||
+    self.nodes[1].value != nodes[1].value ||
+    self.width != width {
+    let text = nodes[1].value
+    let fragments : Array[TextFragment] = []
+    for run in layout.unwrap() {
+      let part = text[run.start:run.end].to_owned()
+      guard text_units(part) is Some(units) else {
+        fragments.clear()
+        break
+      }
+      fragments.push({ id: self.next_text_id, layout: run, text: part, units, })
+      self.next_text_id += 1UL
+    }
+    self.fragments = fragments
   }
   self.nodes = nodes
   self.width = width
@@ -249,6 +321,15 @@ pub fn Bridge::poll(self : Bridge) -> Array[Request] {
             }
           }
         }
+        3 if id == 2UL =>
+          result.push(
+            Select(
+              selection_field(request, 0),
+              selection_field(request, 1),
+              selection_field(request, 2),
+              selection_field(request, 3),
+            ),
+          )
         _ => ()
       }
     }

@@ -53,7 +53,7 @@ Unsupported requests and overload are dropped and freed. Action delivery is not
 transactional under overload; no stronger guarantee is claimed.
 
 The same C boundary accesses official request fields and passes the by-value
-rectangle ABI. These use the header rather than hard-coded offsets. The external
+rectangle and selection ABI. These use the header rather than hard-coded offsets. The external
 test has a separate small SDK cache-navigation adapter in `accessibility_probe`;
 it is not linked into the production window. The new C code contains neither
 application state nor an independently implemented UIA provider.
@@ -71,12 +71,30 @@ result or toggle state, HWND destruction
 and rejection by retained Toggle/Value providers after close. Success emits
 `WINDOW_PRODUCTION_UIA_OK` and `WINDOW_PRODUCTION_UIA_PROCESSES_OK`.
 
+Text runs come from the retained editor layout, including wrapped and offscreen
+lines. Run-local AccessKit character indices map explicitly to editor UTF-16
+offsets; a supplementary scalar and a CRLF pair each form one selectable unit.
+The shared editor rejects selection inside CRLF and skips the pair for horizontal
+navigation and backward deletion. When an edit forms a new CRLF pair across its
+boundary, the caret moves to the end of that pair. Stored text remains unchanged
+and offsets remain UTF-16; this is not newline normalization or full grapheme
+navigation.
+
+The external probe verifies exact document and selected text for Japanese,
+supplementary characters, CRLF and wrapped text. It selects the interior of
+`A…B`, waits for the published selection to match, types `X`, observes `AXB`,
+checks rejection of the obsolete range, and continues typing to obtain `AXYB`.
+Selection-only updates retain run IDs; changed text or width creates new IDs.
+Requests retain raw IDs until application so a later tree cannot reuse cached
+offsets from an earlier layout. Forced queue interleavings still need separate
+evidence.
+
 Existing six native scenarios still exercise shared input/rendering after
 attachment; a staged-composition check rejects a queued accessibility value
 replacement without changing committed text. This is not a real IME run.
 UIA properties and posted messages do not prove presented GPU pixels, real keyboard or
 pointer delivery, Japanese IME behavior, or screen-reader usability. Forced queue
 overflow, action/close races and adapter recreation need dedicated evidence;
-the current normal-close check does not claim to cover those races. Full text
-patterns, selection, composition-aware focus and assistive-technology testing
+the current normal-close check does not claim to cover those races. Full character
+geometry, composition-aware focus and assistive-technology testing
 remain required. See [ADR 023](../adr/023-development-automation.md) for selection.

@@ -12,6 +12,12 @@ static unsigned int count;
 static uintptr_t generation;
 static HWND target;
 
+static int selection_request(const accesskit_action_request *request) {
+  return request->action == ACCESSKIT_ACTION_SET_TEXT_SELECTION &&
+      request->data.has_value &&
+      request->data.value.tag == ACCESSKIT_ACTION_DATA_SET_TEXT_SELECTION;
+}
+
 static int32_t value_length(const accesskit_action_request *request) {
   if (request->action != ACCESSKIT_ACTION_SET_VALUE || !request->data.has_value ||
       request->data.value.tag != ACCESSKIT_ACTION_DATA_VALUE ||
@@ -24,7 +30,8 @@ static void receive(accesskit_action_request *request, void *userdata) {
   AcquireSRWLockExclusive(&lock);
   if (target && (uintptr_t)userdata == generation && count < 32 &&
       (request->action == ACCESSKIT_ACTION_CLICK ||
-       request->action == ACCESSKIT_ACTION_FOCUS || value_length(request) >= 0)) {
+       request->action == ACCESSKIT_ACTION_FOCUS || value_length(request) >= 0 ||
+       selection_request(request))) {
     requests[count++] = request;
     PostMessageW(target, WM_APP + 77, 0, 0);
   } else {
@@ -65,8 +72,31 @@ int32_t metonic_accesskit_action(uintptr_t request) {
     case ACCESSKIT_ACTION_CLICK: return 0;
     case ACCESSKIT_ACTION_FOCUS: return 1;
     case ACCESSKIT_ACTION_SET_VALUE: return 2;
+    case ACCESSKIT_ACTION_SET_TEXT_SELECTION: return 3;
     default: return -1;
   }
+}
+
+uint64_t metonic_accesskit_selection_field(uintptr_t pointer, int32_t field) {
+  const accesskit_action_request *request = (accesskit_action_request *)pointer;
+  if (!selection_request(request)) return UINT64_MAX;
+  const accesskit_text_selection *selection = &request->data.value.set_text_selection;
+  switch (field) {
+    case 0: return selection->anchor.node;
+    case 1: return selection->anchor.character_index;
+    case 2: return selection->focus.node;
+    case 3: return selection->focus.character_index;
+    default: return UINT64_MAX;
+  }
+}
+
+void metonic_accesskit_selection(uintptr_t node, uint64_t anchor_node,
+    uint64_t anchor_index, uint64_t focus_node, uint64_t focus_index) {
+  accesskit_text_selection selection = {
+    {anchor_node, (size_t)anchor_index}, {focus_node, (size_t)focus_index}
+  };
+  accesskit_node_set_text_selection((accesskit_node *)node, selection);
+  accesskit_node_add_action((accesskit_node *)node, ACCESSKIT_ACTION_SET_TEXT_SELECTION);
 }
 
 void metonic_accesskit_value_action(uintptr_t node) {

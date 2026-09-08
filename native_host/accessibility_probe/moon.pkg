@@ -2,6 +2,8 @@ import {
   "moonbitlang/async", "moonbitlang/core/env", "moonbitlang/core/string",
   "moonbitlang/async/process",
   "moonbitlang/async/fs", "moonbitlang/core/json", "mizchi/image",
+  "local/p0/text_raster" @raster,
+  "local/native_host/accessibility" @accessibility,
 }
 pkgtype(kind: "executable")
 supported_targets = "native"

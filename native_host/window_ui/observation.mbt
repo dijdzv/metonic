@@ -4,6 +4,7 @@ pub(all) enum Injected {
   CompositionUpdate(String, Int?)
   CompositionCancel
   AccessibilityValue(String)
+  AccessibilitySelection(UInt64, UInt64, UInt64, UInt64)
   Updated(Int, Int)
 }
 
@@ -16,6 +17,7 @@ pub struct Observation {
   scene : (Int) -> Int
   task : (Int) -> Int
   editor : @semantics.Node
+  accessibility_runs : Array[UInt64]
   rendered_text : String?
   preedit_cursor : Int
   composing : Bool
@@ -38,6 +40,9 @@ fn App::observation(self : App) -> Observation {
     scene: index => @scene.field(self.state, index),
     task: index => @task_scope.field(self.scope, index),
     editor: @semantics.snapshot(self.editor)[1],
+    accessibility_runs: self.accessibility
+    .map(bridge => bridge.fragments.map(fragment => fragment.id))
+    .unwrap_or([]),
     rendered_text: self.rendered_text,
     preedit_cursor: self.preedit_cursor,
     composing: self.composition is Some(_),
@@ -74,6 +79,17 @@ fn App::observation(self : App) -> Observation {
           CompositionCancel => CompositionCancel
           AccessibilityValue(text) =>
             Accessibility(@accessibility.SetValue(2, text))
+          AccessibilitySelection(
+            anchor_node,
+            anchor_index,
+            focus_node,
+            focus_index
+          ) =>
+            Accessibility(
+              @accessibility.Select(
+                anchor_node, anchor_index, focus_node, focus_index,
+              ),
+            )
           Updated(id, value) => Updated(id, value)
         },
       )

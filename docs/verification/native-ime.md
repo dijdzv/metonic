@@ -25,11 +25,18 @@ not been submitted upstream.
 
 ## Real input procedure
 
-Build with `mise run native:window-build`, then launch the ordinary window:
+Run the integrated production demo from the repository root:
 
 ```powershell
-mise exec -- .work/native-host-build/native/debug/build/local/native_host/window_app/window_app.exe
+mise run demo
 ```
+
+This builds and launches the release window with its owned HTTP server. Follow
+the [common operation sequence](integrated-demo.md#common-operation-sequence)
+before and after the composition checks below: confirm ordinary editing, F7
+result display, resize and continued editing. Close native last; the launcher
+must report `DEMO_STOPPED`. A successful automated UIA run does not replace
+this physical-input check.
 
 Use Microsoft Japanese IME or record the exact alternative IME and version.
 Record Windows version, display scaling and monitor for each run.
@@ -46,7 +53,16 @@ Record Windows version, display scaling and monitor for each run.
 6. Cancel, change focus during another composition, and close while composing.
    Record text loss, unexpected commits, duplicate input or a lingering window.
 
-For a development session, `window_snapshot` exposes `composing`, `preedit`,
+Record the tested commit, production build, Windows/IME version and display
+scale, then a pass/fail/not-run result for each step and the actual observed
+text or popup behavior. Put run-specific results on #94 (composition) and #92
+(ordinary input); keep this document as the reproducible procedure. Do not
+infer a pass for an unperformed step from an automated or development run.
+
+If diagnosis needs internal state, use a separate development session through
+the [CLI/MCP integration](../development.md#integrated-window-http-requests).
+Do not enable a development endpoint in the production executable.
+For that development session, `window_snapshot` exposes `composing`, `preedit`,
 `preedit_cursor` and `ime_requested_x/y`. The last two are requested client-area
 physical coordinates, not measured OS candidate-window positions. MCP capture
 contains the application's shared offscreen pass, not the external IME popup.
