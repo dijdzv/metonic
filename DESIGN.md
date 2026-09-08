@@ -1,6 +1,6 @@
 # metonic Architecture
 
-Design revision: 0.3 · 2026-09-06 · Status: technical validation
+Design revision: 0.3 · Adoption notes updated 2026-09-08 · Status: technical validation
 
 This document defines the intended architecture. Implemented behavior and test
 results are recorded separately in [P0 verification](docs/verification/p0.md).
@@ -116,9 +116,11 @@ First verify recomputation counts and correctness, then real rendering latency.
 
 ### Windows
 
-Use MoonBit native plus a low-level C ABI bridge. Compare a Rust wgpu wrapper
-with wgpu-native before adopting one. winit is a window/event-loop candidate,
-not a renderer or a complete input framework.
+The P0 implementation uses MoonBit native and the existing `wgpu_mbt` binding
+over wgpu-native. The project's custom Rust GPU wrapper has been removed; see
+the [binding evaluation](docs/verification/wgpu-mbt.md). The window/event loop
+and asynchronous ownership are described in
+[Windows async integration](docs/verification/windows-async-integration.md).
 
 Verify the C ABI and event loop on Windows. Do not assume a compiler target name
 proves callback ownership or representation compatibility. Runtime and distribution
@@ -126,7 +128,9 @@ dependencies must be recorded separately from build tools.
 
 ### Browser
 
-Compare MoonBit WasmGC plus a small JS host with MoonBit JS output. State has one
+P0 selects MoonBit WasmGC plus a JS host; MoonBit JS output remains a comparison
+target. See the [selection and packaging record](docs/verification/browser-target.md).
+State has one
 owner in the selected application target; the JS host owns browser resources,
 not a second reactive graph. A separate MoonBit-to-JS host build is optional.
 
@@ -159,10 +163,11 @@ The MoonBit interaction/semantic model is the source of truth for role, accessib
 name, value, enabled state, focus, actions, and hierarchy. It is shared by production
 accessibility and development inspection, without requiring identical wire formats.
 
-**AccessKit is a candidate, not an adopted dependency.** Compare a thin Rust
-AccessKit adapter with a direct Windows UI Automation provider. Browser semantics
-will use a DOM/accessibility adapter. Measure bridge complexity, text selection,
-action dispatch, focus events, tree updates, and lifetime behavior before selecting.
+P0 adopts the official AccessKit C adapter for Windows, with MoonBit owning the
+semantic model and action handling. Browser semantics use DOM adapters.
+The [production accessibility record](docs/verification/native-accessibility.md)
+documents implemented Value/Text selection and request actions, the C ownership
+boundary, and remaining geometry and real assistive-technology acceptance.
 See [ADR 023](docs/adr/023-development-automation.md).
 
 Accessibility remains enabled in production. Removing MCP support must never
@@ -254,7 +259,7 @@ Detailed protocol and security constraints are in ADR 023.
 | P0-B Browser GPU | Real WebGPU path and WasmGC/JS comparison |
 | P0-C Async | Non-blocking completion, cancellation, stale/disposed result handling |
 | P0-D Contract | Contract-only FE build; wrong input/output/error rejected |
-| P0-E Protobuf/gRPC | Generated DTO interop; native/browser protocol decision |
+| Optional P0-E Protobuf/gRPC | Separate adapter experiment; not a prerequisite for the standard HTTP/JSON path or P0 completion |
 | P0-F Text | Japanese/Latin shaping and rendering with explicit position units |
 | P0-G IME | Browser composition, selection, candidate position on real systems |
 | P0-H Semantics/devtools | Accessibility bridge comparison; dev control and production exclusion experiment |
