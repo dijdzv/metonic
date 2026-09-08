@@ -23,7 +23,12 @@ extern "C" fn frame_bounds(
 extern "C" fn client_origin(hwnd : UInt64, point : FixedArray[Int]) -> Int = "ClientToScreen"
 
 ///|
-async fn capture_presentation(hwnd : UInt64, phase : String) -> Unit {
+async fn capture_presentation(
+  hwnd : UInt64,
+  phase : String,
+  editor_text? : String? = None,
+  caret? : Int? = None,
+) -> Unit {
   if @env.get_env_var("METONIC_PRESENTATION_CAPTURE") != Some("1") {
     return
   }
@@ -110,13 +115,19 @@ async fn capture_presentation(hwnd : UInt64, phase : String) -> Unit {
   assert_eq(right - left + 1, 120)
   assert_eq(bottom - top + 1, 72)
   assert_eq(cyan + orange, 120 * 72)
-  if phase == "initial" {
+  let reference_text = if phase == "initial" {
+    Some("日本語の描画を確認します ABC 123")
+  } else {
+    editor_text
+  }
+  if reference_text is Some(text) {
+    let client = FixedArray::make(4, 0)
+    assert_true(client_rect(hwnd, client) != 0)
+    let width = (client[2] - 16).max(1).min(640)
     let engine = @raster.create(
       @fs.read_file(".work/text-assets/NotoSansJP.ttf").binary(),
     ).unwrap()
-    let expected = @raster.render(
-      engine, "日本語の描画を確認します ABC 123", 624, 96,
-    )
+    let expected = @raster.render(engine, text, width, 96, caret~)
     let x0 = origin[0] - frame[0] + 8
     let y0 = origin[1] - frame[1] + 8
     let mut black = 0
@@ -124,8 +135,8 @@ async fn capture_presentation(hwnd : UInt64, phase : String) -> Unit {
     // Antialiased edges change with surface color conversion; only opaque
     // black and white establish this transfer/placement contract.
     for y in 0..<96 {
-      for x in 0..<624 {
-        let source = (y * 624 + x) * 4
+      for x in 0..<width {
+        let source = (y * width + x) * 4
         let target = ((y0 + y) * image.width + x0 + x) * 4
         if expected[source] == b'\x00' &&
           expected[source + 1] == b'\x00' &&
@@ -144,8 +155,11 @@ async fn capture_presentation(hwnd : UInt64, phase : String) -> Unit {
         }
       }
     }
-    assert_true(black > 100 && white > 10000)
-    stage("initial Japanese/Latin glyph interiors and background match raster")
+    assert_true(white > width * 40)
+    if text != "" {
+      assert_true(black > 100)
+    }
+    stage("editor glyph interiors, caret and background match raster " + phase)
   }
   if phase == "long-editor" || phase == "result" {
     let mut status_ink = 0
