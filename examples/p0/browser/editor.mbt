@@ -140,6 +140,7 @@ pub fn editor_unit(index : Int) -> Int {
 #export_name("editor_dispose")
 pub fn editor_dispose() -> Unit {
   editor_composition_end()
+  query_composition_end()
   ignore(@semantics.dispose(application.val.editor))
   clear_text()
 }

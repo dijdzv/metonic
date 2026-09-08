@@ -273,6 +273,14 @@ try {
                 });
               });
               case 'value': return page.locator(command.selector).inputValue();
+              case 'rpc-count': return resources.filter((path) => path === '/rpc').length;
+              case 'input-event': await page.locator(command.selector).evaluate((input, event) => {
+                if (event.value !== undefined) input.value = event.value;
+                if (event.start !== undefined) input.setSelectionRange(event.start, event.end);
+                input.dispatchEvent(event.type.startsWith('composition')
+                  ? new CompositionEvent(event.type, { data: event.data ?? '', bubbles: true })
+                  : new InputEvent(event.type, { data: event.data ?? '', isComposing: event.composing ?? false, bubbles: true }));
+              }, command); await settle(); break;
               case 'disabled': return page.locator(command.selector).isDisabled();
               case 'no-probe': return page.evaluate(() => !('metonicAsyncProbe' in window));
               case 'width': return page.locator('#canvas').evaluate((element) => element.width);

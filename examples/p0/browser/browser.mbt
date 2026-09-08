@@ -5,6 +5,7 @@ let application : Ref[@application.Model] = Ref(@application.create(1, 1))
 #export_name("init")
 pub fn reset_state() -> Unit {
   editor_composition_end()
+  query_composition_end()
   ignore(@semantics.dispose(application.val.editor))
   ignore(application.val.stop())
   application.val = @application.create(1, 1)

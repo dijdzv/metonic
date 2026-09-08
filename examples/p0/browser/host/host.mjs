@@ -12,6 +12,7 @@ const textInput = $('text-input');
 const DEFAULT_TEXT = textInput.value;
 let textRenderer;
 let composing = false;
+let queryComposing = false;
 function onCompositionStart() {
   if (disposed) return;
   syncEditor();
@@ -51,7 +52,7 @@ function syncEditor() {
   if (Number(app.editor_commit(textInput.selectionStart, textInput.selectionEnd)) !== 1) throw new Error('Editor selection rejected');
 }
 async function loadUser() {
-  if (disposed || !app || composing) return;
+  if (disposed || !app || composing || queryComposing) return;
   app.view_focus(1);
   renderEditor();
   rpcInput(new TextEncoder().encode($('rpc-user').value));
@@ -261,6 +262,7 @@ function onReset() {
   $('rpc-user').value = '1';
   composing = false;
   syncEditor();
+  queryComposing = false;
   textRenderer?.rasterText(cssW);
   updateTaskDiagnostics();
   resize(true);
@@ -280,14 +282,30 @@ function placeView() {
   $('rpc-load').textContent = String.fromCharCode(...Array.from({ length: Number(app.view_field(1, 4)) }, (_, i) => Number(app.view_label_unit(i))));
 }
 function onEditorFocus() { if (!disposed && app) { app.view_focus(0); renderEditor(); } }
-function onQueryInput() {
-  if (disposed || !app) return;
+function onQueryInput(event) {
+  if (disposed || !app || queryComposing || event?.isComposing) return;
   const input = $('rpc-user');
   sendEditorText(input.value);
   if (Number(app.query_commit(input.selectionStart, input.selectionEnd)) !== 1) throw new Error('Query input rejected');
   renderEditor();
 }
 function onQueryFocus() { if (!disposed && app) { app.view_focus(6); onQueryInput(); } }
+function onQueryCompositionStart() {
+  if (disposed || !app) return;
+  onQueryInput();
+  queryComposing = Number(app.query_composition_start()) === 1;
+}
+function onQueryCompositionUpdate(event) {
+  if (disposed || !queryComposing) return;
+  sendEditorText(event.data);
+  if (Number(app.query_composition_update()) === 1) renderEditor();
+}
+function onQueryCompositionEnd() {
+  if (disposed || !queryComposing) return;
+  queryComposing = false;
+  app.query_composition_end();
+  onQueryInput();
+}
 function onRequestFocus() { if (!disposed && app) { app.view_focus(1); renderEditor(); } }
 function onStartFocus() { if (!disposed && app) { app.view_focus(3); renderEditor(); } }
 function onCancelFocus() { if (!disposed && app) { app.view_focus(4); renderEditor(); } }
@@ -322,6 +340,11 @@ function stop(reason = 'Stopped.', error = false) {
   $('rpc-user').removeEventListener('focus', onQueryFocus);
   $('rpc-user').removeEventListener('input', onQueryInput);
   $('rpc-user').removeEventListener('select', onQueryInput);
+  $('rpc-user').removeEventListener('compositionstart', onQueryCompositionStart);
+  $('rpc-user').removeEventListener('compositionupdate', onQueryCompositionUpdate);
+  $('rpc-user').removeEventListener('compositionend', onQueryCompositionEnd);
+  app?.query_composition_end?.();
+  queryComposing = false;
   canvas.removeEventListener('focus', onSceneFocus);
   $('rpc-user').disabled = true;
   textRenderer?.dispose();
@@ -445,6 +468,9 @@ struct U { rect: vec4f, viewport: vec2f, enabled: f32, pad: f32 };
   $('rpc-user').addEventListener('focus', onQueryFocus);
   $('rpc-user').addEventListener('input', onQueryInput);
   $('rpc-user').addEventListener('select', onQueryInput);
+  $('rpc-user').addEventListener('compositionstart', onQueryCompositionStart);
+  $('rpc-user').addEventListener('compositionupdate', onQueryCompositionUpdate);
+  $('rpc-user').addEventListener('compositionend', onQueryCompositionEnd);
   canvas.addEventListener('focus', onSceneFocus);
   $('rpc-user').disabled = false;
   $('task-cancel').addEventListener('click', onTaskCancel);
