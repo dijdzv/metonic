@@ -4,7 +4,8 @@ The packaged browser application links `browser_host/app` and the shared
 `examples/p0/browser` state once. MoonBit owns listeners for the main textarea
 and User ID input, including composition, selection, focus and disposal.
 Direct string calls share validation with the numeric control API. The remaining
-JavaScript host owns WebGPU calls, bounded HTTP transport and frame scheduling;
+JavaScript host owns WebGPU calls and frame scheduling; the
+[MoonBit HTTP host](browser-http.md) owns bounded fetch and cancellation.
 `metonic-input` requests a render after an input update.
 
 `scripts/prepare-browser-deps.mbtx` downloads webapi commit

@@ -13,6 +13,17 @@ async fn run(command : String, args : Array[String]) -> String {
     no_console_window=true,
   )
   if code != 0 {
+    @fs.write_file(
+      ".work/named-pipe-command-failure.log",
+      command +
+      " " +
+      args.join(" ") +
+      "\nexit=" +
+      code.to_string() +
+      "\n" +
+      @utf8.decode_lossy(output.binary()) +
+      @utf8.decode_lossy(error.binary()),
+    )
     abort(
       command +
       " failed: " +
