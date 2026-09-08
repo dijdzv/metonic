@@ -89,21 +89,21 @@ fn App::handle(self : App) -> Handle {
       result.val.unwrap_or("closed")
     },
     inspect: () => {
-      let node = @semantics.snapshot(self.editor)[1]
+      let node = @semantics.snapshot(self.model.editor)[1]
       {
-        x: @scene.field(self.state, 0),
-        y: @scene.field(self.state, 1),
-        width: @scene.field(self.state, 6),
-        height: @scene.field(self.state, 7),
-        semantic_revision: @semantics.revision(self.editor),
+        x: @scene.field(self.model.scene, 0),
+        y: @scene.field(self.model.scene, 1),
+        width: @scene.field(self.model.scene, 6),
+        height: @scene.field(self.model.scene, 7),
+        semantic_revision: @semantics.revision(self.model.editor),
         text: node.value,
         selection_start: node.selection_start,
         selection_end: node.selection_end,
         selection_anchor: node.selection_anchor,
         caret: @semantics.caret(node),
         frames: self.diagnostics.frames,
-        task_status: @task_scope.field(self.scope, 0),
-        rpc_result: self.rpc_result,
+        task_status: self.model.task_field(0),
+        rpc_result: self.model.result,
         composing: self.composition is Some(_),
         preedit: self.preedit,
         preedit_cursor: if self.composition is Some(_) {

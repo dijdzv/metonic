@@ -8,9 +8,6 @@ let rpc_expected : Ref[Int] = Ref(-1)
 let rpc_wire : Ref[Bytes] = Ref(b"")
 
 ///|
-let rpc_result : Ref[Bytes] = Ref(b"")
-
-///|
 #export_name("rpc_begin_input")
 pub fn rpc_begin_input(length : Int) -> Int {
   rpc_input.val = []
@@ -64,13 +61,13 @@ pub fn rpc_request() -> Int {
 ///|
 #export_name("rpc_output_length")
 pub fn rpc_output_length(kind : Int) -> Int {
-  (if kind == 0 { rpc_wire.val } else { rpc_result.val }).length()
+  (if kind == 0 { rpc_wire.val } else { application.val.result_utf8 }).length()
 }
 
 ///|
 #export_name("rpc_output_byte")
 pub fn rpc_output_byte(kind : Int, index : Int) -> Int {
-  let bytes = if kind == 0 { rpc_wire.val } else { rpc_result.val }
+  let bytes = if kind == 0 { rpc_wire.val } else { application.val.result_utf8 }
   if index < 0 || index >= bytes.length() {
     -1
   } else {
@@ -80,21 +77,10 @@ pub fn rpc_output_byte(kind : Int, index : Int) -> Int {
 
 ///|
 fn rpc_apply(id : Int, result : Result[String, String]) -> Int {
-  match result {
-    Ok(name) =>
-      if @task_scope.complete(taskScope.val, id, 0) {
-        rpc_result.val = @utf8.encode("\n" + name)
-        1
-      } else {
-        0
-      }
-    Err(error) =>
-      if @task_scope.fail(taskScope.val, id, 1) {
-        rpc_result.val = @utf8.encode("\nRPC: " + error)
-        1
-      } else {
-        0
-      }
+  if application.val.complete_user(id, result) {
+    1
+  } else {
+    0
   }
 }
 

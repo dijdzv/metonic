@@ -19,8 +19,8 @@ async fn App::dispatch_development(
           let pixels = app.renderer.unwrap().capture_frame()
           Ok(Captured::{
             pixels,
-            width: @scene.field(app.state, 6),
-            height: @scene.field(app.state, 7),
+            width: @scene.field(app.model.scene, 6),
+            height: @scene.field(app.model.scene, 7),
             frame: app.diagnostics.frames,
           })
         } catch {
@@ -31,14 +31,14 @@ async fn App::dispatch_development(
       if app.composition is Some(_) {
         result.val = Some("composition_active")
       } else if expected is Some(revision) &&
-        revision != @semantics.revision(app.editor) {
+        revision != @semantics.revision(app.model.editor) {
         result.val = Some("stale_revision")
       } else {
-        let reference = @semantics.snapshot(app.editor)[1].reference
+        let reference = @semantics.snapshot(app.model.editor)[1].reference
         let error = match text {
           Some(text) =>
-            @semantics.replace_selection(app.editor, reference, text)
-          None => @semantics.delete_backward(app.editor, reference)
+            @semantics.replace_selection(app.model.editor, reference, text)
+          None => @semantics.delete_backward(app.model.editor, reference)
         }
         if error == "" {
           app.draw()
@@ -49,11 +49,16 @@ async fn App::dispatch_development(
       if app.composition is Some(_) {
         result.val = Some("composition_active")
       } else if expected is Some(revision) &&
-        revision != @semantics.revision(app.editor) {
+        revision != @semantics.revision(app.model.editor) {
         result.val = Some("stale_revision")
       } else {
-        let reference = @semantics.snapshot(app.editor)[1].reference
-        let error = @semantics.set_selection(app.editor, reference, start, end)
+        let reference = @semantics.snapshot(app.model.editor)[1].reference
+        let error = @semantics.set_selection(
+          app.model.editor,
+          reference,
+          start,
+          end,
+        )
         if error == "" {
           app.draw()
         }

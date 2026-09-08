@@ -44,11 +44,8 @@ priv enum Event {
 struct App {
   event_loop : @windows.EventLoop
   events : @aqueue.Queue[Event]
-  state : @scene.State
-  editor : @semantics.Tree
-  scope : @task_scope.Scope
+  model : @application.Model
   diagnostics : Diagnostics
-  mut rpc_result : String
   mut composition : @semantics.Composition?
   mut preedit : String
   mut preedit_cursor : Int
@@ -99,7 +96,7 @@ pub impl @windows.ApplicationHandler for App with fn can_create_surfaces(
   self.hwnd = window.native_window_handle()
   self.accessibility = @accessibility.open(
     self.hwnd,
-    @semantics.snapshot(self.editor),
+    @semantics.snapshot(self.model.editor),
   )
   if self.accessibility is None {
     self.error = Some(WindowFailure::Failure("accessibility attachment failed"))
@@ -200,13 +197,13 @@ pub impl @windows.ApplicationHandler for App with fn window_event(
 
 ///|
 fn App::draw(self : App) -> Unit raise Error {
-  let button = @semantics.snapshot(self.editor)[0]
-  if (button.value == "on") != (@scene.field(self.state, 4) == 1) {
-    ignore(@semantics.activate(self.editor, button.reference))
+  let button = @semantics.snapshot(self.model.editor)[0]
+  if (button.value == "on") != (@scene.field(self.model.scene, 4) == 1) {
+    ignore(@semantics.activate(self.model.editor, button.reference))
   }
   match self.renderer {
     Some(renderer) => {
-      let node = @semantics.snapshot(self.editor)[1]
+      let node = @semantics.snapshot(self.model.editor)[1]
       let preview = match self.composition {
         Some(composition) => composition.preview(self.preedit)
         None => None
@@ -228,19 +225,19 @@ fn App::draw(self : App) -> Unit raise Error {
       } else {
         None
       }
-      let width = (@scene.field(self.state, 6) - 16).max(1).min(640)
+      let width = (@scene.field(self.model.scene, 6) - 16).max(1).min(640)
       if self.rendered_text != Some(text) ||
-        self.rendered_result != self.rpc_result ||
+        self.rendered_result != self.model.result ||
         self.text_width != width ||
         self.rendered_selection != selection ||
         self.rendered_caret != visible_caret {
         // Rendering the result last would replace the editor layout used by IME and hit testing.
-        let status = if self.rpc_result == "" {
+        let status = if self.model.result == "" {
           b""
         } else {
           @raster.render(
             self.raster.unwrap(),
-            self.rpc_result.trim().to_owned(),
+            self.model.result.trim().to_owned(),
             width,
             32,
           )
@@ -270,7 +267,7 @@ fn App::draw(self : App) -> Unit raise Error {
           pixels,
         )
         self.rendered_text = Some(text)
-        self.rendered_result = self.rpc_result
+        self.rendered_result = self.model.result
         self.rendered_selection = selection
         self.rendered_caret = visible_caret
         self.text_width = width
@@ -284,28 +281,28 @@ fn App::draw(self : App) -> Unit raise Error {
         }
       }
       renderer.present(
-        @scene.field(self.state, 6),
-        @scene.field(self.state, 7),
-        @scene.field(self.state, 0),
-        @scene.field(self.state, 1),
-        @scene.field(self.state, 2),
-        @scene.field(self.state, 3),
-        @scene.field(self.state, 4),
+        @scene.field(self.model.scene, 6),
+        @scene.field(self.model.scene, 7),
+        @scene.field(self.model.scene, 0),
+        @scene.field(self.model.scene, 1),
+        @scene.field(self.model.scene, 2),
+        @scene.field(self.model.scene, 3),
+        @scene.field(self.model.scene, 4),
       )
       self.diagnostics.presented()
     }
     None => ()
   }
   if self.accessibility is Some(bridge) {
-    let nodes = @semantics.snapshot(self.editor)
+    let nodes = @semantics.snapshot(self.model.editor)
     bridge.update(
       nodes,
-      @scene.field(self.state, 6),
-      @scene.field(self.state, 7),
-      @scene.field(self.state, 0),
-      @scene.field(self.state, 1),
+      @scene.field(self.model.scene, 6),
+      @scene.field(self.model.scene, 7),
+      @scene.field(self.model.scene, 0),
+      @scene.field(self.model.scene, 1),
       self.composition is Some(_),
-      self.rpc_result,
+      self.model.result,
       self.raster.bind(engine => @raster.text_runs(engine, nodes[1].value)),
     )
   }
@@ -375,11 +372,8 @@ async fn run_loop(
   let app : App = {
     event_loop,
     events: @aqueue.Queue::Queue(kind=@aqueue.Blocking(64)),
-    state: @scene.create(),
-    editor: @semantics.create(1, 1),
-    scope: @task_scope.create(),
+    model: @application.create(1, 1),
     diagnostics: Diagnostics::new(),
-    rpc_result: "",
     composition: None,
     preedit: "",
     preedit_cursor: 0,
@@ -424,8 +418,8 @@ async fn run_loop(
     require(app.raster is Some(_), "font could not be loaded")
     require(
       @semantics.set_text(
-        app.editor,
-        @semantics.snapshot(app.editor)[1].reference,
+        app.model.editor,
+        @semantics.snapshot(app.model.editor)[1].reference,
         "日本語の描画を確認します ABC 123",
       ) ==
       "",
@@ -472,23 +466,30 @@ async fn run_loop(
             Development(request) => app.dispatch_development(request)
             Accessibility(_) if app.composition is Some(_) => ()
             Accessibility(request) => {
-              let nodes = @semantics.snapshot(app.editor)
+              let nodes = @semantics.snapshot(app.model.editor)
               match request {
                 @accessibility.Focus(target) => {
                   if app.window is Some(window) {
                     window.focus_window()
                   }
                   ignore(
-                    @semantics.focus(app.editor, nodes[target - 1].reference),
+                    @semantics.focus(
+                      app.model.editor,
+                      nodes[target - 1].reference,
+                    ),
                   )
                   app.draw()
                 }
                 @accessibility.Click(1) => {
-                  ignore(@scene.dispatch(app.state, Activate))
+                  ignore(@scene.dispatch(app.model.scene, Activate))
                   app.draw()
                 }
                 @accessibility.SetValue(2, text) =>
-                  if @semantics.set_text(app.editor, nodes[1].reference, text) ==
+                  if @semantics.set_text(
+                      app.model.editor,
+                      nodes[1].reference,
+                      text,
+                    ) ==
                     "" {
                     app.draw()
                   }
@@ -496,10 +497,12 @@ async fn run_loop(
                   if app.accessibility is Some(bridge) {
                     if bridge.resolve_selection(request)
                       is Some((anchor, caret)) {
-                      ignore(@semantics.focus(app.editor, nodes[1].reference))
+                      ignore(
+                        @semantics.focus(app.model.editor, nodes[1].reference),
+                      )
                       ignore(
                         @semantics.set_selection_directed(
-                          app.editor,
+                          app.model.editor,
                           nodes[1].reference,
                           anchor,
                           caret,
@@ -514,17 +517,17 @@ async fn run_loop(
             SelectBoundary(_, _) | Navigate(_, _) | ToggleFocus if app.composition
               is Some(_) => ()
             ToggleFocus => {
-              let nodes = @semantics.snapshot(app.editor)
+              let nodes = @semantics.snapshot(app.model.editor)
               let target = if nodes[1].focused { nodes[0] } else { nodes[1] }
-              ignore(@semantics.focus(app.editor, target.reference))
+              ignore(@semantics.focus(app.model.editor, target.reference))
               app.draw()
             }
             Navigate(forward, extend_selection) => {
-              let node = @semantics.snapshot(app.editor)[1]
+              let node = @semantics.snapshot(app.model.editor)[1]
               if node.focused {
                 ignore(
                   @semantics.navigate(
-                    app.editor,
+                    app.model.editor,
                     node.reference,
                     forward,
                     extend_selection,
@@ -533,7 +536,7 @@ async fn run_loop(
               } else {
                 ignore(
                   @scene.dispatch(
-                    app.state,
+                    app.model.scene,
                     Move(if forward { 10 } else { -10 }, 0),
                   ),
                 )
@@ -541,8 +544,8 @@ async fn run_loop(
               app.draw()
             }
             SelectBoundary(kind, extend_selection) => {
-              let node = @semantics.snapshot(app.editor)[1]
-              ignore(@semantics.focus(app.editor, node.reference))
+              let node = @semantics.snapshot(app.model.editor)[1]
+              ignore(@semantics.focus(app.model.editor, node.reference))
               let end = if kind == 1 { 0 } else { node.value.length() }
               let anchor = if kind == 0 {
                 0
@@ -553,7 +556,7 @@ async fn run_loop(
               }
               ignore(
                 @semantics.set_selection_directed(
-                  app.editor,
+                  app.model.editor,
                   node.reference,
                   anchor,
                   end,
@@ -566,7 +569,7 @@ async fn run_loop(
                 LoadUser(value) => Some(value)
                 _ => None
               }
-              ignore(@task_scope.cancel(app.scope))
+              ignore(app.model.cancel_update())
               if update is Some(previous) {
                 previous.cancel()
                 previous.wait() catch {
@@ -574,9 +577,9 @@ async fn run_loop(
                   error => raise error
                 }
               }
-              let id = @task_scope.begin(app.scope)
+              let id = app.model.begin_update()
               require(id > 0, "update scope unavailable")
-              let target = (@scene.field(app.state, 0) - 10).max(0)
+              let target = (@scene.field(app.model.scene, 0) - 10).max(0)
               update = Some(
                 group.spawn(() => {
                   if user_id is Some(value) {
@@ -595,7 +598,7 @@ async fn run_loop(
               )
             }
             CancelUpdate => {
-              ignore(@task_scope.cancel(app.scope))
+              ignore(app.model.cancel_update())
               if update is Some(previous) {
                 previous.cancel()
                 previous.wait() catch {
@@ -606,47 +609,35 @@ async fn run_loop(
               update = None
             }
             UserLoaded(id, result) =>
-              match result {
-                Ok(name) =>
-                  if @task_scope.complete(app.scope, id, 0) {
-                    app.rpc_result = "\n" + name
-                    app.draw()
-                  }
-                Err(error) =>
-                  if @task_scope.fail(app.scope, id, 1) {
-                    app.rpc_result = "\nRPC: " + error
-                    app.draw()
-                  }
+              if app.model.complete_user(id, result) {
+                app.draw()
               }
             Updated(id, value) =>
-              if @task_scope.complete(app.scope, id, value) {
-                ignore(
-                  @scene.move_to(app.state, value, @scene.field(app.state, 1)),
-                )
+              if app.model.complete_movement(id, value) {
                 app.draw()
               } else {
                 app.diagnostics.rejected()
               }
             Close => {
               app.closed = true
-              ignore(@task_scope.dispose(app.scope))
+              ignore(app.model.stop())
             }
             Resize(size) =>
               if size.width() > 0 && size.height() > 0 {
-                if @scene.resize(app.state, size.width(), size.height()) {
+                if @scene.resize(app.model.scene, size.width(), size.height()) {
                   app.draw()
                 }
               }
             Redraw => app.draw()
             CompositionStart =>
               if app.composition is None {
-                app.composition = @semantics.begin_composition(app.editor)
+                app.composition = @semantics.begin_composition(app.model.editor)
                 app.preedit = ""
                 app.draw()
               }
             CompositionUpdate(value, cursor) => {
               if app.composition is None {
-                app.composition = @semantics.begin_composition(app.editor)
+                app.composition = @semantics.begin_composition(app.model.editor)
               }
               app.preedit = value
               app.preedit_cursor = cursor
@@ -671,22 +662,24 @@ async fn run_loop(
             }
             // Space also arrives as text after scene activation; it must not
             // transfer focus to the editor a second time.
-            Commit(" ") if !@semantics.snapshot(app.editor)[1].focused => ()
+            Commit(" ") if !@semantics.snapshot(app.model.editor)[1].focused =>
+              ()
             Commit(value) => {
-              let reference = @semantics.snapshot(app.editor)[1].reference
-              ignore(@semantics.focus(app.editor, reference))
+              let reference = @semantics.snapshot(app.model.editor)[1].reference
+              ignore(@semantics.focus(app.model.editor, reference))
               require(
-                @semantics.replace_selection(app.editor, reference, value) == "",
+                @semantics.replace_selection(app.model.editor, reference, value) ==
+                "",
                 "committed text rejected",
               )
               app.draw()
             }
             Backspace if app.composition is Some(_) ||
-              !@semantics.snapshot(app.editor)[1].focused => ()
+              !@semantics.snapshot(app.model.editor)[1].focused => ()
             Backspace => {
-              let reference = @semantics.snapshot(app.editor)[1].reference
+              let reference = @semantics.snapshot(app.model.editor)[1].reference
               require(
-                @semantics.delete_backward(app.editor, reference) == "",
+                @semantics.delete_backward(app.model.editor, reference) == "",
                 "backspace rejected",
               )
               app.draw()
@@ -696,8 +689,8 @@ async fn run_loop(
               if x >= 8 && x < 8 + app.text_width && y >= 8 && y < 104 {
                 if app.raster is Some(engine) {
                   if @raster.hit(engine, x - 8, y - 8) is Some(offset) {
-                    let node = @semantics.snapshot(app.editor)[1]
-                    ignore(@semantics.focus(app.editor, node.reference))
+                    let node = @semantics.snapshot(app.model.editor)[1]
+                    ignore(@semantics.focus(app.model.editor, node.reference))
                     let caret = offset.min(node.value.length())
                     let anchor = if extend_selection {
                       node.selection_anchor
@@ -706,7 +699,7 @@ async fn run_loop(
                     }
                     ignore(
                       @semantics.set_selection_directed(
-                        app.editor,
+                        app.model.editor,
                         node.reference,
                         anchor,
                         caret,
@@ -718,17 +711,17 @@ async fn run_loop(
               } else {
                 ignore(
                   @semantics.focus(
-                    app.editor,
-                    @semantics.snapshot(app.editor)[0].reference,
+                    app.model.editor,
+                    @semantics.snapshot(app.model.editor)[0].reference,
                   ),
                 )
-                ignore(@scene.dispatch(app.state, Click(x, y)))
+                ignore(@scene.dispatch(app.model.scene, Click(x, y)))
                 app.draw()
               }
             Input(_) if app.composition is Some(_) ||
-              @semantics.snapshot(app.editor)[1].focused => ()
+              @semantics.snapshot(app.model.editor)[1].focused => ()
             Input(action) =>
-              if @scene.dispatch(app.state, action) {
+              if @scene.dispatch(app.model.scene, action) {
                 app.draw()
               }
           }
@@ -764,7 +757,7 @@ async fn run_loop(
           @async.sleep(1)
         }
       }
-      ignore(@task_scope.dispose(app.scope))
+      ignore(app.model.stop())
       if control_task is Some(task) {
         task.cancel()
         task.wait() catch {
@@ -791,7 +784,7 @@ async fn run_loop(
   } catch {
     error => {
       app.closed = true
-      ignore(@task_scope.dispose(app.scope))
+      ignore(app.model.stop())
       app.error = Some(error)
     }
   }

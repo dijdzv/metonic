@@ -1,7 +1,4 @@
 ///|
-let editor : Ref[@semantics.Tree] = Ref(@semantics.create(1, 1))
-
-///|
 let editor_composition : Ref[@semantics.Composition?] = Ref(None)
 
 ///|
@@ -21,7 +18,7 @@ pub fn editor_composition_end() -> Unit {
 #export_name("editor_composition_start")
 pub fn editor_composition_start() -> Int {
   editor_composition_end()
-  editor_composition.val = @semantics.begin_composition(editor.val)
+  editor_composition.val = @semantics.begin_composition(application.val.editor)
   if editor_composition.val is Some(_) {
     1
   } else {
@@ -57,7 +54,7 @@ fn editor_display() -> String {
   if editor_preview.val is Some(text) {
     return text
   }
-  let nodes = @semantics.snapshot(editor.val)
+  let nodes = @semantics.snapshot(application.val.editor)
   if nodes.length() == 2 {
     nodes[1].value
   } else {
@@ -77,18 +74,11 @@ pub fn editor_display_unit(index : Int) -> Int {
 }
 
 ///|
-fn reset_editor() -> Unit {
-  editor_composition_end()
-  ignore(@semantics.dispose(editor.val))
-  editor.val = @semantics.create(1, 1)
-}
-
-///|
 fn accept_editor(value : String, start : Int, end : Int) -> Bool {
   if editor_composition.val is Some(_) {
     return false
   }
-  let nodes = @semantics.snapshot(editor.val)
+  let nodes = @semantics.snapshot(application.val.editor)
   if nodes.length() != 2 ||
     start > end ||
     @text_position.utf16_to_scalar(value, start) is None ||
@@ -96,8 +86,8 @@ fn accept_editor(value : String, start : Int, end : Int) -> Bool {
     return false
   }
   let reference = nodes[1].reference
-  @semantics.set_text(editor.val, reference, value) == "" &&
-  @semantics.set_selection(editor.val, reference, start, end) == ""
+  @semantics.set_text(application.val.editor, reference, value) == "" &&
+  @semantics.set_selection(application.val.editor, reference, start, end) == ""
 }
 
 ///|
@@ -119,7 +109,7 @@ pub fn editor_commit(start : Int, end : Int) -> Int {
 ///|
 #export_name("editor_field")
 pub fn editor_field(index : Int) -> Int {
-  let nodes = @semantics.snapshot(editor.val)
+  let nodes = @semantics.snapshot(application.val.editor)
   if nodes.length() != 2 {
     return -1
   }
@@ -128,7 +118,7 @@ pub fn editor_field(index : Int) -> Int {
     0 => node.value.length()
     1 => node.selection_start
     2 => node.selection_end
-    3 => @semantics.revision(editor.val)
+    3 => @semantics.revision(application.val.editor)
     4 => editor_display().length()
     5 => if editor_composition.val is Some(_) { 1 } else { 0 }
     _ => -1
@@ -138,7 +128,7 @@ pub fn editor_field(index : Int) -> Int {
 ///|
 #export_name("editor_unit")
 pub fn editor_unit(index : Int) -> Int {
-  let nodes = @semantics.snapshot(editor.val)
+  let nodes = @semantics.snapshot(application.val.editor)
   if nodes.length() != 2 || index < 0 || index >= nodes[1].value.length() {
     -1
   } else {
@@ -150,6 +140,6 @@ pub fn editor_unit(index : Int) -> Int {
 #export_name("editor_dispose")
 pub fn editor_dispose() -> Unit {
   editor_composition_end()
-  ignore(@semantics.dispose(editor.val))
+  ignore(@semantics.dispose(application.val.editor))
   clear_text()
 }

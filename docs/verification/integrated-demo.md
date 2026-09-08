@@ -17,6 +17,12 @@ control a browser process. See [the selection and package record](browser-target
 The two frontends share model implementations and the HTTP contract, not a live
 editing session. Perform the sequence separately in each UI.
 
+`examples/p0/application` owns each demo instance's scene, editor, task scope and
+RPC result. Both hosts use its result and delayed-movement transitions, including
+rejection of canceled, superseded and stopped requests. Window/browser events,
+transport execution and GPU resources remain in their host adapters. This is the
+sample application's shared behavior, not a general component or reactive API.
+
 | Operation | Native | Browser |
 | --- | --- | --- |
 | Replace the initial text | Ctrl+A, type Japanese and Latin text | Focus the text input, select all and type |
