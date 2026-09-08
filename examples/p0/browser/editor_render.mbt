@@ -1,6 +1,6 @@
 ///|
 let rendered_editor : Ref[
-  (String, Bytes, Int, Bool, Int, Int, Bool, Int, Bool, Bool)?,
+  (String, Bytes, Int, Bool, Int, Int, Bool, Int, Bool, Bool, Int)?,
 ] = Ref(None)
 
 ///|
@@ -35,6 +35,7 @@ pub fn editor_render(viewport_width : Int) -> Int {
     application.val.task_field(0),
     view.start.focused,
     view.cancel.focused,
+    @scene.field(application.val.scene, 7),
   )
   if rendered_editor.val == Some(key) {
     return 2

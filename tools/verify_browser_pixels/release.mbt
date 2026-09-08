@@ -150,6 +150,9 @@ async fn run_release(host : BrowserHost) -> String {
     "resize changed maximum-length editor",
   )
   ignore(command(host, { "op": "viewport", "width": 1000 }))
+  ignore(command(host, { "op": "viewport", "width": 600 }))
+  verify_compact_tasks(host)
+  ignore(command(host, { "op": "viewport", "width": 1000 }))
   ignore(
     command(host, {
       "op": "fill",
@@ -247,6 +250,108 @@ async fn run_release(host : BrowserHost) -> String {
     "release page errors",
   )
   return "{\"ordinary_ui\":true,\"rendered_edit_and_rpc\":true,\"resize\":true,\"stop\":true,\"development_excluded\":true,\"rpc_failures\":8,\"rpc_recovery\":8,\"rpc_cancel_replace\":2}"
+}
+
+///|
+async fn verify_compact_tasks(host : BrowserHost) -> Unit {
+  let before = command(host, { "op": "value", "selector": "#text-input" })
+  ignore(command(host, { "op": "click", "selector": "#task-start" }))
+  ignore(
+    command(host, {
+      "op": "wait-text",
+      "selector": "#task-state",
+      "text": "Working…",
+    }),
+  )
+  ignore(command(host, { "op": "click", "selector": "#task-cancel" }))
+  ignore(
+    command(host, {
+      "op": "wait-text",
+      "selector": "#task-state",
+      "text": "Canceled",
+    }),
+  )
+  ignore(command(host, { "op": "sleep", "milliseconds": 1100 }))
+  ignore(
+    command(host, {
+      "op": "wait-text",
+      "selector": "#task-state",
+      "text": "Canceled",
+    }),
+  )
+  ignore(command(host, { "op": "image", "name": "compact-canceled" }))
+  ignore(
+    command(host, { "op": "press", "selector": "#task-start", "key": "Enter" }),
+  )
+  ignore(
+    command(host, {
+      "op": "wait-text",
+      "selector": "#task-state",
+      "text": "Completed",
+    }),
+  )
+  require(
+    command(host, { "op": "value", "selector": "#text-input" }) == before,
+    "compact task changed editor",
+  )
+  verify_task_layout(host, true, "compact-completed")
+  ignore(command(host, { "op": "canvas-height", "height": "360px" }))
+  verify_task_layout(host, false, "height-restored")
+  ignore(command(host, { "op": "canvas-height", "height": "" }))
+  verify_task_layout(host, true, "height-compact")
+}
+
+///|
+async fn verify_task_layout(
+  host : BrowserHost,
+  compact : Bool,
+  name : String,
+) -> Unit {
+  let actual = command(host, { "op": "view-bounds" })
+  guard actual is Json::Array(elements) && elements.length() == 4 else {
+    fail("task bounds missing")
+  }
+  let start_y = if compact { 216 } else { 224 }
+  let cancel_x = if compact { 288 } else { 8 }
+  let cancel_y = if compact { 216 } else { 272 }
+  near_coordinate(elements[2], "x", 8)
+  near_coordinate(elements[2], "y", start_y.to_double())
+  near_coordinate(elements[3], "x", cancel_x.to_double())
+  near_coordinate(elements[3], "y", cancel_y.to_double())
+  let image = decode_png(
+    { "png": command(host, { "op": "image", "name": name }) },
+    "png",
+  )
+  for
+    entry in [
+      (16, start_y + 4),
+      (cancel_x + 8, cancel_y + 4),
+      (8, if compact { 184 } else { 320 }),
+    ] {
+    let (x0, y0) = entry
+    require(
+      x0 + 100 <= image.width && y0 + 32 <= image.height,
+      "task label outside canvas",
+    )
+    let mut ink = 0
+    let mut white = 0
+    for y in y0..<(y0 + 32) {
+      for x in x0..<(x0 + 100) {
+        let i = (y * image.width + x) * 4
+        if image.data[i] < b'\x50' &&
+          image.data[i + 1] < b'\x50' &&
+          image.data[i + 2] < b'\x50' {
+          ink += 1
+        }
+        if image.data[i] > b'\xF0' &&
+          image.data[i + 1] > b'\xF0' &&
+          image.data[i + 2] > b'\xF0' {
+          white += 1
+        }
+      }
+    }
+    require(ink > 30 && white > 1000, "task GPU label missing at input bounds")
+  }
 }
 
 ///|

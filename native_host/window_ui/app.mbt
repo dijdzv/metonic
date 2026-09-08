@@ -55,6 +55,7 @@ struct App {
   mut rendered_text : String?
   mut rendered_request_focus : Bool
   mut rendered_task_status : Int
+  mut rendered_viewport_height : Int
   mut rendered_control_focus : (Bool, Bool)
   mut rendered_result : String
   mut rendered_selection : (Int, Int)
@@ -235,6 +236,7 @@ fn App::draw(self : App) -> Unit raise Error {
         self.rendered_result != self.model.result ||
         self.rendered_request_focus != view.request.focused ||
         self.rendered_task_status != self.model.task_field(0) ||
+        self.rendered_viewport_height != @scene.field(self.model.scene, 7) ||
         self.rendered_control_focus != (view.start.focused, view.cancel.focused) ||
         self.text_width != width ||
         self.rendered_selection != selection ||
@@ -257,6 +259,7 @@ fn App::draw(self : App) -> Unit raise Error {
         )
         self.rendered_request_focus = view.request.focused
         self.rendered_task_status = self.model.task_field(0)
+        self.rendered_viewport_height = @scene.field(self.model.scene, 7)
         self.rendered_control_focus = (view.start.focused, view.cancel.focused)
         self.rendered_text = Some(text)
         self.rendered_result = self.model.result
@@ -377,6 +380,7 @@ async fn run_loop(
     rendered_result: "",
     rendered_request_focus: false,
     rendered_task_status: -1,
+    rendered_viewport_height: -1,
     rendered_control_focus: (false, false),
     rendered_selection: (-1, -1),
     rendered_caret: None,

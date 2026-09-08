@@ -36,6 +36,12 @@ pub struct View {
 pub fn Model::view(self : Model) -> View {
   let nodes = @semantics.snapshot(self.editor)
   let width = (@scene.field(self.scene, 6) - 16).max(1).min(640)
+  let compact = @scene.field(self.scene, 7) < 352 && width >= 384
+  let start_width = if compact {
+    (width - 120).min(272)
+  } else {
+    width.min(272)
+  }
   let editor = nodes[1]
   let request = nodes[2]
   {
@@ -58,7 +64,20 @@ pub fn Model::view(self : Model) -> View {
       focused: false,
     },
     task_status: {
-      bounds: { x: 8, y: 320, width, height: 32, },
+      bounds: {
+        x: 8,
+        y: if compact {
+          184
+        } else {
+          320
+        },
+        width: if compact {
+          176
+        } else {
+          width
+        },
+        height: 32,
+      },
       text: match self.task_field(0) {
         0 => "Idle"
         1 => "Working..."
@@ -71,13 +90,39 @@ pub fn Model::view(self : Model) -> View {
       focused: false,
     },
     start: {
-      bounds: { x: 8, y: 224, width: width.min(272), height: 40, },
+      bounds: {
+        x: 8,
+        y: if compact {
+          216
+        } else {
+          224
+        },
+        width: start_width,
+        height: 40,
+      },
       text: nodes[3].name,
       reference: Some(nodes[3].reference),
       focused: nodes[3].focused,
     },
     cancel: {
-      bounds: { x: 8, y: 272, width: width.min(176), height: 40, },
+      bounds: {
+        x: if compact {
+          16 + start_width
+        } else {
+          8
+        },
+        y: if compact {
+          216
+        } else {
+          272
+        },
+        width: if compact {
+          (width - start_width - 8).min(176)
+        } else {
+          width.min(176)
+        },
+        height: 40,
+      },
       text: nodes[4].name,
       reference: Some(nodes[4].reference),
       focused: nodes[4].focused,

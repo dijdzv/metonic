@@ -51,6 +51,11 @@ a fixed-height viewport without scrolling.
 Both hosts render the delayed-update controls and task status through the shared
 GPU view. The demo delay is one second. Cancel applies to the active delayed update
 or HTTP request; completion and cancellation preserve editor contents.
+For viewports at least 400 pixels wide and 260 pixels high, a height below 352
+uses side-by-side task buttons and a status row above them. Taller viewports keep
+the stacked controls. Native uses client-area pixels; the browser uses CSS pixels.
+Below 400x260, complete control visibility is not supported; enlarge the viewport.
+This sample layout does not implement scrolling or a general responsive layout engine.
 Native left/right keys edit while text is focused; Tab cycles through text, the
 scene, Load user, Move after delay and Cancel. Clicking the scene returns its keyboard focus. Scene focus enables
 Up/down movement and Enter/Space activation. Those keys do not operate the scene

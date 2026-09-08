@@ -488,6 +488,11 @@ async fn main {
     }
     expect_text(editor, "再入力 🚀Q")
     capture_presentation(hwnd, "resized")
+    verify_task_controls(hwnd, root[0], editor, expected_text="再入力 🚀Q")
+    guard text_is(result_node, 30005, "月兎") else {
+      fail("compact task controls changed HTTP result")
+    }
+    capture_presentation(hwnd, "compact-completed")
     guard post(hwnd, 0x0010U, 0UL, 0L) != 0 else {
       fail("production close failed")
     }
