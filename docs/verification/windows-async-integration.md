@@ -2,11 +2,13 @@
 
 ## Scope
 
-This isolated experiment connects `moonbitlang/async@0.21.2` to the
+This record preserves the initial isolated experiment connecting `moonbitlang/async@0.21.2` to the
 `wzzc-dev/window` Windows candidate at
 `b33c9f0ac85002bca4a9cceccbbcd512d13b7ceb`, with the
-[local pump correction](windows-event-pump.md). It does not replace the native
-application's current window or worker implementation. The design boundary is
+[local pump correction](windows-event-pump.md). That boundary was subsequently
+adopted by the native application; the former custom worker implementation was
+removed. For current preparation and commands, use the [development guide](../development.md)
+and [native async record](native-async.md). The design boundary is
 recorded in [ADR 030](../adr/030-native-external-event-loop.md).
 
 The application handler creates a hidden HWND. The external-loop adapter forwards
@@ -56,7 +58,11 @@ asserted that path was exercised. It recorded five zero polls, two finite polls,
 four indefinite polls, a 113 ms timer and the same I/O/cleanup counters. Both
 negative cases were rerun with diagnostics preserved in the observer log.
 
-## Reproduction
+## Historical isolated reproduction
+
+The instructions below reproduce the original separate-checkout experiment.
+For the maintained repository integration, run `mise run native:host-verify`
+and `mise run native:async`; normal builds prepare the pinned patched sources.
 
 Use the pinned [toolchain](../development.md) and a Visual Studio x64 Native Tools
 command prompt. Prepare the separate checkout and apply the patch as described
@@ -89,6 +95,6 @@ not validate arbitrary MoonBit closures on worker threads, GPU presentation,
 physical input, IME or UI Automation. The original application-HWND result alone
 did not prove message-HWND or waiter-HANDLE release. The additional ownership
 measurements and their limits are recorded in
-[resource cleanup](native-resource-cleanup.md). Existing product worker
+[resource cleanup](native-resource-cleanup.md). Current structured-job
 completion and shutdown evidence remains separate in
 [the native async probe](native-async.md).

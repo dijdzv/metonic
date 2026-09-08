@@ -43,19 +43,21 @@ WasmGC) and `mise run verify-native` (MSVC/native).
 This is part of P0-F/P0-G preparation. It does not demonstrate glyph shaping,
 text rendering, actual IME composition or candidate placement.
 
-## Rendering comparison to perform
+## Historical rendering candidates
 
-The next experiment must shape and render the same licensed font and mixed-script
-sample on native and browser targets, recording font bytes, engine versions,
-cluster units, missing-glyph behavior and bridge copies.
+At the time of the position-boundary experiment, the following candidates still
+needed shaping/rendering evaluation. The subsequent [font-layout record](text-layout.md)
+documents the adopted MoonBit `moon_cosmic` path, pinned Noto Sans JP font,
+native/browser evidence and explicit browser copies. No project-owned Rust text
+bridge is required by that adopted path. The table preserves the earlier alternatives.
 
 | Candidate | Documented capability | Evaluation still required |
 | --- | --- | --- |
 | [COSMIC Text 0.19.0](https://docs.rs/cosmic-text/0.19.0/cosmic_text/) | Shaping, layout, font fallback and optional swash rasterization | Native/Wasm build, explicit font loading, cluster mapping and GPU upload |
 | [Parley 0.11.1](https://docs.rs/parley/0.11.1/parley/) | Rich-text shaping, line breaking, bidi layout and alignment | Rasterizer integration and bridge size compared with COSMIC Text |
 
-These are candidates, not adopted dependencies or measured results. The
+These Rust candidates are not the adopted implementation or measured results. The
 [Noto Sans JP source](https://github.com/google/fonts/tree/main/ofl/notosansjp)
-is a font candidate; its exact revision, file checksum and license must be
-recorded before it is distributed with an experiment. No font is bundled by
-this position-boundary change.
+was the font candidate for this initial experiment. Its adopted revision,
+checksum and license are recorded in the font-layout record. The standalone
+position-conversion package itself does not bundle a font.
