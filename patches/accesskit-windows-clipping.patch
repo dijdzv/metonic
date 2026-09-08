@@ -1,0 +1,13 @@
+diff --git a/src/text.rs b/src/text.rs
+index 07a45b8..92ebd09 100644
+--- a/src/text.rs
++++ b/src/text.rs
+@@ -492,7 +492,7 @@ impl ITextRangeProvider_Impl for PlatformRange_Impl {
+
+     fn GetBoundingRectangles(&self) -> Result<*mut SAFEARRAY> {
+         self.read_with_context(|range, context| {
+-            let rects = range.bounding_boxes();
++            let rects = range.clipped_bounding_boxes();
+             if rects.is_empty() {
+                 return Ok(std::ptr::null_mut());
+             }

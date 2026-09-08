@@ -34,4 +34,14 @@ async fn verify_text_layout() -> Unit {
   stage(
     "retained text layout covers empty, wrapped, offscreen and trailing lines",
   )
+  let clustered = "が"
+  ignore(@raster.render(engine, clustered, 160, 96))
+  let clustered_runs = @raster.text_runs(engine, clustered).unwrap()
+  assert_eq(clustered_runs.length(), 1)
+  assert_true(
+    clustered_runs[0].cells is None,
+    msg="combining glyph cluster invented per-scalar geometry",
+  )
+  assert_true(@raster.text_runs(engine, "replacement") is None)
+  stage("combining cluster omits unsupported scalar geometry")
 }

@@ -21,8 +21,9 @@ GetTickCount64 resolution does not establish sub-millisecond latency. Physical
 input, real IME and foreground-focus acceptance remain separate requirements.
 
 `scripts/prepare-accesskit-focus.mbtx` verifies fixed source archive hashes,
-applies this patch, and builds the original AccessKit C dependency lock with
-only the Windows package changed to the local source path. Rust 1.93.0 must be
+applies this patch together with the [text clipping correction](accesskit-clipping.md),
+and builds the original AccessKit C dependency lock with the Windows and consumer
+packages changed to local source paths. Rust 1.93.0 must be
 on PATH. The generated source directory `.work/accesskit-focus-source` is
 disposable build input, reconstructed by this command; edits there are not
 maintained. Make changes to the tracked patch instead. The shared Cargo registry

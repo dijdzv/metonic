@@ -1,0 +1,47 @@
+diff --git a/src/text.rs b/src/text.rs
+index bd9ec4b..91b2dc8 100644
+--- a/src/text.rs
++++ b/src/text.rs
+@@ -738,6 +738,18 @@ impl<'a> Range<'a> {
+     /// there will always be at least one box, even if it's zero-width,
+     /// as it is for a degenerate range.
+     pub fn bounding_boxes(&self) -> Vec<Rect> {
++        self.bounding_boxes_inner(false)
++    }
++
++    /// Returns range rectangles intersected with ancestor clipping bounds.
++    pub fn clipped_bounding_boxes(&self) -> Vec<Rect> {
++        if self.is_degenerate() {
++            return Vec::new();
++        }
++        self.bounding_boxes_inner(true)
++    }
++
++    fn bounding_boxes_inner(&self, clipped: bool) -> Vec<Rect> {
+         let mut result = Vec::new();
+         self.walk(|node| {
+             let mut rect = match node.data().bounds() {
+@@ -814,7 +826,22 @@ impl<'a> Range<'a> {
+                     }
+                 }
+             }
+-            result.push(node.transform().transform_rect_bbox(rect));
++            let mut rect = node.transform().transform_rect_bbox(rect);
++            if clipped {
++                let mut ancestor = node.parent();
++                while let Some(parent) = ancestor {
++                    if parent.clips_children() {
++                        if let Some(bounds) = parent.bounding_box() {
++                            rect = rect.intersect(bounds);
++                        }
++                    }
++                    ancestor = parent.parent();
++                }
++                if rect.width() <= 0.0 || rect.height() <= 0.0 {
++                    return None;
++                }
++            }
++            result.push(rect);
+             None
+         })
+         .unwrap_or(result)

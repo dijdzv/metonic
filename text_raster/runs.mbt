@@ -6,6 +6,7 @@ pub struct TextRun {
   height : Float
   width : Float
   rtl : Bool
+  cells : Array[TextCell]?
 }
 
 ///|
@@ -51,6 +52,7 @@ pub fn text_runs(engine : Engine, committed : String) -> Array[TextRun]? {
           height: run.line_height,
           width: run.line_w,
           rtl: run.rtl,
+          cells: text_cells(run, base, first, last, committed),
         })
       }
     }
