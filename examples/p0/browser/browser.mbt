@@ -18,6 +18,12 @@ pub fn task_begin() -> Int {
 }
 
 ///|
+#export_name("task_movement_target")
+pub fn task_movement_target() -> Int {
+  application.val.movement_target()
+}
+
+///|
 #export_name("task_complete")
 pub fn task_complete(id : Int, value : Int) -> Int {
   if application.val.complete_movement(id, value) {
