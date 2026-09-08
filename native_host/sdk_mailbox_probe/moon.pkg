@@ -1,0 +1,12 @@
+pkgtype(kind: "executable")
+
+supported_targets = "native"
+
+options(
+  "native-stub": [ "boundary.c" ],
+  link: {
+    "native": {
+      "cc-link-flags": "accesskit.lib user32.lib uiautomationcore.lib ole32.lib oleaut32.lib",
+    },
+  },
+)
