@@ -44,9 +44,11 @@ async fn main {
   run("git", ["diff", "--cached", "--check"])
   let moon = ".tools/moonbit/bin/moon.exe"
   run(moon, ["run", "scripts/prepare-wgpu.mbtx"])
+  run(moon, ["run", "scripts/prepare-browser-deps.mbtx"])
   run(moon, ["fmt"])
   run(moon, ["run", "scripts/format-scripts.mbtx"])
   run(moon, ["-C", "experiments/wgpu_binding", "fmt"])
+  run(moon, ["-C", "browser_host", "fmt", "app"])
   expect_clean(
     ["diff", "--exit-code"],
     "formatting changed files; review and stage explicitly",
@@ -57,10 +59,11 @@ async fn main {
     "verify", "verify-native", "browser:verify", "browser:server-test", "browser:supervisor-test",
     "browser:headless", "browser:async", "devtools:test", "native:headless", "native:control",
     "native:mcp-test", "native:session-test", "native:semantics", "native:client-test",
-    "native:cli-test", "native:window", "native:window-control", "native:window-rpc",
-    "native:window-mcp", "native:host-verify", "native:async", "native:surface",
-    "native:binding", "rpc:verify", "native:release-lifecycle", "native:accessibility",
-    "native:mailbox", "native:sdk-mailbox", "demo:test", "prerequisites:test",
+    "native:cli-test", "native:window", "native:window-control", "native:window-attach",
+    "native:pipe-verify", "native:window-rpc", "native:window-mcp", "native:host-verify",
+    "native:async", "native:surface", "native:binding", "rpc:verify", "native:release-lifecycle",
+    "native:accessibility", "native:mailbox", "native:sdk-mailbox", "demo:test",
+    "prerequisites:test",
   ]
   for gate in gates {
     println("pre-commit gate: mise run " + gate)

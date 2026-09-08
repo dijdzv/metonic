@@ -1,5 +1,6 @@
 import {
   "local/p0/tools/native_control" @control,
+  "local/p0/tools/window_attach" @attach,
   "local/p0/tools/cli_lines" @lines,
   "moonbitlang/async",
   "moonbitlang/async/fs",

@@ -1,0 +1,10 @@
+diff --git a/webapi/moon.pkg b/webapi/moon.pkg
+--- a/webapi/moon.pkg
++++ b/webapi/moon.pkg
+@@ -1,3 +1,5 @@
+-warnings = "-53"
++// Preserve the pinned generated API instead of renaming its DOM methods.
++// Metonic packages retain deny-warn; these are upstream syntax migrations.
++warnings = "-53-20-35-83"
+ 
+ supported_targets = "js+wasm-gc"

@@ -231,6 +231,32 @@ async fn main {
       } else {
         "debug"
       }
+      let trace_flags = if profile == "debug" {
+        " /UMETONIC_IME_TRACE /DMETONIC_IME_TRACE=1"
+      } else {
+        " /UMETONIC_IME_TRACE"
+      }
+      envmap.set("_CL_", envmap.get("_CL_").unwrap_or("") + trace_flags)
+      let trace_test_flags = if host_app == "window_probe" {
+        " /UMETONIC_IME_TRACE_TEST /DMETONIC_IME_TRACE_TEST=1"
+      } else {
+        " /UMETONIC_IME_TRACE_TEST"
+      }
+      envmap.set("_CL_", envmap.get("_CL_").unwrap_or("") + trace_test_flags)
+      // CL environment changes do not invalidate Moon's C-stub cache.
+      let window_object = native_host_build_dir +
+        "/native/" +
+        profile +
+        "/build/wzzc-dev/window/windows/native_window.obj"
+      if (
+          host_app == "window_app" ||
+          host_app == "window_dev" ||
+          host_app == "window_probe" ||
+          host_app == "async_app"
+        ) &&
+        @fs.exists(window_object) {
+        @fs.remove(window_object)
+      }
       if @process.run(
           moon,
           build_args,

@@ -1,0 +1,535 @@
+diff --git a/src/internal/event_loop/io_result_windows.h b/src/internal/event_loop/io_result_windows.h
+new file mode 100644
+index 0000000..f40b253
+--- /dev/null
++++ b/src/internal/event_loop/io_result_windows.h
+@@ -0,0 +1,27 @@
++#ifndef MOONBIT_ASYNC_IO_RESULT_WINDOWS_H
++#define MOONBIT_ASYNC_IO_RESULT_WINDOWS_H
++#include <stdint.h>
++#include <windows.h>
++enum IoResultKind {
++  File = 0,
++  Socket,
++  SocketWithAddr,
++  Connect,
++  Accept,
++  PipeConnect,
++  ReadDirChanges
++};
++
++// should be the same as `ReadEvent`/`WriteEvent` in `event_bus.mbt`
++#define IO_RESULT_READ_EVENT  1
++#define IO_RESULT_WRITE_EVENT 2
++
++struct IoResult {
++  OVERLAPPED overlapped;
++  enum IoResultKind kind;
++  // Used to identify different IO operations on the same handle (in particular read v.s. write).
++  // May be `IO_RESULT_READ_EVENT` or `IO_RESULT_WRITE_EVENT`
++  int32_t event;
++};
++
++#endif
+diff --git a/src/internal/event_loop/io_windows.c b/src/internal/event_loop/io_windows.c
+index 40ecafe..c20e693 100644
+--- a/src/internal/event_loop/io_windows.c
++++ b/src/internal/event_loop/io_windows.c
+@@ -34,26 +34,7 @@ int32_t moonbitlang_async_cleanup_WSA() {
+   return WSACleanup();
+ }
+ 
+-enum IoResultKind {
+-  File = 0,
+-  Socket,
+-  SocketWithAddr,
+-  Connect,
+-  Accept,
+-  ReadDirChanges
+-};
+-
+-// should be the same as `ReadEvent`/`WriteEvent` in `event_bus.mbt`
+-#define IO_RESULT_READ_EVENT  1
+-#define IO_RESULT_WRITE_EVENT 2
+-
+-struct IoResult {
+-  OVERLAPPED overlapped;
+-  enum IoResultKind kind;
+-  // Used to identify different IO operations on the same handle (in particular read v.s. write).
+-  // May be `IO_RESULT_READ_EVENT` or `IO_RESULT_WRITE_EVENT`
+-  int32_t event;
+-};
++#include "io_result_windows.h"
+ 
+ struct FileIoResult {
+   struct IoResult header;
+@@ -295,6 +276,7 @@ void moonbitlang_async_free_io_result(struct IoResult *obj) {
+     moonbit_decref(((struct ConnectIoResult*)obj)->addr);
+     break;
+   case Accept:
++  case PipeConnect:
+   case ReadDirChanges:
+     break;
+   }
+diff --git a/src/internal/event_loop/moon.pkg b/src/internal/event_loop/moon.pkg
+index 2100829..571ca01 100644
+--- a/src/internal/event_loop/moon.pkg
++++ b/src/internal/event_loop/moon.pkg
+@@ -26,6 +26,10 @@ import {
+ import {
+   "moonbitlang/async",
+   "moonbitlang/async/internal/test_util",
++  "moonbitlang/async/fs",
++  "moonbitlang/async/io",
++  "moonbitlang/async/internal/pipe_test_support",
++  "moonbitlang/async/named_pipe",
+ } for "wbtest"
+ 
+ options(
+@@ -53,6 +57,8 @@ options(
+     "io.mbt": [ "native", "wasm" ],
+     "io_unix.mbt": [ "native", "wasm" ],
+     "io_windows.mbt": [ "native", "wasm" ],
++    "pipe_windows.mbt": [ "native" ],
++    "pipe_accept_wbtest.mbt": [ "native" ],
+     "io_result.native.mbt": [ "native" ],
+     "io_result.wasm.mbt": [ "wasm" ],
+     "missing_close_test.mbt": [ "native" ],
+diff --git a/src/internal/event_loop/pipe_accept_wbtest.mbt b/src/internal/event_loop/pipe_accept_wbtest.mbt
+new file mode 100644
+index 0000000..ca7cd1a
+--- /dev/null
++++ b/src/internal/event_loop/pipe_accept_wbtest.mbt
+@@ -0,0 +1,126 @@
++///|
++#cfg(platform="windows")
++async test "pending pipe accept cancellation allows another accept" {
++  let handle = @named_pipe.WindowsPipe::listen("metonic_accept_cancel.\{@env_util.current_process}")
++  defer handle.close()
++  for _ in 0..<3 {
++    let result = @async.with_timeout_opt(20, () => handle.accept())
++    assert_true(result is None)
++  }
++}
++
++///|
++#cfg(platform="windows")
++fn process_handle_count() -> Int { @pipe_test_support.process_handle_count() }
++
++///|
++#cfg(platform="windows")
++fn restricted_pipe_open(name : @os_string.OsString) -> Int { @pipe_test_support.restricted_pipe_open(name) }
++
++///|
++#cfg(platform="windows")
++async test "pipe denies restricted token then accepts normal user" {
++  let control_name = @os_string.encode("\\\\.\\pipe\\metonic_acl_control.\{@env_util.current_process}")
++  let control = @fd_util.create_named_pipe_server(control_name, is_async=true)
++  if !@fd_util.fd_is_valid(control) { @os_error.check_errno("create default ACL control") }
++  let control_handle = IoHandle::from_fd(control, kind=Pipe)
++  defer control_handle.close()
++  assert_eq(restricted_pipe_open(control_name), 0)
++  let path = "\\\\.\\pipe\\metonic_acl.\{@env_util.current_process}"
++  let name = @os_string.encode(path)
++  let fd = @fd_util.create_private_duplex_pipe(name)
++  if !@fd_util.fd_is_valid(fd) { @os_error.check_errno("create ACL pipe") }
++  let server = IoHandle::from_fd(fd, kind=Pipe)
++  defer server.close()
++  assert_eq(restricted_pipe_open(name), 5)
++  let client = @fs.open(path, mode=ReadWrite)
++  defer client.close()
++  @async.with_timeout(500, () => server.accept_pipe())
++}
++
++///|
++#cfg(platform="windows")
++async test "pipe cancellation and close release endpoint and handles" {
++  let path = @os_string.encode("\\\\.\\pipe\\metonic_close.\{@env_util.current_process}")
++  // Initialize the timeout machinery before measuring endpoint-owned handles.
++  ignore(@async.with_timeout_opt(1, () => @async.sleep(10)))
++  let before = process_handle_count()
++  assert_true(before > 0)
++  for _ in 0..<32 {
++    let fd = @fd_util.create_private_duplex_pipe(path)
++    if !@fd_util.fd_is_valid(fd) {
++      @os_error.check_errno("recreate closed endpoint")
++    }
++    let server = IoHandle::from_fd(fd, kind=Pipe)
++    assert_true(@async.with_timeout_opt(1, () => server.accept_pipe()) is None)
++    server.close()
++    server.close()
++  }
++  let after = process_handle_count()
++  assert_true(after > 0 && after <= before)
++}
++
++///|
++#cfg(platform="windows")
++async test "pipe accepts early and delayed clients and transfers both ways" {
++  for early in [true, false] {
++    let path = "\\\\.\\pipe\\metonic_duplex.\{@env_util.current_process}"
++    let fd = @fd_util.create_private_duplex_pipe(@os_string.encode(path))
++    if !@fd_util.fd_is_valid(fd) {
++      @os_error.check_errno("create duplex pipe")
++    }
++    let server = IoHandle::from_fd(fd, kind=Pipe)
++    defer server.close()
++    @async.with_timeout(2000, () => {
++      @async.with_task_group() <| group => {
++        group.spawn_bg() <| () => {
++          if !early { @async.sleep(20) }
++          let client = @fs.open(path, mode=ReadWrite)
++          defer client.close()
++          client.write(b"ping")
++          assert_eq(client.read_exactly(4), b"pong")
++        }
++        if early { @async.sleep(20) }
++        server.accept_pipe()
++        let buf = FixedArray::make(4, b'\x00')
++        assert_eq(server.read(buf, offset=0, len=4, context="server read"), 4)
++        assert_eq(Bytes::from_array(Array::makei(4, i => buf[i])), b"ping")
++        assert_eq(server.write(b"pong", offset=0, len=4, context="server write"), 4)
++      }
++    })
++  }
++}
++
++///|
++#cfg(platform="windows")
++async test "pipe reconnects after disconnect and recovers from cancelled read" {
++  let path = "\\\\.\\pipe\\metonic_reconnect.\{@env_util.current_process}"
++  let fd = @fd_util.create_private_duplex_pipe(@os_string.encode(path))
++  if !@fd_util.fd_is_valid(fd) {
++    @os_error.check_errno("create reconnect pipe")
++  }
++  let server = IoHandle::from_fd(fd, kind=Pipe)
++  defer server.close()
++  @async.with_timeout(2000, () => {
++    for _ in 0..<3 {
++      @async.with_task_group() <| group => {
++        group.spawn_bg() <| () => {
++          let client = @fs.open(path, mode=ReadWrite)
++          defer client.close()
++          @async.sleep(40)
++          client.write(b"x")
++          assert_eq(client.read_exactly(1), b"y")
++        }
++        server.accept_pipe()
++        let buf = FixedArray::make(1, b'\x00')
++        assert_true(@async.with_timeout_opt(10, () => {
++          server.read(buf, offset=0, len=1, context="cancel read")
++        }) is None)
++        assert_eq(server.read(buf, offset=0, len=1, context="read after cancel"), 1)
++        assert_eq(buf[0], b'x')
++        assert_eq(server.write(b"y", offset=0, len=1, context="reply"), 1)
++      }
++      server.disconnect_pipe()
++    }
++  })
++}
+diff --git a/src/internal/event_loop/pipe_windows.mbt b/src/internal/event_loop/pipe_windows.mbt
+new file mode 100644
+index 0000000..997fb9b
+--- /dev/null
++++ b/src/internal/event_loop/pipe_windows.mbt
+@@ -0,0 +1,38 @@
++///|
++#cfg(platform="windows")
++extern "C" fn IoResult::for_pipe_connect() -> IoResult = "moonbitlang_async_make_pipe_connect_io_result"
++
++///|
++#cfg(platform="windows")
++extern "C" fn connect_pipe_ffi(fd : @fd_util.Fd, result : IoResult) -> Int = "moonbitlang_async_connect_pipe"
++
++///|
++#cfg(platform="windows")
++extern "C" fn disconnect_pipe_ffi(fd : @fd_util.Fd) -> Int = "moonbitlang_async_disconnect_pipe_checked"
++
++///|
++#cfg(platform="windows")
++pub fn IoHandle::disconnect_pipe(self : IoHandle) -> Unit raise {
++  guard! self.read is Idle
++  guard! self.write is Idle
++  if disconnect_pipe_ffi(self.fd) == 0 {
++    @os_error.check_errno("disconnect named pipe")
++  }
++}
++
++///|
++#cfg(platform="windows")
++pub async fn IoHandle::accept_pipe(self : IoHandle) -> Unit {
++  @coroutine.check_cancellation()
++  guard! self.read is Idle
++  let context = "accept named pipe"
++  let result = IoResult::for_pipe_connect()
++  defer result.free()
++  if connect_pipe_ffi(self.fd, result) == 0 {
++    if !@os_error.is_nonblocking_io_error() {
++      @os_error.check_errno(context)
++    }
++    self.wait_read_result(result, context~)
++    ignore(result.status(self.fd, context~))
++  }
++}
+diff --git a/src/internal/fd_util/pipe.mbt b/src/internal/fd_util/pipe.mbt
+index 5326a6d..f57eb6a 100644
+--- a/src/internal/fd_util/pipe.mbt
++++ b/src/internal/fd_util/pipe.mbt
+@@ -44,6 +44,12 @@ pub fn pipe(
+ 
+ ///|
+ // mute unused warning
++// Prototype Windows local duplex endpoint; access is restricted to the process user.
++#cfg(platform="windows")
++#borrow(name)
++pub extern "C" fn create_private_duplex_pipe(name : @os_string.OsString) -> Fd = "moonbitlang_async_create_private_duplex_pipe"
++
++///|
+ #cfg(not(platform="windows"))
+ let _unused : Unit = {
+   ignore(@os_string.encode)
+diff --git a/src/internal/pipe_test_support/helpers.mbt b/src/internal/pipe_test_support/helpers.mbt
+new file mode 100644
+index 0000000..4f1e627
+--- /dev/null
++++ b/src/internal/pipe_test_support/helpers.mbt
+@@ -0,0 +1,8 @@
++///|
++#cfg(platform="windows")
++pub extern "C" fn process_handle_count() -> Int = "metonic_test_process_handle_count"
++
++///|
++#cfg(platform="windows")
++#borrow(name)
++pub extern "C" fn restricted_pipe_open(name : @os_string.OsString) -> Int = "metonic_test_restricted_pipe_open"
+diff --git a/src/internal/pipe_test_support/moon.pkg b/src/internal/pipe_test_support/moon.pkg
+new file mode 100644
+index 0000000..da46e1f
+--- /dev/null
++++ b/src/internal/pipe_test_support/moon.pkg
+@@ -0,0 +1,2 @@
++import { "moonbitlang/async/internal/os_string" }
++options("native-stub": ["stub.c"], targets: {"helpers.mbt": ["native"]})
+diff --git a/src/internal/pipe_test_support/stub.c b/src/internal/pipe_test_support/stub.c
+new file mode 100644
+index 0000000..af5d473
+--- /dev/null
++++ b/src/internal/pipe_test_support/stub.c
+@@ -0,0 +1,34 @@
++#include <stdint.h>
++#include <moonbit.h>
++#ifdef _WIN32
++#include <windows.h>
++#pragma comment(lib, "advapi32.lib")
++MOONBIT_FFI_EXPORT
++int32_t metonic_test_restricted_pipe_open(const WCHAR *name) {
++  HANDLE original = NULL, restricted = NULL, client = INVALID_HANDLE_VALUE;
++  BYTE world[SECURITY_MAX_SID_SIZE];
++  DWORD size = sizeof(world), error;
++  SID_AND_ATTRIBUTES sid = {world, 0};
++  int32_t result = -1;
++  if (!CreateWellKnownSid(WinWorldSid, NULL, world, &size)) return -1;
++  if (!OpenProcessToken(GetCurrentProcess(), TOKEN_DUPLICATE | TOKEN_QUERY, &original)) return -2;
++  if (!CreateRestrictedToken(original, DISABLE_MAX_PRIVILEGE, 0, NULL,
++      0, NULL, 1, &sid, &restricted)) { result = -3; goto done; }
++  if (!ImpersonateLoggedOnUser(restricted)) { result = -4; goto done; }
++  client = CreateFileW(name, GENERIC_READ, 0, NULL,
++    OPEN_EXISTING, FILE_FLAG_OVERLAPPED, NULL);
++  error = GetLastError();
++  // Never yield to a MoonBit coroutine while the OS thread is impersonating.
++  if (!RevertToSelf()) ExitProcess(90);
++  result = client == INVALID_HANDLE_VALUE ? (int32_t)error : 0;
++done:
++  if (client != INVALID_HANDLE_VALUE) CloseHandle(client);
++  if (restricted) CloseHandle(restricted);
++  CloseHandle(original);
++  return result;
++}
++
++
++MOONBIT_FFI_EXPORT
++int32_t metonic_test_process_handle_count(void) { DWORD count; return GetProcessHandleCount(GetCurrentProcess(), &count) ? (int32_t)count : -1; }
++#endif
+diff --git a/src/named_pipe/moon.pkg b/src/named_pipe/moon.pkg
+new file mode 100644
+index 0000000..b04471f
+--- /dev/null
++++ b/src/named_pipe/moon.pkg
+@@ -0,0 +1,15 @@
++import {
++  "moonbitlang/async/internal/event_loop",
++  "moonbitlang/async/internal/fd_util",
++  "moonbitlang/async/internal/os_string",
++  "moonbitlang/async/os_error",
++  "moonbitlang/async/io",
++}
++import {
++  "moonbitlang/async",
++  "moonbitlang/async/fs",
++} for "test"
++options("native-stub": ["stub.c"], targets: {
++  "windows_pipe.mbt": ["native"],
++  "windows_pipe_test.mbt": ["native"],
++})
+diff --git a/src/named_pipe/stub.c b/src/named_pipe/stub.c
+new file mode 100644
+index 0000000..bb8d4cb
+--- /dev/null
++++ b/src/named_pipe/stub.c
+@@ -0,0 +1,62 @@
++#include <moonbit.h>
++#ifdef _WIN32
++#include <windows.h>
++#include <aclapi.h>
++#include <stdlib.h>
++#include "../internal/event_loop/io_result_windows.h"
++#pragma comment(lib, "advapi32.lib")
++MOONBIT_FFI_EXPORT
++HANDLE moonbitlang_async_create_private_duplex_pipe(const WCHAR *name) {
++  HANDLE token = NULL;
++  TOKEN_USER *user = NULL;
++  PACL acl = NULL;
++  HANDLE pipe = INVALID_HANDLE_VALUE;
++  DWORD size = 0, error = ERROR_SUCCESS;
++  SECURITY_DESCRIPTOR descriptor;
++  EXPLICIT_ACCESSW access = {0};
++  SECURITY_ATTRIBUTES attributes = {sizeof(SECURITY_ATTRIBUTES), &descriptor, FALSE};
++  if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token)) return pipe;
++  GetTokenInformation(token, TokenUser, NULL, 0, &size);
++  if (GetLastError() != ERROR_INSUFFICIENT_BUFFER) goto cleanup;
++  user = (TOKEN_USER *)malloc(size);
++  if (!user) { SetLastError(ERROR_NOT_ENOUGH_MEMORY); goto cleanup; }
++  if (!GetTokenInformation(token, TokenUser, user, size, &size)) goto cleanup;
++  access.grfAccessPermissions = FILE_GENERIC_READ | FILE_GENERIC_WRITE;
++  access.grfAccessMode = SET_ACCESS;
++  access.grfInheritance = NO_INHERITANCE;
++  access.Trustee.TrusteeForm = TRUSTEE_IS_SID;
++  access.Trustee.TrusteeType = TRUSTEE_IS_USER;
++  access.Trustee.ptstrName = (LPWSTR)user->User.Sid;
++  error = SetEntriesInAclW(1, &access, NULL, &acl);
++  if (error != ERROR_SUCCESS) { SetLastError(error); goto cleanup; }
++  if (!InitializeSecurityDescriptor(&descriptor, SECURITY_DESCRIPTOR_REVISION) ||
++      !SetSecurityDescriptorDacl(&descriptor, TRUE, acl, FALSE) ||
++      !SetSecurityDescriptorOwner(&descriptor, user->User.Sid, FALSE)) goto cleanup;
++  pipe = CreateNamedPipeW(name,
++    PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED | FILE_FLAG_FIRST_PIPE_INSTANCE,
++    PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
++    1, 4096, 4096, 0, &attributes);
++cleanup:
++  error = GetLastError();
++  if (acl) LocalFree(acl);
++  free(user);
++  CloseHandle(token);
++  SetLastError(error);
++  return pipe;
++}
++
++MOONBIT_FFI_EXPORT
++int32_t moonbitlang_async_disconnect_pipe_checked(HANDLE pipe) { return DisconnectNamedPipe(pipe); }
++MOONBIT_FFI_EXPORT
++struct IoResult *moonbitlang_async_make_pipe_connect_io_result(void) {
++  struct IoResult *result = calloc(1, sizeof(struct IoResult));
++  if (!result) moonbit_panic();
++  result->kind = PipeConnect; result->event = IO_RESULT_READ_EVENT; return result;
++}
++MOONBIT_FFI_EXPORT
++int32_t moonbitlang_async_connect_pipe(HANDLE pipe, struct IoResult *result) {
++  if (ConnectNamedPipe(pipe, &result->overlapped)) return 1;
++  if (GetLastError() == ERROR_PIPE_CONNECTED) return 1;
++  return 0;
++}
++#endif
+diff --git a/src/named_pipe/windows_pipe.mbt b/src/named_pipe/windows_pipe.mbt
+new file mode 100644
+index 0000000..e950883
+--- /dev/null
++++ b/src/named_pipe/windows_pipe.mbt
+@@ -0,0 +1,60 @@
++///|
++#cfg(platform="windows")
++pub struct WindowsPipe {
++  priv io : @event_loop.IoHandle
++  priv path : String
++  priv mut buffer : @io.ReaderBuffer
++}
++
++///|
++#cfg(platform="windows")
++pub suberror PipeNameError { InvalidName } derive(Debug)
++
++///|
++#cfg(platform="windows")
++pub fn WindowsPipe::listen(name : String) -> WindowsPipe raise {
++  guard name.length() > 0 && name.length() <= 128 &&
++    name.to_array().all(c => (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
++      (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.') else {
++    raise PipeNameError::InvalidName
++  }
++  let path = "\\\\.\\pipe\\" + name
++  let fd = @fd_util.create_private_duplex_pipe(@os_string.encode(path))
++  if !@fd_util.fd_is_valid(fd) { @os_error.check_errno("create Windows pipe") }
++  { io: @event_loop.IoHandle::from_fd(fd, kind=Pipe), path, buffer: @io.ReaderBuffer::new() }
++}
++
++///|
++#cfg(platform="windows")
++pub fn WindowsPipe::path(self : WindowsPipe) -> String { self.path }
++
++///|
++#cfg(platform="windows")
++pub async fn WindowsPipe::accept(self : WindowsPipe) -> Unit { self.io.accept_pipe() }
++
++///|
++#cfg(platform="windows")
++pub fn WindowsPipe::disconnect(self : WindowsPipe) -> Unit raise {
++  self.io.disconnect_pipe()
++  self.buffer = @io.ReaderBuffer::new()
++}
++
++///|
++#cfg(platform="windows")
++pub fn WindowsPipe::close(self : WindowsPipe) -> Unit { self.io.close() }
++
++///|
++#cfg(platform="windows")
++pub impl @io.Reader for WindowsPipe with fn _direct_read(self, buf, offset~, max_len~) {
++  self.io.read(buf, offset~, len=max_len, context="Windows pipe read")
++}
++
++///|
++#cfg(platform="windows")
++pub impl @io.Reader for WindowsPipe with fn _get_internal_buffer(self) { self.buffer }
++
++///|
++#cfg(platform="windows")
++pub impl @io.Writer for WindowsPipe with fn write_once(self, buf, offset~, len~) {
++  self.io.write(buf, offset~, len~, context="Windows pipe write")
++}
+diff --git a/src/named_pipe/windows_pipe_test.mbt b/src/named_pipe/windows_pipe_test.mbt
+new file mode 100644
+index 0000000..43d10b5
+--- /dev/null
++++ b/src/named_pipe/windows_pipe_test.mbt
+@@ -0,0 +1,22 @@
++///|
++#cfg(platform="windows")
++async test "public Windows pipe reconnect does not reuse buffered client text" {
++  let server = @named_pipe.WindowsPipe::listen("metonic_public_pipe_test")
++  defer server.close()
++  @async.with_timeout(2000, () => {
++    for value in ["a", "c"] {
++      @async.with_task_group() <| group => {
++        group.spawn_bg() <| () => {
++          let client = @fs.open(server.path(), mode=ReadWrite)
++          defer client.close()
++          client.write(value + "\nstale\n")
++          assert_eq(client.read_exactly(1), b"x")
++        }
++        server.accept()
++        assert_eq(server.read_until("\n"), Some(value))
++        server.write(b"x")
++      }
++      server.disconnect()
++    }
++  })
++}

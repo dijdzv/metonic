@@ -3,6 +3,87 @@
 pub type Client
 
 ///|
+#export_name("verify_sdk_cancel")
+pub fn verify_sdk_cancel(
+  client : Client,
+  rejected : Bool,
+  notified : Bool,
+) -> @js_async.Promise[String] {
+  @js_async.Promise::from_async(async fn() {
+    assert_true(rejected)
+    assert_true(notified)
+    for _ in 0..<40 {
+      let request : Json = { "name": "window_snapshot", "arguments": {} }
+      let reply : Reply = @json.from_json(
+        @json.parse(call(client, request.stringify()).wait()),
+      )
+      if reply.isError == Some(true) {
+        assert_true(
+          reply.content[0].text.contains("closed") ||
+          reply.content[0].text.contains("aborted"),
+        )
+        return "WINDOW_MCP_SDK_CANCEL_OK"
+      }
+      sleep(25).wait()
+    }
+    fail("SDK cancellation did not close the attached control session")
+  })
+}
+
+///|
+struct CancellationResult {
+  statuses : Array[String]
+  session : String
+  pending : Int
+  forced_kill : Bool
+  exit_code : Int
+} derive(FromJson)
+
+///|
+#export_name("verify_cancel_result")
+pub fn verify_cancel_result(
+  raw : String,
+  expected_session : String,
+) -> Unit raise {
+  let result : CancellationResult = @json.from_json(@json.parse(raw))
+  assert_eq(result.statuses, ["rejected", "rejected"])
+  assert_eq(result.session, expected_session)
+  assert_eq(result.pending, 0)
+  assert_false(result.forced_kill)
+  assert_eq(result.exit_code, 0)
+}
+
+///|
+#export_name("verify_attachment")
+pub fn verify_attachment(
+  client : Client,
+  session : String,
+) -> @js_async.Promise[String] {
+  @js_async.Promise::from_async(async fn() {
+    let before = invoke(client, { "name": "window_snapshot", "arguments": {} })
+    assert_eq(before.session_id, session)
+    let inserted = invoke(client, {
+      "name": "window_insert",
+      "arguments": {
+        "text": "日本",
+        "expected_semantic_revision": before.semantic_revision,
+      },
+    })
+    assert_eq(inserted.text, before.text + "日本")
+    assert_eq(inserted.session_id, session)
+    let deleted = invoke(client, { "name": "window_backspace", "arguments": {} })
+    assert_eq(deleted.text, before.text + "日")
+    let restored = invoke(client, {
+      "name": "window_backspace",
+      "arguments": {},
+    })
+    assert_eq(restored.text, before.text)
+    assert_eq(restored.session_id, session)
+    "WINDOW_MCP_ATTACH_OK"
+  })
+}
+
+///|
 extern "js" fn call(
   client : Client,
   request : String,
@@ -22,6 +103,10 @@ struct Reply {
 
 ///|
 struct State {
+  ime_events : Array[Json]
+  raw_ime_events : Array[Json]
+  raw_ime_dropped : Int64
+  ime_dropped : Int64
   host_input_events : HostInputEvents
   view : Array[ViewNode]
   text : String
@@ -98,6 +183,10 @@ async fn invoke(client : Client, request : Json) -> State {
 pub fn verify(client : Client) -> @js_async.Promise[String] {
   @js_async.Promise::from_async(async fn() {
     let before = invoke(client, { "name": "window_snapshot", "arguments": {} })
+    assert_true(before.ime_events.length() <= 128)
+    assert_true(before.raw_ime_events.length() <= 128)
+    assert_eq(before.ime_dropped, 0L)
+    assert_eq(before.raw_ime_dropped, 0L)
     assert_eq(before.view.length(), 7)
     assert_eq(before.view[6].id, Json::number(6))
     assert_eq(before.view[6].role, "text_input")
@@ -128,6 +217,9 @@ pub fn verify(client : Client) -> @js_async.Promise[String] {
     assert_eq(after.text, before.text + "日本")
     assert_eq(after.semantic_revision, before.semantic_revision + 1)
     assert_eq(after.host_input_events, before.host_input_events)
+    assert_eq(after.ime_events, before.ime_events)
+    assert_eq(after.raw_ime_events, before.raw_ime_events)
+    assert_eq(after.ime_dropped, before.ime_dropped)
     assert_eq(after.session_id, before.session_id)
     let deleted = invoke(client, {
       "name": "window_backspace",

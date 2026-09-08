@@ -6,7 +6,15 @@ import { fileURLToPath } from 'node:url';
 import { createMoonBitSession } from './moonbit-session.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const session = await createMoonBitSession({
+const launchArgs = process.argv.slice(2);
+if (launchArgs.length && (launchArgs.length !== 2 || launchArgs[0] !== '--session')) {
+  throw new Error('usage: window-mcp.mjs [--session session.json]');
+}
+const session = await createMoonBitSession(launchArgs.length ? {
+  protocol: 'window-attach',
+  executable: path.join(root, '.tools/moonbit/bin/moonrun.exe'),
+  args: [path.join(root, '_build/wasm/release/build/tools/native_cli/native_cli.wasm'), '--session-wire', path.resolve(launchArgs[1])],
+} : {
   protocol: 'window',
   executable: path.join(root, '.work/native-host-build/native/debug/build/local/native_host/window_dev/window_dev.exe'),
   args: [],

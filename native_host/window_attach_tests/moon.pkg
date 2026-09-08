@@ -1,0 +1,10 @@
+import {
+  "local/p0/tools/window_attach" @attach,
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/named_pipe" @pipe,
+  "moonbitlang/core/json",
+  "moonbitlang/core/debug",
+} for "test"
+
+supported_targets = "native"

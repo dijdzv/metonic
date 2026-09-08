@@ -11,6 +11,10 @@ pub(all) enum Injected {
 
 ///|
 pub struct Observation {
+  ime_events : Array[Json]
+  raw_ime_events : Array[Json]
+  raw_ime_dropped : Int64
+  ime_dropped : Int64
   input : InputObservation
   closed_queue_empty : Bool
   frames : Int
@@ -37,6 +41,10 @@ pub struct Observation {
 ///|
 fn App::observation(self : App) -> Observation {
   {
+    ime_events: self.diagnostics.ime_events.map(value => value),
+    raw_ime_events: self.raw_ime_events(),
+    raw_ime_dropped: self.raw_ime_dropped(),
+    ime_dropped: self.diagnostics.ime_dropped,
     input: self.diagnostics.input,
     closed_queue_empty: if self.closed {
       try {

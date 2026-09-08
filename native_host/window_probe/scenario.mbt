@@ -18,6 +18,9 @@ extern "C" fn post_message(
 ) -> Int = "PostMessageW"
 
 ///|
+extern "C" fn trace_probe_cursor(hwnd : UInt64, cursor : Int) -> Int = "mbw_ime_trace_probe_cursor"
+
+///|
 fn require(ok : Bool, message : String) -> Unit raise Error {
   guard ok else { fail(message) }
 }
@@ -38,9 +41,101 @@ fn post(
 ///|
 async fn Scenario::step(self : Scenario, view : @ui.Observation) -> Unit {
   if self.stage == 0 && (view.scene)(0) == 270 {
+    self.stage = 110
+    require(
+      view.ime_dropped == 0L && view.raw_ime_dropped == 0L,
+      "new window inherited trace overflow",
+    )
+  } else if self.stage >= 110 &&
+    self.stage < 115 &&
+    view.raw_ime_dropped + view.raw_ime_events.length().to_int64() >=
+    ((self.stage - 110) * 26).to_int64() {
+    for i = 0; i < 26; i = i + 1 {
+      post(view.hwnd, 0x010FU, 0UL, 0x4000L)
+    }
+    self.stage = self.stage + 1
+  } else if self.stage == 115 &&
+    view.raw_ime_dropped + view.raw_ime_events.length().to_int64() >= 130L {
     self.stage = 1
+    post(view.hwnd, 0x010DU, 0UL, 0L)
+    post(view.hwnd, 0x010FU, 0UL, 0x80L)
+    post(view.hwnd, 0x010EU, 0UL, 0L)
+    post(view.hwnd, 0x010FU, 0UL, 0x4000L)
     (view.resize)(317, 193)
-  } else if self.stage == 1 && (view.scene)(6) == 317 && (view.scene)(7) == 193 {
+  } else if self.stage == 1 &&
+    (view.scene)(6) == 317 &&
+    (view.scene)(7) == 193 &&
+    view.raw_ime_events.any(event => {
+      match event {
+        Object(fields) => fields.get("flags") == Some(128L.to_json())
+        _ => false
+      }
+    }) {
+    require(
+      view.raw_ime_events.length() == 128,
+      "raw IME history is not bounded",
+    )
+    require(view.raw_ime_dropped > 0L, "raw IME overflow was not counted")
+    for i = 0; i < view.raw_ime_events.length(); i = i + 1 {
+      let fields = match view.raw_ime_events[i] {
+        Object(fields) => fields
+        _ => abort("raw IME record is not an object")
+      }
+      require(
+        fields.get("sequence") ==
+        Some((view.raw_ime_dropped + i.to_int64() + 1L).to_json()),
+        "raw IME history is not the retained suffix",
+      )
+    }
+    require(
+      view.raw_ime_events.any(event => {
+        match event {
+          Object(fields) =>
+            fields.get("message") == Some(271L.to_json()) &&
+            fields.get("flags") == Some(16384L.to_json()) &&
+            fields.get("cursor_queried") == Some(false.to_json())
+          _ => false
+        }
+      }),
+      "raw composition flags were not preserved",
+    )
+    require(
+      view.raw_ime_events.any(event => {
+        match event {
+          Object(fields) =>
+            fields.get("message") == Some(271L.to_json()) &&
+            fields.get("flags") == Some(128L.to_json()) &&
+            fields.get("cursor_queried") == Some(true.to_json())
+          _ => false
+        }
+      }),
+      "raw cursor query was not observed",
+    )
+    for cursor in [-2, -1, 0, 99] {
+      require(
+        trace_probe_cursor(view.hwnd, cursor) == 1,
+        "cursor fixture rejected window",
+      )
+    }
+    self.stage = 101
+  } else if self.stage == 101 {
+    let expected = [-2L, -1L, 0L, 99L]
+    require(view.raw_ime_events.length() >= 4, "cursor fixture records missing")
+    for i = 0; i < 4; i = i + 1 {
+      let fields = match
+        view.raw_ime_events[view.raw_ime_events.length() - 4 + i] {
+        Object(fields) => fields
+        _ => abort("cursor fixture record is not an object")
+      }
+      require(
+        fields.get("cursor_queried") == Some(true.to_json()),
+        "cursor query status lost",
+      )
+      require(
+        fields.get("cursor_result") == Some(expected[i].to_json()),
+        "signed cursor result changed",
+      )
+    }
     self.stage = 2
     let packed = (((view.scene)(1) + 1) << 16) | ((view.scene)(0) + 1)
     post(view.hwnd, 0x0201U, 1UL, packed.to_int64())
@@ -130,7 +225,7 @@ async fn Scenario::step(self : Scenario, view : @ui.Observation) -> Unit {
       view.editor.selection_end == view.editor.value.length(),
       "obsolete queued selection changed new text",
     )
-    self.stage = 30
+    self.stage = 330
     require(
       !view.accessibility_runs.is_empty(),
       "precomposition text run missing",
@@ -138,6 +233,16 @@ async fn Scenario::step(self : Scenario, view : @ui.Observation) -> Unit {
     self.precomposition_run = view.accessibility_runs[0]
     require((view.select)(0, 3) == "", "test selection rejected")
     (view.inject)(CompositionStart)
+  } else if self.stage >= 330 && self.stage < 335 {
+    for i = 0; i < 26; i = i + 1 {
+      (view.inject)(CompositionUpdate("にほん", Some(0)))
+    }
+    self.stage += 1
+  } else if self.stage == 335 {
+    self.stage = 30
+    (view.inject)(CompositionUpdate("にほん", Some(0)))
+    (view.inject)(CompositionUpdate("にほん", None))
+    (view.inject)(CompositionUpdate("にほん", Some(99)))
     (view.inject)(CompositionUpdate("にほん", Some(1)))
   } else if self.stage == 30 &&
     view.rendered_text == Some("にほんの描画を確認します ABC 123") {
@@ -151,6 +256,70 @@ async fn Scenario::step(self : Scenario, view : @ui.Observation) -> Unit {
       "preedit changed selection",
     )
     require(view.preedit_cursor == 1, "composition cursor was lost")
+    require(!view.ime_events.is_empty(), "composition trace missing")
+    require(
+      view.ime_events.length() == 128,
+      "composition history is not bounded",
+    )
+    require(
+      view.ime_dropped > 0L,
+      "composition history overflow was not counted",
+    )
+    for i = 0; i < view.ime_events.length(); i = i + 1 {
+      let fields = match view.ime_events[i] {
+        Object(fields) => fields
+        _ => abort("composition history entry is not an object")
+      }
+      require(
+        fields.get("sequence") ==
+        Some((view.ime_dropped + i.to_int64() + 1L).to_json()),
+        "composition history is not the ordered retained suffix",
+      )
+    }
+    let trace = view.ime_events[view.ime_events.length() - 1]
+    let fields = match trace {
+      Object(fields) => fields
+      _ => abort("composition trace is not an object")
+    }
+    require(
+      fields.get("kind") == Some(Json::string("update")),
+      "composition trace order",
+    )
+    require(
+      fields.get("supplied_cursor") == Some(Json::number(1)),
+      "supplied cursor lost",
+    )
+    require(
+      fields.get("applied_cursor") == Some(Json::number(1)),
+      "applied cursor lost",
+    )
+    require(
+      !trace.stringify().contains("にほん"),
+      "trace retained input text",
+    )
+    let expected : Array[(Json, Json)] = [
+      (0, 0),
+      (Json::null(), 3),
+      (99, 3),
+      (1, 1),
+    ]
+    require(view.ime_events.length() >= 4, "cursor decisions missing")
+    for i = 0; i < 4; i = i + 1 {
+      let entry = view.ime_events[view.ime_events.length() - 4 + i]
+      let fields = match entry {
+        Object(fields) => fields
+        _ => abort("cursor decision is not an object")
+      }
+      let (supplied, applied) = expected[i]
+      require(
+        fields.get("supplied_cursor") == Some(supplied),
+        "cursor availability conflated",
+      )
+      require(
+        fields.get("applied_cursor") == Some(applied),
+        "cursor normalization not observed",
+      )
+    }
     require(
       view.accessibility_runs.is_empty(),
       "preedit retained stale committed geometry",
@@ -169,11 +338,20 @@ async fn Scenario::step(self : Scenario, view : @ui.Observation) -> Unit {
       (view.scene)(5) == self.scene_revision + 2,
       "composition key changed the scene",
     )
+    self.stage = 33
+    post(view.hwnd, 0x010FU, 0UL, 0x10L)
+    post(view.hwnd, 0x010FU, 0UL, 0x20L)
+  } else if self.stage == 33 {
+    require(view.composing, "attribute or clause update canceled composition")
     self.stage = 31
-    (view.inject)(CompositionCancel)
+    post(view.hwnd, 0x010FU, 0UL, 0L)
   } else if self.stage == 31 &&
     view.rendered_text == Some("日本語の描画を確認します ABC 123") {
     require(!view.composing, "composition survived cancellation")
+    require(
+      view.editor.selection_start == 0 && view.editor.selection_end == 3,
+      "cancellation changed the original selection",
+    )
     require(
       !view.accessibility_runs.is_empty(),
       "cancel did not restore text geometry",

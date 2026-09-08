@@ -28,6 +28,11 @@ fn Diagnostics::rejected(_self : Diagnostics) -> Unit {
 priv struct Hooks {}
 
 ///|
+fn Hooks::processed(_self : Hooks, _event : Event, _app : App) -> Unit {
+  ()
+}
+
+///|
 type DevelopmentRequest = Unit
 
 ///|

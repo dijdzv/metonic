@@ -29,6 +29,15 @@ pub fn composition_cursor(query : Bool, cursor : Int) -> Int {
     None
   }
   clear_text()
+  guard value is Some(value) else { return 0 }
+  input_cursor(query, value, cursor)
+}
+
+///|
+pub fn input_cursor(query : Bool, value : String, cursor : Int) -> Int {
+  if value.length() > 1024 {
+    return 0
+  }
   let composition = if query {
     query_composition.val
   } else {
@@ -42,7 +51,7 @@ pub fn composition_cursor(query : Bool, cursor : Int) -> Int {
   }
   guard composition is Some(composition) &&
     preview.val is Some(text) &&
-    value == Some(text) &&
+    value == text &&
     geometry.val is Some((start, end, _)) else {
     return 0
   }

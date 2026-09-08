@@ -249,17 +249,19 @@ fn App::draw(self : App) -> Unit raise Error {
       }
       let view = if self.input_node().reference == self.model.query_input {
         match self.composition {
-          Some(composition) => match composition.preview(self.preedit) {
-            Some(preview) => self.model.view(
-              query_preview=preview,
-              query_preedit=(
-                self.input_node().selection_start,
-                self.input_node().selection_start + self.preedit.length(),
-                self.input_node().selection_start + self.preedit_cursor,
-              ),
-            )
-            None => self.model.view()
-          }
+          Some(composition) =>
+            match composition.preview(self.preedit) {
+              Some(preview) =>
+                self.model.view(
+                  query_preview=preview,
+                  query_preedit=(
+                    self.input_node().selection_start,
+                    self.input_node().selection_start + self.preedit.length(),
+                    self.input_node().selection_start + self.preedit_cursor,
+                  ),
+                )
+              None => self.model.view()
+            }
           None => self.model.view()
         }
       } else {
@@ -916,6 +918,7 @@ async fn run_loop(
                 app.draw()
               }
           }
+          hooks.processed(event, app)
           if initializing && hooks.has_lifecycle() {
             match event {
               Close => may_present = hooks.notify(Closing, app)

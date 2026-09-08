@@ -48,6 +48,10 @@ async fn main {
           "/" => Some(("index.html", "text/html; charset=utf-8"))
           "/index.html" => Some(("index.html", "text/html; charset=utf-8"))
           "/style.css" => Some(("style.css", "text/css; charset=utf-8"))
+          "/webapi.mjs" =>
+            Some(("webapi.mjs", "text/javascript; charset=utf-8"))
+          "/LICENSE-webapi" =>
+            Some(("LICENSE-webapi", "text/plain; charset=utf-8"))
           "/host.mjs" => Some(("host.mjs", "text/javascript; charset=utf-8"))
           "/loader.mjs" =>
             Some(("loader.mjs", "text/javascript; charset=utf-8"))

@@ -2,8 +2,9 @@
 
 Date: 2026-09-06.
 
-Status: **accepted direction; adapters and transport are proposed, not implemented**.
-AccessKit adoption remains open pending P0-H evidence.
+Status: **accepted direction; implementation and acceptance are partial**.
+AccessKit is adopted for initial production nodes/actions; full P0-H acceptance
+remains open.
 
 ## Context
 
@@ -111,6 +112,21 @@ ACLs, rejection of remote clients, per-session discovery, timeouts, disconnects,
 and multi-window routing before adopting them. Do not expose an unauthenticated
 fixed TCP port. A launch-scoped capability and an explicit attach target prevent
 accidental control of a different app/session.
+
+Independent development-app attachment is required for P0. The developer may
+start the app through their usual CLI workflow; a later CLI or MCP connection
+must not acquire ownership of the app's lifetime. Launch-owned fixture sessions
+remain a separate supported mode described in [ADR 026](026-launch-scoped-native-control.md).
+Normal product builds omit both development entry points; optional product
+automation is a separate adapter decision.
+
+Discovery must identify a specific application session and protocol version.
+Clients must validate that identity before mutating state, and stale discovery
+must fail explicitly instead of silently selecting another application. Session
+identity is not an authentication secret: pipe ACLs establish the current-user
+access boundary. A filesystem-generated temporary name is not sufficient evidence
+of a cryptographically secure capability. Detailed discovery implementation and
+its stale-session tests remain tracked in issue #198.
 
 The browser can use a development-only host bridge connected by DevTools, with
 the same semantic/action contract. Its global hook must be absent from production

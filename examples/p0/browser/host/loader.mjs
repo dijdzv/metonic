@@ -17,7 +17,7 @@ export async function loadApp(target) {
     if (!response.ok) throw new Error(`Unable to fetch app.wasm (${response.status})`);
     const bytes = await response.arrayBuffer();
     const started = performance.now();
-    const result = await WebAssembly.instantiate(bytes, wasmImports());
+    const result = await WebAssembly.instantiate(bytes, wasmImports(), { builtins: ['js-string'], importedStringConstants: '_' });
     const app = validateExports(result.instance.exports, target);
     app.init();
     return { app, loadMs: performance.now() - started, artifactBytes: bytes.byteLength };
