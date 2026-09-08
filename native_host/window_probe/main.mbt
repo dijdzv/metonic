@@ -12,6 +12,7 @@ async fn main {
     stage: 0,
     canceled_id: 0,
     scene_revision: 0,
+    precomposition_run: 0UL,
   }
   @ui.run(
     observer=Some(view => scenario.step(view)),
