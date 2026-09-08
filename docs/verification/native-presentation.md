@@ -29,7 +29,8 @@ initial cyan rectangle from the orange toggled rectangle and check the orange
 state after resize. UIA separately verifies editor preservation, HTTP result and
 updated editor bounds. The native Win32 title is checked independently of UIA.
 The rectangle mask must occupy exactly 120x72 pixels at the scene's client-area
-position (260,144). DWM extended frame bounds and the client origin translate
+position (260,144) before the task-control flow and (250,144) after its completed
+ten-pixel delayed movement. DWM extended frame bounds and the client origin translate
 that position into capture coordinates; the capture must match the reported
 frame dimensions. This rejects displaced, scaled, incomplete or extra colored
 regions in the tested flow, including after resize.
