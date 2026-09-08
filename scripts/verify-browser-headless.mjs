@@ -363,6 +363,10 @@ try {
           }
           if (request.mode !== 'cancel') await page.waitForFunction(() => document.querySelector('#rpc-result').textContent !== '');
           await page.waitForLoadState('networkidle');
+          if (request.after_text !== undefined) {
+            await page.setViewportSize({ width: 740, height: 800 });
+            await page.locator('#text-input').fill(request.after_text);
+          }
           return await page.evaluate(() => ({
             text: document.querySelector('#text-input').value,
             result: document.querySelector('#rpc-result').textContent,
