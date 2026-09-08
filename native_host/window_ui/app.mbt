@@ -54,6 +54,8 @@ struct App {
   mut raster : @raster.Engine?
   mut rendered_text : String?
   mut rendered_request_focus : Bool
+  mut rendered_task_status : Int
+  mut rendered_control_focus : (Bool, Bool)
   mut rendered_result : String
   mut rendered_selection : (Int, Int)
   mut rendered_caret : Int?
@@ -232,6 +234,8 @@ fn App::draw(self : App) -> Unit raise Error {
       if self.rendered_text != Some(text) ||
         self.rendered_result != self.model.result ||
         self.rendered_request_focus != view.request.focused ||
+        self.rendered_task_status != self.model.task_field(0) ||
+        self.rendered_control_focus != (view.start.focused, view.cancel.focused) ||
         self.text_width != width ||
         self.rendered_selection != selection ||
         self.rendered_caret != visible_caret {
@@ -252,6 +256,8 @@ fn App::draw(self : App) -> Unit raise Error {
           }),
         )
         self.rendered_request_focus = view.request.focused
+        self.rendered_task_status = self.model.task_field(0)
+        self.rendered_control_focus = (view.start.focused, view.cancel.focused)
         self.rendered_text = Some(text)
         self.rendered_result = self.model.result
         self.rendered_selection = selection
@@ -370,6 +376,8 @@ async fn run_loop(
     rendered_text: None,
     rendered_result: "",
     rendered_request_focus: false,
+    rendered_task_status: -1,
+    rendered_control_focus: (false, false),
     rendered_selection: (-1, -1),
     rendered_caret: None,
     text_width: 0,
@@ -474,6 +482,23 @@ async fn run_loop(
                   app.queue(LoadUser("1"))
                   app.draw()
                 }
+                @accessibility.Click(target) if target ==
+                  app.model.start_button.id ||
+                  target == app.model.cancel_button.id => {
+                  ignore(
+                    @semantics.focus(
+                      app.model.editor,
+                      nodes[target - 1].reference,
+                    ),
+                  )
+                  app.queue(
+                    if target == app.model.start_button.id {
+                      StartUpdate
+                    } else {
+                      CancelUpdate
+                    },
+                  )
+                }
                 @accessibility.Click(1) => {
                   ignore(@scene.dispatch(app.model.scene, Activate))
                   app.draw()
@@ -516,13 +541,17 @@ async fn run_loop(
                 nodes[0]
               } else if nodes[0].focused {
                 nodes[2]
+              } else if nodes[2].focused {
+                nodes[3]
+              } else if nodes[3].focused {
+                nodes[4]
               } else {
                 nodes[1]
               }
               ignore(@semantics.focus(app.model.editor, target.reference))
               app.draw()
             }
-            Navigate(_, _) | SelectBoundary(_, _) if app.model.request_focused() =>
+            Navigate(_, _) | SelectBoundary(_, _) if app.model.control_focused() =>
               ()
             Navigate(forward, extend_selection) => {
               let node = @semantics.snapshot(app.model.editor)[1]
@@ -582,6 +611,7 @@ async fn run_loop(
               let id = app.model.begin_update()
               require(id > 0, "update scope unavailable")
               let target = (@scene.field(app.model.scene, 0) - 10).max(0)
+              app.draw()
               update = Some(
                 group.spawn(() => {
                   if user_id is Some(value) {
@@ -593,7 +623,7 @@ async fn run_loop(
                     )
                     app.queue(UserLoaded(id, result.map(user => user.name)))
                   } else {
-                    @async.sleep(250)
+                    @async.sleep(1000)
                     app.queue(Updated(id, target))
                   }
                 }),
@@ -609,6 +639,7 @@ async fn run_loop(
                 }
               }
               update = None
+              app.draw()
             }
             UserLoaded(id, result) =>
               if app.model.complete_user(id, result) {
@@ -687,6 +718,21 @@ async fn run_loop(
               app.draw()
             }
             TextPointer(_, _, _) if app.composition is Some(_) => ()
+            TextPointer(x, y, _) if app.model.view().start.bounds.contains(x, y) ||
+              app.model.view().cancel.bounds.contains(x, y) => {
+              let start = app.model.view().start.bounds.contains(x, y)
+              ignore(
+                @semantics.focus(
+                  app.model.editor,
+                  if start {
+                    app.model.start_button
+                  } else {
+                    app.model.cancel_button
+                  },
+                ),
+              )
+              app.queue(if start { StartUpdate } else { CancelUpdate })
+            }
             TextPointer(x, y, _) if app.model.view().request.bounds.contains(
                 x, y,
               ) &&
@@ -730,8 +776,17 @@ async fn run_loop(
               }
             Input(Activate) if app.model.request_focused() &&
               app.composition is None => app.queue(LoadUser("1"))
+            Input(Activate) if app.model.control_focused() &&
+              app.composition is None =>
+              app.queue(
+                if app.model.view().start.focused {
+                  StartUpdate
+                } else {
+                  CancelUpdate
+                },
+              )
             Input(_) if app.composition is Some(_) ||
-              app.model.request_focused() ||
+              app.model.control_focused() ||
               @semantics.snapshot(app.model.editor)[1].focused => ()
             Input(action) =>
               if @scene.dispatch(app.model.scene, action) {

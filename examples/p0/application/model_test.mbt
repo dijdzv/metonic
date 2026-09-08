@@ -32,6 +32,7 @@ test "cancel and shutdown preserve the last application snapshot" {
   assert_eq(app.complete_user(canceled, Err("late failure")), false)
   let pending = app.begin_update()
   let x = @scene.field(app.scene, 0)
+  let node_count = @semantics.snapshot(app.editor).length()
   assert_eq(app.stop(), true)
   assert_eq(app.complete_movement(pending, 0), false)
   assert_eq(app.complete_user(pending, Ok("late success")), false)
@@ -39,7 +40,7 @@ test "cancel and shutdown preserve the last application snapshot" {
   assert_eq(@scene.field(app.scene, 0), x)
   assert_eq(app.result, "\nretained")
   assert_eq(@utf8.decode(app.result_utf8), app.result)
-  assert_eq(@semantics.snapshot(app.editor).length(), 3)
+  assert_eq(@semantics.snapshot(app.editor).length(), node_count)
 }
 
 ///|

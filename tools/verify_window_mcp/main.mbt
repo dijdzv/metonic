@@ -89,7 +89,7 @@ async fn invoke(client : Client, request : Json) -> State {
 pub fn verify(client : Client) -> @js_async.Promise[String] {
   @js_async.Promise::from_async(async fn() {
     let before = invoke(client, { "name": "window_snapshot", "arguments": {} })
-    assert_eq(before.view.length(), 3)
+    assert_eq(before.view.length(), 6)
     assert_eq(before.view[0].id, Json::number(2))
     assert_eq(before.view[1].id, Json::number(3))
     assert_eq(before.view[2].id, Json::null())

@@ -97,6 +97,8 @@ async fn Scenario::step(self : Scenario, view : @ui.Observation) -> Unit {
     require(!view.editor.focused, "request and editor both focused")
     self.stage = 29
     post(view.hwnd, 0x0100U, 0x09UL, 0L)
+    post(view.hwnd, 0x0100U, 0x09UL, 0L)
+    post(view.hwnd, 0x0100U, 0x09UL, 0L)
   } else if self.stage == 29 && view.editor.focused {
     require(!view.request_focused, "return to editor retained request focus")
     require(!view.accessibility_runs.is_empty(), "current text run missing")

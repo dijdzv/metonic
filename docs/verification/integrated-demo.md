@@ -38,8 +38,8 @@ button through AccessKit. Development snapshots include the shared view and its
 | Move the insertion position | Left/Right, Home/End; hold Shift to select | Use the text input's keyboard controls |
 | Load the sample user | Click Load user, or focus it and press Enter/Space; F7 also works | Click Load user or focus it and press Enter/Space, with User ID `1` |
 | Observe the result | `月兎` below the editor; editor text preserved | Same result below the GPU editor |
-| Start delayed scene movement | F5 | Move after delay |
-| Cancel before completion | F6 | Cancel |
+| Start delayed scene movement | Move after delay; F5 also works | Move after delay |
+| Cancel before completion | Cancel; F6 also works | Cancel |
 | Resize | Resize the native window | Resize the browser window |
 | End the session | Close the native window | Stop disposes the browser UI; close the tab separately |
 
@@ -48,8 +48,11 @@ user `1`; arbitrary IDs are available through the separate development CLI/MCP.
 Native and browser HTTP results use a dedicated row below the GPU editor, so multiline editor
 contents do not push the result out of its viewport. The editor itself remains
 a fixed-height viewport without scrolling.
+Both hosts render the delayed-update controls and task status through the shared
+GPU view. The demo delay is one second. Cancel applies to the active delayed update
+or HTTP request; completion and cancellation preserve editor contents.
 Native left/right keys edit while text is focused; Tab cycles through text, the
-scene and Load user. Clicking the scene returns its keyboard focus. Scene focus enables
+scene, Load user, Move after delay and Cancel. Clicking the scene returns its keyboard focus. Scene focus enables
 Up/down movement and Enter/Space activation. Those keys do not operate the scene
 while editing, composing or focusing Load user; Space inserts text while editing. Vertical editor
 navigation is not implemented. The browser requires canvas focus for scene keyboard

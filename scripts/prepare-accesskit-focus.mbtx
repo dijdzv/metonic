@@ -1,0 +1,100 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/encoding/utf8",
+}
+
+///|
+async fn run(command : String, args : Array[String]) -> Unit {
+  guard @process.run(command, args, no_console_window=true) == 0 else {
+    fail("AccessKit focus preparation failed: " + command)
+  }
+}
+
+///|
+async fn source(name : String, url : String, hash : String) -> Unit {
+  let directory = ".work/accesskit-focus-source"
+  let archive = directory + "/" + name + ".tar.gz"
+  if !@fs.exists(archive) {
+    run("curl.exe", ["--fail", "--location", "--output", archive, url])
+  }
+  let (code, output, _) = @process.collect_output(
+    "certutil",
+    ["-hashfile", archive, "SHA256"],
+    no_console_window=true,
+  )
+  guard code == 0 &&
+    @utf8.decode_lossy(output.binary())
+    .split("\n")
+    .any(line => line.trim().to_owned().to_lower() == hash) else {
+    fail("AccessKit source hash mismatch: " + name)
+  }
+  run("tar", ["-xf", archive, "-C", directory])
+}
+
+///|
+async fn main {
+  @async.with_timeout(600000, async fn() {
+    let (code, version, _) = @process.collect_output(
+      "rustc",
+      ["--version"],
+      no_console_window=true,
+    )
+    guard code == 0 && version.text().has_prefix("rustc 1.93.0 ") else {
+      fail("AccessKit source build requires Rust 1.93.0 on PATH")
+    }
+    if !@fs.exists(".work/accesskit-focus-source") {
+      @fs.mkdir(".work/accesskit-focus-source", recursive=true)
+    }
+    source(
+      "accesskit-c-0.22.3", "https://github.com/AccessKit/accesskit-c/archive/refs/tags/0.22.3.tar.gz",
+      "9e487bb5ce917b230ce36463cf65113a57878555376109ebbd4a5c551595c60e",
+    )
+    source(
+      "accesskit_windows-0.34.0", "https://static.crates.io/crates/accesskit_windows/accesskit_windows-0.34.0.crate",
+      "106c2b961215864d1c2e703ee63269c25c4e80a577ffb2c1017b9c17dcdf83a1",
+    )
+    let directory = ".work/accesskit-focus-source/accesskit_windows-0.34.0"
+    let patch = "patches/accesskit-windows-focus.patch"
+    run("git", ["apply", "--check", "--directory=" + directory, patch])
+    run("git", ["apply", "--directory=" + directory, patch])
+    let root = ".work/accesskit-focus-source/accesskit-c-0.22.3"
+    let manifest = @fs.read_file(root + "/Cargo.toml").text()
+    @fs.write_file(
+      root + "/Cargo.toml",
+      manifest +
+      "\n[patch.crates-io]\naccesskit_windows = { path = \"../accesskit_windows-0.34.0\" }\n",
+    )
+    let original = @fs.read_file(root + "/Cargo.lock").text()
+    let mut lock = ""
+    let mut windows = false
+    let mut removed = 0
+    for line in original.split("\n") {
+      if line == "[[package]]" {
+        windows = false
+      }
+      if line == "name = \"accesskit_windows\"" {
+        windows = true
+      }
+      if windows &&
+        (line.has_prefix("source = ") || line.has_prefix("checksum = ")) {
+        removed += 1
+      } else {
+        lock += line.to_owned() + "\n"
+      }
+    }
+    guard removed == 2 else { fail("unexpected AccessKit lockfile") }
+    @fs.write_file(root + "/Cargo.lock", lock)
+    run("cargo", [
+      "build",
+      "--locked",
+      "--release",
+      "--manifest-path",
+      root + "/Cargo.toml",
+      "--target-dir",
+      ".work/accesskit-focus-build",
+    ])
+    println("ACCESSKIT_FOCUS_BUILD_OK version=0.22.3 rust=1.93.0")
+  })
+}

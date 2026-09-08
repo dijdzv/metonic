@@ -1,7 +1,7 @@
 ///|
 async fn verify_shared_view(host : BrowserHost) -> Unit {
   let actual = command(host, { "op": "view-bounds" })
-  guard actual is Json::Array(elements) && elements.length() == 2 else {
+  guard actual is Json::Array(elements) && elements.length() == 4 else {
     fail("shared input and request bounds missing")
   }
   let editor = elements[0]
@@ -14,7 +14,18 @@ async fn verify_shared_view(host : BrowserHost) -> Unit {
     int_field(request, "width") == 176 && int_field(request, "height") == 40,
     "shared request dimensions",
   )
-  for entry in [(editor, 8), (request, 144)] {
+  require(
+    int_field(elements[2], "width") == 272 &&
+    int_field(elements[3], "width") == 176,
+    "shared task control dimensions",
+  )
+  for
+    entry in [
+      (editor, 8),
+      (request, 144),
+      (elements[2], 224),
+      (elements[3], 272),
+    ] {
     let (element, y) = entry
     near_coordinate(element, "x", 8.0)
     near_coordinate(element, "y", y.to_double())

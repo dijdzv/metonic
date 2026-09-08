@@ -14,12 +14,17 @@ from UIA state.
 
 ## Implemented behavior
 
-The ordinary window attaches official AccessKit C 0.22.3 before becoming visible.
+The ordinary window attaches AccessKit C 0.22.3 with the reviewed local
+[Windows focus-ownership patch](../../patches/accesskit-windows-focus.md) before
+becoming visible. Its source build retains the official C ABI.
 The adapter maps the shared semantic model into a Window root, Toggle button,
-Text editor and Load user button. The request button uses the common view's label
+Text editor, Load user, Move after delay and Cancel buttons. The buttons use the common view's label
 and bounds and exposes Invoke. Scene activation synchronizes the Toggle value.
 The current RPC result is a separate Label populated from the same result used
 by GPU rendering. It has no editing actions and does not replace editor text.
+Task status is a separate Label from the shared task state. The external verifier
+starts a delayed task, observes pending state, cancels it, checks that late
+completion does not replace Canceled, and successfully starts another task.
 Draw/resize publishes current values and physical bounds. Accessibility Click
 and Focus requests rejoin the ordinary UI event queue. Focus requests also ask
 the window library to focus the window. Active IME composition currently rejects

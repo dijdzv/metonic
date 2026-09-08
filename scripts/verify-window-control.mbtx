@@ -25,7 +25,7 @@ async fn verify_case(fallback : Bool) -> Unit {
     oversized +
     "\n{\"id\":6,\"op\":\"snapshot\"}"
   let requests = requests +
-    "\n{\"id\":6,\"op\":\"insert\",\"text\":\"wrong\"}\n{\"id\":7,\"op\":\"insert\",\"text\":\"wrong\",\"expected_semantic_revision\":1}\n{\"id\":8,\"op\":\"insert\",\"text\":\"Z\",\"expected_semantic_revision\":4}"
+    "\n{\"id\":6,\"op\":\"insert\",\"text\":\"wrong\"}\n{\"id\":7,\"op\":\"insert\",\"text\":\"wrong\",\"expected_semantic_revision\":1}\n{\"id\":8,\"op\":\"insert\",\"text\":\"Z\",\"expected_semantic_revision\":6}"
   @fs.write_file(".work/window-control-input.jsonl", requests)
   let env : Map[String, String] = Map([])
   env.set("METONIC_DEV_HIDDEN", "1")

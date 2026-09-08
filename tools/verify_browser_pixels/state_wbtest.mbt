@@ -106,13 +106,13 @@ test "moving the rectangle must not upload the restored text again" {
     "action": "text_counts",
     "width": 100,
     "initialRenders": 1,
-    "initialUploaded": 54400,
+    "initialUploaded": 99200,
     "renders": 3,
-    "uploaded": 163200,
+    "uploaded": 297600,
     "restoredRenders": 4,
-    "restoredUploaded": 217600,
+    "restoredUploaded": 396800,
     "afterMoveRenders": 4,
-    "afterMoveUploaded": 217600,
+    "afterMoveUploaded": 396800,
   }
   ignore(verify_checked(request.stringify()))
   match request {
