@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
+import { validate_response } from '../../_build/js/release/build/tools/session_wire/session_wire.js';
 
 const MAX_PENDING = 16;
 const MAX_STDOUT = 32 * 1024 * 1024;
@@ -61,39 +62,22 @@ export async function createMoonBitSession(options = {}) {
   }
   function dispatch(value) {
     if (windowProtocol) {
-      if (!value || typeof value.error !== 'string') return fail(new Error('invalid window response'));
       value = { id: value.id, ok: value.error === '', error: value.error, response: value };
     }
     if (value?.id === 0 && !sessionId) {
-      if (value.ok !== true || typeof value.session_id !== 'string' || value.session_id.length === 0) return fail(new Error('invalid session ready response'));
       sessionId = value.session_id;
       readyResolve(sessionId);
       return;
     }
-    if (!Number.isSafeInteger(value?.id) || value.id < 1 || typeof value.ok !== 'boolean') return fail(new Error('invalid response schema'));
     const waiter = pending.get(value.id);
     if (!waiter) return fail(new Error('unknown response id'));
     if (value.ok !== true) {
-      if (typeof value.error !== 'string') return fail(new Error('invalid response error'));
       pending.delete(value.id);
       waiter.reject(new Error(value.error));
     } else {
-      if (!validNativeResponse(value.response)) return fail(new Error('invalid native response'));
       pending.delete(value.id);
       waiter.resolve(value);
     }
-  }
-  function validNativeResponse(response) {
-    if (windowProtocol) return response && typeof response.text === 'string' &&
-      Number.isInteger(response.semantic_revision) && response.semantic_revision >= 0 &&
-      Number.isInteger(response.frames) && response.frames >= 0 &&
-      Number.isInteger(response.task_status) && response.task_status >= 0 && response.task_status <= 5;
-    const state = response?.state;
-    return response && typeof response === 'object' && Number.isInteger(response.version) && response.version === 1 &&
-      Number.isInteger(response.id) && response.id > 0 && typeof response.ok === 'boolean' &&
-      (response.ok || typeof response.error === 'string') && Array.isArray(state) && state.length === 8 &&
-      state.every(Number.isInteger) && Number.isInteger(state[6]) && state[6] >= 1 && state[6] <= 2048 &&
-      Number.isInteger(state[7]) && state[7] >= 1 && state[7] <= 2048 && Number.isInteger(response.frame) && response.frame >= 0;
   }
   child.stdout.on('data', (chunk) => {
     if (fatalError) return;
@@ -108,7 +92,11 @@ export async function createMoonBitSession(options = {}) {
       const text = lineParts.join('').replace(/\r$/, '');
       lineParts = [];
       lineBytes = 0;
-      try { dispatch(JSON.parse(text)); } catch (error) { fail(new Error(`invalid native session response: ${error.message}`)); return; }
+      try {
+        const error = validate_response(text, windowProtocol, !sessionId);
+        if (error) { fail(new Error(error)); return; }
+        dispatch(JSON.parse(text));
+      } catch (error) { fail(new Error(`invalid native session response: ${error.message}`)); return; }
       if (fatalError) return;
     }
     const tail = parts[parts.length - 1];
