@@ -468,7 +468,14 @@ These hidden checks do not establish physical input or OS accessibility.
 The same task also opens a development window briefly on default and fallback
 GPUs and closes only its owned HWND while control stdin remains open. It checks
 normal process exit, stdout EOF and rejection of a later pipe write. This verifies
-idle window-initiated shutdown, not an in-flight capture/edit race.
+idle window-initiated shutdown. A second scenario reads the first byte of a
+capture response, stops draining stdout, submits a subsequent edit, then closes
+the owned HWND. Native must exit successfully within two seconds while stdin
+remains open. The remaining output must be an incomplete JSON response followed
+by EOF, with no later response; late writes must fail. This establishes shutdown
+during response backpressure with queued protocol input. It does not assert
+rollback of actions already applied. Clients must reject truncated responses;
+the MCP session adapter reports them as a session failure.
 For MCP, use the pinned Node executable with the absolute path to
 `tools/devtools/window-mcp.mjs`. This dedicated server exposes `window_snapshot`,
 `window_insert`, `window_backspace`, `window_start_update` and `window_cancel_update`.
