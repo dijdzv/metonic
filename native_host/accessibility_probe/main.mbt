@@ -449,6 +449,22 @@ async fn main {
     assert_eq(bounds_component(button, 1), scene_y)
     expect_text(editor, "再入力 🚀")
     if @env.get_env_var("METONIC_PRESENTATION_CAPTURE") == Some("1") {
+      assert_eq(focus_node(editor), 0)
+      expect_focus(editor)
+      for text in ["編集後 日本語 ABC 123", ""] {
+        assert_eq(set_value(value_provider[0], utf16z(text)), 0)
+        expect_text(editor, text)
+        capture_presentation(
+          hwnd,
+          if text == "" {
+            "empty-editor"
+          } else {
+            "edited-editor"
+          },
+          editor_text=Some(text),
+          caret=Some(text.length()),
+        )
+      }
       let long_text = "一行目\n二行目\n三行目\n四行目"
       assert_eq(set_value(value_provider[0], utf16z(long_text)), 0)
       expect_text(editor, long_text)
@@ -487,7 +503,12 @@ async fn main {
       fail("editing after HTTP and resize failed")
     }
     expect_text(editor, "再入力 🚀Q")
-    capture_presentation(hwnd, "resized")
+    capture_presentation(
+      hwnd,
+      "resized",
+      editor_text=Some("再入力 🚀Q"),
+      caret=Some("再入力 🚀Q".length()),
+    )
     verify_task_controls(hwnd, root[0], editor, expected_text="再入力 🚀Q")
     guard text_is(result_node, 30005, "月兎") else {
       fail("compact task controls changed HTTP result")

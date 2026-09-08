@@ -51,6 +51,17 @@ placement agreement, including unexpected marks in blank space. Antialiased
 edge values are excluded because surface color conversion changes them; the
 check does not independently validate the shaping engine or font design.
 
+The same production sequence compares the edited Japanese/Latin/digit sample,
+the empty editor and text entered after resize against the rasterizer. The
+reference width comes from the actual client area; the focused insertion caret
+is included. Every opaque black/white reference pixel is checked, including the
+empty editor background, so leftover glyphs and displaced content fail. These
+checks passed locally on 2026-09-08 using the default adapter. They extend the
+transfer/placement evidence to editing and resize without claiming independent
+shaping correctness or physical input. Additional captures are
+`.work/presentation-edited-editor.png` and `.work/presentation-empty-editor.png`;
+the existing `resized` capture checks the post-resize edit.
+
 PNG artifacts are `.work/presentation-initial.png`,
 `.work/presentation-toggled.png` and `.work/presentation-resized.png`. These include
 window chrome. Inspection of the initial local images showed Japanese/Latin text,
