@@ -45,6 +45,16 @@ async fn Scenario::step(self : Scenario, view : @ui.Observation) -> Unit {
     let packed = (((view.scene)(1) + 1) << 16) | ((view.scene)(0) + 1)
     post(view.hwnd, 0x0201U, 1UL, packed.to_int64())
   } else if self.stage == 2 && (view.scene)(4) == 1 {
+    require(view.input.key_presses > 0, "keyboard event observation missing")
+    require(
+      view.input.pointer_presses == 1,
+      "pointer event observation missing",
+    )
+    require(
+      view.input.pointer_x == Some((view.scene)(0) + 1) &&
+      view.input.pointer_y == Some((view.scene)(1) + 1),
+      "pointer coordinates differ from dispatched event",
+    )
     self.stage = 20
     post(view.hwnd, 0x0102U, 1UL, 0L)
     post(view.hwnd, 0x0100U, 0x24UL, 0L)

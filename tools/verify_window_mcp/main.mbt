@@ -22,6 +22,7 @@ struct Reply {
 
 ///|
 struct State {
+  host_input_events : HostInputEvents
   view : Array[ViewNode]
   text : String
   semantic_revision : Int
@@ -29,6 +30,13 @@ struct State {
   task_status : Int
   rpc_result : String
 } derive(FromJson)
+
+///|
+struct HostInputEvents {
+  key_presses : Int
+  pointer_presses : Int
+  last_key : String
+} derive(FromJson, Eq, Debug)
 
 ///|
 struct ViewNode {
@@ -118,6 +126,7 @@ pub fn verify(client : Client) -> @js_async.Promise[String] {
     })
     assert_eq(after.text, before.text + "日本")
     assert_eq(after.semantic_revision, before.semantic_revision + 1)
+    assert_eq(after.host_input_events, before.host_input_events)
     assert_eq(after.session_id, before.session_id)
     let deleted = invoke(client, {
       "name": "window_backspace",

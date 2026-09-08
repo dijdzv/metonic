@@ -71,5 +71,15 @@ physical coordinates, not measured OS candidate-window positions. MCP capture
 contains the application's shared offscreen pass, not the external IME popup.
 Human observation is required for the popup; Computer Use is not used.
 
+Development snapshots also include `host_input_events`: session-local, saturating
+key/pointer press counts, the last key category, the last pointer press position
+in client coordinates, and the last observed focus state (`null` until observed).
+Character keys are classified as `character`; this observation does not retain
+their text or an event history. Compare snapshots before and after an operation
+alongside `semantic_revision`, selection and scene coordinates. Direct MCP edits
+do not increment host input counts. Posted window messages can increment them,
+so the counters alone do not prove a physical device was used. Production builds
+exclude this observation and still require the ordinary-input procedure above.
+
 Keep this requirement open until the scenarios have actual observed evidence.
 Missing multi-monitor hardware must be recorded as unverified, not passed.

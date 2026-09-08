@@ -12,12 +12,14 @@ pub(all) enum Action {
 
 ///|
 pub struct Snapshot {
+  input : InputObservation
   view : @application.View
   x : Int
   y : Int
   width : Int
   height : Int
   semantic_revision : Int
+  scene_revision : Int
   text : String
   selection_start : Int
   selection_end : Int
@@ -93,11 +95,13 @@ fn App::handle(self : App) -> Handle {
       let node = @semantics.snapshot(self.model.editor)[1]
       {
         view: self.model.view(),
+        input: self.diagnostics.input,
         x: @scene.field(self.model.scene, 0),
         y: @scene.field(self.model.scene, 1),
         width: @scene.field(self.model.scene, 6),
         height: @scene.field(self.model.scene, 7),
         semantic_revision: @semantics.revision(self.model.editor),
+        scene_revision: @scene.field(self.model.scene, 5),
         text: node.value,
         selection_start: node.selection_start,
         selection_end: node.selection_end,

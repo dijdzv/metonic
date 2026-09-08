@@ -1,12 +1,78 @@
 ///|
+pub struct InputObservation {
+  key_presses : Int
+  pointer_presses : Int
+  last_key : String
+  pointer_x : Int?
+  pointer_y : Int?
+  focused : Bool?
+} derive(ToJson)
+
+///|
 priv struct Diagnostics {
+  mut input : InputObservation
   mut frames : Int
   mut rejected_updates : Int
 }
 
 ///|
 fn Diagnostics::new() -> Diagnostics {
-  { frames: 0, rejected_updates: 0, }
+  {
+    frames: 0,
+    rejected_updates: 0,
+    input: {
+      key_presses: 0,
+      pointer_presses: 0,
+      last_key: "none",
+      pointer_x: None,
+      pointer_y: None,
+      focused: None,
+    },
+  }
+}
+
+///|
+fn Diagnostics::observe_input(
+  self : Diagnostics,
+  event : @core.WindowEvent,
+) -> Unit {
+  match event {
+    @core.WindowEvent::KeyboardInput(_, key, _) if key.state()
+      is @core.ElementState::Pressed => {
+      let kind = match key.logical_key() {
+        @core.Key::Character(_) => "character"
+        @core.Key::Named(@core.NamedKey::Tab) => "tab"
+        @core.Key::Named(@core.NamedKey::Enter) => "enter"
+        @core.Key::Named(@core.NamedKey::Backspace) => "backspace"
+        @core.Key::Named(@core.NamedKey::ArrowLeft) => "left"
+        @core.Key::Named(@core.NamedKey::ArrowRight) => "right"
+        @core.Key::Named(@core.NamedKey::ArrowUp) => "up"
+        @core.Key::Named(@core.NamedKey::ArrowDown) => "down"
+        _ => "other"
+      }
+      self.input = {
+        ..self.input,
+        key_presses: self.input.key_presses.min(2147483646) + 1,
+        last_key: kind,
+      }
+    }
+    @core.WindowEvent::PointerButton(
+      _,
+      @core.ElementState::Pressed,
+      position,
+      _,
+      _
+    ) =>
+      self.input = {
+        ..self.input,
+        pointer_presses: self.input.pointer_presses.min(2147483646) + 1,
+        pointer_x: Some(position.x().to_int()),
+        pointer_y: Some(position.y().to_int()),
+      }
+    @core.WindowEvent::Focused(value) =>
+      self.input = { ..self.input, focused: Some(value), }
+    _ => ()
+  }
 }
 
 ///|

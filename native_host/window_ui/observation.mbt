@@ -11,6 +11,7 @@ pub(all) enum Injected {
 
 ///|
 pub struct Observation {
+  input : InputObservation
   closed_queue_empty : Bool
   frames : Int
   pending_initialization : Int
@@ -36,6 +37,7 @@ pub struct Observation {
 ///|
 fn App::observation(self : App) -> Observation {
   {
+    input: self.diagnostics.input,
     closed_queue_empty: if self.closed {
       try {
         ignore(self.events.try_get())

@@ -15,6 +15,15 @@ relationships for actual prerequisites. Related work alone is not a dependency;
 use a link for context. Parent/sub-issue relationships describe decomposition,
 not execution order.
 
+Among ready tasks, prioritize a complete user operation through the integrated
+application: input, state change, rendering, result observation and cleanup.
+Implement the smallest working path across those layers before expanding edge
+cases in an individual layer. Fix defects that prevent that path or threaten
+state/resource safety first. Split independent refinements into separate Issues;
+do not let them silently extend the current task. At each integrated milestone,
+review what users can now do, what still prevents acceptance, and whether the
+remaining priorities reflect those gaps. Report progress in those terms.
+
 The Issue body is the current task summary: outcome, acceptance criteria, present
 state, unresolved questions and links to evidence. Edit it when those facts
 change, distinguishing local verification from merged behavior. Close the task
@@ -78,7 +87,8 @@ HTTP endpoint. Closing native stops the owned server. Follow the
 current interaction differences. `demo:test` verifies launcher process ownership
 and failure handling and is included in pre-commit.
 
-Both hosts provide a GPU-rendered Load user button to fetch user `1` through the standard HTTP/JSON
+Both hosts provide a GPU-rendered Load user button to fetch the editable User ID
+(initially `1`) through the standard HTTP/JSON
 adapter. Set `METONIC_RPC_BASE` to the server origin (default
 `http://127.0.0.1:4174`). The response or error appears below the editor without
 replacing its text. Requests share the existing replace/cancel task scope;
