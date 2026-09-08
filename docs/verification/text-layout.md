@@ -1,8 +1,10 @@
 # Font-backed MoonBit text evaluation
 
-Date: 2026-09-06. The initial isolated dependency evaluation now also has a
-browser integration. This does not adopt a complete text/IME stack or replace
-the native renderer.
+Initial evaluation: 2026-09-06. The dated measurements below preserve the
+dependency evaluation. The current native and browser applications both use
+`text_raster` and the shared view renderer; see the [integrated demo](integrated-demo.md)
+and [production presentation](native-presentation.md). This is not a complete
+text/IME stack or a claim of full editing parity.
 
 ## Reproduction and inputs
 
@@ -78,11 +80,12 @@ package with no file/process or browser imports. The original script remains an
 independent CPU/native reference; its raster loop has not yet been replaced by
 this package.
 
-The native result establishes an offscreen GPU texture path. The browser input
-can update displayed text, but selection/caret remain in the DOM input rather
-than the GPU canvas. This is not a GPU text editor or glyph atlas. Next gates are
-native interactive integration, mixed-script and emoji fallback, selection/hit-testing,
-and input normalization.
+The original native result establishes an offscreen GPU texture path. Subsequent
+integration renders shared editor text, selection and caret through the GPU in
+both hosts; native pointer placement uses the retained layout. Browser DOM input
+still supplies editing and semantic behavior. The demo documents remaining
+navigation, scrolling and fallback limitations. The initial offscreen experiment
+alone does not establish those later capabilities.
 Real IME composition and candidate positioning require separate OS integration.
 The existing [text-position contracts](text-positions.md) remain authoritative.
 
@@ -115,8 +118,10 @@ checks. The physical NVIDIA adapter passed the following on 2026-09-06:
 - JS and WasmGC produced identical 640×96 Japanese text crops. Replacing the text
   changed the image, empty input produced opaque white pixels, and restoring the
   original input restored the exact image.
-- Rectangle movement preserved the text raster/upload counts. A narrower viewport
-  changed the raster width. One initial raster uploads 245,760 bytes.
+- In the initial text-only integration, rectangle movement preserved the text
+  raster/upload counts, a narrower viewport changed raster width, and the initial
+  text raster uploaded 245,760 bytes. Current shared controls/result/status add
+  layers; task status and viewport-height changes can invalidate their raster.
 - The JS DPR-2 image matched a 2× nearest-neighbor expansion of the DPR-1 text crop.
 - JS font HTTP failure, hash mismatch, and stopping during font loading were
   checked alongside the existing artifact-loading and lifecycle failures.
