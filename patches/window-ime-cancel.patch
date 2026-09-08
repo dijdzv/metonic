@@ -1,0 +1,18 @@
+diff --git a/modules/window/windows/native_window.c b/modules/window/windows/native_window.c
+--- a/modules/window/windows/native_window.c
++++ b/modules/window/windows/native_window.c
+@@ -503,6 +503,14 @@
+       return 0;
+ 
+     case WM_IME_COMPOSITION:
++      if ((lparam & (GCS_COMPREADSTR | GCS_COMPREADATTR | GCS_COMPREADCLAUSE |
++                     GCS_COMPSTR | GCS_COMPATTR | GCS_COMPCLAUSE |
++                     GCS_CURSORPOS | GCS_DELTASTART | GCS_RESULTREADSTR |
++                     GCS_RESULTREADCLAUSE | GCS_RESULTSTR | GCS_RESULTCLAUSE)) == 0) {
++        g_input_event_trampoline(g_input_event_closure, state->raw_id, 36, 0, 0);
++        return 0;
++      }
++
+       if ((lparam & GCS_RESULTSTR) != 0) {
+         mbw_queue_ime_text(hwnd, state, 37, GCS_RESULTSTR);
+       }

@@ -2,6 +2,17 @@
 
 Status: implementation under verification; real IME acceptance is not complete.
 
+The additional `patches/window-ime-cancel.patch` follows the existing position
+patch during dependency preparation. It handles `WM_IME_COMPOSITION` without
+any GCS flags as cancellation, following the
+[Windows message contract](https://learn.microsoft.com/en-us/windows/win32/intl/wm-ime-composition).
+Attribute-only and clause-only notifications must not cancel a composition.
+`mise run native:window` stages a synthetic preedit, posts those updates and then
+posts the no-GCS message, checking cancellation and restored text geometry.
+The same test times out with the pre-correction dependency and passes with the
+correction. This is OS-message-path coverage, not physical IME acceptance or
+evidence about Space-conversion cursor placement.
+
 The shared editor stages preedit separately from committed text. Commit replaces
 the original selection once; cancellation leaves the text unchanged. A revision
 change invalidates the composition. CLI/MCP edits and selection changes are

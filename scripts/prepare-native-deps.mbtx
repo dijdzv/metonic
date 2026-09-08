@@ -403,13 +403,21 @@ async fn prepare(args : Array[String]) -> Unit raise Error {
     ),
   )
 
-  let window_existing = sources + "/window"
+  let window_existing = sources + "/window-ime-cancel"
   for check_only in [true, false] {
     let args = ["apply", "--directory=" + window_stage_relative]
     if check_only {
       args.push("--check")
     }
     args.push("patches/window-ime-position.patch")
+    ignore(run_checked("git", args, repo_root))
+  }
+  for check_only in [true, false] {
+    let args = ["apply", "--directory=" + window_stage_relative]
+    if check_only {
+      args.push("--check")
+    }
+    args.push("patches/window-ime-cancel.patch")
     ignore(run_checked("git", args, repo_root))
   }
   let async_existing = sources + "/async"

@@ -169,11 +169,20 @@ async fn Scenario::step(self : Scenario, view : @ui.Observation) -> Unit {
       (view.scene)(5) == self.scene_revision + 2,
       "composition key changed the scene",
     )
+    self.stage = 33
+    post(view.hwnd, 0x010FU, 0UL, 0x10L)
+    post(view.hwnd, 0x010FU, 0UL, 0x20L)
+  } else if self.stage == 33 {
+    require(view.composing, "attribute or clause update canceled composition")
     self.stage = 31
-    (view.inject)(CompositionCancel)
+    post(view.hwnd, 0x010FU, 0UL, 0L)
   } else if self.stage == 31 &&
     view.rendered_text == Some("日本語の描画を確認します ABC 123") {
     require(!view.composing, "composition survived cancellation")
+    require(
+      view.editor.selection_start == 0 && view.editor.selection_end == 3,
+      "cancellation changed the original selection",
+    )
     require(
       !view.accessibility_runs.is_empty(),
       "cancel did not restore text geometry",
