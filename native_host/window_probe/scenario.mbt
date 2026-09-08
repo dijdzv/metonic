@@ -6,6 +6,7 @@ struct Scenario {
   mut stage : Int
   mut canceled_id : Int
   mut scene_revision : Int
+  mut precomposition_run : UInt64
 }
 
 ///|
@@ -119,6 +120,11 @@ async fn Scenario::step(self : Scenario, view : @ui.Observation) -> Unit {
       "obsolete queued selection changed new text",
     )
     self.stage = 30
+    require(
+      !view.accessibility_runs.is_empty(),
+      "precomposition text run missing",
+    )
+    self.precomposition_run = view.accessibility_runs[0]
     require((view.select)(0, 3) == "", "test selection rejected")
     (view.inject)(CompositionStart)
     (view.inject)(CompositionUpdate("にほん", Some(1)))
@@ -134,6 +140,10 @@ async fn Scenario::step(self : Scenario, view : @ui.Observation) -> Unit {
       "preedit changed selection",
     )
     require(view.preedit_cursor == 1, "composition cursor was lost")
+    require(
+      view.accessibility_runs.is_empty(),
+      "preedit retained stale committed geometry",
+    )
     self.stage = 32
     (view.inject)(AccessibilityValue("must not replace composition"))
     post(view.hwnd, 0x0100U, 0x0DUL, 0L)
@@ -153,6 +163,14 @@ async fn Scenario::step(self : Scenario, view : @ui.Observation) -> Unit {
   } else if self.stage == 31 &&
     view.rendered_text == Some("日本語の描画を確認します ABC 123") {
     require(!view.composing, "composition survived cancellation")
+    require(
+      !view.accessibility_runs.is_empty(),
+      "cancel did not restore text geometry",
+    )
+    require(
+      view.accessibility_runs[0] != self.precomposition_run,
+      "cancel reused an invalidated text range",
+    )
     self.stage = 3
     post(view.hwnd, 0x0102U, 0x8A9EUL, 0L)
     post(view.hwnd, 0x0102U, 0xD83DUL, 0L)

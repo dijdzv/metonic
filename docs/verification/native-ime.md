@@ -20,6 +20,9 @@ not been submitted upstream.
   intervening edits and disposal on JS and WasmGC.
 - `mise run native:window` injects composition events into the integrated UI and
   checks preview, retained committed text/selection, cursor value and cancellation.
+  When preview text differs from committed text, it also checks that committed
+  accessibility text runs disappear and cancellation restores runs with fresh
+  identifiers. This verifies invalidation rather than reusing stale geometry.
 - These tests do not drive a Japanese IME. Builds and cached candidate coordinates
   do not prove that an OS candidate window appears at the requested position.
 
