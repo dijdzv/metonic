@@ -12,63 +12,33 @@ const textInput = $('text-input');
 const DEFAULT_TEXT = textInput.value;
 let textRenderer;
 const taskButtons = [$('task-start'), $('task-cancel'), $('rpc-load')];
-let rpcController;
+let rpcTimer;
 function rpcOutput(kind) {
   return new TextDecoder('utf-8', { fatal: true }).decode(Uint8Array.from({ length: Number(app.rpc_output_length(kind)) }, (_, i) => Number(app.rpc_output_byte(kind, i))));
-}
-function rpcInput(bytes) {
-  if (Number(app.rpc_begin_input(bytes.length)) !== 1) throw new Error('RPC input limit');
-  for (const byte of bytes) if (Number(app.rpc_put(byte)) !== 1) throw new Error('RPC input rejected');
 }
 function renderRpc() {
   $('rpc-result').textContent = rpcOutput(1);
   renderEditor();
   updateTaskDiagnostics();
 }
-async function loadUser() {
+function loadUser() {
   if (disposed || !app || app.inputs_composing() !== 0) return;
   app.view_focus(1);
   renderEditor();
-  rpcInput(new TextEncoder().encode($('rpc-user').value));
-  if (Number(app.rpc_request()) !== 1) return;
-  const request = rpcOutput(0);
-  rpcController?.abort();
-  const controller = new AbortController();
-  rpcController = controller;
-  const id = app.task_begin();
-  const epoch = taskEpoch;
-  let failure = 0;
-  const timer = setTimeout(() => { failure = 1; controller.abort(); }, 3000);
+  if (app.http_start() !== 1) return;
+  clearTimeout(rpcTimer);
+  rpcTimer = setTimeout(() => app.http_timeout(), 3000);
   updateTaskDiagnostics();
-  try {
-    const response = await fetch('/rpc', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: request, signal: controller.signal });
-    const type = response.headers.get('Content-Type');
-    if (type !== 'application/json' && type !== 'application/json; charset=utf-8') { failure = 3; throw new Error('RPC content type'); }
-    const reader = response.body.getReader();
-    const chunks = [];
-    let length = 0;
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        length += value.length;
-        if (length > 65536) { failure = 2; throw new Error('RPC response limit'); }
-        chunks.push(value);
-      }
-    } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
-    if (disposed || taskEpoch !== epoch || rpcController !== controller) return;
-    const bytes = new Uint8Array(length);
-    let offset = 0;
-    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
-    rpcInput(bytes);
-    if (Number(app.rpc_response(id, response.status)) === 1) renderRpc();
-  } catch {
-    if (!disposed && taskEpoch === epoch && rpcController === controller && Number(app.rpc_transport_error(id, failure)) === 1) renderRpc();
-  } finally {
-    clearTimeout(timer);
-    controller.abort();
-    if (rpcController === controller) rpcController = undefined;
-  }
+}
+function onRpcChanged() {
+  if (disposed) return;
+  if (!app.http_active()) { clearTimeout(rpcTimer); rpcTimer = undefined; }
+  renderRpc();
+}
+function cancelHttp() {
+  clearTimeout(rpcTimer);
+  rpcTimer = undefined;
+  app?.http_cancel();
 }
 const taskTimers = new Map();
 let taskEpoch = 0;
@@ -88,8 +58,7 @@ function dispatchTask(delayMs, value, fail = false) {
     || taskTimers.size >= 16) return false;
   const id = app.task_begin();
   if (Number(id) < 0) return false;
-  rpcController?.abort();
-  rpcController = undefined;
+  cancelHttp();
   const epoch = taskEpoch;
   const timer = setTimeout(() => {
     taskTimers.delete(id);
@@ -103,10 +72,9 @@ function dispatchTask(delayMs, value, fail = false) {
   updateTaskDiagnostics();
   return true;
 }
-function cancelTask() { if (!disposed && app) { app.task_cancel(); rpcController?.abort(); rpcController = undefined; updateTaskDiagnostics(); } }
+function cancelTask() { if (!disposed && app) { app.task_cancel(); cancelHttp(); updateTaskDiagnostics(); } }
 function resetTasks() {
-  rpcController?.abort();
-  rpcController = undefined;
+  cancelHttp();
   for (const timer of taskTimers.values()) clearTimeout(timer);
   taskTimers.clear();
   taskEpoch += 1;
@@ -279,9 +247,9 @@ function stop(reason = 'Stopped.', error = false) {
   if (disposed) return;
   disposed = true;
   document.removeEventListener('metonic-input', onInputChanged);
+  document.removeEventListener('metonic-rpc', onRpcChanged);
   app?.inputs_stop?.();
-  rpcController?.abort();
-  rpcController = undefined;
+  cancelHttp();
   $('rpc-load').removeEventListener('click', loadUser);
   $('rpc-load').removeEventListener('focus', onRequestFocus);
   $('task-start').removeEventListener('focus', onStartFocus);
@@ -385,6 +353,7 @@ struct U { rect: vec4f, viewport: vec2f, enabled: f32, pad: f32 };
   resize(true);
   if (disposed) return;
   document.addEventListener('metonic-input', onInputChanged);
+  document.addEventListener('metonic-rpc', onRpcChanged);
   observer = new ResizeObserver(onResize);
   observer.observe(canvas);
   window.addEventListener('resize', onResize);

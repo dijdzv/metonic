@@ -78,7 +78,7 @@ async fn main {
   }
   let copies = [
     (
-      ".work/browser-deps/webapi-input/webapi.mjs", ".work/browser-dist/webapi.mjs",
+      ".work/browser-deps/webapi-http/webapi.mjs", ".work/browser-dist/webapi.mjs",
     ),
     (".work/browser-deps/LICENSE-webapi", ".work/browser-dist/LICENSE-webapi"),
     ("examples/p0/browser/host/index.html", ".work/browser-dist/index.html"),

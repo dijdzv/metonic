@@ -8,3 +8,4 @@ patches/window-ime-position.patch whitespace=-blank-at-eol
 patches/window-ime-cancel.patch whitespace=-blank-at-eol
 patches/webapi-compiler-warnings.patch whitespace=-blank-at-eol
 patches/window-ime-trace.patch whitespace=-blank-at-eol
+patches/webapi-http-boundary.patch whitespace=-blank-at-eol

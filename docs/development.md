@@ -460,7 +460,8 @@ It does not establish physical IME candidate placement or browser/IME-specific
 composition event ordering. Those still require the browser IME evaluation.
 
 The MoonBit JSON contract encodes and decodes requests on both JS and WasmGC;
-fetch owns browser HTTP I/O and abort signals. Responses update the shared task
+the [MoonBit browser HTTP host](verification/browser-http.md) owns fetch,
+bounded reading and abort signals through the pinned binding. Responses update the shared task
 scope and append result text to the GPU text layer without replacing the editor.
 Cancel, replacement and reset abort the pending request. The browser transport
 bounds responses to 64 KiB and uses a three-second timeout.
