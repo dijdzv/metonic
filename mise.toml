@@ -136,6 +136,7 @@ run = [
 ]
 
 [tasks."native:session-build"]
+depends = ["devtools:wire-build"]
 run = '.\\.tools\\moonbit\\bin\\moon.exe build tools/native_session --target wasm --release --frozen --deny-warn'
 
 [tasks."native:session-test"]
@@ -154,6 +155,12 @@ run = "node --test tools/devtools/moonbit-session.test.mjs tools/devtools/sessio
 
 [tasks."devtools:fixture-build"]
 run = '.\\.tools\\moonbit\\bin\\moon.exe build tools/session_fixture --target wasm --release --frozen --deny-warn'
+
+[tasks."devtools:wire-build"]
+run = [
+  '.\\.tools\\moonbit\\bin\\moon.exe test tools/session_wire --target js --frozen --deny-warn',
+  '.\\.tools\\moonbit\\bin\\moon.exe build tools/session_wire --target js --release --frozen --deny-warn',
+]
 
 [tasks."native:control"]
 depends = ["native:build"]
@@ -232,6 +239,7 @@ run = [
 env = { METONIC_PRESENTATION_CAPTURE = "1", WINAPP_CLI_TELEMETRY_OPTOUT = "1" }
 
 [tasks."native:window-dev-build"]
+depends = ["devtools:wire-build"]
 run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/build-native.mbtx'
 env = { METONIC_NATIVE_BUILD = "window-dev" }
 
