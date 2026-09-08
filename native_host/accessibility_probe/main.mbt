@@ -92,6 +92,12 @@ extern "C" fn pattern(
 extern "C" fn toggle(pattern : UInt64) -> Int = "TogglePattern_Toggle"
 
 ///|
+extern "C" fn invoke(pattern : UInt64) -> Int = "InvokePattern_Invoke"
+
+///|
+extern "C" fn focus_node(node : UInt64) -> Int = "UiaSetFocus"
+
+///|
 #borrow(text)
 extern "C" fn set_value(pattern : UInt64, text : FixedArray[Byte]) -> Int = "ValuePattern_SetValue"
 
@@ -190,7 +196,7 @@ fn utf16z(text : String) -> FixedArray[Byte] {
 }
 
 ///|
-fn bounds_width(node : UInt64) -> Double {
+fn bounds_component(node : UInt64, index : Int) -> Double {
   let value = FixedArray::make(3, 0UL)
   if property(node, 30001, value) != 0 {
     return -1
@@ -200,10 +206,61 @@ fn bounds_width(node : UInt64) -> Double {
     return -1
   }
   let output = FixedArray::make(1, 0.0)
-  if array_number(value[1], FixedArray::make(1, 2), output) != 0 {
+  if array_number(value[1], FixedArray::make(1, index), output) != 0 {
     return -1
   }
   output[0]
+}
+
+///|
+fn bounds_width(node : UInt64) -> Double {
+  bounds_component(node, 2)
+}
+
+///|
+async fn expect_focus(node : UInt64) -> Unit {
+  for _ in 0..<200 {
+    let value = FixedArray::make(3, 0UL)
+    assert_eq(property(node, 30008, value), 0)
+    let focused = value[0] == 11UL && (value[1] & 65535UL) != 0UL
+    ignore(clear(value))
+    if focused {
+      return
+    }
+    @async.sleep(5)
+  }
+  fail("shared view focus not published")
+}
+
+///|
+async fn request_action(
+  hwnd : UInt64,
+  node : UInt64,
+  provider : UInt64,
+) -> Unit {
+  let mode = @env.get_env_var("METONIC_VIEW_ACTION").unwrap_or("invoke")
+  match mode {
+    "invoke" => assert_eq(invoke(provider), 0)
+    "keyboard" => {
+      assert_eq(focus_node(node), 0)
+      expect_focus(node)
+      assert_true(post(hwnd, 0x0100U, 0x28UL, 0L) != 0)
+      assert_true(post(hwnd, 0x0100U, 0x0DUL, 0L) != 0)
+    }
+    "pointer" => {
+      let origin = FixedArray::make(2, 0)
+      assert_true(client_origin(hwnd, origin) != 0)
+      let x = (bounds_component(node, 0) + bounds_component(node, 2) / 2).to_int() -
+        origin[0]
+      let y = (bounds_component(node, 1) + bounds_component(node, 3) / 2).to_int() -
+        origin[1]
+      let point = ((y << 16) | x).to_int64()
+      assert_true(post(hwnd, 0x0201U, 1UL, point) != 0)
+      assert_true(post(hwnd, 0x0202U, 0UL, point) != 0)
+    }
+    _ => fail("unknown shared view action mode")
+  }
+  stage("shared request action: " + mode)
 }
 
 ///|
@@ -357,9 +414,19 @@ async fn main {
       fail("ordinary backspace message failed")
     }
     expect_text(editor, "再入力 🚀")
-    guard post(hwnd, 0x0100U, 0x76UL, 0L) != 0 else {
-      fail("ordinary F7 request failed")
+    let request = child_named(root[0], "Load user")
+    guard request != 0UL else { fail("shared request button missing") }
+    defer ignore(release_node(request))
+    assert_eq(integer(request, 30003), 50000)
+    assert_eq(bounds_width(request), 176.0)
+    let request_provider = FixedArray::make(1, 0UL)
+    assert_eq(pattern(request, 10000, request_provider), 0)
+    guard request_provider[0] != 0UL else {
+      fail("request Invoke pattern missing")
     }
+    defer ignore(release_pattern(request_provider[0]))
+    let scene_y = bounds_component(button, 1)
+    request_action(hwnd, request, request_provider[0])
     let mut result_node = 0UL
     stage("HTTP requested")
     for _ in 0..<500 {
@@ -372,6 +439,7 @@ async fn main {
     guard result_node != 0UL else { fail("production HTTP result missing") }
     defer ignore(release_node(result_node))
     stage("HTTP result observed")
+    assert_eq(bounds_component(button, 1), scene_y)
     expect_text(editor, "再入力 🚀")
     if @env.get_env_var("METONIC_PRESENTATION_CAPTURE") == Some("1") {
       let long_text = "一行目\n二行目\n三行目\n四行目"
@@ -406,6 +474,8 @@ async fn main {
     guard text_is(result_node, 30005, "月兎") && integer(button, 30086) == 1 else {
       fail("resize changed HTTP result or scene")
     }
+    assert_eq(focus_node(editor), 0)
+    expect_focus(editor)
     guard post(hwnd, 0x0102U, 0x51UL, 0L) != 0 else {
       fail("editing after HTTP and resize failed")
     }
@@ -423,6 +493,9 @@ async fn main {
     guard is_window(hwnd) == 0 else { fail("production UIA close failed") }
     guard toggle(provider[0]) < 0 else {
       fail("closed production provider accepted action")
+    }
+    guard invoke(request_provider[0]) < 0 else {
+      fail("closed request button accepted action")
     }
     guard set_value(value_provider[0], utf16z("late")) < 0 else {
       fail("closed editor accepted Value request")

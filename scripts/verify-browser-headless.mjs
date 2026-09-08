@@ -151,6 +151,7 @@ async function runTarget(browser, target) {
   try {
     return await runTargetUnsafe(browser, target)
   } catch (error) {
+    console.error(error);
     let status = ''
     if (activePage) {
       status = await activePage.locator('#status').textContent().catch(() => '')
@@ -199,6 +200,7 @@ try {
         const hostCommand = async (request) => {
           switch (request.op) {
             case 'crop': return crop()
+            case 'focus-scene': await canvas.focus(); await page.waitForTimeout(50); break;
             case 'original': return input.inputValue()
             case 'counts': return {
               width: Number(await page.locator('#text-width').innerText()),
@@ -261,6 +263,15 @@ try {
               case 'wait-text': await page.waitForFunction(({ selector, text }) => document.querySelector(selector)?.textContent?.trim() === text, command); break;
               case 'fill': await page.locator(command.selector).fill(command.value); await settle(); break;
               case 'click': await page.locator(command.selector).click(); break;
+              case 'focus': await page.locator(command.selector).focus(); await settle(); break;
+              case 'press': await page.locator(command.selector).press(command.key); break;
+              case 'view-bounds': return page.evaluate(() => {
+                const canvas = document.querySelector('#canvas').getBoundingClientRect();
+                return ['#text-input', '#rpc-load'].map((selector) => {
+                  const element = document.querySelector(selector), rect = element.getBoundingClientRect();
+                  return { x: rect.x - canvas.x, y: rect.y - canvas.y, width: rect.width, height: rect.height, opacity: getComputedStyle(element).opacity };
+                });
+              });
               case 'value': return page.locator(command.selector).inputValue();
               case 'disabled': return page.locator(command.selector).isDisabled();
               case 'no-probe': return page.evaluate(() => !('metonicAsyncProbe' in window));

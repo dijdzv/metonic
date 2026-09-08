@@ -5,6 +5,7 @@ suberror VerifyFailure {
 
 ///|
 fn fail(message : String) -> Unit raise VerifyFailure {
+  println("browser verification failed: " + message)
   raise VerifyFailure::Failure(message)
 }
 

@@ -4,12 +4,18 @@ fn number(value : Json, key : String) -> Json raise VerifyFailure {
 }
 
 ///|
+async fn text_crop(host : BrowserHost) -> Json {
+  ignore(command(host, { "op": "focus-scene" }))
+  command(host, { "op": "crop" })
+}
+
+///|
 async fn run_text(
   host : BrowserHost,
   target : String,
   reference : String,
 ) -> String {
-  let initial = command(host, { "op": "crop" })
+  let initial = text_crop(host)
   ignore(text_initial(initial))
   let start = command(host, { "op": "counts" })
   let original = command(host, { "op": "original" })
@@ -17,7 +23,7 @@ async fn run_text(
   ignore(
     command(host, { "op": "wait-submit", "value": number(start, "submitted") }),
   )
-  let changed = command(host, { "op": "crop" })
+  let changed = text_crop(host)
   let initial_data = string_field(initial, "data")
   ignore(
     text_compare({
@@ -28,10 +34,10 @@ async fn run_text(
   )
   ignore(command(host, { "op": "fill", "value": "" }))
   ignore(command(host, { "op": "sleep", "milliseconds": 200 }))
-  ignore(text_blank(command(host, { "op": "crop" })))
+  ignore(text_blank(text_crop(host)))
   let blank = command(host, { "op": "counts" })
   ignore(command(host, { "op": "fill", "value": original }))
-  let restored = command(host, { "op": "crop" })
+  let restored = text_crop(host)
   ignore(
     text_compare({
       "actual": Json::string(string_field(restored, "data")),

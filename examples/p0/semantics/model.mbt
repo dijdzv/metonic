@@ -29,6 +29,8 @@ pub struct Node {
 pub struct Tree {
   session : Int
   window : Int
+  mut next_id : Int
+  mut extra_buttons : Array[Node]
   mut next_generation : Int
   mut button : Node?
   mut input : Node?
@@ -43,6 +45,8 @@ pub fn create(session : Int, window : Int) -> Tree {
   {
     session,
     window,
+    next_id: 3,
+    extra_buttons: [],
     next_generation: 3,
     button: Some({
       reference: button_ref,
@@ -76,12 +80,14 @@ pub fn snapshot(tree : Tree) -> Array[Node] {
   if tree.closed {
     []
   } else {
-    match (tree.button, tree.input) {
+    let nodes = match (tree.button, tree.input) {
       (Some(button), Some(input)) => [button, input]
       (Some(button), None) => [button]
       (None, Some(input)) => [input]
       (None, None) => []
     }
+    nodes.append(tree.extra_buttons)
+    nodes
   }
 }
 
@@ -97,6 +103,11 @@ fn resolve(tree : Tree, reference : NodeRef) -> (Int, String) {
   } else if reference.session != tree.session || reference.window != tree.window {
     (-1, "stale_target")
   } else {
+    for node in tree.extra_buttons {
+      if node.reference == reference {
+        return (node.reference.id, "")
+      }
+    }
     match (tree.button, tree.input) {
       (Some(node), _) if node.reference == reference => (1, "")
       (_, Some(node)) if node.reference == reference => (2, "")
@@ -140,7 +151,13 @@ pub fn focus(tree : Tree, reference : NodeRef) -> String {
   if kind < 0 {
     error
   } else {
-    let target = if kind == 1 { tree.button } else { tree.input }
+    let target = if kind == 1 {
+      tree.button
+    } else if kind == 2 {
+      tree.input
+    } else {
+      extra_button(tree, kind)
+    }
     match target {
       Some(node) =>
         if !node.enabled {
@@ -156,6 +173,10 @@ pub fn focus(tree : Tree, reference : NodeRef) -> String {
             Some(other) => tree.input = Some({ ..other, focused: kind == 2, })
             None => ()
           }
+          tree.extra_buttons = tree.extra_buttons.map(other => {
+            ..other,
+            focused: other.reference.id == kind,
+          })
           tree.revision += 1
           ""
         }
@@ -298,7 +319,13 @@ pub fn set_enabled(tree : Tree, reference : NodeRef, enabled : Bool) -> String {
   if kind < 0 {
     error
   } else {
-    let target = if kind == 1 { tree.button } else { tree.input }
+    let target = if kind == 1 {
+      tree.button
+    } else if kind == 2 {
+      tree.input
+    } else {
+      extra_button(tree, kind)
+    }
     match target {
       Some(node) =>
         if node.enabled == enabled {
@@ -315,8 +342,16 @@ pub fn set_enabled(tree : Tree, reference : NodeRef, enabled : Bool) -> String {
           }
           if kind == 1 {
             tree.button = Some(updated)
-          } else {
+          } else if kind == 2 {
             tree.input = Some(updated)
+          } else {
+            tree.extra_buttons = tree.extra_buttons.map(other => {
+              if other.reference.id == kind {
+                updated
+              } else {
+                other
+              }
+            })
           }
           tree.revision += 1
           ""
@@ -393,8 +428,12 @@ pub fn remove(tree : Tree, reference : NodeRef) -> String {
   } else {
     if kind == 1 {
       tree.button = None
-    } else {
+    } else if kind == 2 {
       tree.input = None
+    } else {
+      tree.extra_buttons = tree.extra_buttons.filter(node => {
+        node.reference.id != kind
+      })
     }
     tree.revision += 1
     ""
@@ -436,8 +475,49 @@ pub fn dispose(tree : Tree) -> Bool {
   } else {
     tree.button = None
     tree.input = None
+    tree.extra_buttons = []
     tree.closed = true
     tree.revision += 1
     true
   }
+}
+
+///|
+fn extra_button(tree : Tree, id : Int) -> Node? {
+  for node in tree.extra_buttons {
+    if node.reference.id == id {
+      return Some(node)
+    }
+  }
+  None
+}
+
+///|
+pub fn add_button(tree : Tree, name : String) -> NodeRef? {
+  if tree.closed ||
+    tree.next_id == 2147483647 ||
+    tree.next_generation == 2147483647 {
+    return None
+  }
+  let reference = {
+    session: tree.session,
+    window: tree.window,
+    id: tree.next_id,
+    generation: tree.next_generation,
+  }
+  tree.next_id += 1
+  tree.next_generation += 1
+  tree.extra_buttons.push({
+    reference,
+    role: Button,
+    name,
+    value: "",
+    enabled: true,
+    focused: false,
+    selection_start: 0,
+    selection_end: 0,
+    selection_anchor: 0,
+  })
+  tree.revision += 1
+  Some(reference)
 }

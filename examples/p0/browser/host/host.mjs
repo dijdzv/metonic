@@ -51,7 +51,9 @@ function syncEditor() {
   if (Number(app.editor_commit(textInput.selectionStart, textInput.selectionEnd)) !== 1) throw new Error('Editor selection rejected');
 }
 async function loadUser() {
-  if (disposed || !app) return;
+  if (disposed || !app || composing) return;
+  app.view_focus(1);
+  renderEditor();
   rpcInput(new TextEncoder().encode($('rpc-user').value));
   if (Number(app.rpc_request()) !== 1) return;
   const request = rpcOutput(0);
@@ -199,6 +201,7 @@ function resize(force = false) {
   context.configure({ device, format, alphaMode: 'opaque' });
   app.resize(cssW, cssH);
   textRenderer?.rasterText(cssW);
+  placeView();
   environment.dimensions(cssW, cssH, backingW, backingH);
   dirty = true;
   schedule();
@@ -212,6 +215,8 @@ function changed(result = 1) {
 }
 function onPointer(event) {
   if (disposed) return;
+  app.view_focus(2);
+  renderEditor();
   canvas.focus();
   const rect = canvas.getBoundingClientRect();
   const x = Math.trunc(event.clientX - rect.left);
@@ -260,6 +265,18 @@ function onReset() {
   schedule();
 }
 
+function placeView() {
+  for (const [element, target] of [[0, textInput], [1, $('rpc-load')]]) {
+    target.style.left = (canvas.offsetLeft + Number(app.view_field(element, 0))) + 'px';
+    target.style.top = (canvas.offsetTop + Number(app.view_field(element, 1))) + 'px';
+    target.style.width = Number(app.view_field(element, 2)) + 'px';
+    target.style.height = Number(app.view_field(element, 3)) + 'px';
+  }
+  $('rpc-load').textContent = String.fromCharCode(...Array.from({ length: Number(app.view_field(1, 4)) }, (_, i) => Number(app.view_label_unit(i))));
+}
+function onEditorFocus() { if (!disposed && app) { app.view_focus(0); renderEditor(); } }
+function onRequestFocus() { if (!disposed && app) { app.view_focus(1); renderEditor(); } }
+function onSceneFocus() { if (!disposed && app) { app.view_focus(2); renderEditor(); } }
 function onTextInput(event) {
   if (disposed || !textRenderer || composing || event?.isComposing) return;
   try { syncEditor(); renderEditor(); }
@@ -283,6 +300,9 @@ function stop(reason = 'Stopped.', error = false) {
   rpcController?.abort();
   rpcController = undefined;
   $('rpc-load').removeEventListener('click', loadUser);
+  $('rpc-load').removeEventListener('focus', onRequestFocus);
+  textInput.removeEventListener('focus', onEditorFocus);
+  canvas.removeEventListener('focus', onSceneFocus);
   $('rpc-user').disabled = true;
   textRenderer?.dispose();
   textRenderer = undefined;
@@ -398,6 +418,9 @@ struct U { rect: vec4f, viewport: vec2f, enabled: f32, pad: f32 };
   textInput.disabled = false;
   $('task-start').addEventListener('click', onTaskStart);
   $('rpc-load').addEventListener('click', loadUser);
+  $('rpc-load').addEventListener('focus', onRequestFocus);
+  textInput.addEventListener('focus', onEditorFocus);
+  canvas.addEventListener('focus', onSceneFocus);
   $('rpc-user').disabled = false;
   $('task-cancel').addEventListener('click', onTaskCancel);
   for (const button of taskButtons) button.disabled = false;

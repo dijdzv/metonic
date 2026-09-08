@@ -23,13 +23,21 @@ rejection of canceled, superseded and stopped requests. Window/browser events,
 transport execution and GPU resources remain in their host adapters. This is the
 sample application's shared behavior, not a general component or reactive API.
 
+`application/view.mbt` defines the editor, request button and result bounds and
+labels. `examples/p0/view_renderer` uses the same text rasterizer for both hosts;
+each host presents those layers through its normal GPU pass. The browser's
+transparent textarea and button provide input and semantic behavior at the shared
+bounds. Their visible content comes from the GPU. Native exposes the same request
+button through AccessKit. Development snapshots include the shared view and its
+`load_user` operation.
+
 | Operation | Native | Browser |
 | --- | --- | --- |
 | Replace the initial text | Ctrl+A, type Japanese and Latin text | Focus the text input, select all and type |
 | Select and replace a range | Click and Shift+click the GPU text, then type | Use the text input's selection and type |
 | Move the insertion position | Left/Right, Home/End; hold Shift to select | Use the text input's keyboard controls |
-| Load the sample user | F7 | Load user, with User ID `1` |
-| Observe the result | `月兎` below the editor; editor text preserved | Same result below the GPU editor and in the result output |
+| Load the sample user | Click Load user, or focus it and press Enter/Space; F7 also works | Click Load user or focus it and press Enter/Space, with User ID `1` |
+| Observe the result | `月兎` below the editor; editor text preserved | Same result below the GPU editor |
 | Start delayed scene movement | F5 | Move after delay |
 | Cancel before completion | F6 | Cancel |
 | Resize | Resize the native window | Resize the browser window |
@@ -40,10 +48,10 @@ user `1`; arbitrary IDs are available through the separate development CLI/MCP.
 Native and browser HTTP results use a dedicated row below the GPU editor, so multiline editor
 contents do not push the result out of its viewport. The editor itself remains
 a fixed-height viewport without scrolling.
-Native left/right keys edit while text is focused; Tab switches between text and
-the scene, and clicking the scene returns its keyboard focus. Scene focus enables
+Native left/right keys edit while text is focused; Tab cycles through text, the
+scene and Load user. Clicking the scene returns its keyboard focus. Scene focus enables
 Up/down movement and Enter/Space activation. Those keys do not operate the scene
-while editing or composing; Space inserts text while editing. Vertical editor
+while editing, composing or focusing Load user; Space inserts text while editing. Vertical editor
 navigation is not implemented. The browser requires canvas focus for scene keyboard
 controls. Native uses a steady caret and scalar-boundary horizontal navigation;
 grapheme-aware and visual bidi navigation, vertical editing navigation and caret
@@ -66,7 +74,7 @@ respective UI paths. `native:release-lifecycle` checks the production window's
 startup and close, not its editor or pixels.
 
 `native:accessibility` exercises the ordinary release executable through OS
-accessibility and messages sent to its own window: replace text, invoke F7
+accessibility and messages sent to its own window: replace text, activate Load user
 against an owned real HTTP server, observe the result, resize, continue editing
 and close. It checks editor preservation and updated accessible layout. This
 connects the production session's semantic behavior; it does not establish

@@ -22,11 +22,24 @@ struct Reply {
 
 ///|
 struct State {
+  view : Array[ViewNode]
   text : String
   semantic_revision : Int
   session_id : String
   task_status : Int
   rpc_result : String
+} derive(FromJson)
+
+///|
+struct ViewNode {
+  id : Json
+  role : String
+  text : String
+  action : Json
+  x : Int
+  y : Int
+  width : Int
+  height : Int
 } derive(FromJson)
 
 ///|
@@ -54,6 +67,8 @@ async fn verify_rpc(
       assert_eq(state.task_status, status)
       assert_eq(state.rpc_result, expected)
       assert_eq(state.text, text)
+      assert_eq(state.view[0].text, text)
+      assert_eq(state.view[2].text, expected.trim().to_owned())
       return
     }
   }
@@ -74,6 +89,23 @@ async fn invoke(client : Client, request : Json) -> State {
 pub fn verify(client : Client) -> @js_async.Promise[String] {
   @js_async.Promise::from_async(async fn() {
     let before = invoke(client, { "name": "window_snapshot", "arguments": {} })
+    assert_eq(before.view.length(), 3)
+    assert_eq(before.view[0].id, Json::number(2))
+    assert_eq(before.view[1].id, Json::number(3))
+    assert_eq(before.view[2].id, Json::null())
+    assert_eq(before.view[1].role, "button")
+    assert_eq(before.view[1].text, "Load user")
+    assert_eq(before.view[1].action, Json::string("load_user"))
+    assert_eq(before.view[0].action, Json::null())
+    assert_eq(
+      (
+        before.view[1].x,
+        before.view[1].y,
+        before.view[1].width,
+        before.view[1].height,
+      ),
+      (8, 144, 176, 40),
+    )
     let after = invoke(client, {
       "name": "window_insert",
       "arguments": {

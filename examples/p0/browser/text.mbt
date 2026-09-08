@@ -230,6 +230,7 @@ pub fn text_width() -> Int {
 ///|
 #export_name("text_dispose")
 pub fn text_dispose() -> Unit {
+  view_layers.val = []
   rendered_editor.val = None
   clear_font()
   clear_text()

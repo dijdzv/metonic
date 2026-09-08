@@ -12,6 +12,7 @@ pub(all) enum Action {
 
 ///|
 pub struct Snapshot {
+  view : @application.View
   x : Int
   y : Int
   width : Int
@@ -91,6 +92,7 @@ fn App::handle(self : App) -> Handle {
     inspect: () => {
       let node = @semantics.snapshot(self.model.editor)[1]
       {
+        view: self.model.view(),
         x: @scene.field(self.model.scene, 0),
         y: @scene.field(self.model.scene, 1),
         width: @scene.field(self.model.scene, 6),

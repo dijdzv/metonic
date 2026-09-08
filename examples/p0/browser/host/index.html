@@ -16,8 +16,8 @@
     <h2 id="stage-title">Interactive rectangle</h2>
     <p>Click the rectangle to activate it. Use arrow keys to move by 10px; Space or Enter toggles active state.</p>
     <canvas id="canvas" tabindex="0" aria-label="MoonBit rectangle canvas"></canvas>
-    <label for="text-input">Japanese text</label>
-    <input id="text-input" type="text" maxlength="1024" value="日本語の描画を確認します ABC 123" disabled>
+    <label class="visually-hidden" for="text-input">Japanese text</label>
+    <textarea id="text-input" class="gpu-input" maxlength="1024" rows="3" disabled>日本語の描画を確認します ABC 123</textarea>
     <div class="controls"><button id="reset" type="button">Reset</button><button id="stop" type="button">Stop</button></div>
     <section aria-labelledby="task-title">
       <h3 id="task-title">Async task probe</h3>
@@ -28,8 +28,8 @@
       <h3 id="rpc-title">User lookup</h3>
       <label for="rpc-user">User ID</label>
       <input id="rpc-user" value="1" maxlength="1024" disabled>
-      <button id="rpc-load" type="button" disabled>Load user</button>
-      <output id="rpc-result" aria-live="polite"></output>
+      <button id="rpc-load" class="gpu-button" type="button" disabled>Load user</button>
+      <output id="rpc-result" class="visually-hidden" aria-live="polite"></output>
     </section>
     <p id="status" role="status" aria-live="polite">Loading…</p>
     <details open><summary>Performance result</summary><dl>

@@ -46,7 +46,7 @@ mise run demo
 ```
 
 Open the printed browser URL while the native window is running. Edit the text,
-use **Load user** in the browser or **F7** in native, then resize the window. Use
+use the GPU-rendered **Load user** button in either UI, then resize the window. Use
 **Move after delay / Cancel** in the browser or **F5 / F6** in native to try async
 updates. Closing the native window stops the shared server. The browser tab is
 user-owned and stays open; its **Stop** button disposes that browser UI only.

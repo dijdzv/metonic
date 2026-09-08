@@ -106,18 +106,18 @@ test "moving the rectangle must not upload the restored text again" {
     "action": "text_counts",
     "width": 100,
     "initialRenders": 1,
-    "initialUploaded": 38400,
+    "initialUploaded": 54400,
     "renders": 3,
-    "uploaded": 115200,
+    "uploaded": 163200,
     "restoredRenders": 4,
-    "restoredUploaded": 153600,
+    "restoredUploaded": 217600,
     "afterMoveRenders": 4,
-    "afterMoveUploaded": 153600,
+    "afterMoveUploaded": 217600,
   }
   ignore(verify_checked(request.stringify()))
   match request {
     Json::Object(fields) =>
-      fields.set("afterMoveUploaded", Json::number(192000))
+      fields.set("afterMoveUploaded", Json::number(272000))
     _ => ()
   }
   assert_eq(
