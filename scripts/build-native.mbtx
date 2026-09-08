@@ -183,6 +183,7 @@ async fn main {
       ]
       if host_app == "window_app" ||
         host_app == "window_dev" ||
+        host_app == "accessibility_probe" ||
         host_app == "window_probe" {
         guard @process.run(
             moon,
@@ -234,6 +235,7 @@ async fn main {
       }
       if host_app == "window_app" ||
         host_app == "window_dev" ||
+        host_app == "accessibility_probe" ||
         host_app == "window_probe" {
         let directory = native_host_build_dir +
           "/native/" +

@@ -204,17 +204,6 @@ fn App::draw(self : App) -> Unit raise Error {
   if (button.value == "on") != (@scene.field(self.state, 4) == 1) {
     ignore(@semantics.activate(self.editor, button.reference))
   }
-  if self.accessibility is Some(bridge) {
-    bridge.update(
-      @semantics.snapshot(self.editor),
-      @scene.field(self.state, 6),
-      @scene.field(self.state, 7),
-      @scene.field(self.state, 0),
-      @scene.field(self.state, 1),
-      self.composition is Some(_),
-      self.rpc_result,
-    )
-  }
   match self.renderer {
     Some(renderer) => {
       let node = @semantics.snapshot(self.editor)[1]
@@ -306,6 +295,19 @@ fn App::draw(self : App) -> Unit raise Error {
       self.diagnostics.presented()
     }
     None => ()
+  }
+  if self.accessibility is Some(bridge) {
+    let nodes = @semantics.snapshot(self.editor)
+    bridge.update(
+      nodes,
+      @scene.field(self.state, 6),
+      @scene.field(self.state, 7),
+      @scene.field(self.state, 0),
+      @scene.field(self.state, 1),
+      self.composition is Some(_),
+      self.rpc_result,
+      self.raster.bind(engine => @raster.text_runs(engine, nodes[1].value)),
+    )
   }
 }
 
@@ -489,6 +491,22 @@ async fn run_loop(
                   if @semantics.set_text(app.editor, nodes[1].reference, text) ==
                     "" {
                     app.draw()
+                  }
+                @accessibility.Select(_, _, _, _) =>
+                  if app.accessibility is Some(bridge) {
+                    if bridge.resolve_selection(request)
+                      is Some((anchor, caret)) {
+                      ignore(@semantics.focus(app.editor, nodes[1].reference))
+                      ignore(
+                        @semantics.set_selection_directed(
+                          app.editor,
+                          nodes[1].reference,
+                          anchor,
+                          caret,
+                        ),
+                      )
+                      app.draw()
+                    }
                   }
                 _ => ()
               }

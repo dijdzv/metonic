@@ -240,6 +240,7 @@ fn child_named(parent : UInt64, name : String) -> UInt64 {
 ///|
 async fn main {
   @async.with_timeout(60000, async fn() {
+    verify_text_layout()
     guard initialize(0UL, 0U) >= 0 else {
       fail("UIA COM initialization failed")
     }
@@ -336,12 +337,14 @@ async fn main {
       (read_only_property[1] & 65535UL) == 0UL
     ignore(clear(read_only_property))
     guard writable else { fail("production editor remains read-only") }
+    verify_selection(editor, value_provider[0], hwnd)
     for
       text in ["日本語 ABC 😀", "変更後 XYZ 123", "", "再入力 🚀"] {
       guard set_value(value_provider[0], utf16z(text)) == 0 else {
         fail("Value request failed")
       }
       expect_text(editor, text)
+      verify_document(editor, text)
       guard integer(button, 30086) == 1 else {
         fail("Value request changed scene")
       }

@@ -224,7 +224,12 @@ pub fn replace_selection(
       let value = node.value[:start].to_owned() +
         inserted +
         node.value[end:].to_owned()
-      let caret = start + inserted.length()
+      let insertion_end = start + inserted.length()
+      let caret = if selection_boundary(value, insertion_end) {
+        insertion_end
+      } else {
+        insertion_end + 1
+      }
       if value != node.value || start != caret || end != caret {
         tree.input = Some({
           ..node,
@@ -263,13 +268,15 @@ pub fn delete_backward(tree : Tree, reference : NodeRef) -> String {
   while !selection_boundary(node.value, start) {
     start -= 1
   }
+  let value = node.value[:start].to_owned() +
+    node.value[node.selection_end:].to_owned()
+  let caret = if selection_boundary(value, start) { start } else { start + 1 }
   tree.input = Some({
     ..node,
-    value: node.value[:start].to_owned() +
-    node.value[node.selection_end:].to_owned(),
-    selection_start: start,
-    selection_end: start,
-    selection_anchor: start,
+    value,
+    selection_start: caret,
+    selection_end: caret,
+    selection_anchor: caret,
   })
   tree.revision += 1
   ""
@@ -277,7 +284,12 @@ pub fn delete_backward(tree : Tree, reference : NodeRef) -> String {
 
 ///|
 fn selection_boundary(value : String, index : Int) -> Bool {
-  @text_position.utf16_to_scalar(value, index) is Some(_)
+  // Splitting CRLF would expose a caret position that native text ranges cannot represent.
+  @text_position.utf16_to_scalar(value, index) is Some(_) &&
+  !(index > 0 &&
+  index < value.length() &&
+  value[index - 1].to_int() == 13 &&
+  value[index].to_int() == 10)
 }
 
 ///|

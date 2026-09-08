@@ -27,3 +27,25 @@ uintptr_t metonic_uia_navigate(uintptr_t parent, int32_t direction) {
   SysFreeString(structure);
   return (uintptr_t)node;
 }
+
+uintptr_t metonic_uia_selected_range(uintptr_t provider) {
+  SAFEARRAY *ranges = NULL;
+  HUIATEXTRANGE range = NULL;
+  if (SUCCEEDED(TextPattern_GetSelection((HUIAPATTERNOBJECT)provider, &ranges)) && ranges) {
+    LONG first = 0, last = -1;
+    VARTYPE type = VT_EMPTY;
+    if (SafeArrayGetDim(ranges) == 1 &&
+        SUCCEEDED(SafeArrayGetVartype(ranges, &type)) && type == VT_VARIANT &&
+        SUCCEEDED(SafeArrayGetLBound(ranges, 1, &first)) &&
+        SUCCEEDED(SafeArrayGetUBound(ranges, 1, &last)) && first == last) {
+      VARIANT value;
+      VariantInit(&value);
+      if (SUCCEEDED(SafeArrayGetElement(ranges, &first, &value))) {
+        UiaHTextRangeFromVariant(&value, &range);
+      }
+      VariantClear(&value);
+    }
+  }
+  if (ranges) SafeArrayDestroy(ranges);
+  return (uintptr_t)range;
+}

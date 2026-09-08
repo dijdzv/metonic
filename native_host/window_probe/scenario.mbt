@@ -94,11 +94,24 @@ async fn Scenario::step(self : Scenario, view : @ui.Observation) -> Unit {
     self.stage = 27
     post(view.hwnd, 0x0100U, 0x09UL, 0L)
   } else if self.stage == 27 && view.editor.focused {
-    self.stage = 30
-    require(
-      (view.set_text)("日本語の描画を確認します ABC 123") == "",
-      "editor restore rejected",
+    require(!view.accessibility_runs.is_empty(), "current text run missing")
+    self.stage = 28
+    let old_run = view.accessibility_runs[0]
+    (view.inject)(
+      AccessibilityValue("日本語の描画を確認します ABC 123"),
     )
+    (view.inject)(AccessibilitySelection(old_run, 0UL, old_run, 1UL))
+  } else if self.stage == 28 {
+    require(
+      view.editor.value == "日本語の描画を確認します ABC 123",
+      "queued value not applied",
+    )
+    require(
+      view.editor.selection_start == view.editor.value.length() &&
+      view.editor.selection_end == view.editor.value.length(),
+      "obsolete queued selection changed new text",
+    )
+    self.stage = 30
     require((view.select)(0, 3) == "", "test selection rejected")
     (view.inject)(CompositionStart)
     (view.inject)(CompositionUpdate("にほん", Some(1)))
