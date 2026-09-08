@@ -1,4 +1,69 @@
 ///|
+async fn verify_query_pointer(host : BrowserHost) -> Unit {
+  let original = command(host, { "op": "value", "selector": "#text-input" })
+  for width in [1000, 600] {
+    ignore(command(host, { "op": "viewport", "width": width }))
+    ignore(
+      command(host, { "op": "fill", "selector": "#rpc-user", "value": "1" }),
+    )
+    ignore(
+      command(host, { "op": "click", "selector": "#rpc-user", "x": 10, "y": 16 }),
+    )
+    ignore(
+      command(host, { "op": "press", "selector": "#rpc-user", "key": "Delete" }),
+    )
+    require(
+      command(host, { "op": "value", "selector": "#rpc-user" }) ==
+      Json::string(""),
+      "click at visible first glyph did not place caret before it",
+    )
+    ignore(
+      command(host, { "op": "press", "selector": "#rpc-user", "key": "1" }),
+    )
+    ignore(command(host, { "op": "click", "selector": "#rpc-load" }))
+    ignore(
+      command(host, {
+        "op": "wait-text",
+        "selector": "#rpc-result",
+        "text": "月兎",
+      }),
+    )
+    ignore(
+      command(host, {
+        "op": "fill",
+        "selector": "#rpc-user",
+        "value": "missing",
+      }),
+    )
+    ignore(command(host, { "op": "click", "selector": "#rpc-load" }))
+    ignore(
+      command(host, {
+        "op": "wait-text",
+        "selector": "#rpc-result",
+        "text": "RPC: domain:not_found",
+      }),
+    )
+    ignore(
+      command(host, { "op": "fill", "selector": "#rpc-user", "value": "1" }),
+    )
+    ignore(command(host, { "op": "click", "selector": "#rpc-load" }))
+    ignore(
+      command(host, {
+        "op": "wait-text",
+        "selector": "#rpc-result",
+        "text": "月兎",
+      }),
+    )
+    require(
+      command(host, { "op": "value", "selector": "#text-input" }) == original,
+      "pointer query editing changed main editor",
+    )
+  }
+  ignore(command(host, { "op": "viewport", "width": 1000 }))
+  ignore(command(host, { "op": "click", "selector": "#reset" }))
+}
+
+///|
 async fn verify_query_composition(host : BrowserHost) -> Unit {
   ignore(command(host, { "op": "focus", "selector": "#rpc-user" }))
   let count = command(host, { "op": "rpc-count" })
