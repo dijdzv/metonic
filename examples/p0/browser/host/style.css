@@ -9,7 +9,7 @@ nav a, button { border: 1px solid #35506d; border-radius: .45rem; padding: .5rem
 nav a[aria-current="page"] { background: #d96d22; border-color: #f5a15c; color: #fff; }
 button:hover, button:focus-visible, nav a:hover, nav a:focus-visible { border-color: #f5a15c; }
 .stage { padding: 1rem; border: 1px solid #29425e; border-radius: .6rem; background: #091b2e; }
-canvas { display: block; width: 100%; height: clamp(260px, 48vw, 470px); border: 0; border-radius: .35rem; outline: 1px solid #35506d; background: #061426; }
+canvas { display: block; width: 100%; height: clamp(360px, 48vw, 470px); border: 0; border-radius: .35rem; outline: 1px solid #35506d; background: #061426; }
 canvas:focus-visible { box-shadow: 0 0 0 2px #f5a15c; }
 .controls { display: flex; gap: .6rem; margin-top: .8rem; }
 [role="status"] { min-height: 1.5em; margin-top: .8rem; color: #b9d2eb; }

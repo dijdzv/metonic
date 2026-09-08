@@ -170,7 +170,15 @@ fn tree(_data : UInt64) -> UInt64 {
         toggled(node, if semantic.value == "on" { 1 } else { 0 })
         bounds(node, bridge.x.to_double(), bridge.y.to_double(), 120, 72)
       } else {
-        let box = bridge.view.request.bounds
+        let box = if bridge.view.start.reference is Some(reference) &&
+          reference.id.to_uint64() == id {
+          bridge.view.start.bounds
+        } else if bridge.view.cancel.reference is Some(reference) &&
+          reference.id.to_uint64() == id {
+          bridge.view.cancel.bounds
+        } else {
+          bridge.view.request.bounds
+        }
         bounds(
           node,
           box.x.to_double(),
@@ -244,6 +252,19 @@ fn tree(_data : UInt64) -> UInt64 {
     push_child(root, 4294967295UL)
     push_node(result, 4294967295UL, status)
   }
+  let task_status = node_new(3)
+  let task_text = @utf8.encode(bridge.view.task_status.text)
+  value(task_status, task_text, task_text.length().to_uint64())
+  let task_box = bridge.view.task_status.bounds
+  bounds(
+    task_status,
+    task_box.x.to_double(),
+    task_box.y.to_double(),
+    task_box.width.to_double(),
+    task_box.height.to_double(),
+  )
+  push_child(root, 4294967294UL)
+  push_node(result, 4294967294UL, task_status)
   push_node(result, 0UL, root)
   result
 }

@@ -1,0 +1,8 @@
+diff --git a/src/node.rs b/src/node.rs
+--- a/src/node.rs
++++ b/src/node.rs
+@@ -1008,3 +1008,3 @@
+     fn ProviderOptions(&self) -> Result<ProviderOptions> {
+-        Ok(ProviderOptions_ServerSideProvider)
++        Ok(ProviderOptions_ServerSideProvider | ProviderOptions_ProviderOwnsSetFocus)
+     }

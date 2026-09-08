@@ -193,6 +193,14 @@ async fn main {
           0 else {
           fail("AccessKit preparation failed")
         }
+        guard @process.run(
+            moon,
+            ["run", "scripts/prepare-accesskit-focus.mbtx"],
+            no_console_window=true,
+          ) ==
+          0 else {
+          fail("AccessKit focus build failed")
+        }
         let accesskit = @fs.realpath(
           ".work/accesskit-assets/accesskit-c-0.22.3",
         )
@@ -244,9 +252,7 @@ async fn main {
           host_app
         @fs.write_file(
           directory + "/accesskit.dll",
-          @fs.read_file(
-            ".work/accesskit-assets/accesskit-c-0.22.3/lib/windows/x86_64/msvc/shared/accesskit.dll",
-          ).binary(),
+          @fs.read_file(".work/accesskit-focus-build/release/accesskit.dll").binary(),
         )
         for license in ["MIT", "APACHE"] {
           @fs.write_file(

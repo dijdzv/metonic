@@ -27,6 +27,9 @@ pub struct View {
   editor : Element
   request : Element
   result : Element
+  task_status : Element
+  start : Element
+  cancel : Element
 }
 
 ///|
@@ -54,6 +57,31 @@ pub fn Model::view(self : Model) -> View {
       reference: None,
       focused: false,
     },
+    task_status: {
+      bounds: { x: 8, y: 320, width, height: 32, },
+      text: match self.task_field(0) {
+        0 => "Idle"
+        1 => "Working..."
+        2 => "Completed"
+        3 => "Failed"
+        4 => "Canceled"
+        _ => "Stopped"
+      },
+      reference: None,
+      focused: false,
+    },
+    start: {
+      bounds: { x: 8, y: 224, width: width.min(272), height: 40, },
+      text: nodes[3].name,
+      reference: Some(nodes[3].reference),
+      focused: nodes[3].focused,
+    },
+    cancel: {
+      bounds: { x: 8, y: 272, width: width.min(176), height: 40, },
+      text: nodes[4].name,
+      reference: Some(nodes[4].reference),
+      focused: nodes[4].focused,
+    },
   }
 }
 
@@ -70,6 +98,12 @@ pub fn Model::request_focused(self : Model) -> Bool {
     }
   }
   false
+}
+
+///|
+pub fn Model::control_focused(self : Model) -> Bool {
+  let view = self.view()
+  view.request.focused || view.start.focused || view.cancel.focused
 }
 
 ///|
@@ -94,5 +128,8 @@ pub fn View::snapshot(self : View) -> Json {
     element(self.editor, "text_input", Json::null()),
     element(self.request, "button", Json::string("load_user")),
     element(self.result, "status", Json::null()),
+    element(self.start, "button", Json::string("start_update")),
+    element(self.cancel, "button", Json::string("cancel_update")),
+    element(self.task_status, "status", Json::null()),
   ])
 }

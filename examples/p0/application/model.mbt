@@ -3,6 +3,8 @@ pub struct Model {
   scene : @scene.State
   editor : @semantics.Tree
   request_button : @semantics.NodeRef
+  start_button : @semantics.NodeRef
+  cancel_button : @semantics.NodeRef
   tasks : @task_scope.Scope
   mut result : String
   mut result_utf8 : Bytes
@@ -12,10 +14,14 @@ pub struct Model {
 pub fn create(session : Int, window : Int) -> Model {
   let editor = @semantics.create(session, window)
   let request_button = @semantics.add_button(editor, "Load user").unwrap()
+  let start_button = @semantics.add_button(editor, "Move after delay").unwrap()
+  let cancel_button = @semantics.add_button(editor, "Cancel").unwrap()
   {
     scene: @scene.create(),
     editor,
     request_button,
+    start_button,
+    cancel_button,
     tasks: @task_scope.create(),
     result: "",
     result_utf8: b"",

@@ -267,7 +267,7 @@ try {
               case 'press': await page.locator(command.selector).press(command.key); break;
               case 'view-bounds': return page.evaluate(() => {
                 const canvas = document.querySelector('#canvas').getBoundingClientRect();
-                return ['#text-input', '#rpc-load'].map((selector) => {
+                return ['#text-input', '#rpc-load', '#task-start', '#task-cancel'].map((selector) => {
                   const element = document.querySelector(selector), rect = element.getBoundingClientRect();
                   return { x: rect.x - canvas.x, y: rect.y - canvas.y, width: rect.width, height: rect.height, opacity: getComputedStyle(element).opacity };
                 });

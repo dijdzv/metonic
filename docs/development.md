@@ -36,6 +36,9 @@ Issue-local notes belong on the task that needs them, not in public handoff logs
 ## Windows x64 setup
 
 Install mise, PowerShell 7 (`pwsh`), and Visual Studio C++ x64 build tools with the Windows SDK.
+Native AccessKit source preparation additionally requires Rust 1.93.0 (`rustc`
+and `cargo`) on PATH; it checks the compiler version before building the
+[focus-ownership patch](../patches/accesskit-windows-focus.md).
 From the repository root:
 
 ```powershell
@@ -203,7 +206,9 @@ layout; grapheme navigation and physical IME verification remain incomplete.
 Left/right move the insertion position when text is focused; Tab switches text
 and scene focus. Up/down and Enter/Space control the rectangle only with scene
 focus and no active composition. Scene Space and Backspace do not edit text.
-F5 starts a delayed move to the left; F6 cancels it. A new F5 replaces the pending
+Move after delay (also F5) starts a move after one second; Cancel (also F6) cancels
+the active task. Both controls and task status use the shared GPU view.
+A new F5 replaces the pending
 job. The ordinary window uses the shared task-scope model to reject obsolete
 results and joins canceled work before releasing GPU/window resources.
 

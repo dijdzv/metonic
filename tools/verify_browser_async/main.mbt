@@ -3,6 +3,10 @@
 pub type Page
 
 ///|
+extern "js" fn settle_frames(page : Page) -> @js_async.Promise[Unit] =
+  #| async (page) => { await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))); }
+
+///|
 extern "js" fn snapshot_raw(page : Page) -> @js_async.Promise[String] =
   #| async (page) => JSON.stringify(await page.evaluate(() => window.metonicAsyncProbe.snapshot()))
 
@@ -49,6 +53,7 @@ pub suberror VerifyFailure {
 
 ///|
 fn fail(message : String) -> Unit raise VerifyFailure {
+  println("browser async verification failed: " + message)
   raise Failure(message)
 }
 
@@ -276,6 +281,17 @@ async fn wait_state(
 }
 
 ///|
+async fn wait_task_frame(page : Page, before : Int) -> Unit raise VerifyFailure {
+  let deadline = monotonic_ms() + 3000.0
+  while read_text_int(page, "#submitted") <= before {
+    require(monotonic_ms() < deadline, "task status was not presented")
+    @js_async.Promise::wait(sleep(25)) catch {
+      _ => fail("frame wait timer failed")
+    }
+  }
+}
+
+///|
 async fn verify_checked(
   page : Page,
   target : String,
@@ -357,20 +373,32 @@ async fn verify_checked(
     _ => fail("cancel")
   }
   let canceled = wait_state(page, 4, 90, 0)
-  require(
-    submitted == read_text_int(page, "#submitted"),
-    target + " cancel stability",
-  )
+  wait_task_frame(page, submitted)
+  let canceled_png = @js_async.Promise::wait(
+    screenshot(page, out + "/" + target + "-canceled.png"),
+  ) catch {
+    _ => {
+      fail("canceled screenshot")
+      ""
+    }
+  }
+  check_png(canceled_png, 90)
   let submitted_before_fail = read_text_int(page, "#submitted")
   @js_async.Promise::wait(action(page, "start", 10, 7, true)) catch {
     _ => fail("failure start")
   }
   let failed = wait_state(page, 3, 90, 0)
   require(ints(failed, "task", 6)[3] == 7, target + " failure error")
-  require(
-    read_text_int(page, "#submitted") == submitted_before_fail,
-    target + " failure submit",
-  )
+  wait_task_frame(page, submitted_before_fail)
+  let failed_png = @js_async.Promise::wait(
+    screenshot(page, out + "/" + target + "-failed.png"),
+  ) catch {
+    _ => {
+      fail("failed screenshot")
+      ""
+    }
+  }
+  check_png(failed_png, 90)
   let reset_before = read_text_int(page, "#submitted")
   @js_async.Promise::wait(action(page, "start", 100, 120, false)) catch {
     _ => fail("reset start")
@@ -379,6 +407,9 @@ async fn verify_checked(
     _ => fail("reset")
   }
   let reset = wait_state(page, 0, 0, 0)
+  @js_async.Promise::wait(settle_frames(page)) catch {
+    _ => fail("reset frame settlement")
+  }
   let reset_deadline = monotonic_ms() + 3000.0
   let mut reset_submitted = read_text_int(page, "#submitted")
   while reset_submitted <= reset_before && monotonic_ms() < reset_deadline {
@@ -402,13 +433,13 @@ async fn verify_checked(
     reset.stringify() == read(page).stringify(),
     target + " reset snapshot stable",
   )
-  let submitted_before_stop = read_text_int(page, "#submitted")
   @js_async.Promise::wait(action(page, "start", 100, 130, false)) catch {
     _ => fail("stop start")
   }
   @js_async.Promise::wait(action(page, "stop", 0, 0, false)) catch {
     _ => fail("stop")
   }
+  let submitted_at_stop = read_text_int(page, "#submitted")
   let stopped = wait_state(page, 5, 0, 0)
   require(bool_field(stopped, "disposed"), target + " disposed")
   @js_async.Promise::wait(sleep(200)) catch {
@@ -419,7 +450,7 @@ async fn verify_checked(
     target + " stop stable",
   )
   require(
-    read_text_int(page, "#submitted") == submitted_before_stop,
+    read_text_int(page, "#submitted") == submitted_at_stop,
     target + " stop submit",
   )
   let restart = @js_async.Promise::wait(can_start(page)) catch {

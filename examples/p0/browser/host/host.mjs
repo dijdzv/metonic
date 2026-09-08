@@ -98,12 +98,14 @@ async function loadUser() {
 const taskTimers = new Map();
 let taskEpoch = 0;
 let rejectedCallbacks = 0;
+let lastTaskStatus;
 
 function taskField(index) { return Number(app.task_field(index)); }
 function updateTaskDiagnostics() {
   const values = [];
   for (let index = 0; index < 6; index += 1) values.push(taskField(index));
   environment.task(values, taskTimers.size, rejectedCallbacks);
+  if (!disposed && lastTaskStatus !== values[0]) { lastTaskStatus = values[0]; dirty = true; schedule(); }
 }
 function dispatchTask(delayMs, value, fail = false) {
   if (disposed || !app || !Number.isInteger(delayMs) || delayMs < 0 || delayMs > 5000
@@ -135,7 +137,7 @@ function resetTasks() {
   taskEpoch += 1;
   if (app) updateTaskDiagnostics();
 }
-function onTaskStart() { dispatchTask(250, 40); }
+function onTaskStart() { dispatchTask(1000, 40); }
 function onTaskCancel() { cancelTask(); }
 
 function setStatus(message, error = false) {
@@ -266,7 +268,8 @@ function onReset() {
 }
 
 function placeView() {
-  for (const [element, target] of [[0, textInput], [1, $('rpc-load')]]) {
+  for (const [element, target] of [[0, textInput], [1, $('rpc-load')], [3, $('task-start')], [4, $('task-cancel')]]) {
+    if (element !== 0) target.classList.add('gpu-button');
     target.style.left = (canvas.offsetLeft + Number(app.view_field(element, 0))) + 'px';
     target.style.top = (canvas.offsetTop + Number(app.view_field(element, 1))) + 'px';
     target.style.width = Number(app.view_field(element, 2)) + 'px';
@@ -276,6 +279,8 @@ function placeView() {
 }
 function onEditorFocus() { if (!disposed && app) { app.view_focus(0); renderEditor(); } }
 function onRequestFocus() { if (!disposed && app) { app.view_focus(1); renderEditor(); } }
+function onStartFocus() { if (!disposed && app) { app.view_focus(3); renderEditor(); } }
+function onCancelFocus() { if (!disposed && app) { app.view_focus(4); renderEditor(); } }
 function onSceneFocus() { if (!disposed && app) { app.view_focus(2); renderEditor(); } }
 function onTextInput(event) {
   if (disposed || !textRenderer || composing || event?.isComposing) return;
@@ -301,6 +306,8 @@ function stop(reason = 'Stopped.', error = false) {
   rpcController = undefined;
   $('rpc-load').removeEventListener('click', loadUser);
   $('rpc-load').removeEventListener('focus', onRequestFocus);
+  $('task-start').removeEventListener('focus', onStartFocus);
+  $('task-cancel').removeEventListener('focus', onCancelFocus);
   textInput.removeEventListener('focus', onEditorFocus);
   canvas.removeEventListener('focus', onSceneFocus);
   $('rpc-user').disabled = true;
@@ -419,6 +426,8 @@ struct U { rect: vec4f, viewport: vec2f, enabled: f32, pad: f32 };
   $('task-start').addEventListener('click', onTaskStart);
   $('rpc-load').addEventListener('click', loadUser);
   $('rpc-load').addEventListener('focus', onRequestFocus);
+  $('task-start').addEventListener('focus', onStartFocus);
+  $('task-cancel').addEventListener('focus', onCancelFocus);
   textInput.addEventListener('focus', onEditorFocus);
   canvas.addEventListener('focus', onSceneFocus);
   $('rpc-user').disabled = false;

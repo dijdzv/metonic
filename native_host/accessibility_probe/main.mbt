@@ -239,6 +239,7 @@ async fn request_action(
   provider : UInt64,
 ) -> Unit {
   let mode = @env.get_env_var("METONIC_VIEW_ACTION").unwrap_or("invoke")
+  let began = uptime_ms()
   match mode {
     "invoke" => assert_eq(invoke(provider), 0)
     "keyboard" => {
@@ -260,7 +261,12 @@ async fn request_action(
     }
     _ => fail("unknown shared view action mode")
   }
-  stage("shared request action: " + mode)
+  stage(
+    "shared request action: " +
+    mode +
+    " elapsed_ms=" +
+    (uptime_ms() - began).to_string(),
+  )
 }
 
 ///|
@@ -414,6 +420,7 @@ async fn main {
       fail("ordinary backspace message failed")
     }
     expect_text(editor, "再入力 🚀")
+    verify_task_controls(hwnd, root[0], editor)
     let request = child_named(root[0], "Load user")
     guard request != 0UL else { fail("shared request button missing") }
     defer ignore(release_node(request))

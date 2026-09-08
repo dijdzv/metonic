@@ -49,6 +49,45 @@ async fn run_release(host : BrowserHost) -> String {
     }),
   )
   let edited = release_crop(host, "edited")
+  ignore(command(host, { "op": "click", "selector": "#task-start" }))
+  ignore(
+    command(host, {
+      "op": "wait-text",
+      "selector": "#task-state",
+      "text": "Working…",
+    }),
+  )
+  ignore(command(host, { "op": "click", "selector": "#task-cancel" }))
+  ignore(
+    command(host, {
+      "op": "wait-text",
+      "selector": "#task-state",
+      "text": "Canceled",
+    }),
+  )
+  ignore(command(host, { "op": "sleep", "milliseconds": 1100 }))
+  ignore(
+    command(host, {
+      "op": "wait-text",
+      "selector": "#task-state",
+      "text": "Canceled",
+    }),
+  )
+  ignore(
+    command(host, { "op": "press", "selector": "#task-start", "key": "Enter" }),
+  )
+  ignore(
+    command(host, {
+      "op": "wait-text",
+      "selector": "#task-state",
+      "text": "Completed",
+    }),
+  )
+  require(
+    command(host, { "op": "value", "selector": "#text-input" }) ==
+    Json::string("配布版 ABC 😀"),
+    "task controls changed editor contents",
+  )
   ignore(text_initial(edited))
   ignore(
     text_compare({
