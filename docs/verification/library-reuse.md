@@ -1,6 +1,7 @@
 # Library reuse evaluation
 
-Date: 2026-09-06. This supplements dependency selection; it does not replace the
+Initial evaluation: 2026-09-06; current boundaries reconciled on 2026-09-08.
+This supplements dependency selection; it does not replace the
 architecture or authorize adoption of every candidate. Working implementations
 remain comparison baselines until equivalent requirements pass.
 
@@ -26,7 +27,12 @@ The Windows candidate now has a locally evaluated bounded-pump correction and
 positive/negative contract comparison; see [event-pump results](windows-event-pump.md).
 The [GPU external-loop comparison](windows-gpu-external-loop.md) reuses the
 unchanged renderer in an isolated workspace. The async scenario now uses the
-shared host; the ordinary native-window C host still requires separate migration.
+shared host. The ordinary native window also uses the prepared window library
+and shared external-loop adapter; its former custom C host and application
+workers have been replaced. The retained wake thunk and accessibility mailbox
+are external-thread boundaries, not an unfinished host migration. See
+[ADR 030](../adr/030-native-external-event-loop.md) and
+[production accessibility](native-accessibility.md).
 The initial checkout checks below remain historical results, not adoption claims.
 The font-backed browser integration now uses a root `text_raster` package and pins
 moon_cosmic in the root module. Demonstration hosts remain under `examples/p0`.
@@ -61,17 +67,23 @@ Commands used with `MOON_HOME` and the explicit compiler from `toolchain.json`:
 The cloned sources were not patched. Warnings were retained, not treated as
 proof of incompatibility or silently disabled.
 
-## Remaining comparisons
+## Follow-up selection
 
-- GPU: the existing hidden HWND host now isolates surface behavior before changing
-  the event loop. Extend failure cleanup coverage and measure startup, transfers
-  and distribution size before replacing the baseline.
-- Layout/text: extend typed chicle and interactive text integration tests.
+The initial table above is historical evidence, not the current task list.
+Native window/async adoption and interactive text integration have since landed;
+the current-boundary table and linked verification records describe that state.
+Open Issues own current priority and acceptance criteria.
+
+- GPU: retain the adopted binding and integrated event loop. Track further
+  surface-reuse and presentation coverage separately from completed host migration.
+- Layout/text: no general layout engine has been adopted. Evaluate typed chicle
+  behavior when the shared sample layout requires it, preserving the working UI.
   Evaluate moon_swash/moon_zeno through text dependencies before creating separate
   public APIs. Preserve UTF-16/UTF-8/scalar validity requirements.
-- Accessibility: compare `Milky2018/moon_accesskit` data model and updates with
-  current semantics; verify Windows UI Automation independently. No OS adapter
-  or current package version has been validated in this pass.
+- Accessibility: the official AccessKit C adapter is adopted and production UIA
+  behavior has automated evidence. `Milky2018/moon_accesskit` is not adopted;
+  further data-model reuse must preserve that OS adapter and semantic contract.
+  Actual assistive-technology acceptance remains separate.
 - Browser: inventory required WebGPU, input and semantic DOM calls before choosing
   `mizchi/js_browser` or `bikallem/webapi`; JS/WasmGC coverage must be demonstrated.
 - RPC: inspect `moonbitlang/protoc-gen-mbt` generator/runtime compatibility before
