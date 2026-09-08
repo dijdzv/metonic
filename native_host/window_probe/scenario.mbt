@@ -248,7 +248,13 @@ async fn Scenario::step(self : Scenario, view : @ui.Observation) -> Unit {
     require((view.scene)(0) == (view.task)(2), "rejected result changed scene")
     self.stage = 10
     post(view.hwnd, 0x0100U, 0x74UL, 0L)
-    post(view.hwnd, 0x0010U, 0UL, 0L)
+  } else if self.stage == 10 && (view.task)(0) == 1 {
+    self.stage = 11
+    self.scene_revision = (view.scene)(5)
+    (view.inject)(AccessibilityValue("before close"))
+    (view.inject)(Close)
+    (view.inject)(AccessibilityValue("after close"))
+    (view.inject)(Updated((view.task)(1), 0))
   }
 }
 
@@ -270,13 +276,26 @@ fn Scenario::finish(
     println("WINDOW_INIT_CLOSE_OK")
   } else {
     require(
-      self.stage == 10 &&
+      self.stage == 11 &&
       view.frames >= 3 &&
       (view.scene)(4) == 1 &&
       (view.scene)(6) == 317 &&
       (view.scene)(7) == 193,
       "window scenario failed",
     )
+    require(
+      view.editor.value == "before close",
+      "queued action after close changed text",
+    )
+    require(
+      (view.scene)(5) == self.scene_revision,
+      "queued completion after close changed scene",
+    )
+    require(
+      view.closed_queue_empty,
+      "closed application retained pending events",
+    )
+    println("WINDOW_CLOSE_QUEUE_OK before_applied after_discarded closed_empty")
     println(
       if mode == "input" {
         "WINDOW_INIT_INPUT_OK"

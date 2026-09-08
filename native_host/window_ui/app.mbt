@@ -734,6 +734,7 @@ async fn run_loop(
               }
             Close => {
               app.closed = true
+              app.events.close(clear=true)
               ignore(app.model.stop())
             }
             Resize(size) =>
@@ -968,6 +969,7 @@ async fn run_loop(
   } catch {
     error => {
       app.closed = true
+      app.events.close(clear=true)
       ignore(app.model.stop())
       app.error = Some(error)
     }
