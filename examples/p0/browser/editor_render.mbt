@@ -10,17 +10,17 @@ pub fn editor_render(viewport_width : Int) -> Int {
   }
   let width = (viewport_width - 16).max(1).min(640)
   let text = editor_display()
-  let key = (text, rpc_result.val, width)
+  let key = (text, application.val.result_utf8, width)
   if rendered_editor.val == Some(key) {
     return 2
   }
   // Rendering the result last would replace the retained editor layout.
-  let status = if rpc_result.val.is_empty() {
+  let status = if application.val.result_utf8.is_empty() {
     b""
   } else {
     @raster.render(
       engine,
-      @utf8.decode_lossy(rpc_result.val).trim().to_owned(),
+      @utf8.decode_lossy(application.val.result_utf8).trim().to_owned(),
       width,
       32,
     )

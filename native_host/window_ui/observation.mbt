@@ -37,9 +37,9 @@ fn App::observation(self : App) -> Observation {
     pending_initialization: self.owner.pending_count(),
     has_renderer: self.renderer is Some(_),
     hwnd: self.hwnd,
-    scene: index => @scene.field(self.state, index),
-    task: index => @task_scope.field(self.scope, index),
-    editor: @semantics.snapshot(self.editor)[1],
+    scene: index => @scene.field(self.model.scene, index),
+    task: index => self.model.task_field(index),
+    editor: @semantics.snapshot(self.model.editor)[1],
     accessibility_runs: self.accessibility
     .map(bridge => bridge.fragments.map(fragment => fragment.id))
     .unwrap_or([]),
@@ -56,16 +56,16 @@ fn App::observation(self : App) -> Observation {
     },
     select: (start, end) => {
       @semantics.set_selection(
-        self.editor,
-        @semantics.snapshot(self.editor)[1].reference,
+        self.model.editor,
+        @semantics.snapshot(self.model.editor)[1].reference,
         start,
         end,
       )
     },
     set_text: text => {
       @semantics.set_text(
-        self.editor,
-        @semantics.snapshot(self.editor)[1].reference,
+        self.model.editor,
+        @semantics.snapshot(self.model.editor)[1].reference,
         text,
       )
     },

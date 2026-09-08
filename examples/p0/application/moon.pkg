@@ -1,0 +1,6 @@
+import {
+  "local/p0/examples/p0/scene",
+  "local/p0/examples/p0/semantics",
+  "local/p0/examples/p0/task_scope",
+  "moonbitlang/core/encoding/utf8",
+}

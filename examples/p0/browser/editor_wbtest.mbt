@@ -5,7 +5,10 @@ test "editor preserves committed state on invalid selection and rejects late inp
   let revision = editor_field(3)
   assert_false(accept_editor("changed", 0, 100))
   assert_eq(editor_field(3), revision)
-  assert_eq(@semantics.snapshot(editor.val)[1].value, "A😀日本語B")
+  assert_eq(
+    @semantics.snapshot(application.val.editor)[1].value,
+    "A😀日本語B",
+  )
   assert_false(accept_editor("A😀B", 2, 3))
   assert_eq(editor_field(3), revision)
   editor_dispose()
@@ -27,7 +30,7 @@ test "composition previews selected text without committing and reset rejects la
   assert_eq(text_put(0x672C), 1)
   assert_eq(editor_composition_update(), 1)
   assert_eq(editor_display(), "A日本B")
-  assert_eq(@semantics.snapshot(editor.val)[1].value, "A😀B")
+  assert_eq(@semantics.snapshot(application.val.editor)[1].value, "A😀B")
   assert_eq(editor_field(3), revision)
   assert_false(accept_editor("premature", 0, 0))
   editor_composition_end()

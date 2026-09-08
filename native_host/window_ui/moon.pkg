@@ -1,6 +1,6 @@
 import {
+  "local/p0/examples/p0/application",
   "local/p0/examples/p0/scene",
-  "local/p0/examples/p0/task_scope",
   "local/p0/examples/p0/semantics",
   "local/p0/text_raster" @raster,
   "local/p0/native_gpu" @gpu,
@@ -21,10 +21,12 @@ import {
 
 supported_targets = "native"
 
-options(targets: {
-  "handle.mbt": ["debug"],
-  "observation.mbt": ["debug"],
-  "development.mbt": ["debug"],
-  "hooks_debug.mbt": ["debug"],
-  "hooks_release.mbt": ["release"],
-})
+options(
+  targets: {
+    "handle.mbt": [ "debug" ],
+    "observation.mbt": [ "debug" ],
+    "development.mbt": [ "debug" ],
+    "hooks_debug.mbt": [ "debug" ],
+    "hooks_release.mbt": [ "release" ],
+  },
+)
