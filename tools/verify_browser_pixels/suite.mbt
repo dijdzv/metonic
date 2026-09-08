@@ -77,6 +77,27 @@ async fn run_suite(host : BrowserHost, metadata : String) -> String {
       require(int_field(result, "status") == status, "RPC task status mismatch")
     }
   }
+  for target in ["js", "wasm-gc"] {
+    let result = command(host, {
+      "op": "rpc",
+      "target": Json::string(target),
+      "user": "1",
+      "text": Json::string(String::from_array(Array::make(1024, 'A'))),
+      "after_text": "編集継続 日本語 ABC",
+    })
+    require(
+      string_field(result, "text") == "編集継続 日本語 ABC",
+      "maximum-length RPC prevented continued editing",
+    )
+    require(
+      string_field(result, "result") == "\n月兎",
+      "maximum-length RPC result mismatch",
+    )
+    require(
+      int_field(result, "status") == 2,
+      "maximum-length RPC stopped the app",
+    )
+  }
   let summaries : Array[Json] = []
   for target in ["js", "wasm-gc"] {
     for
