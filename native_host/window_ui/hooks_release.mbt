@@ -2,6 +2,14 @@
 priv struct Diagnostics {}
 
 ///|
+fn Diagnostics::observe_input(
+  _self : Diagnostics,
+  _event : @core.WindowEvent,
+) -> Unit {
+  ()
+}
+
+///|
 fn Diagnostics::new() -> Diagnostics {
   Diagnostics::{ }
 }

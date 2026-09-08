@@ -147,6 +147,7 @@ pub impl @windows.ApplicationHandler for App with fn window_event(
   _id,
   event,
 ) {
+  self.diagnostics.observe_input(event)
   match event {
     @core.WindowEvent::RedrawRequested => self.queue(Redraw)
     @core.WindowEvent::SurfaceResized(size) => self.queue(Resize(size))

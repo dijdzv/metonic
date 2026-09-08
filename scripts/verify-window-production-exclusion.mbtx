@@ -12,7 +12,10 @@ async fn main {
   let development = @fs.read_file(
     root + "debug/build/local/native_host/window_dev/window_dev.c",
   ).text()
-  for marker in ["App_3a_3ahandle", "capture__frame", "Captured"] {
+  for
+    marker in [
+      "App_3a_3ahandle", "capture__frame", "Captured", "InputObservation",
+    ] {
     guard development.contains(marker) else {
       abort("development positive control missing: " + marker)
     }
