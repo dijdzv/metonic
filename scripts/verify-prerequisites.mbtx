@@ -1,0 +1,70 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/env",
+}
+
+///|
+async fn main {
+  @async.with_timeout(90000, () => {
+    let moon = @fs.realpath(".tools/moonbit/bin/moon.exe")
+    let system = @env.get_env_var("SystemRoot").unwrap_or("C:/Windows")
+    let isolated : Map[String, String] = Map([
+      ("PATH", @fs.realpath(".tools/moonbit/bin") + ";" + system + "/System32"),
+    ])
+    for mode in ["bootstrap", "demo"] {
+      let (code, output, error) = @process.collect_output(
+        moon,
+        ["run", "scripts/check-prerequisites.mbtx", "--", mode],
+        extra_env=isolated,
+        no_console_window=true,
+      )
+      let message = output.text() + error.text()
+      guard code != 0 &&
+        message.contains("gh.exe: Install GitHub CLI") &&
+        message.contains("git.exe: Install Git for Windows") &&
+        !message.contains("PREREQUISITES_OK") else {
+        abort(
+          "Missing download tools did not produce actionable prerequisite failure",
+        )
+      }
+      if mode == "demo" {
+        guard message.contains("rustc.exe: Install/select Rust 1.93.0") else {
+          abort(
+            "Missing native toolchain was not reported with download prerequisites",
+          )
+        }
+      }
+    }
+    let auth_directory = ".work/prerequisites/no-auth"
+    if !@fs.exists(auth_directory) {
+      @fs.mkdir(auth_directory, recursive=true)
+    }
+    let (auth, auth_output, auth_error) = @process.collect_output(
+      moon,
+      ["run", "scripts/check-prerequisites.mbtx", "--", "bootstrap"],
+      extra_env=Map([
+        ("GH_CONFIG_DIR", @fs.realpath(auth_directory)),
+        ("GH_TOKEN", ""),
+        ("GITHUB_TOKEN", ""),
+      ]),
+      no_console_window=true,
+    )
+    guard auth != 0 &&
+      (auth_output.text() + auth_error.text()).contains(
+        "GitHub release authentication unavailable. Run gh auth login",
+      ) else {
+      abort("Unauthenticated downloads did not produce authentication guidance")
+    }
+    let (invalid, _, _) = @process.collect_output(
+      moon,
+      ["run", "scripts/check-prerequisites.mbtx", "--", "invalid"],
+      no_console_window=true,
+    )
+    guard invalid != 0 else { abort("Unknown prerequisite mode was accepted") }
+    println(
+      "PREREQUISITES_NEGATIVE_OK missing_tools native_tools missing_auth invalid_mode",
+    )
+  })
+}
