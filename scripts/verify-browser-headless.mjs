@@ -277,6 +277,7 @@ try {
               case 'no-probe': return page.evaluate(() => !('metonicAsyncProbe' in window));
               case 'width': return page.locator('#canvas').evaluate((element) => element.width);
               case 'viewport': await page.setViewportSize({ width: command.width, height: 800 }); await settle(); break;
+              case 'canvas-height': await page.locator('#canvas').evaluate((element, height) => { element.style.height = height; window.dispatchEvent(new Event('resize')); }, command.height); await settle(); break;
               case 'errors': return errors;
               case 'late-input': await page.evaluate(() => { const input = document.querySelector('#text-input'); input.value = 'late'; input.dispatchEvent(new Event('input')); window.dispatchEvent(new Event('resize')); }); await page.waitForTimeout(350); break;
               case 'image': {

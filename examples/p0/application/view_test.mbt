@@ -42,3 +42,34 @@ test "task status follows cancellation and reuse without replacing editor conten
   ignore(app.stop())
   assert_eq(app.view().task_status.text, "Stopped")
 }
+
+///|
+test "compact viewport keeps task actions and status inside the visible area" {
+  let app = create(1, 1)
+  for width in [400, 464, 640] {
+    ignore(@scene.resize(app.scene, width, 260))
+    let view = app.view()
+    for
+      item in [
+        view.editor,
+        view.request,
+        view.result,
+        view.start,
+        view.cancel,
+        view.task_status,
+      ] {
+      assert_true(item.bounds.x >= 0 && item.bounds.y >= 0)
+      assert_true(item.bounds.x + item.bounds.width <= width)
+      assert_true(item.bounds.y + item.bounds.height <= 260)
+    }
+    assert_true(
+      view.start.bounds.x + view.start.bounds.width < view.cancel.bounds.x,
+    )
+    assert_eq(view.start.bounds.y, view.cancel.bounds.y)
+    assert_true(view.cancel.bounds.contains(view.cancel.bounds.x + 8, 236))
+    ignore(@scene.resize(app.scene, width, 360))
+    assert_eq(app.view().cancel.bounds.x, 8)
+    assert_eq(app.view().cancel.bounds.y, 272)
+    assert_eq(app.view().task_status.bounds.y, 320)
+  }
+}

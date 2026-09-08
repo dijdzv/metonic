@@ -60,7 +60,13 @@ async fn capture_presentation(hwnd : UInt64, phase : String) -> Unit {
   assert_true(client_origin(hwnd, origin) != 0)
   assert_eq(image.width, frame[2] - frame[0])
   assert_eq(image.height, frame[3] - frame[1])
-  let scene_x = if phase == "initial" || phase == "toggled" { 260 } else { 250 }
+  let scene_x = if phase == "initial" || phase == "toggled" {
+    260
+  } else if phase == "compact-completed" {
+    240
+  } else {
+    250
+  }
   let expected_x = origin[0] - frame[0] + scene_x
   let expected_y = origin[1] - frame[1] + 144
   let mut cyan = 0

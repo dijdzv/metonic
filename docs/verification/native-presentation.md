@@ -34,6 +34,10 @@ ten-pixel delayed movement. DWM extended frame bounds and the client origin tran
 that position into capture coordinates; the capture must match the reported
 frame dimensions. This rejects displaced, scaled, incomplete or extra colored
 regions in the tested flow, including after resize.
+After resize, the production flow repeats task cancellation and successful reuse,
+preserves the edited text and HTTP result, and captures `compact-completed` at
+scene position (240,144). This capture includes the side-by-side task buttons and
+visible status. Automated activation is not physical input acceptance.
 The initial local run and a repeat with `METONIC_GPU_FALLBACK=1` passed these
 assertions. This records the two requested adapter modes on the current display,
 not coverage of every GPU or display configuration.

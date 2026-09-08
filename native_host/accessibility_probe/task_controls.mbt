@@ -33,6 +33,7 @@ async fn verify_task_controls(
   hwnd : UInt64,
   root : UInt64,
   editor : UInt64,
+  expected_text? : String = "再入力 🚀",
 ) -> Unit {
   let start = child_named(root, "Move after delay")
   guard start != 0UL else { fail("shared start button missing") }
@@ -54,10 +55,10 @@ async fn verify_task_controls(
   expect_task(root, "Canceled")
   @async.sleep(1100)
   expect_task(root, "Canceled")
-  expect_text(editor, "再入力 🚀")
+  expect_text(editor, expected_text)
   request_action(hwnd, start, start_provider[0])
   expect_task(root, "Working...")
   expect_task(root, "Completed")
-  expect_text(editor, "再入力 🚀")
+  expect_text(editor, expected_text)
   stage("shared task controls cancel and reuse passed")
 }
