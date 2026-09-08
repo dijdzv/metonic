@@ -103,6 +103,43 @@ async fn capture_presentation(hwnd : UInt64, phase : String) -> Unit {
   assert_eq(right - left + 1, 120)
   assert_eq(bottom - top + 1, 72)
   assert_eq(cyan + orange, 120 * 72)
+  if phase == "initial" {
+    let engine = @raster.create(
+      @fs.read_file(".work/text-assets/NotoSansJP.ttf").binary(),
+    ).unwrap()
+    let expected = @raster.render(
+      engine, "日本語の描画を確認します ABC 123", 624, 96,
+    )
+    let x0 = origin[0] - frame[0] + 8
+    let y0 = origin[1] - frame[1] + 8
+    let mut black = 0
+    let mut white = 0
+    // Antialiased edges change with surface color conversion; only opaque
+    // black and white establish this transfer/placement contract.
+    for y in 0..<96 {
+      for x in 0..<624 {
+        let source = (y * 624 + x) * 4
+        let target = ((y0 + y) * image.width + x0 + x) * 4
+        if expected[source] == b'\x00' &&
+          expected[source + 1] == b'\x00' &&
+          expected[source + 2] == b'\x00' {
+          black += 1
+          for channel in 0..<3 {
+            assert_true(image.data[target + channel] <= b'\x02')
+          }
+        } else if expected[source] == b'\xFF' &&
+          expected[source + 1] == b'\xFF' &&
+          expected[source + 2] == b'\xFF' {
+          white += 1
+          for channel in 0..<3 {
+            assert_true(image.data[target + channel] >= b'\xFD')
+          }
+        }
+      }
+    }
+    assert_true(black > 100 && white > 10000)
+    stage("initial Japanese/Latin glyph interiors and background match raster")
+  }
   if phase == "long-editor" || phase == "result" {
     let mut status_ink = 0
     let x0 = origin[0] - frame[0] + 8
