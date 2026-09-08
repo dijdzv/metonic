@@ -26,9 +26,15 @@ async fn main {
   guard mailbox_probe.contains("metonic_mailbox_probe_") else {
     abort("mailbox fixture positive control missing")
   }
+  let sdk_probe = @fs.read_file(
+    root + "debug/build/local/native_host/sdk_mailbox_probe/sdk_mailbox_probe.c",
+  ).text()
+  guard sdk_probe.contains("metonic_sdk_") else {
+    abort("SDK mailbox fixture positive control missing")
+  }
   for
     marker in [
-      "Observation", "window_probe", "window_dev", "metonic_mailbox_probe_",
+      "Observation", "window_probe", "window_dev", "metonic_mailbox_probe_", "metonic_sdk_",
     ] {
     guard !production.contains(marker) else {
       abort("production retains development type or package: " + marker)
@@ -43,6 +49,7 @@ async fn main {
   for
     dependency in [
       "window_probe", "window_dev", "native_session", "native_control", "mailbox_probe",
+      "sdk_mailbox_probe",
     ] {
     guard !link.contains(dependency) else {
       abort("production links development package: " + dependency)

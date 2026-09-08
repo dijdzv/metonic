@@ -210,6 +210,13 @@ run = [
   '.\\.work\\native-host-build\\native\\debug\\build\\local\\native_host\\mailbox_probe\\mailbox_probe.exe',
 ]
 
+[tasks."native:sdk-mailbox"]
+env.METONIC_NATIVE_BUILD = "sdk-mailbox-probe"
+run = [
+  '.\\.tools\\moonbit\\bin\\moon.exe run scripts/build-native.mbtx',
+  '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-sdk-mailbox.mbtx',
+]
+
 [tasks."native:accessibility"]
 depends = ["native:accessibility-probe-build"]
 run = [

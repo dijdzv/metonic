@@ -1,0 +1,21 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/process",
+}
+
+///|
+async fn main {
+  // A blocked native SDK call cannot run an in-process timeout.
+  @async.with_timeout(30000, async fn() {
+    @async.with_task_group() <| group => {
+      let child = @process.spawn(
+        group,
+        ".work/native-host-build/native/debug/build/local/native_host/sdk_mailbox_probe/sdk_mailbox_probe.exe",
+        [],
+        no_console_window=true,
+        cancel_handler=@process.hard_cancel(),
+      )
+      guard child.wait() == 0 else { fail("SDK mailbox lifetime probe failed") }
+    }
+  })
+}

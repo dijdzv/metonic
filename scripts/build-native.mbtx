@@ -24,6 +24,7 @@ async fn main {
       mode != "release-probe" &&
       mode != "accessibility-probe" &&
       mode != "mailbox-probe" &&
+      mode != "sdk-mailbox-probe" &&
       mode != "window-dev" &&
       mode != "window-probe" &&
       mode != "async" &&
@@ -154,6 +155,7 @@ async fn main {
       mode == "release-probe" ||
       mode == "accessibility-probe" ||
       mode == "mailbox-probe" ||
+      mode == "sdk-mailbox-probe" ||
       mode == "window-dev" ||
       mode == "window-probe" {
       let host_app = if mode == "async" {
@@ -168,6 +170,8 @@ async fn main {
         "accessibility_probe"
       } else if mode == "mailbox-probe" {
         "mailbox_probe"
+      } else if mode == "sdk-mailbox-probe" {
+        "sdk_mailbox_probe"
       } else {
         "window_app"
       }
@@ -189,6 +193,7 @@ async fn main {
         host_app == "window_dev" ||
         host_app == "accessibility_probe" ||
         host_app == "mailbox_probe" ||
+        host_app == "sdk_mailbox_probe" ||
         host_app == "window_probe" {
         guard @process.run(
             moon,
@@ -250,6 +255,7 @@ async fn main {
         host_app == "window_dev" ||
         host_app == "accessibility_probe" ||
         host_app == "mailbox_probe" ||
+        host_app == "sdk_mailbox_probe" ||
         host_app == "window_probe" {
         let directory = native_host_build_dir +
           "/native/" +

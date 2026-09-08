@@ -129,6 +129,24 @@ The fixture is a separate build target; generated production code and link
 inputs exclude it, with the fixture artifact as a positive control. The task
 is part of pre-commit. Remaining SDK/application interleavings stay in #128.
 
+`mise run native:sdk-mailbox` adds a real-SDK control. Its dedicated executable
+creates its own windows and uses the installed AccessKit DLL and UIA Invoke
+client. A callback gate holds an SDK-owned Click request before mailbox admission.
+The owner destroys that adapter/window, creates a later adapter, then releases
+the old callback. The old Click is freed without entering the new queue; a fresh
+Invoke reaches the new queue. Click counts and total request/free counts are
+checked separately because UIA can also request focus. All requests use the real
+SDK allocator/deallocator. An old Invoke may fail after its provider is destroyed;
+the fresh Invoke must succeed.
+
+MoonBit owns the semantic fixture and assertions. C supplies Windows/COM calls,
+worker dispatch and callback gating, reusing the actual mailbox implementation.
+The external MoonBit supervisor limits the process to 30 seconds because an SDK
+call can block its native thread. The task briefly opens only its owned windows.
+Generated-code/link checks exclude this fixture from production with a positive
+control. This establishes a delayed real callback across adapter recreation,
+not application model mutation after close or physical-input acceptance.
+
 The six integrated native scenarios also exercise shared input/rendering after
 attachment; a staged-composition check rejects a queued accessibility value
 replacement without changing committed text. This is not a real IME run.
