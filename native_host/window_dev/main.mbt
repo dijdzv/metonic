@@ -7,6 +7,7 @@ struct Request {
   selection_start : Int?
   selection_end : Int?
   expected_semantic_revision : Int?
+  session_id : String?
 } derive(FromJson)
 
 ///|
@@ -14,10 +15,12 @@ async fn respond(
   handle : @ui.Handle,
   bytes : Bytes,
   last_id : Ref[Int],
+  output : &@io.Writer,
+  identity : String?,
 ) -> Unit {
   let request : Request = @json.from_json(@json.parse(@utf8.decode(bytes))) catch {
     _ => {
-      @stdio.stdout.write("{\"id\":null,\"error\":\"invalid_request\"}\n")
+      output.write("{\"id\":null,\"error\":\"invalid_request\"}\n")
       return
     }
   }
@@ -25,12 +28,16 @@ async fn respond(
   let mut captured_image : Json = Json::null()
   if request.id < 1 {
     error = "invalid_id"
+  } else if identity is Some(expected) &&
+    request.op != "capabilities" &&
+    request.session_id != Some(expected) {
+    error = "stale_session"
   } else if request.id <= last_id.val {
     error = "duplicate_id"
   } else {
     last_id.val = request.id
     match request.op {
-      "snapshot" => ()
+      "snapshot" | "capabilities" => ()
       "capture" => {
         let captured = (handle.capture)()
         let png = @image.encode_png(@image.ImageData::{
@@ -100,30 +107,87 @@ async fn respond(
     "ime_requested_y": state.ime_requested_y,
     "image": captured_image,
   }
-  @stdio.stdout.write(response.stringify() + "\n")
+  if identity is Some(value) {
+    guard! response is Json::Object(fields)
+    fields["session_id"] = Json::string(value)
+    fields["protocol_version"] = Json::number(1)
+  }
+  output.write(response.stringify() + "\n")
 }
 
 ///|
-async fn control(handle : @ui.Handle) -> Unit {
+async fn session(
+  handle : @ui.Handle,
+  input : &@io.Reader,
+  output : &@io.Writer,
+  identity : String?,
+) -> Unit {
   let lines = @lines.Lines::new(lf_only=true)
   let last_id = Ref(0)
-  while @stdio.stdin.read_some(max_len=1024) is Some(chunk) {
+  while input.read_some(max_len=1024) is Some(chunk) {
     for line in lines.feed(chunk) {
       match line {
-        @lines.InputLine::Line(bytes) => respond(handle, bytes, last_id)
+        @lines.InputLine::Line(bytes) =>
+          respond(handle, bytes, last_id, output, identity)
         @lines.InputLine::TooLong =>
-          @stdio.stdout.write("{\"id\":null,\"error\":\"line_too_long\"}\n")
+          output.write("{\"id\":null,\"error\":\"line_too_long\"}\n")
       }
     }
   }
   for line in lines.finish() {
     match line {
-      @lines.InputLine::Line(bytes) => respond(handle, bytes, last_id)
+      @lines.InputLine::Line(bytes) =>
+        respond(handle, bytes, last_id, output, identity)
       @lines.InputLine::TooLong =>
-        @stdio.stdout.write("{\"id\":null,\"error\":\"line_too_long\"}\n")
+        output.write("{\"id\":null,\"error\":\"line_too_long\"}\n")
     }
   }
-  (handle.apply)(@ui.Action::Close)
+}
+
+///|
+async fn control(handle : @ui.Handle) -> Unit {
+  match @env.get_env_var("METONIC_DEV_PIPE") {
+    None => {
+      session(handle, @stdio.stdin, @stdio.stdout, None)
+      (handle.apply)(@ui.Action::Close)
+    }
+    Some(name) => {
+      let pipe = @pipe.WindowsPipe::listen(name)
+      defer pipe.close()
+      let reservation = @fs.tmpdir(prefix="metonic-session")
+      defer @async.protect_from_cancel(() => @fs.rmdir(reservation))
+      let parts = reservation
+        .replace_all(old="\\", new="/")
+        .split("/")
+        .to_array()
+      let identity = parts[parts.length() - 1].to_owned()
+      let discovery_path = reservation + "/session.json"
+      let discovery : Json = {
+        "protocol_version": 1,
+        "session_id": identity,
+        "pipe": pipe.path(),
+      }
+      defer @async.protect_from_cancel(() => {
+        if @fs.exists(discovery_path) {
+          @fs.remove(discovery_path)
+        }
+      })
+      @fs.write_file(discovery_path, discovery.stringify())
+      @stdio.stderr.write("METONIC_DEV_SESSION " + discovery_path + "\n")
+      @stdio.stderr.write("METONIC_DEV_PIPE_READY " + pipe.path() + "\n")
+      while true {
+        pipe.accept()
+        session(handle, pipe, pipe, Some(identity)) catch {
+          error if @async.is_cancellation_error(error) => raise error
+          error =>
+            @stdio.stderr.write(
+              "control connection ended: " + error.to_string() + "\n",
+            )
+        }
+        pipe.disconnect()
+      }
+    }
+  }
 }
 
 ///|

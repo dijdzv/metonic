@@ -1,0 +1,257 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/json",
+}
+
+///|
+struct Reply {
+  id : Int
+  text : String
+  error : String
+  session_id : String
+  protocol_version : Int
+} derive(FromJson)
+
+///|
+async fn connect(path : String) -> @fs.File {
+  while true {
+    let file = @fs.open(path, mode=ReadWrite) catch {
+      _ => {
+        @async.sleep(20)
+        continue
+      }
+    }
+    return file
+  } nobreak {
+    abort("connect loop ended")
+  }
+}
+
+///|
+struct Discovery {
+  protocol_version : Int
+  session_id : String
+  pipe : String
+} derive(FromJson)
+
+///|
+async fn main {
+  let lock = ".work/window-attach-verification.lock"
+  @fs.mkdir(lock)
+  defer @fs.rmdir(lock)
+  let previous_session = Ref("stale-session")
+  for mode in ["accept", "read", "write"] {
+    let pending_read = mode == "read"
+    @async.with_timeout(30000, () => {
+      @async.with_task_group() <| group => {
+        let log = @process.redirect_to_file(".work/window-attach-smoke.log")
+        defer log.close()
+        let child = @process.spawn(
+          group,
+          ".work/native-host-build/native/debug/build/local/native_host/window_dev/window_dev.exe",
+          [],
+          extra_env=Map([
+            ("METONIC_DEV_PIPE", "metonic_attach_smoke"),
+            ("METONIC_DEV_HIDDEN", "0"),
+          ]),
+          stdout=log,
+          stderr=log,
+          no_console_window=true,
+          cancel_handler=@process.hard_cancel(),
+        )
+        while !@fs.read_file(".work/window-attach-smoke.log")
+              .text()
+              .contains("METONIC_DEV_PIPE_READY ") {
+          assert_true(
+            child.try_wait() is None,
+            msg="owned app exited before endpoint readiness",
+          )
+          @async.sleep(20)
+        }
+        let mut discovery_path = ""
+        for
+          line in @fs.read_file(".work/window-attach-smoke.log")
+          .text()
+          .split("\n") {
+          if line.strip_prefix("METONIC_DEV_SESSION ") is Some(path) {
+            discovery_path = path.trim().to_owned()
+          }
+        }
+        assert_true(discovery_path != "")
+        let discovery : Discovery = @json.from_json(
+          @json.parse(@fs.read_file(discovery_path).text()),
+        )
+        assert_eq(discovery.protocol_version, 1)
+        let first = connect(discovery.pipe)
+        defer first.close()
+        first.write("{\"id\":1,\"op\":\"capabilities\"}\n")
+        let ready : Reply = @json.from_json(
+          @json.parse(first.read_until("\n").unwrap()),
+        )
+        assert_eq(ready.protocol_version, 1)
+        assert_eq(ready.session_id, discovery.session_id)
+        assert_true(ready.session_id != previous_session.val)
+        first.write(
+          "{\"id\":2,\"op\":\"insert\",\"text\":\"wrong-session\",\"session_id\":\"" +
+          previous_session.val +
+          "\"}\n",
+        )
+        let rejected : Reply = @json.from_json(
+          @json.parse(first.read_until("\n").unwrap()),
+        )
+        assert_eq(rejected.error, "stale_session")
+        assert_eq(rejected.text, ready.text)
+        previous_session.val = ready.session_id
+        first.write(
+          "{\"id\":2,\"op\":\"insert\",\"text\":\"attach-proof\",\"session_id\":\"" +
+          ready.session_id +
+          "\"}\n",
+        )
+        let edited : Reply = @json.from_json(
+          @json.parse(first.read_until("\n").unwrap()),
+        )
+        assert_eq(edited.error, "")
+        assert_true(edited.text.contains("attach-proof"))
+        first.close()
+        @async.sleep(50)
+        assert_true(child.try_wait() is None)
+        let stale_path = ".work/window-attach-stale.json"
+        let stale : Json = {
+          "protocol_version": 1,
+          "session_id": "stale-session",
+          "pipe": discovery.pipe,
+        }
+        @fs.write_file(stale_path, stale.stringify())
+        defer @fs.remove(stale_path)
+        let (stale_stdin, stale_writer) = @process.write_to_process()
+        defer stale_writer.close()
+        stale_writer.write(
+          "{\"op\":\"insert\",\"args\":{\"text\":\"must-not-apply\"}}\n",
+        )
+        stale_writer.close()
+        let (stale_code, _, stale_error) = @process.collect_output(
+          ".tools/moonbit/bin/moonrun.exe",
+          [
+            "_build/wasm/release/build/tools/native_cli/native_cli.wasm", "--session",
+            stale_path,
+          ],
+          stdin=stale_stdin,
+          no_console_window=true,
+        )
+        assert_true(stale_code != 0)
+        assert_true(stale_error.text().contains("response identity mismatch"))
+        assert_true(child.try_wait() is None)
+        let (cli_stdin, cli_writer) = @process.write_to_process()
+        defer cli_writer.close()
+        cli_writer.write("{\"op\":\"snapshot\"}\n")
+        cli_writer.close()
+        let (cli_code, cli_output, cli_error) = @process.collect_output(
+          ".tools/moonbit/bin/moonrun.exe",
+          [
+            "_build/wasm/release/build/tools/native_cli/native_cli.wasm", "--session",
+            discovery_path,
+          ],
+          stdin=cli_stdin,
+          no_console_window=true,
+        )
+        assert_eq(cli_code, 0, msg=cli_error.text())
+        let cli_reply : Reply = @json.from_json(
+          @json.parse(cli_output.text().trim()),
+        )
+        assert_eq(cli_reply.text, edited.text)
+        assert_eq(cli_reply.session_id, discovery.session_id)
+        assert_true(child.try_wait() is None, msg="CLI closed the app")
+        let (mcp_code, mcp_output, mcp_error) = @process.collect_output(
+          "node",
+          [
+            "scripts/verify-window-mcp.mjs",
+            "--session",
+            discovery_path,
+            discovery.session_id,
+          ],
+          no_console_window=true,
+        )
+        assert_eq(mcp_code, 0, msg=mcp_error.text())
+        assert_true(mcp_output.text().contains("WINDOW_MCP_ATTACH_OK"))
+        assert_true(child.try_wait() is None, msg="MCP closed the app")
+        let second = connect(discovery.pipe)
+        defer second.close()
+        second.write(
+          "{\"id\":1,\"op\":\"snapshot\",\"session_id\":\"" +
+          ready.session_id +
+          "\"}\n",
+        )
+        let restored : Reply = @json.from_json(
+          @json.parse(second.read_until("\n").unwrap()),
+        )
+        assert_eq(restored.error, "")
+        assert_eq(restored.id, 1)
+        assert_eq(restored.text, edited.text)
+        if mode == "write" {
+          second.write(
+            "{\"id\":2,\"op\":\"capture\",\"session_id\":\"" +
+            ready.session_id +
+            "\"}\n",
+          )
+          assert_eq(second.read_some(max_len=1).unwrap(), b"{")
+        }
+        if mode == "accept" {
+          second.close()
+        }
+        @async.sleep(50)
+        assert_true(child.try_wait() is None)
+        @fs.write_file(stale_path, @fs.read_file(discovery_path))
+        let closer = @process.spawn(
+          group,
+          ".work/native-host-build/native/debug/build/local/native_host/accessibility_probe/accessibility_probe.exe",
+          [child.pid.to_string(), "close-only"],
+          no_console_window=true,
+        )
+        assert_eq(closer.wait(), 0)
+        assert_eq(@async.with_timeout(2000, () => child.wait()), 0)
+        assert_true(
+          !@fs.exists(discovery_path),
+          msg="discovery survived normal app exit",
+        )
+        let reservation = discovery_path.strip_suffix("/session.json").unwrap()
+        assert_true(
+          !@fs.exists(reservation),
+          msg="session reservation survived app exit",
+        )
+        if pending_read {
+          assert_eq(second.read_until("\n"), None)
+          second.close()
+        }
+        if mode == "write" {
+          let tail = second.read_all().text()
+          let incomplete = try {
+            ignore(@json.parse("{" + tail))
+            false
+          } catch {
+            _ => true
+          }
+          assert_true(
+            incomplete,
+            msg="capture finished before shutdown; backpressure unproven",
+          )
+          second.close()
+        }
+        let (expired_code, _, _) = @process.collect_output(
+          ".tools/moonbit/bin/moonrun.exe",
+          [
+            "_build/wasm/release/build/tools/native_cli/native_cli.wasm", "--session",
+            stale_path,
+          ],
+          no_console_window=true,
+        )
+        assert_true(
+          expired_code != 0,
+          msg="CLI accepted discovery after app exit",
+        )
+        println("WINDOW_ATTACH_CLOSE_OK mode=" + mode)
+      }
+    })
+  }
+}

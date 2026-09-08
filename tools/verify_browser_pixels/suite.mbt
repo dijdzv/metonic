@@ -162,5 +162,13 @@ pub fn run_suite_export(
   host : BrowserHost,
   metadata : String,
 ) -> @js_async.Promise[String] {
-  @js_async.Promise::from_async(async fn() { run_suite(host, metadata) })
+  @js_async.Promise::from_async(async fn() {
+    run_suite(host, metadata) catch {
+      VerifyFailure::Failure(message) => {
+        println(message)
+        raise VerifyFailure::Failure(message)
+      }
+      error => raise error
+    }
+  })
 }

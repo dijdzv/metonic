@@ -5,7 +5,11 @@ extern "js" fn failing_host() -> BrowserHost =
 ///|
 async test "failure scenario propagates failure to create its first page" {
   try run_failures(failing_host()) catch {
-    error => assert_true(error.to_string().contains("host rejected open"))
+    VerifyFailure::Failure(message) => {
+      assert_true(message.contains("host rejected open"))
+      assert_true(message.contains("browser operation"))
+    }
+    error => raise error
   } noraise {
     _ => fail("host failure was swallowed")
   }

@@ -3,6 +3,36 @@
 pub type Client
 
 ///|
+#export_name("verify_attachment")
+pub fn verify_attachment(
+  client : Client,
+  session : String,
+) -> @js_async.Promise[String] {
+  @js_async.Promise::from_async(async fn() {
+    let before = invoke(client, { "name": "window_snapshot", "arguments": {} })
+    assert_eq(before.session_id, session)
+    let inserted = invoke(client, {
+      "name": "window_insert",
+      "arguments": {
+        "text": "日本",
+        "expected_semantic_revision": before.semantic_revision,
+      },
+    })
+    assert_eq(inserted.text, before.text + "日本")
+    assert_eq(inserted.session_id, session)
+    let deleted = invoke(client, { "name": "window_backspace", "arguments": {} })
+    assert_eq(deleted.text, before.text + "日")
+    let restored = invoke(client, {
+      "name": "window_backspace",
+      "arguments": {},
+    })
+    assert_eq(restored.text, before.text)
+    assert_eq(restored.session_id, session)
+    "WINDOW_MCP_ATTACH_OK"
+  })
+}
+
+///|
 extern "js" fn call(
   client : Client,
   request : String,

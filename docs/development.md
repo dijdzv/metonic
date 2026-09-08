@@ -122,6 +122,39 @@ scenarios described in [UI HTTP failures](verification/ui-rpc-failures.md).
 
 ## MoonBit scripts
 
+### Attach to an independently started development window
+
+Build with `mise run native:window-dev-build` and build the CLI with
+`mise exec -- ./.tools/moonbit/bin/moon.exe build tools/native_cli --target wasm --release --deny-warn`.
+Set `METONIC_DEV_PIPE` to a unique local name before starting
+`.work/native-host-build/native/debug/build/local/native_host/window_dev/window_dev.exe`.
+The development window writes `METONIC_DEV_SESSION <path>` to stderr. Keep that
+`session.json` path; it identifies this application instance. Do not use the
+ordinary release executable for development control.
+
+Run the pinned `moonrun` with
+`_build/wasm/release/build/tools/native_cli/native_cli.wasm --session <path>` and
+send JSON lines such as `{"op":"snapshot"}` or
+`{"op":"insert","args":{"text":"hello"}}` on stdin. Closing stdin disconnects
+the CLI and leaves the application running. Repeating the command reconnects to
+the same state. Attached responses are window protocol objects; capture includes
+its PNG image inside that object.
+
+After building `tools/session_wire` for JS release, configure the external MCP
+client to run `node tools/devtools/window-mcp.mjs --session <path>` from the
+repository root. It owns a MoonBit connection process, not the application.
+Without `--session`, the existing launch-owned MCP mode remains available.
+The internal CLI `--session-wire` mode preserves MCP bridge request IDs while
+the MoonBit pipe client independently correlates application requests.
+
+`mise run native:window-attach` verifies CLI and SDK MCP attachment, Japanese
+text edits, client disconnect/reconnect and application shutdown. Discovery is
+removed on normal application exit. A stale identity is rejected without
+retrying against another instance; a retained discovery file cannot reconnect
+after that endpoint closes. Abrupt process termination can leave metadata on
+disk and is not a proof of normal cleanup. Cancellation disconnects the client;
+it cannot undo an operation the application already applied.
+
 Development scripts, verification and CLI logic use MoonBit by default. Standalone
 tools use `.mbtx`; `scripts/doctor.mbtx` is the first migrated tool and runs through
 `mise run doctor`. It pins `moonbitlang/async@0.21.2` (Apache-2.0) for file/process

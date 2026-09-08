@@ -11,7 +11,26 @@ extern "js" fn call_host(
 
 ///|
 async fn command(host : BrowserHost, request : Json) -> Json {
-  @json.parse(@js_async.Promise::wait(call_host(host, request.stringify())))
+  @json.parse(@js_async.Promise::wait(call_host(host, request.stringify()))) catch {
+    error => {
+      let context : Map[String, Json] = Map([])
+      for key in ["op", "target", "selector", "name"] {
+        if field(request, key) is Some(Json::String(value)) {
+          context.set(
+            key,
+            Json::string(value[:value.length().min(128)].to_owned()),
+          )
+        }
+      }
+      let detail = match error {
+        VerifyFailure::Failure(message) => message
+        other => other.to_string()
+      }
+      raise VerifyFailure::Failure(
+        "browser operation " + Json::object(context).stringify() + ": " + detail,
+      )
+    }
+  }
 }
 
 ///|

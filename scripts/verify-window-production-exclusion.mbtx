@@ -1,6 +1,7 @@
 import {
   "moonbitlang/async@0.21.2",
   "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/core/encoding/utf8",
 }
 
 ///|
@@ -52,11 +53,34 @@ async fn main {
   for
     dependency in [
       "window_probe", "window_dev", "native_session", "native_control", "mailbox_probe",
-      "sdk_mailbox_probe",
+      "sdk_mailbox_probe", "named_pipe", "pipe_test_support",
     ] {
     guard !link.contains(dependency) else {
       abort("production links development package: " + dependency)
     }
   }
-  println("WINDOW_PRODUCTION_EXCLUSION_OK generated_c_and_link_inputs")
+  let release_binary = @utf8.decode_lossy(
+    @fs.read_file(
+      root + "release/build/local/native_host/window_app/window_app.exe",
+    ).binary(),
+  )
+  let dev_binary = @utf8.decode_lossy(
+    @fs.read_file(
+      root + "debug/build/local/native_host/window_dev/window_dev.exe",
+    ).binary(),
+  )
+  for
+    marker in [
+      "moonbitlang_async_create_private_duplex_pipe", "moonbitlang_async_connect_pipe",
+      "moonbitlang_async_make_pipe_connect_io_result", "moonbitlang_async_disconnect_pipe_checked",
+    ] {
+    guard dev_binary.contains(marker) else {
+      abort("development pipe positive control missing: " + marker)
+    }
+    guard !release_binary.contains(marker) else {
+      println("production retains pipe FFI export: " + marker)
+      abort("production retains pipe FFI export")
+    }
+  }
+  println("WINDOW_PRODUCTION_EXCLUSION_OK generated_c_link_inputs_and_binary")
 }
