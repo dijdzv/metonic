@@ -5,10 +5,23 @@ pub struct Layer {
 }
 
 ///|
-fn button_layer(engine : @raster.Engine, item : @application.Element) -> Layer {
+fn button_layer(
+  engine : @raster.Engine,
+  item : @application.Element,
+  selection? : (Int, Int) = (0, 0),
+  caret? : Int? = None,
+) -> Layer {
   let button = item.bounds
   let label_width = (button.width - 16).max(1)
-  let label = @raster.render(engine, item.text, label_width, 32)
+  let label_top = if button.height < 36 { 2 } else { 4 }
+  let label = @raster.render(
+    engine,
+    item.text,
+    label_width,
+    32,
+    selection~,
+    caret~,
+  )
   let pixels = Bytes::makei(button.width * button.height * 4, i => {
     let x = i / 4 % button.width
     let y = i / 4 / button.width
@@ -19,8 +32,11 @@ fn button_layer(engine : @raster.Engine, item : @application.Element) -> Layer {
         2 => if item.focused { b'\x5C' } else { b'\x6D' }
         _ => b'\xFF'
       }
-    } else if x >= 8 && x < button.width - 8 && y >= 4 && y < 36 {
-      label[((y - 4) * label_width + x - 8) * 4 + i % 4]
+    } else if x >= 8 &&
+      x < button.width - 8 &&
+      y >= label_top &&
+      y < label_top + 32 {
+      label[((y - label_top) * label_width + x - 8) * 4 + i % 4]
     } else {
       b'\xFF'
     }
@@ -37,6 +53,16 @@ pub fn render(
   caret? : Int? = None,
 ) -> Array[Layer] {
   let request_layer = button_layer(engine, view.request)
+  let query_layer = button_layer(
+    engine,
+    view.query,
+    selection=view.query_selection,
+    caret=view.query_caret,
+  )
+  let query_label = Layer::{
+    bounds: view.query_label.bounds,
+    pixels: @raster.render(engine, view.query_label.text, 32, 32),
+  }
   let result = view.result.bounds
   let result_pixels = if view.result.text == "" {
     b""
@@ -72,5 +98,7 @@ pub fn render(
   layers.push({ bounds: task, pixels: task_pixels, })
   layers.push(start_layer)
   layers.push(cancel_layer)
+  layers.push(query_label)
+  layers.push(query_layer)
   layers
 }

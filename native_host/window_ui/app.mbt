@@ -52,11 +52,13 @@ struct App {
   mut control_pressed : Bool
   mut shift_pressed : Bool
   mut raster : @raster.Engine?
+  mut query_raster : @raster.Engine?
   mut rendered_text : String?
   mut rendered_request_focus : Bool
   mut rendered_task_status : Int
   mut rendered_viewport_height : Int
   mut rendered_control_focus : (Bool, Bool)
+  mut rendered_query : (String, Bool, (Int, Int), Int?)
   mut rendered_result : String
   mut rendered_selection : (Int, Int)
   mut rendered_caret : Int?
@@ -83,6 +85,17 @@ fn App::queue(self : App, event : Event) -> Unit {
   require(self.events.try_put(event), "window event queue overflow") catch {
     error => if self.error is None { self.error = Some(error) }
   }
+}
+
+///|
+fn App::input_node(self : App) -> @semantics.Node {
+  let nodes = @semantics.snapshot(self.model.editor)
+  for node in nodes {
+    if node.role is @semantics.TextInput && node.focused {
+      return node
+    }
+  }
+  nodes[1]
 }
 
 ///|
@@ -166,7 +179,8 @@ pub impl @windows.ApplicationHandler for App with fn window_event(
             self.queue(SelectBoundary(2, self.shift_pressed))
           @core.Key::Named(@core.NamedKey::Tab) => self.queue(ToggleFocus)
           @core.Key::Named(@core.NamedKey::F5) => self.queue(StartUpdate)
-          @core.Key::Named(@core.NamedKey::F7) => self.queue(LoadUser("1"))
+          @core.Key::Named(@core.NamedKey::F7) =>
+            self.queue(LoadUser(self.model.query()))
           @core.Key::Named(@core.NamedKey::F6) => self.queue(CancelUpdate)
           @core.Key::Named(@core.NamedKey::Backspace) => self.queue(Backspace)
           @core.Key::Named(@core.NamedKey::ArrowLeft) =>
@@ -210,7 +224,9 @@ fn App::draw(self : App) -> Unit raise Error {
     Some(renderer) => {
       let node = @semantics.snapshot(self.model.editor)[1]
       let preview = match self.composition {
-        Some(composition) => composition.preview(self.preedit)
+        Some(composition) if self.input_node().reference == node.reference =>
+          composition.preview(self.preedit)
+        Some(_) => None
         None => None
       }
       let text = preview.unwrap_or(node.value)
@@ -230,7 +246,19 @@ fn App::draw(self : App) -> Unit raise Error {
       } else {
         None
       }
-      let view = self.model.view()
+      let view = if self.input_node().reference == self.model.query_input {
+        match self.composition {
+          Some(composition) =>
+            self.model.view(
+              query_preview=composition
+                .preview(self.preedit)
+                .unwrap_or(self.model.query()),
+            )
+          None => self.model.view()
+        }
+      } else {
+        self.model.view()
+      }
       let width = view.editor.bounds.width
       if self.rendered_text != Some(text) ||
         self.rendered_result != self.model.result ||
@@ -238,6 +266,13 @@ fn App::draw(self : App) -> Unit raise Error {
         self.rendered_task_status != self.model.task_field(0) ||
         self.rendered_viewport_height != @scene.field(self.model.scene, 7) ||
         self.rendered_control_focus != (view.start.focused, view.cancel.focused) ||
+        self.rendered_query !=
+        (
+          view.query.text,
+          view.query.focused,
+          view.query_selection,
+          view.query_caret,
+        ) ||
         self.text_width != width ||
         self.rendered_selection != selection ||
         self.rendered_caret != visible_caret {
@@ -247,6 +282,14 @@ fn App::draw(self : App) -> Unit raise Error {
           text,
           selection~,
           caret=visible_caret,
+        )
+        ignore(
+          @raster.render(
+            self.query_raster.unwrap(),
+            view.query.text,
+            (view.query.bounds.width - 16).max(1),
+            32,
+          ),
         )
         renderer.set_text_layers(
           layers.map(layer => @gpu.TextLayer::{
@@ -261,16 +304,43 @@ fn App::draw(self : App) -> Unit raise Error {
         self.rendered_task_status = self.model.task_field(0)
         self.rendered_viewport_height = @scene.field(self.model.scene, 7)
         self.rendered_control_focus = (view.start.focused, view.cancel.focused)
+        self.rendered_query = (
+          view.query.text,
+          view.query.focused,
+          view.query_selection,
+          view.query_caret,
+        )
         self.rendered_text = Some(text)
         self.rendered_result = self.model.result
         self.rendered_selection = selection
         self.rendered_caret = visible_caret
         self.text_width = width
       }
-      if @raster.caret_position(self.raster.unwrap(), caret) is Some((x, y)) {
+      let query_focused = view.query.focused
+      let input_caret = if query_focused {
+        if self.composition is Some(_) {
+          self.input_node().selection_start + self.preedit_cursor
+        } else {
+          @semantics.caret(self.input_node())
+        }
+      } else {
+        caret
+      }
+      let position = @raster.caret_position(
+        if query_focused {
+          self.query_raster.unwrap()
+        } else {
+          self.raster.unwrap()
+        },
+        input_caret,
+      )
+      if position is Some((x, y)) {
         if self.window is Some(window) {
           window.set_ime_cursor_area(
-            @dpi.PhysicalPosition(x + 8, y + 8).into_position(),
+            @dpi.PhysicalPosition(
+              x + (if query_focused { view.query.bounds.x + 8 } else { 8 }),
+              y + (if query_focused { view.query.bounds.y + 2 } else { 8 }),
+            ).into_position(),
             @dpi.PhysicalSize(1, 32).into_size(),
           )
         }
@@ -376,12 +446,14 @@ async fn run_loop(
     control_pressed: false,
     shift_pressed: false,
     raster: None,
+    query_raster: None,
     rendered_text: None,
     rendered_result: "",
     rendered_request_focus: false,
     rendered_task_status: -1,
     rendered_viewport_height: -1,
     rendered_control_focus: (false, false),
+    rendered_query: ("", false, (0, 0), None),
     rendered_selection: (-1, -1),
     rendered_caret: None,
     text_width: 0,
@@ -408,14 +480,15 @@ async fn run_loop(
   try {
     app.pump(driver)
     app.message_hwnd = driver.message_window_handle()
-    app.raster = @raster.create(
-      @fs.read_file(
-        @env.get_env_var("METONIC_FONT_PATH").unwrap_or(
-          ".work/text-assets/NotoSansJP.ttf",
-        ),
-      ).binary(),
-    )
+    let font = @fs.read_file(
+      @env.get_env_var("METONIC_FONT_PATH").unwrap_or(
+        ".work/text-assets/NotoSansJP.ttf",
+      ),
+    ).binary()
+    app.raster = @raster.create(font)
+    app.query_raster = @raster.create(font)
     require(app.raster is Some(_), "font could not be loaded")
+    require(app.query_raster is Some(_), "query font could not be loaded")
     require(
       @semantics.set_text(
         app.model.editor,
@@ -483,7 +556,7 @@ async fn run_loop(
                 @accessibility.Click(target) if target ==
                   app.model.request_button.id => {
                   ignore(app.model.focus_request())
-                  app.queue(LoadUser("1"))
+                  app.queue(LoadUser(app.model.query()))
                   app.draw()
                 }
                 @accessibility.Click(target) if target ==
@@ -507,10 +580,11 @@ async fn run_loop(
                   ignore(@scene.dispatch(app.model.scene, Activate))
                   app.draw()
                 }
-                @accessibility.SetValue(2, text) =>
+                @accessibility.SetValue(target, text) if target == 2 ||
+                  target == app.model.query_input.id =>
                   if @semantics.set_text(
                       app.model.editor,
-                      nodes[1].reference,
+                      nodes[target - 1].reference,
                       text,
                     ) ==
                     "" {
@@ -549,6 +623,8 @@ async fn run_loop(
                 nodes[3]
               } else if nodes[3].focused {
                 nodes[4]
+              } else if nodes[4].focused {
+                nodes[5]
               } else {
                 nodes[1]
               }
@@ -558,7 +634,7 @@ async fn run_loop(
             Navigate(_, _) | SelectBoundary(_, _) if app.model.control_focused() =>
               ()
             Navigate(forward, extend_selection) => {
-              let node = @semantics.snapshot(app.model.editor)[1]
+              let node = app.input_node()
               if node.focused {
                 ignore(
                   @semantics.navigate(
@@ -579,7 +655,7 @@ async fn run_loop(
               app.draw()
             }
             SelectBoundary(kind, extend_selection) => {
-              let node = @semantics.snapshot(app.model.editor)[1]
+              let node = app.input_node()
               ignore(@semantics.focus(app.model.editor, node.reference))
               let end = if kind == 1 { 0 } else { node.value.length() }
               let anchor = if kind == 0 {
@@ -668,13 +744,19 @@ async fn run_loop(
             Redraw => app.draw()
             CompositionStart =>
               if app.composition is None {
-                app.composition = @semantics.begin_composition(app.model.editor)
+                app.composition = @semantics.begin_composition(
+                  app.model.editor,
+                  target=app.input_node().reference,
+                )
                 app.preedit = ""
                 app.draw()
               }
             CompositionUpdate(value, cursor) => {
               if app.composition is None {
-                app.composition = @semantics.begin_composition(app.model.editor)
+                app.composition = @semantics.begin_composition(
+                  app.model.editor,
+                  target=app.input_node().reference,
+                )
               }
               app.preedit = value
               app.preedit_cursor = cursor
@@ -699,10 +781,9 @@ async fn run_loop(
             }
             // Space also arrives as text after scene activation; it must not
             // transfer focus to the editor a second time.
-            Commit(" ") if !@semantics.snapshot(app.model.editor)[1].focused =>
-              ()
+            Commit(" ") if !app.input_node().focused => ()
             Commit(value) => {
-              let reference = @semantics.snapshot(app.model.editor)[1].reference
+              let reference = app.input_node().reference
               ignore(@semantics.focus(app.model.editor, reference))
               require(
                 @semantics.replace_selection(app.model.editor, reference, value) ==
@@ -711,10 +792,10 @@ async fn run_loop(
               )
               app.draw()
             }
-            Backspace if app.composition is Some(_) ||
-              !@semantics.snapshot(app.model.editor)[1].focused => ()
+            Backspace if app.composition is Some(_) || !app.input_node().focused =>
+              ()
             Backspace => {
-              let reference = @semantics.snapshot(app.model.editor)[1].reference
+              let reference = app.input_node().reference
               require(
                 @semantics.delete_backward(app.model.editor, reference) == "",
                 "backspace rejected",
@@ -722,6 +803,36 @@ async fn run_loop(
               app.draw()
             }
             TextPointer(_, _, _) if app.composition is Some(_) => ()
+            TextPointer(x, y, extend_selection) if app.model.view().query.bounds.contains(
+                x, y,
+              ) => {
+              ignore(@semantics.focus(app.model.editor, app.model.query_input))
+              let node = app.input_node()
+              let box = app.model.view().query.bounds
+              if app.query_raster is Some(engine) {
+                if @raster.hit(
+                    engine,
+                    (x - box.x - 8).max(0),
+                    (y - box.y - 2).max(0),
+                  )
+                  is Some(offset) {
+                  let caret = offset.min(node.value.length())
+                  ignore(
+                    @semantics.set_selection_directed(
+                      app.model.editor,
+                      node.reference,
+                      if extend_selection {
+                        node.selection_anchor
+                      } else {
+                        caret
+                      },
+                      caret,
+                    ),
+                  )
+                }
+              }
+              app.draw()
+            }
             TextPointer(x, y, _) if app.model.view().start.bounds.contains(x, y) ||
               app.model.view().cancel.bounds.contains(x, y) => {
               let start = app.model.view().start.bounds.contains(x, y)
@@ -742,7 +853,7 @@ async fn run_loop(
               ) &&
               app.composition is None => {
               ignore(app.model.focus_request())
-              app.queue(LoadUser("1"))
+              app.queue(LoadUser(app.model.query()))
               app.draw()
             }
             TextPointer(x, y, extend_selection) =>
@@ -779,7 +890,7 @@ async fn run_loop(
                 app.draw()
               }
             Input(Activate) if app.model.request_focused() &&
-              app.composition is None => app.queue(LoadUser("1"))
+              app.composition is None => app.queue(LoadUser(app.model.query()))
             Input(Activate) if app.model.control_focused() &&
               app.composition is None =>
               app.queue(
@@ -791,7 +902,7 @@ async fn run_loop(
               )
             Input(_) if app.composition is Some(_) ||
               app.model.control_focused() ||
-              @semantics.snapshot(app.model.editor)[1].focused => ()
+              app.input_node().focused => ()
             Input(action) =>
               if @scene.dispatch(app.model.scene, action) {
                 app.draw()

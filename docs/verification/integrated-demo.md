@@ -36,6 +36,7 @@ button through AccessKit. Development snapshots include the shared view and its
 | Replace the initial text | Ctrl+A, type Japanese and Latin text | Focus the text input, select all and type |
 | Select and replace a range | Click and Shift+click the GPU text, then type | Use the text input's selection and type |
 | Move the insertion position | Left/Right, Home/End; hold Shift to select | Use the text input's keyboard controls |
+| Choose a user | Edit the GPU User ID field (initially `1`) | Edit the GPU User ID field (initially `1`) |
 | Load the sample user | Click Load user, or focus it and press Enter/Space; F7 also works | Click Load user or focus it and press Enter/Space, with User ID `1` |
 | Observe the result | `月兎` below the editor; editor text preserved | Same result below the GPU editor |
 | Start delayed scene movement | Move after delay; F5 also works | Move after delay |
@@ -43,8 +44,10 @@ button through AccessKit. Development snapshots include the shared view and its
 | Resize | Resize the native window | Resize the browser window |
 | End the session | Close the native window | Stop disposes the browser UI; close the tab separately |
 
-For a domain error, the browser can request `missing`. The native shortcut uses
-user `1`; arbitrary IDs are available through the separate development CLI/MCP.
+For a domain error, enter `missing` in User ID and activate Load user. Change it
+back to `1` to retry successfully. Both hosts retain the separate editor contents;
+the native F7 shortcut also uses the current User ID. Each app instance owns its
+query value. The ID field occupies the right side of the result row.
 Native and browser HTTP results use a dedicated row below the GPU editor, so multiline editor
 contents do not push the result out of its viewport. The editor itself remains
 a fixed-height viewport without scrolling.
@@ -57,7 +60,7 @@ the stacked controls. Native uses client-area pixels; the browser uses CSS pixel
 Below 400x260, complete control visibility is not supported; enlarge the viewport.
 This sample layout does not implement scrolling or a general responsive layout engine.
 Native left/right keys edit while text is focused; Tab cycles through text, the
-scene, Load user, Move after delay and Cancel. Clicking the scene returns its keyboard focus. Scene focus enables
+scene, Load user, Move after delay, Cancel and User ID. Clicking the scene returns its keyboard focus. Scene focus enables
 Up/down movement and Enter/Space activation. Those keys do not operate the scene
 while editing, composing or focusing Load user; Space inserts text while editing. Vertical editor
 navigation is not implemented. The browser requires canvas focus for scene keyboard

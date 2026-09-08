@@ -7,11 +7,22 @@ pub struct Composition {
 }
 
 ///|
-pub fn begin_composition(tree : Tree) -> Composition? {
+pub fn begin_composition(tree : Tree, target? : NodeRef) -> Composition? {
   if tree.closed {
     return None
   }
-  match tree.input {
+  let node = match target {
+    Some(reference) => {
+      let (id, _) = resolve(tree, reference)
+      if id < 0 {
+        None
+      } else {
+        input_node(tree, id)
+      }
+    }
+    None => tree.input
+  }
+  match node {
     Some(node) if node.enabled =>
       Some({ tree, node, revision: tree.revision, active: true, })
     _ => None

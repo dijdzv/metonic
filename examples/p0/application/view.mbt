@@ -25,6 +25,10 @@ pub struct Element {
 ///|
 pub struct View {
   editor : Element
+  query : Element
+  query_label : Element
+  query_selection : (Int, Int)
+  query_caret : Int?
   request : Element
   result : Element
   task_status : Element
@@ -33,7 +37,7 @@ pub struct View {
 }
 
 ///|
-pub fn Model::view(self : Model) -> View {
+pub fn Model::view(self : Model, query_preview? : String) -> View {
   let nodes = @semantics.snapshot(self.editor)
   let width = (@scene.field(self.scene, 6) - 16).max(1).min(640)
   let compact = @scene.field(self.scene, 7) < 352 && width >= 384
@@ -44,7 +48,27 @@ pub fn Model::view(self : Model) -> View {
   }
   let editor = nodes[1]
   let request = nodes[2]
+  let query = nodes[5]
   {
+    query_selection: (query.selection_start, query.selection_end),
+    query_caret: if query.focused &&
+      query.selection_start == query.selection_end {
+      Some(@semantics.caret(query))
+    } else {
+      None
+    },
+    query_label: {
+      bounds: { x: 192, y: 104, width: 32, height: 32, },
+      text: "ID",
+      reference: None,
+      focused: false,
+    },
+    query: {
+      bounds: { x: 224, y: 104, width: (width - 216).max(1), height: 32, },
+      text: query_preview.unwrap_or(query.value),
+      reference: Some(query.reference),
+      focused: query.focused,
+    },
     editor: {
       bounds: { x: 8, y: 8, width, height: 96, },
       text: editor.value,
@@ -58,7 +82,7 @@ pub fn Model::view(self : Model) -> View {
       focused: request.focused,
     },
     result: {
-      bounds: { x: 8, y: 104, width, height: 32, },
+      bounds: { x: 8, y: 104, width: width.min(176), height: 32, },
       text: self.result.trim().to_owned(),
       reference: None,
       focused: false,
@@ -176,5 +200,6 @@ pub fn View::snapshot(self : View) -> Json {
     element(self.start, "button", Json::string("start_update")),
     element(self.cancel, "button", Json::string("cancel_update")),
     element(self.task_status, "status", Json::null()),
+    element(self.query, "text_input", Json::null()),
   ])
 }

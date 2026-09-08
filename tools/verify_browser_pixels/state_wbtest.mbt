@@ -106,7 +106,7 @@ test "moving the rectangle must not upload the restored text again" {
     "action": "text_counts",
     "width": 100,
     "initialRenders": 1,
-    "initialUploaded": 99200,
+    "initialUploaded": 103424,
     "renders": 3,
     "uploaded": 297600,
     "restoredRenders": 4,

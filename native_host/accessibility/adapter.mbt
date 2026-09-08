@@ -187,7 +187,7 @@ fn tree(_data : UInt64) -> UInt64 {
           box.height.to_double(),
         )
       }
-    } else {
+    } else if id == 2UL {
       if bridge.composing {
         read_only(node)
       } else {
@@ -235,6 +235,17 @@ fn tree(_data : UInt64) -> UInt64 {
           _ => ()
         }
       }
+    }
+    if semantic.role is @semantics.TextInput && id != 2UL {
+      add_value_action(node)
+      let box = bridge.view.query.bounds
+      bounds(
+        node,
+        box.x.to_double(),
+        box.y.to_double(),
+        box.width.to_double(),
+        box.height.to_double(),
+      )
     }
     push_child(root, id)
     push_node(result, id, node)
@@ -365,7 +376,10 @@ pub fn Bridge::poll(self : Bridge) -> Array[Request] {
       match action(request) {
         0 => result.push(Click(id.to_int()))
         1 => result.push(Focus(id.to_int()))
-        2 if id == 2UL => {
+        2 if self.nodes.any(node => {
+            node.reference.id.to_uint64() == id &&
+            node.role is @semantics.TextInput
+          }) => {
           let length = value_length(request)
           if length >= 0 && length <= 65536 {
             let bytes = FixedArray::make(length, b'\x00')
@@ -373,7 +387,7 @@ pub fn Bridge::poll(self : Bridge) -> Array[Request] {
               try @utf8.decode(bytes.unsafe_reinterpret_as_bytes()) catch {
                 _ => ()
               } noraise {
-                text => result.push(SetValue(2, text))
+                text => result.push(SetValue(id.to_int(), text))
               }
             }
           }
