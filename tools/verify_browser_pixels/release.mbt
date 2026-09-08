@@ -42,6 +42,7 @@ async fn run_release(host : BrowserHost) -> String {
   ignore(text_initial(initial))
   verify_shared_view(host)
   verify_query_composition(host)
+  verify_query_pointer(host)
   ignore(
     command(host, {
       "op": "fill",

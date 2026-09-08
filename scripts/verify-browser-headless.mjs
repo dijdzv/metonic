@@ -262,7 +262,7 @@ try {
               case 'goto': await page.goto(`${baseUrl}/release/`); break;
               case 'wait-text': await page.waitForFunction(({ selector, text }) => document.querySelector(selector)?.textContent?.trim() === text, command); break;
               case 'fill': await page.locator(command.selector).fill(command.value); await settle(); break;
-              case 'click': await page.locator(command.selector).click(); break;
+              case 'click': await page.locator(command.selector).click(command.x === undefined ? {} : { position: { x: command.x, y: command.y } }); break;
               case 'focus': await page.locator(command.selector).focus(); await settle(); break;
               case 'press': await page.locator(command.selector).press(command.key); break;
               case 'view-bounds': return page.evaluate(() => {
