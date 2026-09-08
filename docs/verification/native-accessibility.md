@@ -111,7 +111,25 @@ per-scalar geometry. The [AccessKit clipping correction](../../patches/accesskit
 preserves document text outside the editor viewport and shares the existing
 source build with the focus correction.
 
-Existing six native scenarios still exercise shared input/rendering after
+`mise run native:mailbox` separately compiles the actual C mailbox
+into a dedicated executable. MoonBit checks the 32-request bound, 64 KiB UTF-8
+byte boundary, recovery after overflow, draining at close and generation
+rejection after recreation. A C fixture supplies owned request allocations and
+fake SDK adapter/free functions; fake allocations never enter Rust's deallocator.
+The mailbox's queue, lock, admission and draining implementation is included
+directly rather than copied.
+
+Two native worker threads overlap delivery and close: a Windows event pauses
+delivery while it holds the mailbox lock, a close worker starts, and release
+allows both to finish. Eight repetitions verify an empty queue, balanced
+allocation/free counts and subsequent reuse. Worker waits are bounded. This
+proves the mailbox boundary under the fixture's schedule, not actual SDK
+provider destruction or application-state mutation during a physical close.
+The fixture is a separate build target; generated production code and link
+inputs exclude it, with the fixture artifact as a positive control. The task
+is part of pre-commit. Remaining SDK/application interleavings stay in #128.
+
+The six integrated native scenarios also exercise shared input/rendering after
 attachment; a staged-composition check rejects a queued accessibility value
 replacement without changing committed text. This is not a real IME run.
 UIA properties and posted messages do not prove presented GPU pixels, real keyboard or

@@ -23,6 +23,7 @@ async fn main {
       mode != "window-release" &&
       mode != "release-probe" &&
       mode != "accessibility-probe" &&
+      mode != "mailbox-probe" &&
       mode != "window-dev" &&
       mode != "window-probe" &&
       mode != "async" &&
@@ -152,6 +153,7 @@ async fn main {
       mode == "window-release" ||
       mode == "release-probe" ||
       mode == "accessibility-probe" ||
+      mode == "mailbox-probe" ||
       mode == "window-dev" ||
       mode == "window-probe" {
       let host_app = if mode == "async" {
@@ -164,6 +166,8 @@ async fn main {
         "release_probe"
       } else if mode == "accessibility-probe" {
         "accessibility_probe"
+      } else if mode == "mailbox-probe" {
+        "mailbox_probe"
       } else {
         "window_app"
       }
@@ -184,6 +188,7 @@ async fn main {
       if host_app == "window_app" ||
         host_app == "window_dev" ||
         host_app == "accessibility_probe" ||
+        host_app == "mailbox_probe" ||
         host_app == "window_probe" {
         guard @process.run(
             moon,
@@ -244,6 +249,7 @@ async fn main {
       if host_app == "window_app" ||
         host_app == "window_dev" ||
         host_app == "accessibility_probe" ||
+        host_app == "mailbox_probe" ||
         host_app == "window_probe" {
         let directory = native_host_build_dir +
           "/native/" +
