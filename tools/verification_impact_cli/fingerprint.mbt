@@ -51,19 +51,39 @@ async fn fingerprint(config_file : String) -> Json {
   }
   paths.sort()
   let inputs : Array[Json] = []
-  for filename in paths {
+  let mut offset = 0
+  while offset < paths.length() {
+    let arguments = ["hash-object", "--no-filters", "--"]
+    let batch : Array[String] = []
+    let mut argument_units = 64
+    while offset < paths.length() {
+      let filename = paths[offset]
+      // Leave room for Windows argument quoting and the executable path.
+      let cost = filename.length() * 2 + 3
+      if !batch.is_empty() && argument_units + cost > 16000 {
+        break
+      }
+      batch.push(filename)
+      arguments.push(filename)
+      argument_units = argument_units + cost
+      offset = offset + 1
+    }
     let (code, output, _) = @process.collect_output(
       "git",
-      ["hash-object", "--no-filters", "--", filename],
+      arguments,
       no_console_window=true,
     )
     assert_eq(code, 0, msg="failed to fingerprint verification input")
-    let hash = output.text().trim().to_owned()
-    assert_true(
-      hash.length() == 40 || hash.length() == 64,
-      msg="unexpected Git hash",
-    )
-    inputs.push({ "path": filename, "blob": hash })
+    let hashes = output.text().trim().split("\n").to_array()
+    assert_eq(hashes.length(), batch.length(), msg="incomplete Git hash output")
+    for index = 0; index < batch.length(); index = index + 1 {
+      let hash = hashes[index].trim().to_owned()
+      assert_true(
+        hash.length() == 40 || hash.length() == 64,
+        msg="unexpected Git hash",
+      )
+      inputs.push({ "path": batch[index], "blob": hash })
+    }
   }
   let keys = context.keys().collect()
   keys.sort()

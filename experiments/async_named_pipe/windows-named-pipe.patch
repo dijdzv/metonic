@@ -100,7 +100,7 @@ new file mode 100644
 index 0000000..ca7cd1a
 --- /dev/null
 +++ b/src/internal/event_loop/pipe_accept_wbtest.mbt
-@@ -0,0 +1,126 @@
+@@ -0,0 +1,135 @@
 +///|
 +#cfg(platform="windows")
 +async test "pending pipe accept cancellation allows another accept" {
@@ -147,6 +147,15 @@ index 0000000..ca7cd1a
 +  let path = @os_string.encode("\\\\.\\pipe\\metonic_close.\{@env_util.current_process}")
 +  // Initialize the timeout machinery before measuring endpoint-owned handles.
 +  ignore(@async.with_timeout_opt(1, () => @async.sleep(10)))
++  // Timeout warmup does not initialize Windows ACL support.
++  // An occupied name warms ACL creation without hiding a successful pipe leak.
++  let occupied_fd = @fd_util.create_named_pipe_server(path, is_async=true)
++  if !@fd_util.fd_is_valid(occupied_fd) { @os_error.check_errno("create warmup control") }
++  let occupied = IoHandle::from_fd(occupied_fd, kind=Pipe)
++  defer occupied.close()
++  let collision = @fd_util.create_private_duplex_pipe(path)
++  assert_false(@fd_util.fd_is_valid(collision))
++  occupied.close()
 +  let before = process_handle_count()
 +  assert_true(before > 0)
 +  for _ in 0..<32 {
