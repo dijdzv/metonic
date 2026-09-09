@@ -5,6 +5,43 @@ async fn main {
     args.length() >= 2,
     msg="usage: verification_impact_cli packages.json [--metadata packages.json] [absolute changed paths...]",
   )
+  if args[1] == "--match-record" {
+    assert_eq(
+      args.length(),
+      4,
+      msg="usage: --match-record config.json record.json",
+    )
+    let output : Json = { "matches": matching_record(args[2], args[3]) }
+    println(output.stringify())
+    return
+  }
+  if args[1] == "--record" {
+    assert_true(
+      args.length() >= 5,
+      msg="usage: --record config.json record.json command [args...]",
+    )
+    let config : Map[String, Json] = @json.from_json(
+      @json.parse(@fs.read_file(args[2]).text()),
+    )
+    let context : Map[String, String] = @json.from_json(
+      config.get("context").unwrap(),
+    )
+    let command : Json = Json::array(args[4:].to_owned().map(Json::string))
+    assert_eq(
+      context.get("command"),
+      Some(command.stringify()),
+      msg="recorded command does not match execution",
+    )
+    record_verification(args[2], args[3], () => {
+      let code = @process.run(
+        args[4],
+        args[5:].to_owned(),
+        no_console_window=true,
+      )
+      assert_eq(code, 0, msg="verification command failed")
+    })
+    return
+  }
   if args[1] == "--fingerprint" {
     assert_eq(
       args.length(),
