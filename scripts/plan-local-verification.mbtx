@@ -21,9 +21,25 @@ async fn checked(command : String, arguments : Array[String]) -> String {
 async fn main {
   let args = @env.args()
   assert_true(
-    args.length() == 2 || (args.length() == 3 && args[2] == "--run-commit"),
-    msg="usage: plan-local-verification target [--run-commit]",
+    args.length() >= 2 && args.length() <= 4,
+    msg="usage: plan-local-verification target [--run-commit | --run-remainder | --plan] [base-commit]",
   )
+  let mode = if args.length() >= 3 { args[2] } else { "--plan" }
+  assert_true(["--plan", "--run-commit", "--run-remainder"].contains(mode))
+  assert_true(
+    mode != "--run-remainder" || args.length() == 4,
+    msg="remainder execution requires the commit lane's explicit base commit",
+  )
+  let requested_base = if args.length() == 4 { args[3] } else { "HEAD" }
+  let base = checked("git", [
+      "rev-parse",
+      "--verify",
+      "--end-of-options",
+      requested_base + "^{commit}",
+    ])
+    .trim()
+    .to_owned()
+  assert_false(base.is_empty() || base.contains("\n"))
   let target = args[1]
   assert_true(["js", "wasm-gc", "wasm", "native"].contains(target))
   let moon = @fs.realpath(".tools/moonbit/bin/moon.exe")
@@ -44,7 +60,7 @@ async fn main {
   let changes : Array[String] = []
   for
     options in [
-      ["diff", "--name-only", "-z", "HEAD", "--"],
+      ["diff", "--name-only", "-z", base, "--"],
       ["ls-files", "--others", "--exclude-standard", "-z"],
     ] {
     for filename in checked("git", options).split("\u0000") {
@@ -60,10 +76,12 @@ async fn main {
   command.append(changes)
   let plan = checked(moon, command)
   println(plan)
-  if args.length() == 3 {
+  if mode != "--plan" {
     let fields : Map[String, Json] = @json.from_json(@json.parse(plan))
     let packages : Array[String] = @json.from_json(
-      fields.get("pre_commit").unwrap(),
+      fields
+      .get(if mode == "--run-commit" { "pre_commit" } else { "pre_push" })
+      .unwrap(),
     )
     if !packages.is_empty() {
       let test_command = [

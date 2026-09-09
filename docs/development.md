@@ -329,6 +329,14 @@ cancellation. This does not replace production exclusion checks or change the
 installed full pre-commit hook. Pre-push installation and result reuse remain
 tracked in issue #225.
 
+For root package selection, `scripts/plan-local-verification.mbtx` accepts a
+target, `--plan`, `--run-commit` or `--run-remainder`, and an optional base commit.
+Remainder execution requires an explicit base: it must match the base used by
+the commit lane. The planner resolves that revision to a commit before checking
+changes. It includes current unstaged and untracked files; it is a manual
+execution primitive, not proof that a pushed tree or earlier test success was
+verified. The future push hook must establish those conditions before using it.
+
 Tracked Markdown links are checked by `moon run scripts/verify-docs.mbtx`.
 The check resolves relative file targets and ignores external URLs and fragments;
 it does not validate heading anchors or implement a complete Markdown parser.
