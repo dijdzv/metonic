@@ -1,4 +1,13 @@
 ///|
+test "layer bytes reject unavailable indices after disposal" {
+  text_dispose()
+  assert_eq(view_layer_bytes(-1), b"")
+  assert_eq(view_layer_bytes(1), b"")
+  assert_eq(view_layer_count(), 0)
+  assert_eq(view_layer_bytes(0), b"")
+}
+
+///|
 test "text contract accepts ASCII Japanese surrogate pair and combining mark" {
   text_dispose()
   assert_eq(text_begin(7), 1)

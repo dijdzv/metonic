@@ -215,6 +215,20 @@ pub fn view_layer_pixel(layer : Int, index : Int) -> Int {
 }
 
 ///|
+#cfg(target="js")
+#export_name("view_layer_bytes")
+pub fn view_layer_bytes(layer : Int) -> Bytes {
+  @app.view_layer_bytes(layer)
+}
+
+///|
+#cfg(target="wasm-gc")
+#export_name("view_layer_bytes")
+pub fn view_layer_bytes(layer : Int) -> String {
+  @app.view_layer_bytes(layer).to_unchecked_string()
+}
+
+///|
 #export_name("view_field")
 pub fn view_field(element : Int, field : Int) -> Int {
   @app.view_field(element, field)

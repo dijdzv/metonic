@@ -53,6 +53,53 @@ async function waitStatus(page, expected) {
 
 async function runTargetUnsafe(browser, target) {
   const page = await browser.newPage({ viewport: { width: 1000, height: 800 }, deviceScaleFactor: 1 })
+  await page.route('**/text-renderer.mjs', async (route) => {
+    const response = await route.fetch()
+    const source = await response.text()
+    const marker = 'const texture = device.createTexture('
+    assert.equal(source.split(marker).length, 2)
+    const transferStart = source.indexOf('const transferred = app.view_layer_bytes(index);')
+    assert(transferStart >= 0)
+    const transfer = source.slice(transferStart, source.indexOf(marker))
+    const verification = `
+        for (let offset = 0; offset < pixels.length; offset += 4) {
+          const expected = app.view_layer_pixel(index, offset / 4);
+          const actual = pixels[offset] | (pixels[offset + 1] << 8) | (pixels[offset + 2] << 16) | (pixels[offset + 3] << 24);
+          if (actual !== expected) throw new Error('Bulk RGBA differs from per-pixel reference');
+        }
+        globalThis.rgbaComparedBytes = (globalThis.rgbaComparedBytes ?? 0) + pixels.length;
+        if (!globalThis.rgbaTransferTiming && pixels.length >= 240000) {
+          const bulk = () => { ${transfer} return pixels; };
+          const scalar = () => {
+            const bytes = new Uint8Array(width * height * 4);
+            for (let at = 0; at < width * height; at += 1) {
+              const word = app.view_layer_pixel(index, at);
+              bytes[at * 4] = word; bytes[at * 4 + 1] = word >>> 8;
+              bytes[at * 4 + 2] = word >>> 16; bytes[at * 4 + 3] = word >>> 24;
+            }
+            return bytes;
+          };
+          const samples = { scalar: [], bulk: [] };
+          for (let run = 0; run < 40; run += 1) {
+            for (const name of run % 2 ? ['bulk', 'scalar'] : ['scalar', 'bulk']) {
+              const start = performance.now();
+              const output = name === 'bulk' ? bulk() : scalar();
+              const elapsed = performance.now() - start;
+              for (let at = 0; at < pixels.length; at += 1) {
+                if (output[at] !== pixels[at]) throw new Error('Timed transfer changed bytes');
+              }
+              if (run >= 10) samples[name].push(elapsed);
+            }
+          }
+          globalThis.rgbaTransferTiming = {
+            bytes: pixels.length, scalarCalls: pixels.length / 4, bulkCalls: 1,
+            scalarMedianMs: samples.scalar.sort((a, b) => a - b)[15],
+            bulkMedianMs: samples.bulk.sort((a, b) => a - b)[15],
+          };
+        }
+        `
+    await route.fulfill({ response, body: source.replace(marker, verification + marker) })
+  })
   activePage = page
   const pageErrors = []
   page.on('pageerror', (error) => pageErrors.push(String(error)))
@@ -88,6 +135,10 @@ async function runTargetUnsafe(browser, target) {
     return null
   }
   Object.assign(result, JSON.parse(await runScene(hostCommand, target)))
+  result.rgbaComparedBytes = await page.evaluate(() => globalThis.rgbaComparedBytes ?? 0)
+  assert(result.rgbaComparedBytes > 0, 'No real text layer RGBA bytes compared')
+  result.rgbaTransferTiming = await page.evaluate(() => globalThis.rgbaTransferTiming ?? null)
+  assert(result.rgbaTransferTiming, 'No real text layer transfer measured')
   Object.assign(result, await diagnostic(page))
   return result
 }

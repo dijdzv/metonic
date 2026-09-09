@@ -45,12 +45,21 @@ struct VertexOut { @builtin(position) position: vec4f, @location(0) uv: vec2f };
       for (let index = 0; index < app.view_layer_count(); index += 1) {
         const x = app.view_layer_field(index, 0), y = app.view_layer_field(index, 1);
         const width = app.view_layer_field(index, 2), height = app.view_layer_field(index, 3);
-        const pixels = new Uint8Array(width * height * 4);
-        for (let at = 0; at < width * height; at += 1) {
-          const packed = app.view_layer_pixel(index, at);
-          pixels[at * 4] = packed & 255; pixels[at * 4 + 1] = (packed >>> 8) & 255;
-          pixels[at * 4 + 2] = (packed >>> 16) & 255; pixels[at * 4 + 3] = (packed >>> 24) & 255;
+        const transferred = app.view_layer_bytes(index);
+        let pixels;
+        if (transferred instanceof Uint8Array) {
+          pixels = transferred.slice();
+        } else if (typeof transferred === 'string') {
+          // This is a binary code-unit container; UTF-8 encoding would corrupt surrogate values.
+          pixels = new Uint8Array(transferred.length * 2);
+          for (let at = 0; at < transferred.length; at += 1) {
+            const word = transferred.charCodeAt(at);
+            pixels[at * 2] = word; pixels[at * 2 + 1] = word >>> 8;
+          }
+        } else {
+          throw new Error('MoonBit returned an unsupported pixel buffer');
         }
+        if (pixels.byteLength !== width * height * 4) throw new Error('MoonBit pixel buffer size mismatch');
         const texture = device.createTexture({ size: { width, height }, format: 'rgba8unorm', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
         const uniform = device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         const layer = { x, y, width, height, texture, uniform };

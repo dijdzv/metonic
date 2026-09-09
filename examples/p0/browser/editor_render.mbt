@@ -159,6 +159,14 @@ pub fn view_layer_pixel(layer : Int, index : Int) -> Int {
 }
 
 ///|
+pub fn view_layer_bytes(layer : Int) -> Bytes {
+  if layer < 0 || layer >= view_layers.val.length() {
+    return b""
+  }
+  view_layers.val[layer].pixels
+}
+
+///|
 #export_name("view_field")
 pub fn view_field(element : Int, field : Int) -> Int {
   if @semantics.snapshot(application.val.editor).length() < 3 {

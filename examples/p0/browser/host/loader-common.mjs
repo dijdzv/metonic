@@ -14,7 +14,7 @@ export function wasmImports() {
 }
 
 export function validateExports(exports, target) {
-  for (const name of [...REQUIRED, 'inputs_start', 'inputs_stop', 'inputs_error', 'inputs_composing', 'http_start', 'http_cancel', 'http_active', 'http_timeout']) {
+  for (const name of [...REQUIRED, 'view_layer_bytes', 'inputs_start', 'inputs_stop', 'inputs_error', 'inputs_composing', 'http_start', 'http_cancel', 'http_active', 'http_timeout']) {
     if (typeof exports[name] !== 'function') {
       throw new Error(`${target} artifact is missing required export: ${name}`);
     }
