@@ -93,6 +93,22 @@ PowerShell activation or command wrapper is unnecessary. Bootstrap remains a
 PowerShell installation boundary because MoonBit is not yet available on a fresh
 checkout.
 
+## Selective root-module verification
+
+For a focused local check inside the mise environment, run the pinned Moon with
+`run scripts/verify.mbtx -- --tests-only examples/p0/task_scope examples/p0/application tools/session_wire`.
+This runs the specified root-module packages on JS and WasmGC. Setting
+`METONIC_VERIFY_NATIVE=1` selects native with the existing MSVC environment setup.
+Empty selections, missing package manifests and packages belonging to nested
+modules are rejected; browser/native host modules need their own workspace runner.
+
+`run scripts/verify.mbtx -- --contracts-only` runs the frontend contract example
+and positive/negative compiler fixtures without repeating package tests.
+Both focused modes retain toolchain verification and dependency preparation.
+They do not replace formatting or the complete gate. With no arguments,
+`verify.mbtx` retains its existing full behavior; installed Git hooks still run
+the complete gate and do not use success caching or automatic impact selection.
+
 ## Integrated window HTTP requests
 
 For an interactive session, run `mise run demo`. It builds the browser host and

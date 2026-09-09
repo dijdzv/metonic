@@ -5,6 +5,33 @@ async fn main {
     args.length() >= 2,
     msg="usage: verification_impact_cli packages.json [--metadata packages.json] [absolute changed paths...]",
   )
+  if args[1] == "--fingerprint" {
+    assert_eq(
+      args.length(),
+      3,
+      msg="expected fingerprint configuration filename",
+    )
+    println(fingerprint(args[2]).stringify())
+    return
+  }
+  if args[1] == "--push-plan" {
+    assert_eq(args.length(), 3, msg="expected pre-push input filename")
+    let input = if args[2] == "-" {
+      let buffer = Buffer()
+      while @stdio.stdin.read_some(max_len=4096) is Some(chunk) {
+        buffer.write_bytes(chunk)
+        assert_true(
+          buffer.length() <= 1048576,
+          msg="pre-push input exceeds 1 MiB",
+        )
+      }
+      @utf8.decode(buffer.to_bytes())
+    } else {
+      @fs.read_file(args[2]).text()
+    }
+    println(resolve_push(input).stringify())
+    return
+  }
   if args[1] == "--plan" {
     assert_true(args.length() >= 3, msg="expected plan configuration filename")
     let config : Map[String, Json] = @json.from_json(
