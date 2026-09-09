@@ -142,6 +142,7 @@ async fn record_checkout(
   record : String,
   command : String,
   arguments : Array[String],
+  staged? : Bool = false,
 ) -> Unit {
   record_verification(config_file, record, () => {
     let config : Map[String, Json] = @json.from_json(
@@ -156,6 +157,78 @@ async fn record_checkout(
     assert_eq(context.get("command"), Some(invocation.stringify()))
     assert_eq(context.get("tree"), Some(expected_tree))
     assert_eq(context.get("checkout"), Some(@fs.realpath(directory)))
-    run_checkout(directory, expected_tree, command, arguments)
+    if staged {
+      let base = comparison_head(directory)
+      assert_eq(
+        context.get("base_commit"),
+        Some(base),
+        msg="record comparison base mismatch",
+      )
+      require_index_tree(directory, expected_tree)
+      let code = @process.run(
+        command,
+        arguments,
+        cwd=directory,
+        no_console_window=true,
+      )
+      require_index_tree(directory, expected_tree)
+      assert_eq(
+        comparison_head(directory),
+        base,
+        msg="comparison base changed during verification",
+      )
+      assert_eq(code, 0, msg="staged verification failed")
+    } else {
+      run_checkout(directory, expected_tree, command, arguments)
+    }
   })
+}
+
+///|
+async fn comparison_head(directory : String) -> String {
+  let (code, output, _) = @process.collect_output(
+    "git",
+    ["-C", directory, "rev-parse", "--verify", "--quiet", "HEAD^{commit}"],
+    no_console_window=true,
+  )
+  assert_true(code == 0 || code == 1, msg="cannot resolve comparison HEAD")
+  if code == 1 {
+    "unborn"
+  } else {
+    output.text().trim().to_owned()
+  }
+}
+
+///|
+async fn require_index_tree(directory : String, expected : String) -> Unit {
+  for
+    args in [
+      ["diff", "--quiet", "--ignore-submodules=none"],
+      ["write-tree"],
+      ["ls-files", "-v", "-z"],
+      ["ls-files", "--others", "--exclude-standard", "-z"],
+    ] {
+    let (code, output, _) = @process.collect_output(
+      "git",
+      ["-C", directory] + args,
+      no_console_window=true,
+    )
+    assert_eq(code, 0, msg="cannot verify staged input: " + args[0])
+    let value = output.text()
+    if args[0] == "write-tree" {
+      assert_eq(value.trim().to_owned(), expected, msg="staged tree changed")
+    } else if args[1] == "-v" {
+      for entry in value.split("\u0000") {
+        assert_true(
+          entry.is_empty() || entry.has_prefix("H "),
+          msg="hidden index entries cannot certify staged input",
+        )
+      }
+    } else if args[1] == "--others" {
+      assert_true(
+        value.is_empty(),
+        msg="untracked files cannot certify staged input",
+      )
+    }
+  }
 }
