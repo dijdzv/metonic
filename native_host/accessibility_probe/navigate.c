@@ -5,15 +5,8 @@
 #include <stdint.h>
 
 /* The SDK owns the cache layout and VARIANT-to-node conversion. */
-uintptr_t metonic_uia_navigate(uintptr_t parent, int32_t direction) {
-  struct UiaCondition condition = {ConditionType_True};
-  struct UiaCacheRequest request = {&condition, TreeScope_Element, NULL, 0,
-      NULL, 0, AutomationElementMode_Full};
-  SAFEARRAY *data = NULL;
-  BSTR structure = NULL;
+static uintptr_t take_cached_node(HRESULT result, SAFEARRAY *data, BSTR structure) {
   HUIANODE node = NULL;
-  HRESULT result = UiaNavigate((HUIANODE)parent, direction, &condition,
-      &request, &data, &structure);
   if (SUCCEEDED(result) && data) {
     LONG indices[2] = {0, 0};
     VARIANT value;
@@ -26,6 +19,27 @@ uintptr_t metonic_uia_navigate(uintptr_t parent, int32_t direction) {
   if (data) SafeArrayDestroy(data);
   SysFreeString(structure);
   return (uintptr_t)node;
+}
+
+uintptr_t metonic_uia_navigate(uintptr_t parent, int32_t direction) {
+  struct UiaCondition condition = {ConditionType_True};
+  struct UiaCacheRequest request = {&condition, TreeScope_Element, NULL, 0,
+      NULL, 0, AutomationElementMode_Full};
+  SAFEARRAY *data = NULL;
+  BSTR structure = NULL;
+  HRESULT result = UiaNavigate((HUIANODE)parent, direction, &condition,
+      &request, &data, &structure);
+  return take_cached_node(result, data, structure);
+}
+
+uintptr_t metonic_uia_focused_node(void) {
+  struct UiaCondition condition = {ConditionType_True};
+  struct UiaCacheRequest request = {&condition, TreeScope_Element, NULL, 0,
+      NULL, 0, AutomationElementMode_Full};
+  SAFEARRAY *data = NULL;
+  BSTR structure = NULL;
+  HRESULT result = UiaNodeFromFocus(&request, &data, &structure);
+  return take_cached_node(result, data, structure);
 }
 
 uintptr_t metonic_uia_selected_range(uintptr_t provider) {
