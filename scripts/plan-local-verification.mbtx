@@ -1,0 +1,76 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+}
+
+///|
+async fn checked(command : String, arguments : Array[String]) -> String {
+  let (code, output, error) = @process.collect_output(
+    command,
+    arguments,
+    no_console_window=true,
+  )
+  assert_eq(code, 0, msg=output.text() + error.text())
+  output.text()
+}
+
+///|
+async fn main {
+  let args = @env.args()
+  assert_true(
+    args.length() == 2 || (args.length() == 3 && args[2] == "--run-commit"),
+    msg="usage: plan-local-verification target [--run-commit]",
+  )
+  let target = args[1]
+  assert_true(["js", "wasm-gc", "wasm", "native"].contains(target))
+  let moon = @fs.realpath(".tools/moonbit/bin/moon.exe")
+  let directory = ".work/local-verification-plan/" + target
+  let metadata = directory + "/" + target + "/debug/check/packages.json"
+  if @fs.exists(metadata) {
+    @fs.remove(metadata)
+  }
+  ignore(
+    checked(moon, [
+      "check", "--target", target, "--deny-warn", "--target-dir", directory,
+    ]),
+  )
+  assert_true(
+    @fs.exists(metadata),
+    msg="check did not produce fresh package metadata",
+  )
+  let changes : Array[String] = []
+  for
+    options in [
+      ["diff", "--name-only", "-z", "HEAD", "--"],
+      ["ls-files", "--others", "--exclude-standard", "-z"],
+    ] {
+    for filename in checked("git", options).split("\u0000") {
+      if !filename.is_empty() {
+        changes.push(@fs.realpath(".") + "/" + filename.to_owned())
+      }
+    }
+  }
+  let command = [
+    "run", "tools/verification_impact_cli", "--target", "wasm", "--", "--partition-metadata",
+    "verification.json", target, metadata,
+  ]
+  command.append(changes)
+  let plan = checked(moon, command)
+  println(plan)
+  if args.length() == 3 {
+    let fields : Map[String, Json] = @json.from_json(@json.parse(plan))
+    let packages : Array[String] = @json.from_json(
+      fields.get("pre_commit").unwrap(),
+    )
+    if !packages.is_empty() {
+      let test_command = [
+        "run", "scripts/verify.mbtx", "--", "--target-tests", target,
+      ]
+      test_command.append(packages)
+      println(checked(moon, test_command))
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "critical_packages": {
+    "examples/p0/task_scope": ["js", "wasm-gc", "native"],
+    "examples/p0/application": ["js", "wasm-gc", "native"],
+    "tools/session_wire": ["js", "wasm", "native"]
+  },
+  "full_gate_tasks": [
+    "verify", "verify-native", "browser:verify", "browser:server-test",
+    "browser:supervisor-test", "browser:headless", "browser:async", "devtools:test",
+    "native:headless", "native:control", "native:mcp-test", "native:session-test",
+    "native:semantics", "native:client-test", "native:cli-test", "native:window",
+    "native:window-control", "native:window-attach", "native:pipe-verify",
+    "native:window-rpc", "native:window-mcp", "native:host-verify", "native:async",
+    "native:surface", "native:binding", "rpc:verify", "native:release-lifecycle",
+    "native:accessibility", "native:mailbox", "native:sdk-mailbox", "demo:test",
+    "prerequisites:test"
+  ]
+}
