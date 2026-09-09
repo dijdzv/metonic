@@ -61,6 +61,27 @@ identity, and compare inputs before and after a successful verification. Caller
 supplied context is not independently authenticated. No test is skipped by this
 command and no Git object is written.
 
+## Successful verification records
+
+`verification_impact_cli --record <config.json> <record.json> <command> <args>...`
+runs a command and saves success only if its exit status is zero and the input
+fingerprints before and after execution agree. The configuration uses the same
+fields as `--fingerprint`; `context.command` must equal the compact JSON encoding
+of the command/argument array. The record's parent directory must already exist.
+
+A retry invalidates an earlier success first. A per-record lock prevents concurrent
+writers; normal failure and cancellation release that lock. Success is published
+by renaming a completed temporary file. Abrupt termination can leave the lock:
+do not automatically remove it merely because a record is old.
+
+`--match-record <config.json> <record.json>` reports `matches: true` only for a
+successful record with the current fingerprint. Missing, malformed or failed
+records do not match. Lock contention and input read failures are errors. This
+inspection does not keep the inputs fixed after returning or authorize skipping
+tests by itself. It does not establish complete inputs, actual environment
+identity or correspondence to a pushed Git tree. Installed hooks still run the
+full gate; no automatic cache reuse is enabled.
+
 ## Legacy check metadata
 
 The Wasm CLI in `tools/verification_impact_cli` accepts a metadata filename,
