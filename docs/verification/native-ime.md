@@ -9,6 +9,10 @@ any GCS flags as cancellation, following the
 Attribute-only and clause-only notifications must not cancel a composition.
 `mise run native:window` stages a synthetic preedit, posts those updates and then
 posts the no-GCS message, checking cancellation and restored text geometry.
+It then posts a new `WM_IME_STARTCOMPOSITION`, supplies a synthetic preedit,
+and verifies its display and cursor without changing committed text. Posting
+`WM_IME_ENDCOMPOSITION` restores the original selection and text geometry,
+after which ordinary Japanese/supplementary-character editing continues.
 The same test times out with the pre-correction dependency and passes with the
 correction. This is OS-message-path coverage, not physical IME acceptance or
 evidence about Space-conversion cursor placement.
