@@ -106,6 +106,23 @@ a complete input inventory and do not install or enable skipping in hooks.
 
 ## Verification input inspection
 
+`--run-recorded-push <directory> <input-file-or-dash> <config> <record>
+<commit-command-json> <full-command-json> <remainder-command-json>` combines the
+checkout guard with record selection. Commands are JSON arrays. It validates all
+non-deletion pushed trees before executing anything; empty and deletion-only
+updates run nothing. A matching record must identify the same tree, canonical
+checkout and commit command. Its comparison base must be a full resolved commit
+ID and an ancestor of every pushed commit. The remainder command receives that
+base as its final argument, and inputs and the success record are checked again
+after it finishes.
+
+Missing or mismatched success, changed inputs, an unrelated base, or an unborn
+base select the full command. Invalid configuration and input read errors fail
+explicitly. Different pushed trees still require a matching checkout; this command
+does not create one. Callers must supply a complete tool/dependency/environment
+input configuration and trusted lane commands. This generic dispatcher does not
+construct that configuration or install the repository hooks.
+
 `--source-inputs <packages.json> [--metadata <packages.json>]... <absolute-package-directory>...` enumerates
 the source maps of selected packages and their transitive dependencies. Test
 sources and test-only imports are included for selected packages; dependencies
@@ -132,7 +149,15 @@ hidden files and empty directories. Each fingerprint enumerates them again so
 new or deleted inputs invalidate an earlier record. Tree entries must be real
 directories; symlinks and special files encountered below them are rejected.
 Store result records, locks and generated test outputs outside these input trees.
-The fingerprint format is version 2; earlier records do not match it.
+The fingerprint format is version 3; earlier records do not match it.
+
+An optional `environment` array names variables read from the running process on
+every fingerprint. Sorted unique names and Git blob hashes of JSON-encoded values
+are recorded; absent and empty values differ. Values are sent to Git over stdin,
+without writing them to a temporary file or command arguments. These hashes are
+input identities, not encrypted secrets. The caller must enumerate the variables
+that affect its commands, including compiler and search-path settings. This does
+not discover environment dependencies or hash the executables found on PATH.
 
 Trees complement explicit `files`; they do not discover transitive dependencies
 or external assets automatically. Include all required source trees and explicit

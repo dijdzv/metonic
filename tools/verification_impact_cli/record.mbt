@@ -22,11 +22,13 @@ async fn record_verification(
   config : String,
   record : String,
   verify : async () -> Unit,
+  prepare? : async () -> Unit = fn() {  },
 ) -> Unit {
   let lock = record + ".lock"
   @fs.mkdir(lock)
   defer @async.protect_from_cancel(() => @fs.rmdir(lock, recursive=true))
   @fs.write_file(record, "{\"success\":false}")
+  prepare()
   let before = fingerprint(config)
   verify()
   let after = fingerprint(config)

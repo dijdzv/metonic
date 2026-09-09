@@ -49,6 +49,14 @@ run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/pre-commit.mbtx -- --commit
 description = "Run remaining package and integration checks against an explicit commit-lane base"
 run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/pre-commit.mbtx -- --push'
 
+[tasks."verify:commit-recorded"]
+description = "Record staged commit verification with before/after input discovery"
+run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/record-commit-verification.mbtx'
+
+[tasks."verify:push-recorded"]
+description = "Verify supplied push refs using freshly discovered commit records"
+run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-push-recorded.mbtx'
+
 [tasks."hooks:install"]
 description = "Install the mise-managed Git pre-commit hook"
 run = "mise generate git-pre-commit --write --task pre-commit"

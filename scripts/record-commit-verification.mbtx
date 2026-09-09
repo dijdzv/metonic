@@ -1,0 +1,40 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/json",
+}
+
+///|
+async fn main {
+  let root = @fs.realpath(".")
+  let moon = @fs.realpath(".tools/moonbit/bin/moon.exe")
+  let directory = ".work/local-verification-records"
+  if !@fs.exists(directory) {
+    @fs.mkdir(directory, recursive=true)
+  }
+  let discovery : Json = [
+    moon, "run", "scripts/collect-verification-inputs.mbtx", "--",
+  ]
+  let command : Json = [
+    moon, "run", "scripts/pre-commit.mbtx", "--", "--commit",
+  ]
+  let code = @process.run(
+    moon,
+    [
+      "run",
+      "tools/verification_impact_cli",
+      "--target",
+      "wasm",
+      "--",
+      "--record-discovered-index",
+      root,
+      directory + "/commit.json",
+      discovery.stringify(),
+      command.stringify(),
+    ],
+    no_console_window=true,
+  )
+  assert_eq(code, 0, msg="commit verification was not recorded")
+  println("COMMIT_VERIFICATION_RECORDED")
+}

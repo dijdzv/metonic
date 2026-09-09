@@ -91,10 +91,48 @@ async fn fingerprint(config_file : String) -> Json {
     "name": key,
     "value": context[key],
   })
+  let names : Array[String] = @json.from_json(
+    config.get("environment").unwrap_or(Json::array([])),
+  )
+  names.sort()
+  let environment : Array[Json] = []
+  let seen : Map[String, Bool] = Map([])
+  for name in names {
+    assert_false(
+      name.is_empty() || name.contains("=") || name.contains("\u0000"),
+      msg="invalid environment input name",
+    )
+    if seen.contains(name) {
+      continue
+    }
+    seen[name] = true
+    let value : Json = match @env.get_env_var(name) {
+      Some(value) => Json::string(value)
+      None => Json::null()
+    }
+    let digest = @async.with_task_group(async fn(group) {
+      let (stdin, writer) = @process.write_to_process()
+      defer writer.close()
+      group.spawn_bg(async fn() {
+        writer.write(value.stringify())
+        writer.close()
+      })
+      let (code, output, _) = @process.collect_output(
+        "git",
+        ["hash-object", "--stdin"],
+        stdin~,
+        no_console_window=true,
+      )
+      assert_eq(code, 0, msg="cannot fingerprint environment input")
+      output.text().trim().to_owned()
+    })
+    environment.push({ "name": name, "blob": digest })
+  }
   {
-    "version": 2,
+    "version": 3,
     "inputs": inputs,
     "directories": directories,
     "context": fields,
+    "environment": environment,
   }
 }

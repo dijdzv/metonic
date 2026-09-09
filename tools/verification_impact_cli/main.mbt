@@ -18,6 +18,54 @@ async fn main {
     )
     return
   }
+  if args[1] == "--run-recorded-push" {
+    assert_eq(
+      args.length(),
+      9,
+      msg="usage: --run-recorded-push directory input config record commit-command-json full-command-json remainder-command-json",
+    )
+    run_recorded_push(
+      args[2],
+      read_push_input(args[3]),
+      args[4],
+      args[5],
+      @json.from_json(@json.parse(args[6])),
+      @json.from_json(@json.parse(args[7])),
+      @json.from_json(@json.parse(args[8])),
+    )
+    return
+  }
+  if args[1] == "--record-discovered-index" {
+    assert_eq(
+      args.length(),
+      6,
+      msg="usage: --record-discovered-index directory record discovery-command-json commit-command-json",
+    )
+    record_discovered_index(
+      args[2],
+      args[3],
+      @json.from_json(@json.parse(args[4])),
+      @json.from_json(@json.parse(args[5])),
+    )
+    return
+  }
+  if args[1] == "--run-discovered-push" {
+    assert_eq(
+      args.length(),
+      9,
+      msg="usage: --run-discovered-push directory input record discovery-json commit-json full-json remainder-json",
+    )
+    run_discovered_push(
+      args[2],
+      read_push_input(args[3]),
+      args[4],
+      @json.from_json(@json.parse(args[5])),
+      @json.from_json(@json.parse(args[6])),
+      @json.from_json(@json.parse(args[7])),
+      @json.from_json(@json.parse(args[8])),
+    )
+    return
+  }
   if args[1] == "--partition-metadata" || args[1] == "--partition-workspace" {
     let scoped = args[1] == "--partition-workspace"
     let start = if scoped { 6 } else { 5 }
