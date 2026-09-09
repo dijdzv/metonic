@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
-import { validate_response } from '../../_build/js/release/build/tools/session_wire/session_wire.js';
+import { validate_response, validate_request } from '../../_build/js/release/build/tools/session_wire/session_wire.js';
 
 const MAX_PENDING = 16;
 const MAX_STDOUT = 32 * 1024 * 1024;
@@ -151,9 +151,11 @@ export async function createMoonBitSession(options = {}) {
     if (id > 2147483647) return Promise.reject(new Error('native session request id exhausted'));
     if (typeof op !== 'string' || !args || typeof args !== 'object' || Array.isArray(args)) return Promise.reject(new Error('invalid native session request'));
     let payload;
-    try { payload = `${JSON.stringify(windowProtocol ? { ...args, id, op } : { id, op, args })}\n`; }
+    try { payload = JSON.stringify(windowProtocol ? { ...args, id, op } : { id, op, args }); }
     catch (error) { return Promise.reject(new Error(`invalid native session request: ${error.message}`)); }
-    if (Buffer.byteLength(payload, 'utf8') - 1 > 4095) return Promise.reject(new Error('native session request exceeds 4095 bytes'));
+    const requestError = validate_request(payload, windowProtocol, id, op);
+    if (requestError) return Promise.reject(new Error(requestError));
+    payload += '\n';
     return new Promise((resolve, reject) => {
       const signal = options.signal;
       const cleanup = () => { clearTimeout(timer); signal?.removeEventListener('abort', onAbort); };

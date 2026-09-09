@@ -608,8 +608,13 @@ path to `tools/devtools/native-mcp.mjs` as its single argument. Build and instal
 dependencies beforehand; do not send build-task output into MCP stdin/stdout.
 Both `native:session-build` and `native:window-dev-build` prepare the MoonBit
 `tools/session_wire` validator used by the SDK adapter. It validates the separate
-headless and window response schemas; Node retains stream decoding, byte limits,
-pending-request ownership and SDK/process APIs. The raw native wire protocol's
+headless and window response schemas, serialized request envelopes, the
+4095-byte UTF-8 request limit (excluding the line terminator), and agreement
+between serialized and allocated request IDs/operation names. Node retains
+host-object checks and JSON serialization, including cyclic-object failures;
+MoonBit rejects non-object headless arguments produced by custom `toJSON`.
+Node also retains stream decoding, response byte limits, pending-request
+ownership and SDK/process APIs. The raw native wire protocol's
 64-KiB response limit is not substituted for the session's 32-MiB image envelope.
 The server exposes `native_snapshot`, `native_move`, `native_resize`,
 `native_activate`, and `native_capture`. Errors use MCP error content. Unknown
