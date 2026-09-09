@@ -48,11 +48,38 @@ runner still needs successful-input records and committed-input verification.
 
 ## Verification input inspection
 
+`--source-inputs <packages.json> [--metadata <packages.json>]... <absolute-package-directory>...` enumerates
+the source maps of selected packages and their transitive dependencies. Test
+sources and test-only imports are included for selected packages; dependencies
+contribute implementation sources/imports, not their own unrelated test suites.
+It requires complete metadata and rejects unresolved
+dependencies. Root check metadata can reference bundled standard-library
+packages without defining them; add a fresh standard-library check metadata file
+through `--metadata`. That source inventory does not replace fingerprints of the
+bundled compiled standard library actually consumed by the command.
+The CLI includes each required package manifest and its nearest module manifest,
+plus workspace/lock files in that module directory. It returns `packages` as well
+as `files` for further input planning. A missing package/module manifest is an
+error. Workspace files above the module root, external assets and toolchain
+binaries still require explicit inclusion; this is not a complete verification key.
+
 `verification_impact_cli --fingerprint <config.json>` records raw Git blob hashes
 for the explicit `files` array and sorted `context` string fields. Context must
 include `target`, `toolchain`, `command` and `policy`. Paths are canonicalized;
 duplicate paths and input ordering do not change the output. Raw file bytes are
 hashed without Git clean filters, so the record describes actual working files.
+
+An optional `trees` array adds recursively enumerated directory inputs, including
+hidden files and empty directories. Each fingerprint enumerates them again so
+new or deleted inputs invalidate an earlier record. Tree entries must be real
+directories; symlinks and special files encountered below them are rejected.
+Store result records, locks and generated test outputs outside these input trees.
+The fingerprint format is version 2; earlier records do not match it.
+
+Trees complement explicit `files`; they do not discover transitive dependencies
+or external assets automatically. Include all required source trees and explicit
+configuration/tool inputs. Before/after comparison still cannot detect a
+temporary change that is reverted while the command is running.
 
 This is not a success record or a complete cache key by itself. The caller must
 enumerate all transitive implementation/test inputs, manifests, locks, generated

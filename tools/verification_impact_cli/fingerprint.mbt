@@ -4,10 +4,16 @@ async fn fingerprint(config_file : String) -> Json {
     @json.parse(@fs.read_file(config_file).text()),
   )
   let filenames : Array[String] = @json.from_json(config.get("files").unwrap())
+  let trees : Array[String] = @json.from_json(
+    config.get("trees").unwrap_or(Json::array([])),
+  )
   let context : Map[String, String] = @json.from_json(
     config.get("context").unwrap(),
   )
-  assert_false(filenames.is_empty(), msg="verification input list is empty")
+  assert_false(
+    filenames.is_empty() && trees.is_empty(),
+    msg="verification input list is empty",
+  )
   for required in ["target", "toolchain", "command", "policy"] {
     assert_false(
       context.get(required).unwrap_or("").is_empty(),
@@ -15,6 +21,28 @@ async fn fingerprint(config_file : String) -> Json {
     )
   }
   let paths : Array[String] = []
+  let directories : Array[String] = []
+  let pending = trees.copy()
+  while pending.pop() is Some(directory) {
+    assert_true(
+      @fs.kind(directory, follow_symlink=false) is @fs.Directory,
+      msg="input tree must be a real directory",
+    )
+    let canonical = @fs.realpath(directory).replace_all(old="\\", new="/")
+    if directories.contains(canonical) {
+      continue
+    }
+    directories.push(canonical)
+    for name in @fs.readdir(canonical, include_hidden=true) {
+      let child = canonical + "/" + name
+      match @fs.kind(child, follow_symlink=false) {
+        @fs.Directory => pending.push(child)
+        @fs.Regular => filenames.push(child)
+        _ => fail("unsupported verification input: " + child)
+      }
+    }
+  }
+  directories.sort()
   for filename in filenames {
     let canonical = @fs.realpath(filename).replace_all(old="\\", new="/")
     if !paths.contains(canonical) {
@@ -43,5 +71,10 @@ async fn fingerprint(config_file : String) -> Json {
     "name": key,
     "value": context[key],
   })
-  { "version": 1, "inputs": inputs, "context": fields }
+  {
+    "version": 2,
+    "inputs": inputs,
+    "directories": directories,
+    "context": fields,
+  }
 }

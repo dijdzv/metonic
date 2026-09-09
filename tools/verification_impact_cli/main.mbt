@@ -5,6 +5,28 @@ async fn main {
     args.length() >= 2,
     msg="usage: verification_impact_cli packages.json [--metadata packages.json] [absolute changed paths...]",
   )
+  if args[1] == "--source-inputs" {
+    assert_true(args.length() >= 4, msg="expected metadata and package paths")
+    let metadata = [@json.parse(@fs.read_file(args[2]).text())]
+    let mut start = 3
+    while start < args.length() && args[start] == "--metadata" {
+      assert_true(start + 1 < args.length(), msg="missing metadata filename")
+      metadata.push(@json.parse(@fs.read_file(args[start + 1]).text()))
+      start += 2
+    }
+    assert_true(start < args.length(), msg="missing package destinations")
+    let inputs = @impact.source_inputs(metadata, args[start:].to_owned())
+    let files = inputs.files
+    for filename in source_manifests(inputs.packages) {
+      if !files.contains(filename) {
+        files.push(filename)
+      }
+    }
+    files.sort()
+    let output : Json = { "files": files, "packages": inputs.packages }
+    println(output.stringify())
+    return
+  }
   if args[1] == "--match-record" {
     assert_eq(
       args.length(),
