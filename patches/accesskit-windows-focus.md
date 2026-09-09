@@ -28,6 +28,12 @@ on PATH. The generated source directory `.work/accesskit-focus-source` is
 disposable build input, reconstructed by this command; edits there are not
 maintained. Make changes to the tracked patch instead. The shared Cargo registry
 is never edited. The output is `.work/accesskit-focus-build/release/accesskit.dll`.
+Preparation reconstructs the patched sources in a locked staging directory and
+compares them with the previous build inputs. Identical directories retain their
+timestamps so Cargo can reuse its build. Changed directories are replaced before
+the locked Cargo build; a failed replacement restores the previous directory.
+Archive hashes and patches are checked on every run. Unexpected staging or lock
+directories stop preparation rather than being removed as stale automatically.
 Native builds retain the official ABI header, import library and license files,
 and copy the rebuilt DLL into each executable's directory.
 
