@@ -153,7 +153,7 @@ fn Hooks::processed(_self : Hooks, event : Event, app : App) -> Unit {
     "sequence": diagnostics.ime_sequence,
     "tick_ms": native_tick_count(),
     "kind": kind,
-    "field": if app.model.request_focused() {
+    "field": if node.reference == app.model.query_input {
       "query"
     } else {
       "editor"
