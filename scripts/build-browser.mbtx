@@ -17,7 +17,7 @@ async fn main {
   assert_eq(
     @process.run(
       moon,
-      ["run", "scripts/prepare-browser-deps.mbtx"],
+      ["run", "scripts/prepare-browser-gpu.mbtx"],
       no_console_window=true,
     ),
     0,
@@ -77,10 +77,8 @@ async fn main {
     @fs.mkdir(dist, recursive=true)
   }
   let copies = [
-    (
-      ".work/browser-deps/webapi-input/webapi.mjs", ".work/browser-dist/webapi.mjs",
-    ),
-    (".work/browser-deps/LICENSE-webapi", ".work/browser-dist/LICENSE-webapi"),
+    (".work/browser-gpu/generated/webapi.mjs", ".work/browser-dist/webapi.mjs"),
+    (".work/browser-gpu/LICENSE-webapi", ".work/browser-dist/LICENSE-webapi"),
     ("examples/p0/browser/host/index.html", ".work/browser-dist/index.html"),
     ("examples/p0/browser/host/style.css", ".work/browser-dist/style.css"),
     ("examples/p0/browser/host/host.mjs", ".work/browser-dist/host.mjs"),

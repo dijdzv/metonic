@@ -364,6 +364,7 @@ async fn main {
     guard integer(button, 30086) == 0 else {
       fail("production initial toggle mismatch")
     }
+    record_provenance(hwnd, pid)
     capture_presentation(hwnd, "initial")
     let provider = FixedArray::make(1, 0UL)
     guard pattern(button, 10015, provider) == 0 && provider[0] != 0UL else {

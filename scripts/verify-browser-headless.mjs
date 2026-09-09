@@ -53,6 +53,53 @@ async function waitStatus(page, expected) {
 
 async function runTargetUnsafe(browser, target) {
   const page = await browser.newPage({ viewport: { width: 1000, height: 800 }, deviceScaleFactor: 1 })
+  await page.route('**/text-renderer.mjs', async (route) => {
+    const response = await route.fetch()
+    const source = await response.text()
+    const marker = 'if (app.text_gpu_add(index, pixels)'
+    assert.equal(source.split(marker).length, 2)
+    const transferStart = source.indexOf('const transferred = app.view_layer_bytes(index);')
+    assert(transferStart >= 0)
+    const transfer = source.slice(transferStart, source.indexOf(marker))
+    const verification = `
+        for (let offset = 0; offset < pixels.length; offset += 4) {
+          const expected = app.view_layer_pixel(index, offset / 4);
+          const actual = pixels[offset] | (pixels[offset + 1] << 8) | (pixels[offset + 2] << 16) | (pixels[offset + 3] << 24);
+          if (actual !== expected) throw new Error('Bulk RGBA differs from per-pixel reference');
+        }
+        globalThis.rgbaComparedBytes = (globalThis.rgbaComparedBytes ?? 0) + pixels.length;
+        if (!globalThis.rgbaTransferTiming && pixels.length >= 240000) {
+          const bulk = () => { ${transfer} return pixels; };
+          const scalar = () => {
+            const bytes = new Uint8Array(width * height * 4);
+            for (let at = 0; at < width * height; at += 1) {
+              const word = app.view_layer_pixel(index, at);
+              bytes[at * 4] = word; bytes[at * 4 + 1] = word >>> 8;
+              bytes[at * 4 + 2] = word >>> 16; bytes[at * 4 + 3] = word >>> 24;
+            }
+            return bytes;
+          };
+          const samples = { scalar: [], bulk: [] };
+          for (let run = 0; run < 40; run += 1) {
+            for (const name of run % 2 ? ['bulk', 'scalar'] : ['scalar', 'bulk']) {
+              const start = performance.now();
+              const output = name === 'bulk' ? bulk() : scalar();
+              const elapsed = performance.now() - start;
+              for (let at = 0; at < pixels.length; at += 1) {
+                if (output[at] !== pixels[at]) throw new Error('Timed transfer changed bytes');
+              }
+              if (run >= 10) samples[name].push(elapsed);
+            }
+          }
+          globalThis.rgbaTransferTiming = {
+            bytes: pixels.length, scalarCalls: pixels.length / 4, bulkCalls: 1,
+            scalarMedianMs: samples.scalar.sort((a, b) => a - b)[15],
+            bulkMedianMs: samples.bulk.sort((a, b) => a - b)[15],
+          };
+        }
+        `
+    await route.fulfill({ response, body: source.replace(marker, verification + marker) })
+  })
   activePage = page
   const pageErrors = []
   page.on('pageerror', (error) => pageErrors.push(String(error)))
@@ -88,6 +135,10 @@ async function runTargetUnsafe(browser, target) {
     return null
   }
   Object.assign(result, JSON.parse(await runScene(hostCommand, target)))
+  result.rgbaComparedBytes = await page.evaluate(() => globalThis.rgbaComparedBytes ?? 0)
+  assert(result.rgbaComparedBytes > 0, 'No real text layer RGBA bytes compared')
+  result.rgbaTransferTiming = await page.evaluate(() => globalThis.rgbaTransferTiming ?? null)
+  assert(result.rgbaTransferTiming, 'No real text layer transfer measured')
   Object.assign(result, await diagnostic(page))
   return result
 }
@@ -106,9 +157,80 @@ async function negativeTests(browser, verifier = runFailures) {
         break
       case 'close': release?.(); await page.close(); page = undefined; break
       case 'fail-route': await page.route(request.pattern, (route) => route.fulfill({ status: 503, body: 'unavailable' })); break
-      case 'respond-route': await page.route(request.pattern, (route) => route.fulfill({ status: request.status, body: request.body })); break
+      case 'respond-route': await page.route(request.pattern, (route) => route.fulfill({ status: request.status, body: request.body.repeat(request.repeat ?? 1) })); break
       case 'unroute': await page.unroute(request.pattern); break
       case 'reload': await page.reload({ waitUntil: 'domcontentloaded' }); break
+      case 'stream-font':
+        await page.addInitScript(() => {
+          const fetch = window.fetch.bind(window)
+          window.fetch = (input, init) => {
+            if (!String(input).endsWith('/NotoSansJP.ttf')) return fetch(input, init)
+            const observation = globalThis.fontStreamObservation = { pulls: 0, aborts: 0, cancels: 0 }
+            init.signal.addEventListener('abort', () => { observation.aborts++ }, { once: true })
+            const stream = new ReadableStream({
+              pull(controller) {
+                observation.pulls++
+                if (observation.pulls === 1) controller.enqueue(new Uint8Array(1024))
+              },
+              cancel() { observation.cancels++ },
+            })
+            globalThis.fontTestStream = stream
+            return Promise.resolve(new Response(stream))
+          }
+        })
+        break
+      case 'hold-digest':
+        await page.addInitScript(() => {
+          const digest = crypto.subtle.digest.bind(crypto.subtle)
+          crypto.subtle.digest = async (...args) => {
+            const result = await digest(...args)
+            globalThis.fontDigestHeld = true
+            await new Promise(resolve => { globalThis.releaseFontDigest = resolve })
+            globalThis.fontDigestReleased = true
+            return result
+          }
+        })
+        break
+      case 'digest-held': await page.waitForFunction(() => globalThis.fontDigestHeld === true); break
+      case 'font-replace': return page.evaluate(async (target) => {
+        const { loadApp } = await import('./loader.mjs')
+        const { app } = await loadApp(target)
+        const originalFetch = window.fetch.bind(window)
+        let resolveOld, reads = 0, oldAborts = 0, newAborts = 0, cancels = 0
+        let stream
+        window.fetch = (input, init) => {
+          if (!String(input).endsWith('/NotoSansJP.ttf')) return originalFetch(input, init)
+          if (++reads === 1) {
+            init.signal.addEventListener('abort', () => oldAborts++, { once: true })
+            return new Promise(resolve => { resolveOld = resolve })
+          }
+          init.signal.addEventListener('abort', () => newAborts++, { once: true })
+          stream = new ReadableStream({ cancel() { cancels++ } })
+          return Promise.resolve(new Response(stream))
+        }
+        try {
+          const old = app.font_fetch().then(() => false, () => true)
+          const current = app.font_fetch().then(() => false, () => true)
+          resolveOld(new Response(new Uint8Array([1, 2, 3])))
+          const oldRejected = await old
+          app.font_fetch_cancel()
+          const currentRejected = await current
+          await Promise.resolve()
+          window.fetch = originalFetch
+          const fresh = await app.font_fetch()
+          return { oldRejected, currentRejected, oldAborts, newAborts, cancels, locked: stream.locked, freshBytes: fresh.byteLength }
+        } finally { window.fetch = originalFetch; app.font_fetch_cancel() }
+      }, request.target)
+      case 'release-digest':
+        await page.evaluate(() => globalThis.releaseFontDigest())
+        await page.waitForFunction(() => globalThis.fontDigestReleased === true)
+        break
+      case 'stream-reading':
+        await page.waitForFunction(() => globalThis.fontStreamObservation?.pulls >= 2 && globalThis.fontTestStream.locked)
+        break
+      case 'stream-cleaned':
+        await page.waitForFunction(() => globalThis.fontStreamObservation?.cancels > 0 && !globalThis.fontTestStream.locked)
+        return page.evaluate(() => ({ ...globalThis.fontStreamObservation, locked: globalThis.fontTestStream.locked }))
       case 'hold-route': {
         let markSeen
         seen = new Promise((resolve) => { markSeen = resolve })

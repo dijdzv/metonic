@@ -14,7 +14,10 @@ export function wasmImports() {
 }
 
 export function validateExports(exports, target) {
-  for (const name of [...REQUIRED, 'inputs_start', 'inputs_stop', 'inputs_error', 'inputs_composing']) {
+  if (target === 'js' && typeof exports.font_receive !== 'function') {
+    throw new Error('js artifact is missing required export: font_receive');
+  }
+  for (const name of [...REQUIRED, 'text_gpu_init', 'text_gpu_add', 'text_gpu_commit', 'text_gpu_abort', 'text_gpu_record', 'text_gpu_dispose', 'font_fetch', 'font_fetch_cancel', 'view_layer_bytes', 'inputs_start', 'inputs_stop', 'inputs_error', 'inputs_composing', 'http_start', 'http_cancel', 'http_active', 'http_timeout']) {
     if (typeof exports[name] !== 'function') {
       throw new Error(`${target} artifact is missing required export: ${name}`);
     }

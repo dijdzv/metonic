@@ -125,7 +125,15 @@ async fn main {
       "patches/webapi-compiler-warnings.patch",
     ]),
   )
-  let destination = root + "/webapi-input"
+  for check_only in [true, false] {
+    let args = ["apply", "--directory=" + relative]
+    if check_only {
+      args.push("--check")
+    }
+    args.push("patches/webapi-http-boundary.patch")
+    ignore(checked("git", args))
+  }
+  let destination = root + "/webapi-http"
   if @fs.exists(destination) {
     ignore(
       checked("git", [

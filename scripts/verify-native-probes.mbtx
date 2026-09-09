@@ -414,7 +414,7 @@ async fn run_probe(
       "window cleanup marker missing or duplicated",
     )
   }
-  if kind == "window" && case_name != "normal" {
+  if kind == "window" && (case_name == "input" || case_name == "close") {
     let retained = marker_number(stdout, "WINDOW_INIT_RETAINED=")
     let remaining = marker_number(stdout, "WINDOW_INIT_REMAINING=")
     require(retained is Some(value) && value > 0, "window retained marker")
@@ -436,6 +436,8 @@ async fn run_probe(
           "WINDOW_INIT_INPUT_OK"
         } else if case_name == "close" {
           "WINDOW_INIT_CLOSE_OK"
+        } else if case_name == "capture" {
+          "WINDOW_CAPTURE_OBSERVATION_OK"
         } else {
           "WINDOW_PROBE_OK"
         }
@@ -498,7 +500,7 @@ async fn main {
   for kind in kinds {
     for mode in modes {
       let cases = if kind == "window" {
-        ["normal", "input", "close"]
+        ["normal", "input", "close", "capture"]
       } else {
         ["normal"]
       }

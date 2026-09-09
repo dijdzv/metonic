@@ -1,1 +1,5 @@
-members = ["app", "..", "../.work/browser-deps/webapi-input"]
+members = [
+  "app",
+  "..",
+  "../.work/browser-gpu/generated",
+]

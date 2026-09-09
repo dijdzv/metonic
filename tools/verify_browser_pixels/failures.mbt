@@ -66,6 +66,22 @@ pub fn run_failures_export(host : BrowserHost) -> @js_async.Promise[String] {
 
 ///|
 async fn run_font_failures(host : BrowserHost) -> String {
+  for target in ["js", "wasm-gc"] {
+    run_font_failures_target(host, target)
+  }
+  Json::object({
+    "font503": Json::boolean(true),
+    "hashBad": Json::boolean(true),
+    "sizeLimit": Json::boolean(true),
+    "delayedStop": Json::boolean(true),
+    "bodyStop": Json::boolean(true),
+    "digestStop": Json::boolean(true),
+    "replacement": Json::boolean(true),
+  }).stringify()
+}
+
+///|
+async fn run_font_failures_target(host : BrowserHost, target : String) -> Unit {
   let pattern = "**/NotoSansJP.ttf"
   ignore(command(host, { "op": "open" }))
   ignore(
@@ -76,7 +92,7 @@ async fn run_font_failures(host : BrowserHost) -> String {
       "body": "font unavailable",
     }),
   )
-  ignore(command(host, { "op": "goto", "target": "js" }))
+  ignore(command(host, { "op": "goto", "target": Json::string(target) }))
   ignore(command(host, { "op": "settled-status" }))
   ignore(initialization_observation(host, "font503"))
   ignore(command(host, { "op": "unroute", "pattern": Json::string(pattern) }))
@@ -91,6 +107,19 @@ async fn run_font_failures(host : BrowserHost) -> String {
   ignore(command(host, { "op": "reload" }))
   ignore(command(host, { "op": "settled-status" }))
   ignore(initialization_observation(host, "font-hash"))
+  ignore(command(host, { "op": "unroute", "pattern": Json::string(pattern) }))
+  ignore(
+    command(host, {
+      "op": "respond-route",
+      "pattern": Json::string(pattern),
+      "status": 200,
+      "body": "x",
+      "repeat": 16777217,
+    }),
+  )
+  ignore(command(host, { "op": "reload" }))
+  ignore(command(host, { "op": "settled-status" }))
+  ignore(initialization_observation(host, "font-limit"))
   ignore(command(host, { "op": "unroute", "pattern": Json::string(pattern) }))
   ignore(
     command(host, { "op": "hold-route", "pattern": Json::string(pattern) }),
@@ -114,12 +143,65 @@ async fn run_font_failures(host : BrowserHost) -> String {
     _ => fail("font observation missing")
   }
   ignore(verify_initialization(after))
+  let replacement = command(host, {
+    "op": "font-replace",
+    "target": Json::string(target),
+  })
+  require(
+    field(replacement, "oldRejected") == Some(Json::boolean(true)),
+    "obsolete font was accepted",
+  )
+  require(
+    field(replacement, "currentRejected") == Some(Json::boolean(true)),
+    "replacement lost cancellation ownership",
+  )
+  require(
+    int_field(replacement, "oldAborts") == 1,
+    "obsolete font was not aborted",
+  )
+  require(
+    int_field(replacement, "newAborts") == 1,
+    "replacement font was not aborted",
+  )
+  require(
+    int_field(replacement, "cancels") == 1,
+    "replacement reader was not cancelled",
+  )
+  require(
+    field(replacement, "locked") == Some(Json::boolean(false)),
+    "replacement reader remained locked",
+  )
+  require(
+    int_field(replacement, "freshBytes") == 9589900,
+    "fresh font loading did not recover",
+  )
   ignore(command(host, { "op": "close" }))
-  Json::object({
-    "font503": Json::boolean(true),
-    "hashBad": Json::boolean(true),
-    "delayedStop": Json::boolean(true),
-  }).stringify()
+  ignore(command(host, { "op": "open" }))
+  ignore(command(host, { "op": "stream-font" }))
+  ignore(command(host, { "op": "goto", "target": Json::string(target) }))
+  ignore(command(host, { "op": "stream-reading" }))
+  ignore(command(host, { "op": "stop" }))
+  let cleanup = command(host, { "op": "stream-cleaned" })
+  require(int_field(cleanup, "aborts") == 1, "font fetch was not aborted once")
+  require(
+    int_field(cleanup, "cancels") == 1,
+    "font stream was not cancelled once",
+  )
+  require(
+    field(cleanup, "locked") == Some(Json::boolean(false)),
+    "font reader remained locked",
+  )
+  ignore(initialization_observation(host, "font-body-stopped"))
+  ignore(command(host, { "op": "close" }))
+  ignore(command(host, { "op": "open" }))
+  ignore(command(host, { "op": "hold-digest" }))
+  ignore(command(host, { "op": "goto", "target": Json::string(target) }))
+  ignore(command(host, { "op": "digest-held" }))
+  ignore(command(host, { "op": "stop" }))
+  ignore(command(host, { "op": "release-digest" }))
+  ignore(command(host, { "op": "sleep", "milliseconds": 100 }))
+  ignore(initialization_observation(host, "font-digest-stopped"))
+  ignore(command(host, { "op": "close" }))
 }
 
 ///|

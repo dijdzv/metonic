@@ -45,15 +45,20 @@ fn clear_text() -> Unit {
 }
 
 ///|
-#export_name("font_begin")
-pub fn font_begin(length : Int) -> Int {
+fn prepare_font(length : Int) -> Bool {
   rendered_editor.val = None
   clear_font()
   clear_text()
   bridge.engine = None
   bridge.output = None
   bridge.output_width = 0
-  if length < 1 || length > 16777216 {
+  length >= 1 && length <= 16777216
+}
+
+///|
+#export_name("font_begin")
+pub fn font_begin(length : Int) -> Int {
+  if !prepare_font(length) {
     0
   } else {
     bridge.font_bytes = Some(FixedArray::make(length, b'\x00'))
@@ -61,6 +66,18 @@ pub fn font_begin(length : Int) -> Int {
     bridge.font_pending = true
     1
   }
+}
+
+///|
+pub fn font_receive(bytes : FixedArray[Byte]) -> Int {
+  if !prepare_font(bytes.length()) {
+    return 0
+  }
+  bridge.font_bytes = Some(bytes)
+  bridge.font_expected = bytes.length()
+  bridge.font_received = bytes.length()
+  bridge.font_pending = true
+  font_commit()
 }
 
 ///|

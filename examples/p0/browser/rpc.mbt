@@ -48,22 +48,32 @@ pub fn rpc_request() -> Int {
     Some(value) => value
     None => return 0
   }
+  match rpc_prepare(user_id) {
+    Some(request) => {
+      rpc_wire.val = @utf8.encode(request)
+      1
+    }
+    None => 0
+  }
+}
+
+///|
+pub fn rpc_prepare(user_id : String) -> String? {
   if @semantics.set_text(
       application.val.editor,
       application.val.query_input,
       user_id,
     ) !=
     "" {
-    return 0
+    return None
   }
-  let encoded = @utf8.encode(
-    @wire.request(@api.get_user(), @api.GetUserInput::{ id: user_id, }).stringify(),
-  )
-  if encoded.length() > 65536 {
-    return 0
+  let request = @wire.request(@api.get_user(), @api.GetUserInput::{
+    id: user_id,
+  }).stringify()
+  if @utf8.encode(request).length() > 65536 {
+    return None
   }
-  rpc_wire.val = encoded
-  1
+  Some(request)
 }
 
 ///|
@@ -99,6 +109,22 @@ pub fn rpc_response(id : Int, status : Int) -> Int {
     Some(value) => value
     None => return rpc_apply(id, Err("invalid_json"))
   }
+  rpc_response_text(id, status, text)
+}
+
+///|
+pub fn rpc_accept(id : Int, status : Int, bytes : Bytes) -> Int {
+  if bytes.length() > 65536 {
+    return rpc_transport_error(id, 2)
+  }
+  let text = @utf8.decode(bytes) catch {
+    _ => return rpc_apply(id, Err("invalid_json"))
+  }
+  rpc_response_text(id, status, text)
+}
+
+///|
+fn rpc_response_text(id : Int, status : Int, text : String) -> Int {
   let json = @wire.parse_bounded(text) catch {
     _ => return rpc_apply(id, Err("invalid_json"))
   }

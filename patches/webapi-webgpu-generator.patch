@@ -1,0 +1,1703 @@
+diff --git a/webapi-gen/base.mbt/alias.mbt b/webapi-gen/base.mbt/alias.mbt
+index fe82199..7221aaf 100644
+--- a/webapi-gen/base.mbt/alias.mbt
++++ b/webapi-gen/base.mbt/alias.mbt
+@@ -80,16 +80,6 @@ pub impl TJsValue for WebGL2RenderingContext with to_js(
+ ///|
+ pub impl FromJsAny for WebGL2RenderingContext with from_js_any(value : JsAny) -> WebGL2RenderingContext = "%identity"
+ 
+-///|
+-#external
+-pub type GPUCanvasContext
+-
+-///|
+-pub impl TJsValue for GPUCanvasContext with to_js(self : GPUCanvasContext) -> JsValue = "%identity"
+-
+-///|
+-pub impl FromJsAny for GPUCanvasContext with from_js_any(value : JsAny) -> GPUCanvasContext = "%identity"
+-
+ ///|
+ #external
+ pub type OnErrorEventHandlerNonNullEvent
+diff --git a/webapi-gen/base.mbt/fallback_gpu_canvas_context.mbt b/webapi-gen/base.mbt/fallback_gpu_canvas_context.mbt
+new file mode 100644
+index 0000000..7e5d3bd
+--- /dev/null
++++ b/webapi-gen/base.mbt/fallback_gpu_canvas_context.mbt
+@@ -0,0 +1,9 @@
++///|
++#external
++pub type GPUCanvasContext
++
++///|
++pub impl TJsValue for GPUCanvasContext with to_js(self : GPUCanvasContext) -> JsValue = "%identity"
++
++///|
++pub impl FromJsAny for GPUCanvasContext with from_js_any(value : JsAny) -> GPUCanvasContext = "%identity"
+diff --git a/webapi-gen/base.mbt/primitives.mbt b/webapi-gen/base.mbt/primitives.mbt
+index 4bb6e2e..f5639ce 100644
+--- a/webapi-gen/base.mbt/primitives.mbt
++++ b/webapi-gen/base.mbt/primitives.mbt
+@@ -23,7 +23,9 @@ pub impl TJsValue for Int64 with to_js(self : Int64) -> JsValue = "%identity"
+ 
+ ///|
+ #cfg(target="js")
+-pub impl TJsValue for UInt64 with to_js(self : UInt64) -> JsValue = "%identity"
++pub impl TJsValue for UInt64 with to_js(self : UInt64) -> JsValue {
++  TJsValue::to_js(self.to_double())
++}
+ 
+ ///|
+ #cfg(target="js")
+diff --git a/webapi-gen/base.mbt/typed_arrays.mbt b/webapi-gen/base.mbt/typed_arrays.mbt
+index 74b7e90..39d9e0d 100644
+--- a/webapi-gen/base.mbt/typed_arrays.mbt
++++ b/webapi-gen/base.mbt/typed_arrays.mbt
+@@ -100,6 +100,36 @@ pub impl TJsValue for Uint8Array with to_js(self : Uint8Array) -> JsValue = "%id
+ ///|
+ pub impl FromJsAny for Uint8Array with from_js_any(value : JsAny) -> Uint8Array = "%identity"
+ 
++///|
++pub fn Uint8Array::length(self : Uint8Array) -> UInt {
++  uint8_array_length_ffi(self)
++}
++
++///|
++pub fn Uint8Array::get(self : Uint8Array, index : Int) -> Byte? {
++  if index < 0 || index.to_uint() >= self.length() {
++    None
++  } else {
++    Some(uint8_array_get_ffi(self, index).to_byte())
++  }
++}
++
++///|
++#cfg(target="js")
++extern "js" fn uint8_array_length_ffi(value : Uint8Array) -> UInt = "(value) => value.length"
++
++///|
++#cfg(target="js")
++extern "js" fn uint8_array_get_ffi(value : Uint8Array, index : Int) -> Int = "(value, index) => value[index]"
++
++///|
++#cfg(target="wasm-gc")
++fn uint8_array_length_ffi(value : Uint8Array) -> UInt = "webapi_Uint8Array" "length"
++
++///|
++#cfg(target="wasm-gc")
++fn uint8_array_get_ffi(value : Uint8Array, index : Int) -> Int = "webapi_Uint8Array" "get"
++
+ ///|
+ #external
+ pub type Uint16Array
+diff --git a/webapi-gen/emit/emit_js_runtime.mbt b/webapi-gen/emit/emit_js_runtime.mbt
+index 0d2e2a1..4fd2112 100644
+--- a/webapi-gen/emit/emit_js_runtime.mbt
++++ b/webapi-gen/emit/emit_js_runtime.mbt
+@@ -40,7 +40,22 @@ fn emit_js_preamble() -> String {
+     #|
+     #|export const wasmImportObject = {
+     #|  "moonbit:ffi": {
+-    #|    make_closure: (funcref, closure) => funcref.bind(null, closure)
++    #|    make_closure: (() => {
++    #|      const functions = new WeakMap();
++    #|      return (funcref, closure) => {
++    #|        let closures = functions.get(funcref);
++    #|        if (!closures) {
++    #|          closures = new WeakMap();
++    #|          functions.set(funcref, closures);
++    #|        }
++    #|        let wrapped = closures.get(closure);
++    #|        if (!wrapped) {
++    #|          wrapped = funcref.bind(null, closure);
++    #|          closures.set(closure, wrapped);
++    #|        }
++    #|        return wrapped;
++    #|      };
++    #|    })()
+     #|  },
+     #|
+     #|  JsValue: {
+@@ -65,7 +80,7 @@ fn emit_js_preamble() -> String {
+     #|    intToJs: (v) => v,
+     #|    uintToJs: (v) => v >>> 0,
+     #|    int64ToJs: (v) => Number(v),
+-    #|    uint64ToJs: (v) => Number(v),
++    #|    uint64ToJs: (v) => Number(BigInt.asUintN(64, v)),
+     #|    floatToJs: (v) => v,
+     #|    doubleToJs: (v) => v,
+     #|    arrayToJs: (arr) => arr,
+@@ -81,6 +96,11 @@ fn emit_js_preamble() -> String {
+     #|    navigator: () => navigator
+     #|  },
+     #|
++    #|  webapi_Uint8Array: {
++    #|    length: (value) => value.length,
++    #|    get: (value, index) => value[index]
++    #|  },
++    #|
+     #|  webapi_JsPromise: {
+     #|    resolve: (value) => Promise.resolve(value),
+     #|    reject: (reason) => Promise.reject(reason),
+@@ -128,7 +148,8 @@ fn emit_js_preamble() -> String {
+ ///|
+ /// Check if a WebIDL type maps to BigInt (i64) on wasm-gc.
+ /// When true, JS runtime getters/methods must wrap return values with BigInt().
+-fn is_bigint_type(type_ : @parser.Type) -> Bool {
++fn is_bigint_type(type_ : @parser.Type, registry? : @type_registry.TypeRegistry = @type_registry.TypeRegistry::new([])) -> Bool {
++  let type_ = registry.resolve_type(type_).unwrap_or(type_)
+   match type_ {
+     LongLong | UnsignedLongLong | Bigint => true
+     Nullable(inner) => is_bigint_type(inner)
+@@ -303,6 +324,7 @@ fn collect_js_constructors(
+ /// Collect JS attribute getter/setter entries for an interface.
+ fn collect_js_attributes(
+   iface : @flattened_idl.FlattenedInterface,
++  registry? : @type_registry.TypeRegistry = @type_registry.TypeRegistry::new([]),
+ ) -> Array[String] {
+   let entries : Array[String] = []
+   for m in iface.members {
+@@ -312,7 +334,7 @@ fn collect_js_attributes(
+           emit_js_getter(
+             attr.name,
+             is_static=attr.static_,
+-            is_bigint=is_bigint_type(attr.type_),
++            is_bigint=is_bigint_type(attr.type_, registry~),
+             interface_name=iface.name,
+           ),
+         )
+@@ -336,6 +358,7 @@ fn collect_js_attributes(
+ /// Collect JS operation entries (methods + special operations) for an interface.
+ fn collect_js_operations(
+   iface : @flattened_idl.FlattenedInterface,
++  registry? : @type_registry.TypeRegistry = @type_registry.TypeRegistry::new([]),
+ ) -> Array[String] {
+   let entries : Array[String] = []
+   let namer = OverloadNamer::new()
+@@ -349,7 +372,7 @@ fn collect_js_operations(
+             op.name,
+             op.arguments,
+             op.static_,
+-            is_bigint=is_bigint_type(op.return_type),
++            is_bigint=is_bigint_type(op.return_type, registry~),
+             interface_name=iface.name,
+           ),
+         )
+@@ -363,7 +386,7 @@ fn collect_js_operations(
+             name,
+             op.arguments,
+             false,
+-            is_bigint=is_bigint_type(op.return_type),
++            is_bigint=is_bigint_type(op.return_type, registry~),
+           ),
+         )
+       }
+@@ -394,11 +417,12 @@ fn wrap_js_module(module_name : String, entries : Array[String]) -> String {
+ /// Emit a complete JS module for an interface
+ fn emit_js_interface_module(
+   iface : @flattened_idl.FlattenedInterface,
++  registry? : @type_registry.TypeRegistry = @type_registry.TypeRegistry::new([]),
+ ) -> String {
+   let entries : Array[String] = []
+   entries.push_iter(collect_js_constructors(iface).iter())
+-  entries.push_iter(collect_js_attributes(iface).iter())
+-  entries.push_iter(collect_js_operations(iface).iter())
++  entries.push_iter(collect_js_attributes(iface, registry~).iter())
++  entries.push_iter(collect_js_operations(iface, registry~).iter())
+   wrap_js_module(iface.name, entries)
+ }
+ 
+@@ -406,6 +430,7 @@ fn emit_js_interface_module(
+ /// Emit a JS module for a dictionary
+ fn emit_js_dictionary_module(
+   dict : @flattened_idl.MergedDictionaryIR,
++  registry? : @type_registry.TypeRegistry = @type_registry.TypeRegistry::new([]),
+ ) -> String {
+   let entries : Array[String] = []
+ 
+@@ -429,7 +454,7 @@ fn emit_js_dictionary_module(
+   entries.push(ctor_buf.to_string())
+   // Dictionary property getters
+   for mem in dict.members {
+-    entries.push(emit_js_getter(mem.name, is_bigint=is_bigint_type(mem.type_)))
++    entries.push(emit_js_getter(mem.name, is_bigint=is_bigint_type(mem.type_, registry~)))
+   }
+   wrap_js_module(dict.name, entries)
+ }
+@@ -446,6 +471,7 @@ fn emit_js_callback_module(cb : @parser.CallbackFunctionDefinition) -> String {
+ /// namespace members are just static calls on the global namespace object.
+ fn emit_js_namespace_module(
+   ns : @partial_merged.PartialMergedNamespace,
++  registry? : @type_registry.TypeRegistry = @type_registry.TypeRegistry::new([]),
+ ) -> String {
+   let module_name = @type_mapping.pascal_case(ns.name)
+   let entries : Array[String] = []
+@@ -460,7 +486,7 @@ fn emit_js_namespace_module(
+             op.name,
+             op.arguments,
+             true,
+-            is_bigint=is_bigint_type(op.return_type),
++            is_bigint=is_bigint_type(op.return_type, registry~),
+             interface_name=ns.name,
+           ),
+         )
+@@ -470,7 +496,7 @@ fn emit_js_namespace_module(
+           emit_js_getter(
+             attr.name,
+             is_static=true,
+-            is_bigint=is_bigint_type(attr.type_),
++            is_bigint=is_bigint_type(attr.type_, registry~),
+             interface_name=ns.name,
+           ),
+         )
+@@ -483,6 +509,8 @@ fn emit_js_namespace_module(
+ ///|
+ /// Emit the complete JS runtime from FlattenedIdl
+ pub fn emit_js_runtime(flattened : @flattened_idl.FlattenedIdl) -> String {
++  let registry = @type_registry.TypeRegistry::new([])
++  registry.set_typedef_defs(flattened.typedefs)
+   let buf = StringBuilder::new()
+ 
+   // Preamble
+@@ -492,12 +520,12 @@ pub fn emit_js_runtime(flattened : @flattened_idl.FlattenedIdl) -> String {
+ 
+   // Interfaces
+   for _name, iface in flattened.interfaces {
+-    modules.push(emit_js_interface_module(iface))
++    modules.push(emit_js_interface_module(iface, registry~))
+   }
+ 
+   // Dictionaries
+   for _name, dict in flattened.dictionaries {
+-    modules.push(emit_js_dictionary_module(dict))
++    modules.push(emit_js_dictionary_module(dict, registry~))
+   }
+ 
+   // Callbacks
+@@ -507,7 +535,7 @@ pub fn emit_js_runtime(flattened : @flattened_idl.FlattenedIdl) -> String {
+ 
+   // Namespaces
+   for _name, ns in flattened.namespaces {
+-    modules.push(emit_js_namespace_module(ns))
++    modules.push(emit_js_namespace_module(ns, registry~))
+   }
+   buf.write_string(modules.join(",\n\n"))
+   buf.write_string("\n};\n")
+diff --git a/webapi-gen/emit/emit_wbtest.mbt b/webapi-gen/emit/emit_wbtest.mbt
+index 8311f0e..773b0ef 100644
+--- a/webapi-gen/emit/emit_wbtest.mbt
++++ b/webapi-gen/emit/emit_wbtest.mbt
+@@ -488,21 +488,14 @@ test "merge_multi_target_code prefixes each backend block with cfg" {
+ 
+ ///|
+ test "extract_trait_ref extracts simple trait ref" {
+-  inspect(
+-    extract_trait_ref("&TFoo"),
+-    content=(
+-      #|Some("&TFoo")
+-    ),
+-  )
++  assert_eq(extract_trait_ref("&TFoo"), Some("&TFoo"))
+ }
+ 
+ ///|
+ test "extract_trait_ref extracts trait ref from Array" {
+-  inspect(
++  assert_eq(
+     extract_trait_ref("Array[&TPath2DRoundRectRadii2]"),
+-    content=(
+-      #|Some("&TPath2DRoundRectRadii2")
+-    ),
++    Some("&TPath2DRoundRectRadii2"),
+   )
+ }
+ 
+diff --git a/webapi-gen/emit/interface_emitter.mbt b/webapi-gen/emit/interface_emitter.mbt
+index 0c9d31f..101c127 100644
+--- a/webapi-gen/emit/interface_emitter.mbt
++++ b/webapi-gen/emit/interface_emitter.mbt
+@@ -264,21 +264,28 @@ fn emit_attribute(
+   emits.push_iter(attr_emits.iter())
+   emit_union_return_type(attr_type, emits)
+ 
++  let return_type = @type_mapping.MethodReturn::{
++    type_: attr_type,
++    optional: attr.type_ is Nullable(_),
++  }.type_name()
++
+   // Getter method (static or regular)
+   if attr.static_ {
+     methods.push(StaticAttributeGetMethodEmit::{
++      bigint_return: is_bigint_type(attr.type_, registry=type_registry),
+       interface_name,
+       js_name,
+       original_name: attr.name,
+-      return_type: attr_type.name(),
++      return_type,
+       is_enum_type: attr_type.is_enum(),
+       is_valid_wasm_stub: is_wasm_valid_stub_type(attr_type),
+     })
+   } else {
+     methods.push(AttributeGetMethodEmit::{
++      bigint_return: is_bigint_type(attr.type_, registry=type_registry),
+       interface_name,
+       original_name: attr.name,
+-      return_type: attr_type.name(),
++      return_type,
+       is_enum_type: attr_type.is_enum(),
+       is_valid_wasm_stub: is_wasm_valid_stub_type(attr_type),
+     })
+diff --git a/webapi-gen/emit/interface_method_emit.mbt b/webapi-gen/emit/interface_method_emit.mbt
+index d7f67fb..f21ba98 100644
+--- a/webapi-gen/emit/interface_method_emit.mbt
++++ b/webapi-gen/emit/interface_method_emit.mbt
+@@ -247,6 +247,7 @@ impl InterfaceMethodEmit for StaticMethodEmit with convenience_impl_emit(
+ 
+ ///|
+ struct AttributeGetMethodEmit {
++  bigint_return : Bool
+   interface_name : String // Name of the interface this method belongs to, eg. Document
+   original_name : String // Original attribute name from IDL, eg "title"
+   return_type : String
+@@ -280,7 +281,7 @@ impl InterfaceMethodEmit for AttributeGetMethodEmit with ffi_emit_js(
+     is_optional=self.return_type.has_suffix("?"),
+     is_void=false,
+     is_enum=self.is_enum_type,
+-    "obj.\{self.original_name}",
++    if self.bigint_return { "((value) => value == null ? value : BigInt(value))(obj.\{self.original_name})" } else { "obj.\{self.original_name}" },
+   )
+ }
+ 
+@@ -411,6 +412,7 @@ impl InterfaceMethodEmit for AttributeSetMethodEmit with impl_emit(
+ 
+ ///|
+ struct StaticAttributeGetMethodEmit {
++  bigint_return : Bool
+   interface_name : String // Name of the interface this method belongs to, eg. Document
+   js_name : String // Name used in JS FFI bodies, eg. "console" (may differ from interface_name)
+   original_name : String // Original attribute name from IDL, eg "title"
+@@ -445,7 +447,7 @@ impl InterfaceMethodEmit for StaticAttributeGetMethodEmit with ffi_emit_js(
+     is_optional=self.return_type.has_suffix("?"),
+     is_void=false,
+     is_enum=self.is_enum_type,
+-    "\{self.js_name}.\{self.original_name}",
++    if self.bigint_return { "((value) => value == null ? value : BigInt(value))(\{self.js_name}.\{self.original_name})" } else { "\{self.js_name}.\{self.original_name}" },
+   )
+ }
+ 
+diff --git a/webapi-gen/emit/interface_method_emit_wbtest.mbt b/webapi-gen/emit/interface_method_emit_wbtest.mbt
+index 0a796b5..9395e8c 100644
+--- a/webapi-gen/emit/interface_method_emit_wbtest.mbt
++++ b/webapi-gen/emit/interface_method_emit_wbtest.mbt
+@@ -195,6 +195,7 @@ test "emit_wasm_ffi_with_return uses jsvalue_to_string for CSSOMString return" {
+ test "AttributeGetMethodEmit uses jsvalue_to_string for CSSOMString attribute" {
+   let Code(rendered) = AttributeGetMethodEmit::{
+     interface_name: "CSSStyleDeclaration",
++    bigint_return: false,
+     original_name: "cssText",
+     return_type: "CSSOMString",
+     is_enum_type: false,
+@@ -217,6 +218,7 @@ test "AttributeGetMethodEmit uses jsvalue_to_string for CSSOMString attribute" {
+ test "AttributeGetMethodEmit uses to_option_prim for optional string returns" {
+   let Code(rendered) = AttributeGetMethodEmit::{
+     interface_name: "Storage",
++    bigint_return: false,
+     original_name: "key",
+     return_type: "String?",
+     is_enum_type: false,
+@@ -237,6 +239,7 @@ test "AttributeGetMethodEmit uses to_option_prim for optional string returns" {
+ test "AttributeGetMethodEmit keeps optional interface returns on to_option" {
+   let Code(rendered) = AttributeGetMethodEmit::{
+     interface_name: "Window",
++    bigint_return: false,
+     original_name: "opener",
+     return_type: "Window?",
+     is_enum_type: false,
+@@ -257,6 +260,7 @@ test "AttributeGetMethodEmit keeps optional interface returns on to_option" {
+ test "StaticAttributeGetMethodEmit uses to_option_prim for optional string returns" {
+   let Code(rendered) = StaticAttributeGetMethodEmit::{
+     interface_name: "Navigator",
++    bigint_return: false,
+     js_name: "navigator",
+     original_name: "vendor",
+     return_type: "String?",
+@@ -278,6 +282,7 @@ test "StaticAttributeGetMethodEmit uses to_option_prim for optional string retur
+ test "StaticAttributeGetMethodEmit keeps optional interface returns on to_option" {
+   let Code(rendered) = StaticAttributeGetMethodEmit::{
+     interface_name: "NavigationCurrentEntryChangeEvent",
++    bigint_return: false,
+     js_name: "navigationCurrentEntryChangeEvent",
+     original_name: "navigationType",
+     return_type: "NavigationDestination?",
+diff --git a/webapi-gen/emit/interface_method_helpers_wbtest.mbt b/webapi-gen/emit/interface_method_helpers_wbtest.mbt
+index 749c2aa..4c6d187 100644
+--- a/webapi-gen/emit/interface_method_helpers_wbtest.mbt
++++ b/webapi-gen/emit/interface_method_helpers_wbtest.mbt
+@@ -32,12 +32,7 @@ test "make_ffi_argnames replaces Self with obj" {
+       variadic: false,
+     },
+   ]
+-  inspect(
+-    make_ffi_argnames(args),
+-    content=(
+-      #|["obj", "name"]
+-    ),
+-  )
++  assert_eq(make_ffi_argnames(args), ["obj", "name"])
+ }
+ 
+ ///|
+@@ -51,12 +46,7 @@ test "make_ffi_argnames with no Self args" {
+       variadic: false,
+     },
+   ]
+-  inspect(
+-    make_ffi_argnames(args),
+-    content=(
+-      #|["url"]
+-    ),
+-  )
++  assert_eq(make_ffi_argnames(args), ["url"])
+ }
+ 
+ ///|
+@@ -77,17 +67,13 @@ test "is_trait_ref_type detects trait reference types" {
+ 
+ ///|
+ test "variadic_inner_type extracts inner type from Array" {
+-  inspect(
++  assert_eq(
+     variadic_inner_type(@type_mapping.ArgMbtType::Other("Array[String]")),
+-    content=(
+-      #|Some("String")
+-    ),
++    Some("String"),
+   )
+-  inspect(
++  assert_eq(
+     variadic_inner_type(@type_mapping.ArgMbtType::Other("Array[&TRequestInfo]")),
+-    content=(
+-      #|Some("&TRequestInfo")
+-    ),
++    Some("&TRequestInfo"),
+   )
+ }
+ 
+diff --git a/webapi-gen/emit/nullable_attribute_wbtest.mbt b/webapi-gen/emit/nullable_attribute_wbtest.mbt
+new file mode 100644
+index 0000000..ccd6198
+--- /dev/null
++++ b/webapi-gen/emit/nullable_attribute_wbtest.mbt
+@@ -0,0 +1,23 @@
++///|
++test "nullable attributes preserve Option and runtime conversion" {
++  let emitter = make_interface_emitter(
++    #|interface ReadableStream {};
++    #|interface Response {
++    #|  readonly attribute ReadableStream? body;
++    #|  readonly attribute DOMString? label;
++    #|  static readonly attribute ReadableStream? current;
++    #|  readonly attribute boolean ok;
++    #|};
++  )
++  let (_, emits) = emitter.emit("Response")
++  let code = mbt_code_gen_multi(emits)
++  assert_true(code.shared.contains("body(self : Self) -> ReadableStream?"))
++  assert_true(code.shared.contains("response_body_ffi(TJsValue::to_js(self)).to_option()"))
++  assert_true(code.shared.contains("label(self : Self) -> String?"))
++  assert_true(code.shared.contains("response_label_ffi(TJsValue::to_js(self)).to_option_prim()"))
++  assert_true(code.shared.contains("Response::current() -> ReadableStream?"))
++  assert_true(code.shared.contains("response_current_ffi().to_option()"))
++  assert_true(code.shared.contains("ok(self : Self) -> Bool"))
++  assert_true(code.js_ffi.contains("-> JsValue"))
++  assert_true(code.wasm_ffi.contains("-> JsValue"))
++}
+diff --git a/webapi-gen/emit/numeric_alias_wbtest.mbt b/webapi-gen/emit/numeric_alias_wbtest.mbt
+new file mode 100644
+index 0000000..5718460
+--- /dev/null
++++ b/webapi-gen/emit/numeric_alias_wbtest.mbt
+@@ -0,0 +1,14 @@
++///|
++test "runtime numeric detection follows aliases without treating unknown types as integers" {
++  let definitions = @parser.parse("typedef unsigned long long Size; typedef Size Alias; typedef Alias? Maybe; typedef B A; typedef A B;")
++  let registry = @type_registry.TypeRegistry::new(definitions)
++  let aliases = {}
++  for definition in definitions {
++    if definition.definition is Typedef(td) { aliases[td.name] = td }
++  }
++  registry.set_typedef_defs(aliases)
++  assert_true(is_bigint_type(Identifier("Alias"), registry~))
++  assert_true(is_bigint_type(Identifier("Maybe"), registry~))
++  assert_false(is_bigint_type(Identifier("Unknown"), registry~))
++  assert_false(is_bigint_type(Identifier("A"), registry~))
++}
+diff --git a/webapi-gen/flattened_idl/flattened_idl_wbtest.mbt b/webapi-gen/flattened_idl/flattened_idl_wbtest.mbt
+index 5acd8d6..9bb4938 100644
+--- a/webapi-gen/flattened_idl/flattened_idl_wbtest.mbt
++++ b/webapi-gen/flattened_idl/flattened_idl_wbtest.mbt
+@@ -13,38 +13,7 @@ test "flatten merges dictionary inheritance" {
+   let partial_merged = @partial_merged.merge_partials(defs)
+   let flattened_idl = flatten(partial_merged, ignore)
+   let flattened_dict = flattened_idl.dictionaries["ChildDict"]
+-  json_inspect(flattened_dict, content={
+-    "name": "ChildDict",
+-    "members": [
+-      {
+-        "extended_attributes": [],
+-        "type_": "DOMString",
+-        "name": "baseProp",
+-        "required": false,
+-      },
+-      {
+-        "extended_attributes": [],
+-        "type_": "Boolean",
+-        "name": "bubbles",
+-        "required": false,
+-        "default_value": ["ConstValue", ["Boolean", "false"]],
+-      },
+-      {
+-        "extended_attributes": [],
+-        "type_": "DOMString",
+-        "name": "childProp",
+-        "required": false,
+-      },
+-      {
+-        "extended_attributes": [],
+-        "type_": "Boolean",
+-        "name": "property1",
+-        "required": false,
+-        "default_value": ["ConstValue", ["Boolean", "false"]],
+-      },
+-    ],
+-    "specs": [""],
+-  })
++  json_inspect(flattened_dict, content=({"name":"ChildDict","members":[{"extended_attributes":[],"type_extended_attributes":[],"type_":"DOMString","name":"baseProp","required":false},{"extended_attributes":[],"type_extended_attributes":[],"type_":"Boolean","name":"bubbles","required":false,"default_value":["ConstValue",["Boolean","false"]]},{"extended_attributes":[],"type_extended_attributes":[],"type_":"DOMString","name":"childProp","required":false},{"extended_attributes":[],"type_extended_attributes":[],"type_":"Boolean","name":"property1","required":false,"default_value":["ConstValue",["Boolean","false"]]}],"specs":[""]}))
+ }
+ 
+ ///|
+@@ -57,18 +26,7 @@ test "flatten handles dictionary without inheritance" {
+   let partial_merged = @partial_merged.merge_partials(defs)
+   let flattened_idl = flatten(partial_merged, ignore)
+   let flattened_dict = flattened_idl.dictionaries["SimpleDict"]
+-  json_inspect(flattened_dict, content={
+-    "name": "SimpleDict",
+-    "members": [
+-      {
+-        "extended_attributes": [],
+-        "type_": "DOMString",
+-        "name": "simpleProp",
+-        "required": false,
+-      },
+-    ],
+-    "specs": [""],
+-  })
++  json_inspect(flattened_dict, content=({"name":"SimpleDict","members":[{"extended_attributes":[],"type_extended_attributes":[],"type_":"DOMString","name":"simpleProp","required":false}],"specs":[""]}))
+ }
+ 
+ ///|
+@@ -106,66 +64,13 @@ test "flatten merges 3-level dictionary inheritance chain" {
+   let flattened_idl = flatten(partial_merged, ignore)
+   let flattened_c = flattened_idl.dictionaries["C"]
+   // C should have members from A, B, then C (ancestor-first order)
+-  json_inspect(flattened_c, content={
+-    "name": "C",
+-    "members": [
+-      {
+-        "extended_attributes": [],
+-        "type_": "DOMString",
+-        "name": "aProp",
+-        "required": false,
+-      },
+-      {
+-        "extended_attributes": [],
+-        "type_": "Boolean",
+-        "name": "bProp",
+-        "required": false,
+-        "default_value": ["ConstValue", ["Boolean", "false"]],
+-      },
+-      {
+-        "extended_attributes": [],
+-        "type_": "Long",
+-        "name": "cProp",
+-        "required": false,
+-      },
+-    ],
+-    "specs": [""],
+-  })
++  json_inspect(flattened_c, content=({"name":"C","members":[{"extended_attributes":[],"type_extended_attributes":[],"type_":"DOMString","name":"aProp","required":false},{"extended_attributes":[],"type_extended_attributes":[],"type_":"Boolean","name":"bProp","required":false,"default_value":["ConstValue",["Boolean","false"]]},{"extended_attributes":[],"type_extended_attributes":[],"type_":"Long","name":"cProp","required":false}],"specs":[""]}))
+   // B should have members from A then B
+   let flattened_b = flattened_idl.dictionaries["B"]
+-  json_inspect(flattened_b, content={
+-    "name": "B",
+-    "members": [
+-      {
+-        "extended_attributes": [],
+-        "type_": "DOMString",
+-        "name": "aProp",
+-        "required": false,
+-      },
+-      {
+-        "extended_attributes": [],
+-        "type_": "Boolean",
+-        "name": "bProp",
+-        "required": false,
+-        "default_value": ["ConstValue", ["Boolean", "false"]],
+-      },
+-    ],
+-    "specs": [""],
+-  })
++  json_inspect(flattened_b, content=({"name":"B","members":[{"extended_attributes":[],"type_extended_attributes":[],"type_":"DOMString","name":"aProp","required":false},{"extended_attributes":[],"type_extended_attributes":[],"type_":"Boolean","name":"bProp","required":false,"default_value":["ConstValue",["Boolean","false"]]}],"specs":[""]}))
+   // A should only have its own members
+   let flattened_a = flattened_idl.dictionaries["A"]
+-  json_inspect(flattened_a, content={
+-    "name": "A",
+-    "members": [
+-      {
+-        "extended_attributes": [],
+-        "type_": "DOMString",
+-        "name": "aProp",
+-        "required": false,
+-      },
+-    ],
+-    "specs": [""],
+-  })
++  json_inspect(flattened_a, content=({"name":"A","members":[{"extended_attributes":[],"type_extended_attributes":[],"type_":"DOMString","name":"aProp","required":false}],"specs":[""]}))
+ }
+ 
+ ///|
+@@ -313,210 +218,7 @@ test "flatten includes merged interfaces, mixins, dictionaries, enums and callba
+   let defs = @parser.parse(widl)
+   let partial_merged = @partial_merged.merge_partials(defs)
+   let flattened_idl = flatten(partial_merged, ignore)
+-  json_inspect(flattened_idl, content={
+-    "interfaces": {
+-      "Dummy": {
+-        "name": "Dummy",
+-        "members": [
+-          {
+-            "extended_attributes": [],
+-            "interface_member": [
+-              "RegularOperation",
+-              {
+-                "return_type": "Undefined",
+-                "name": "dummyMethod",
+-                "arguments": [],
+-                "static_": false,
+-              },
+-            ],
+-          },
+-        ],
+-        "specs": [""],
+-      },
+-      "MyInterface": {
+-        "name": "MyInterface",
+-        "members": [
+-          {
+-            "extended_attributes": [],
+-            "interface_member": [
+-              "Attribute",
+-              {
+-                "type_": ["Nullable", "DOMString"],
+-                "name": "textContent",
+-                "is_readonly": false,
+-                "static_": false,
+-                "is_inherit": false,
+-              },
+-            ],
+-          },
+-          {
+-            "extended_attributes": [],
+-            "interface_member": [
+-              "RegularOperation",
+-              {
+-                "return_type": ["Identifier", "Node"],
+-                "name": "appendChild",
+-                "arguments": [
+-                  {
+-                    "extended_attributes": [],
+-                    "type_": {
+-                      "extended_attributes": [],
+-                      "type_": ["Identifier", "Element"],
+-                    },
+-                    "name": "newChild",
+-                    "optional": false,
+-                    "variadic": false,
+-                  },
+-                ],
+-                "static_": false,
+-              },
+-            ],
+-          },
+-          {
+-            "extended_attributes": [],
+-            "interface_member": [
+-              "Attribute",
+-              {
+-                "type_": ["Nullable", "DOMString"],
+-                "name": "textContent2",
+-                "is_readonly": false,
+-                "static_": false,
+-                "is_inherit": false,
+-              },
+-            ],
+-          },
+-          {
+-            "extended_attributes": [],
+-            "interface_member": [
+-              "RegularOperation",
+-              {
+-                "return_type": "Undefined",
+-                "name": "doSomething",
+-                "arguments": [],
+-                "static_": false,
+-              },
+-            ],
+-          },
+-        ],
+-        "inheritance": "ParentInterface",
+-        "specs": [""],
+-      },
+-    },
+-    "dictionaries": {
+-      "EventInit": {
+-        "name": "EventInit",
+-        "members": [
+-          {
+-            "extended_attributes": [],
+-            "type_": "Boolean",
+-            "name": "bubbles",
+-            "required": false,
+-            "default_value": ["ConstValue", ["Boolean", "false"]],
+-          },
+-          {
+-            "extended_attributes": [],
+-            "type_": "Boolean",
+-            "name": "cancelable",
+-            "required": false,
+-            "default_value": ["ConstValue", ["Boolean", "false"]],
+-          },
+-          {
+-            "extended_attributes": [],
+-            "type_": "Boolean",
+-            "name": "composed",
+-            "required": false,
+-            "default_value": ["ConstValue", ["Boolean", "false"]],
+-          },
+-          {
+-            "extended_attributes": [],
+-            "type_": "Boolean",
+-            "name": "partial_dict",
+-            "required": false,
+-            "default_value": ["ConstValue", ["Boolean", "false"]],
+-          },
+-        ],
+-        "specs": [""],
+-      },
+-      "MyEvent": {
+-        "name": "MyEvent",
+-        "members": [
+-          {
+-            "extended_attributes": [],
+-            "type_": "Boolean",
+-            "name": "bubbles",
+-            "required": false,
+-            "default_value": ["ConstValue", ["Boolean", "false"]],
+-          },
+-          {
+-            "extended_attributes": [],
+-            "type_": "Boolean",
+-            "name": "cancelable",
+-            "required": false,
+-            "default_value": ["ConstValue", ["Boolean", "false"]],
+-          },
+-          {
+-            "extended_attributes": [],
+-            "type_": "Boolean",
+-            "name": "composed",
+-            "required": false,
+-            "default_value": ["ConstValue", ["Boolean", "false"]],
+-          },
+-          {
+-            "extended_attributes": [],
+-            "type_": "Boolean",
+-            "name": "partial_dict",
+-            "required": false,
+-            "default_value": ["ConstValue", ["Boolean", "false"]],
+-          },
+-          {
+-            "extended_attributes": [],
+-            "type_": "DOMString",
+-            "name": "type",
+-            "required": true,
+-          },
+-        ],
+-        "specs": [""],
+-      },
+-    },
+-    "namespaces": {},
+-    "enums": {
+-      "MyEnum": { "name": "MyEnum", "values": ["value1", "value2"], "spec": "" },
+-    },
+-    "typedefs": {},
+-    "callbacks": {
+-      "MyCallback": {
+-        "name": "MyCallback",
+-        "return_type": "Undefined",
+-        "arguments": [
+-          {
+-            "extended_attributes": [],
+-            "type_": { "extended_attributes": [], "type_": "DOMString" },
+-            "name": "arg",
+-            "optional": false,
+-            "variadic": false,
+-          },
+-        ],
+-        "spec": "",
+-      },
+-      "MyCallbackInterface": {
+-        "name": "MyCallbackInterface",
+-        "return_type": "Undefined",
+-        "arguments": [
+-          {
+-            "extended_attributes": [],
+-            "type_": {
+-              "extended_attributes": [],
+-              "type_": ["Identifier", "Event"],
+-            },
+-            "name": "e",
+-            "optional": false,
+-            "variadic": false,
+-          },
+-        ],
+-        "spec": "",
+-      },
+-    },
+-  })
++  json_inspect(flattened_idl, content=({"interfaces":{"Dummy":{"name":"Dummy","members":[{"extended_attributes":[],"interface_member":["RegularOperation",{"return_type":"Undefined","name":"dummyMethod","arguments":[],"static_":false}]}],"specs":[""]},"MyInterface":{"name":"MyInterface","members":[{"extended_attributes":[],"interface_member":["Attribute",{"type_":["Nullable","DOMString"],"name":"textContent","is_readonly":false,"static_":false,"is_inherit":false}]},{"extended_attributes":[],"interface_member":["RegularOperation",{"return_type":["Identifier","Node"],"name":"appendChild","arguments":[{"extended_attributes":[],"type_":{"extended_attributes":[],"type_":["Identifier","Element"]},"name":"newChild","optional":false,"variadic":false}],"static_":false}]},{"extended_attributes":[],"interface_member":["Attribute",{"type_":["Nullable","DOMString"],"name":"textContent2","is_readonly":false,"static_":false,"is_inherit":false}]},{"extended_attributes":[],"interface_member":["RegularOperation",{"return_type":"Undefined","name":"doSomething","arguments":[],"static_":false}]}],"inheritance":"ParentInterface","specs":[""]}},"dictionaries":{"EventInit":{"name":"EventInit","members":[{"extended_attributes":[],"type_extended_attributes":[],"type_":"Boolean","name":"bubbles","required":false,"default_value":["ConstValue",["Boolean","false"]]},{"extended_attributes":[],"type_extended_attributes":[],"type_":"Boolean","name":"cancelable","required":false,"default_value":["ConstValue",["Boolean","false"]]},{"extended_attributes":[],"type_extended_attributes":[],"type_":"Boolean","name":"composed","required":false,"default_value":["ConstValue",["Boolean","false"]]},{"extended_attributes":[],"type_extended_attributes":[],"type_":"Boolean","name":"partial_dict","required":false,"default_value":["ConstValue",["Boolean","false"]]}],"specs":[""]},"MyEvent":{"name":"MyEvent","members":[{"extended_attributes":[],"type_extended_attributes":[],"type_":"Boolean","name":"bubbles","required":false,"default_value":["ConstValue",["Boolean","false"]]},{"extended_attributes":[],"type_extended_attributes":[],"type_":"Boolean","name":"cancelable","required":false,"default_value":["ConstValue",["Boolean","false"]]},{"extended_attributes":[],"type_extended_attributes":[],"type_":"Boolean","name":"composed","required":false,"default_value":["ConstValue",["Boolean","false"]]},{"extended_attributes":[],"type_extended_attributes":[],"type_":"Boolean","name":"partial_dict","required":false,"default_value":["ConstValue",["Boolean","false"]]},{"extended_attributes":[],"type_extended_attributes":[],"type_":"DOMString","name":"type","required":true}],"specs":[""]}},"namespaces":{},"enums":{"MyEnum":{"name":"MyEnum","values":["value1","value2"],"spec":""}},"typedefs":{},"callbacks":{"MyCallback":{"name":"MyCallback","return_type":"Undefined","arguments":[{"extended_attributes":[],"type_":{"extended_attributes":[],"type_":"DOMString"},"name":"arg","optional":false,"variadic":false}],"spec":""},"MyCallbackInterface":{"name":"MyCallbackInterface","return_type":"Undefined","arguments":[{"extended_attributes":[],"type_":{"extended_attributes":[],"type_":["Identifier","Event"]},"name":"e","optional":false,"variadic":false}],"spec":""}}}))
+ }
+ 
+ ///|
+diff --git a/webapi-gen/main.mbt b/webapi-gen/main.mbt
+index 702b5e1..24b152d 100644
+--- a/webapi-gen/main.mbt
++++ b/webapi-gen/main.mbt
+@@ -201,7 +201,7 @@ fn write_output_file(
+ ) -> Unit raise {
+   let filepath = "\{output_dir}/\{filename}"
+   @fs.write_string_to_file(filepath, content) catch {
+-    e => fail("failed to write \{filepath}: \{e}")
++    @fs.IOError(e) => fail("failed to write \{filepath}: \{e}")
+   }
+   track_output_file(expected_files, filename)
+ }
+@@ -224,7 +224,7 @@ fn reconcile_output_dir(
+   expected_files : @hashset.HashSet[String],
+ ) -> Int raise {
+   let output_files = @fs.read_dir(output_dir) catch {
+-    e => fail("failed to read output directory \{output_dir}: \{e}")
++    @fs.IOError(e) => fail("failed to read output directory \{output_dir}: \{e}")
+   }
+   let stale_files = output_files.filter(fn(filename) {
+     is_generated_output_file(filename) && !expected_files.contains(filename)
+@@ -234,11 +234,11 @@ fn reconcile_output_dir(
+   for filename in stale_files {
+     let filepath = "\{output_dir}/\{filename}"
+     let is_file = @fs.is_file(filepath) catch {
+-      e => fail("failed to stat \{filepath}: \{e}")
++      @fs.IOError(e) => fail("failed to stat \{filepath}: \{e}")
+     }
+     if is_file {
+       @fs.remove_file(filepath) catch {
+-        e => fail("failed to remove stale output file \{filepath}: \{e}")
++        @fs.IOError(e) => fail("failed to remove stale output file \{filepath}: \{e}")
+       }
+       removed_count = removed_count + 1
+     }
+@@ -252,12 +252,16 @@ fn copy_templates(
+   templates_dir : String,
+   output_dir : String,
+   expected_files : @hashset.HashSet[String],
++  has_gpu_canvas_context? : Bool = false,
+ ) -> Int raise {
+   let template_files = @fs.read_dir(templates_dir) catch {
+-    e => fail("failed to read templates directory \{templates_dir}: \{e}")
++    @fs.IOError(e) => fail("failed to read templates directory \{templates_dir}: \{e}")
+   }
+   let output_filenames : Array[String] = []
+   for filename in template_files {
++    if has_gpu_canvas_context && filename == "fallback_gpu_canvas_context.mbt" {
++      continue
++    }
+     if !filename.has_suffix(".mbt") {
+       continue
+     }
+@@ -267,7 +271,7 @@ fn copy_templates(
+   for filename in output_filenames {
+     let src_path = "\{templates_dir}/\{filename}"
+     let content = @fs.read_file_to_string(src_path) catch {
+-      e => fail("failed to read template \{src_path}: \{e}")
++      @fs.IOError(e) => fail("failed to read template \{src_path}: \{e}")
+     }
+     write_output_file(output_dir, filename, content, expected_files)
+   }
+@@ -359,7 +363,7 @@ fn run_with_options(options : GeneratorCliOptions) -> Unit {
+   try {
+     // Read config
+     let content = @fs.read_file_to_string(config_file) catch {
+-      e => fail("failed to read config file: \{e}")
++    @fs.IOError(e) => fail("failed to read config file: \{e}")
+     }
+     let config = @config.load_config_from_string(content)
+     let idl_dir = config.idl_dir
+@@ -375,7 +379,7 @@ fn run_with_options(options : GeneratorCliOptions) -> Unit {
+ 
+     // Read all IDL files from directory, filtering by core specs
+     let idl_files = @fs.read_dir(idl_dir) catch {
+-      e => fail("failed to read IDL directory: \{e}")
++    @fs.IOError(e) => fail("failed to read IDL directory: \{e}")
+     }
+     let idl_paths = []
+     for file in idl_files {
+@@ -406,7 +410,7 @@ fn run_with_options(options : GeneratorCliOptions) -> Unit {
+     // Create output directory if it doesn't exist
+     if !@fs.path_exists(output_dir) {
+       @fs.create_dir(output_dir) catch {
+-        e => fail("failed to create output directory: \{e}")
++        @fs.IOError(e) => fail("failed to create output directory: \{e}")
+       }
+     }
+ 
+@@ -414,6 +418,7 @@ fn run_with_options(options : GeneratorCliOptions) -> Unit {
+     let expected_files : @hashset.HashSet[String] = @hashset.new()
+     let template_count = copy_templates(
+       templates_dir, output_dir, expected_files,
++      has_gpu_canvas_context=flattened.interfaces.contains("GPUCanvasContext"),
+     )
+ 
+     // Write skipped log
+diff --git a/webapi-gen/main_wbtest.mbt b/webapi-gen/main_wbtest.mbt
+index 205a9cc..9d02c07 100644
+--- a/webapi-gen/main_wbtest.mbt
++++ b/webapi-gen/main_wbtest.mbt
+@@ -140,16 +140,7 @@ test "filter_idl excludes typedefs" {
+     ]),
+   )
+   let filtered = filter_idl(config, defs)
+-  json_inspect(filtered, content=[
+-    {
+-      "extended_attributes": [],
+-      "definition": [
+-        "Typedef",
+-        { "type_": "UnsignedLongLong", "name": "DOMTimeStamp", "spec": "" },
+-      ],
+-      "spec": "",
+-    },
+-  ])
++  json_inspect(filtered, content=([{"extended_attributes":[],"definition":["Typedef",{"type_extended_attributes":[],"type_":"UnsignedLongLong","name":"DOMTimeStamp","spec":""}],"spec":""}]))
+ }
+ 
+ ///|
+@@ -252,7 +243,7 @@ test "reconcile_output_dir removes stale generated files and keeps unrelated fil
+     _ => ()
+   }
+   @fs.create_dir(output_dir) catch {
+-    e => fail("failed to create test output directory: \{e}")
++    @fs.IOError(e) => fail("failed to create test output directory: \{e}")
+   }
+ 
+   let files = [
+@@ -261,7 +252,7 @@ test "reconcile_output_dir removes stale generated files and keeps unrelated fil
+   ]
+   for filename in files {
+     @fs.write_string_to_file("\{output_dir}/\{filename}", filename) catch {
+-      e => fail("failed to seed test file \{filename}: \{e}")
++      @fs.IOError(e) => fail("failed to seed test file \{filename}: \{e}")
+     }
+   }
+ 
+diff --git a/webapi-gen/moon.mod.json b/webapi-gen/moon.mod.json
+index b2193b6..da35521 100644
+--- a/webapi-gen/moon.mod.json
++++ b/webapi-gen/moon.mod.json
+@@ -4,6 +4,6 @@
+   "license": "Apache-2.0",
+   "description": "WebAPI bindings code generator",
+   "deps": {
+-    "moonbitlang/x": "0.4.38"
++    "moonbitlang/x": "0.5.1"
+   }
+-}
+\ No newline at end of file
++}
+diff --git a/webapi-gen/parser/ast.mbt b/webapi-gen/parser/ast.mbt
+index b0f81e4..148511c 100644
+--- a/webapi-gen/parser/ast.mbt
++++ b/webapi-gen/parser/ast.mbt
+@@ -273,6 +273,7 @@ pub(all) enum StringifierMember {
+ /// Dictionary member
+ pub(all) struct DictionaryMember {
+   extended_attributes : Array[ExtendedAttribute]
++  type_extended_attributes : Array[ExtendedAttribute]
+   type_ : Type
+   name : String
+   required : Bool
+@@ -395,6 +396,7 @@ pub(all) struct EnumDefinition {
+ ///|
+ /// Typedef definition
+ pub(all) struct TypedefDefinition {
++  type_extended_attributes : Array[ExtendedAttribute]
+   type_ : Type
+   name : String
+   spec : String
+diff --git a/webapi-gen/parser/lexer.mbt b/webapi-gen/parser/lexer.mbt
+index f2c5eab..44971bd 100644
+--- a/webapi-gen/parser/lexer.mbt
++++ b/webapi-gen/parser/lexer.mbt
+@@ -130,65 +130,65 @@ pub fn lex(
+ 
+   for ;; {
+     lexmatch remain with longest {
+-      ("-?([1-9][0-9]*|0[Xx][0-9A-Fa-f]+|0[0-7]*)" as s, xs) =>
++      (re"^-?([1-9][0-9]*|0[Xx][0-9A-Fa-f]+|0[0-7]*)" as s, after=xs) =>
+         push(INTEGER(s.to_string()), s, xs)
+       (
+-        "-?(([0-9]+\.[0-9]*|[0-9]*\.[0-9]+)([Ee][+\-]?[0-9]+)?|[0-9]+[Ee][+\-]?[0-9]+)" as s,
+-        xs
++        re"^-?(([0-9]+\.[0-9]*|[0-9]*\.[0-9]+)([Ee][+\-]?[0-9]+)?|[0-9]+[Ee][+\-]?[0-9]+)" as s,
++        after=xs
+       ) => push(FLOAT(s.to_string()), s, xs)
+-      ("[_\-]?[A-Za-z][0-9A-Z_a-z\-]*" as s, xs) => {
++      (re"^[_\-]?[A-Za-z][0-9A-Z_a-z\-]*" as s, after=xs) => {
+         let tok = match keywords.get(s.to_string()) {
+           None => IDENTIFIER(s.to_string())
+           Some(t) => t
+         }
+         push(tok, s, xs)
+       }
+-      ("\"[^\"]*\"" as s, xs) =>
++      (re"^\"[^\"]*\"" as s, after=xs) =>
+         push(
+           STRING(s.view(start_offset=1, end_offset=s.length() - 1).to_string()),
+           s,
+           xs,
+         )
+-      ("(\r\n)|\n|\r" as s, xs) => {
++      (re"^((\r\n)|\n|\r)" as s, after=xs) => {
+         advance_position(s) |> ignore
+         remain = xs
+       }
+-      ("[\t ]+" as s, xs) => {
++      (re"^[\t ]+" as s, after=xs) => {
+         advance_position(s) |> ignore
+         remain = xs
+       }
+-      ("//[^\n]*\n" as s, xs) => { // Single line comment
++      (re"^//[^\n]*\n" as s, after=xs) => { // Single line comment
+         advance_position(s) |> ignore
+         remain = xs
+       }
+-      ("//[^\n]*$" as s, xs) => { // Single line comment at EOF
++      (re"^//[^\n]*$" as s, after=xs) => { // Single line comment at EOF
+         advance_position(s) |> ignore
+         remain = xs
+       }
+-      ("/\*([^*]|\*+[^*/])*\*+/" as s, xs) => { // Multi-line comment
++      (re"^/\*([^*]|\*+[^*/])*\*+/" as s, after=xs) => { // Multi-line comment
+         advance_position(s) |> ignore
+         remain = xs
+       }
+-      ("\.\.\." as s, xs) => push(ELLIPSIS, s, xs)
+-      (":", xs) => push(COLON, ":", xs)
+-      (";", xs) => push(SEMICOLON, ";", xs)
+-      ("<", xs) => push(LANGLE, "<", xs)
+-      ("=", xs) => push(EQUALS, "=", xs)
+-      (">", xs) => push(RANGLE, ">", xs)
+-      ("\?", xs) => push(QUESTION, "?", xs)
+-      ("\*", xs) => push(STAR, "*", xs)
+-      ("[{]", xs) => push(LBRACE, "{", xs)
+-      ("[}]", xs) => push(RBRACE, "}", xs)
+-      ("\(", xs) => push(LPAREN, "(", xs)
+-      ("\)", xs) => push(RPAREN, ")", xs)
+-      ("\[", xs) => push(LBRACKET, "[", xs)
+-      ("\]", xs) => push(RBRACKET, "]", xs)
+-      (",", xs) => push(COMMA, ",", xs)
+-      ("$", _) => {
++      (re"^\.\.\." as s, after=xs) => push(ELLIPSIS, s, xs)
++      (re"^:", after=xs) => push(COLON, ":", xs)
++      (re"^;", after=xs) => push(SEMICOLON, ";", xs)
++      (re"^<", after=xs) => push(LANGLE, "<", xs)
++      (re"^=", after=xs) => push(EQUALS, "=", xs)
++      (re"^>", after=xs) => push(RANGLE, ">", xs)
++      (re"^\?", after=xs) => push(QUESTION, "?", xs)
++      (re"^\*", after=xs) => push(STAR, "*", xs)
++      (re"^[{]", after=xs) => push(LBRACE, "{", xs)
++      (re"^[}]", after=xs) => push(RBRACE, "}", xs)
++      (re"^\(", after=xs) => push(LPAREN, "(", xs)
++      (re"^\)", after=xs) => push(RPAREN, ")", xs)
++      (re"^\[", after=xs) => push(LBRACKET, "[", xs)
++      (re"^\]", after=xs) => push(RBRACKET, "]", xs)
++      (re"^,", after=xs) => push(COMMA, ",", xs)
++      (re"^$", after=_) => {
+         push(EOF, "", "")
+         break
+       }
+-      xs => raise LexFailed(xs)
++      _ => raise LexFailed(remain)
+     }
+   }
+   acc
+diff --git a/webapi-gen/parser/parser.mbt b/webapi-gen/parser/parser.mbt
+index c77197b..e27ef8b 100644
+--- a/webapi-gen/parser/parser.mbt
++++ b/webapi-gen/parser/parser.mbt
+@@ -353,10 +353,11 @@ fn Parser::parse_typedef_def(
+   spec : String,
+ ) -> TypedefDefinition raise ParseError {
+   self.skip(TK_TYPEDEF)
++  let type_extended_attributes = self.parse_extended_attribute_list()
+   let type_ = self.parse_type()
+   let name = self.expect_identifier()
+   self.skip(TK_SEMICOLON)
+-  { type_, name, spec }
++  { type_extended_attributes, type_, name, spec }
+ }
+ 
+ ///|
+@@ -753,6 +754,7 @@ fn Parser::parse_dictionary_member(
+   self : Parser,
+ ) -> DictionaryMember raise ParseError {
+   if self.eat(TK_REQUIRED) {
++    let type_extended_attributes = self.parse_extended_attribute_list()
+     let type_ = self.parse_type()
+     let name = self.expect_identifier()
+     self.skip(TK_SEMICOLON)
+@@ -761,6 +763,7 @@ fn Parser::parse_dictionary_member(
+       type_,
+       name,
+       required: true,
++      type_extended_attributes,
+       default_value: None,
+     }
+   } else {
+@@ -768,7 +771,7 @@ fn Parser::parse_dictionary_member(
+     let name = self.expect_identifier()
+     let default_value = self.parse_default_value_opt()
+     self.skip(TK_SEMICOLON)
+-    { extended_attributes: [], type_, name, required: false, default_value }
++    { extended_attributes: [], type_extended_attributes: [], type_, name, required: false, default_value }
+   }
+ }
+ 
+@@ -1443,7 +1446,7 @@ pub fn parse_file(
+   filepath : String,
+ ) -> Array[DefinitionExtendedAttributes] raise WebIdlError {
+   let content = @fs.read_file_to_string(filepath) catch {
+-    e => raise Lex(LexFailed(e.to_string()))
++    @fs.IOError(message) => raise Lex(LexFailed(message))
+   }
+   let spec = @path.Path(filepath).basename().to_string()
+   let tokens = lex(content[:], file=filepath) catch { e => raise Lex(e) }
+diff --git a/webapi-gen/parser/parser_test.mbt b/webapi-gen/parser/parser_test.mbt
+index b0b9de3..62c967f 100644
+--- a/webapi-gen/parser/parser_test.mbt
++++ b/webapi-gen/parser/parser_test.mbt
+@@ -121,75 +121,7 @@ test "parse dictionary with default values" {
+     #|  B b = undefined;
+     #|  DOMString name;
+     #|};
+-  json_inspect(@parser.parse(idl), content=[
+-    {
+-      "extended_attributes": [],
+-      "definition": [
+-        "Dictionary",
+-        {
+-          "name": "Options",
+-          "members": [
+-            {
+-              "extended_attributes": [],
+-              "type_": "Boolean",
+-              "name": "enabled",
+-              "required": false,
+-              "default_value": ["ConstValue", ["Boolean", "true"]],
+-            },
+-            {
+-              "extended_attributes": [],
+-              "type_": "Float",
+-              "name": "f_value",
+-              "required": false,
+-              "default_value": ["ConstValue", ["Float", ["Float", "0.2"]]],
+-            },
+-            {
+-              "extended_attributes": [],
+-              "type_": ["Identifier", "int"],
+-              "name": "v",
+-              "required": false,
+-              "default_value": ["ConstValue", ["Integer", "1"]],
+-            },
+-            {
+-              "extended_attributes": [],
+-              "type_": ["Identifier", "DictA"],
+-              "name": "x",
+-              "required": false,
+-              "default_value": "EmptyObject",
+-            },
+-            {
+-              "extended_attributes": [],
+-              "type_": ["Identifier", "DictB"],
+-              "name": "y",
+-              "required": false,
+-              "default_value": "EmptySequence",
+-            },
+-            {
+-              "extended_attributes": [],
+-              "type_": ["Identifier", "A"],
+-              "name": "a",
+-              "required": false,
+-              "default_value": "Null",
+-            },
+-            {
+-              "extended_attributes": [],
+-              "type_": ["Identifier", "B"],
+-              "name": "b",
+-              "required": false,
+-              "default_value": "Undefined",
+-            },
+-            {
+-              "extended_attributes": [],
+-              "type_": "DOMString",
+-              "name": "name",
+-              "required": false,
+-            },
+-          ],
+-        },
+-      ],
+-      "spec": "",
+-    },
+-  ])
++  json_inspect(@parser.parse(idl), content=([{"extended_attributes":[],"definition":["Dictionary",{"name":"Options","members":[{"extended_attributes":[],"type_extended_attributes":[],"type_":"Boolean","name":"enabled","required":false,"default_value":["ConstValue",["Boolean","true"]]},{"extended_attributes":[],"type_extended_attributes":[],"type_":"Float","name":"f_value","required":false,"default_value":["ConstValue",["Float",["Float","0.2"]]]},{"extended_attributes":[],"type_extended_attributes":[],"type_":["Identifier","int"],"name":"v","required":false,"default_value":["ConstValue",["Integer","1"]]},{"extended_attributes":[],"type_extended_attributes":[],"type_":["Identifier","DictA"],"name":"x","required":false,"default_value":"EmptyObject"},{"extended_attributes":[],"type_extended_attributes":[],"type_":["Identifier","DictB"],"name":"y","required":false,"default_value":"EmptySequence"},{"extended_attributes":[],"type_extended_attributes":[],"type_":["Identifier","A"],"name":"a","required":false,"default_value":"Null"},{"extended_attributes":[],"type_extended_attributes":[],"type_":["Identifier","B"],"name":"b","required":false,"default_value":"Undefined"},{"extended_attributes":[],"type_extended_attributes":[],"type_":"DOMString","name":"name","required":false}]}],"spec":""}]))
+ }
+ 
+ ///|
+@@ -217,7 +149,7 @@ test "parse typedef" {
+       "extended_attributes": [],
+       "definition": [
+         "Typedef",
+-        { "type_": ["Sequence", "DOMString"], "name": "StringList", "spec": "" },
++        { "type_extended_attributes": [], "type_": ["Sequence", "DOMString"], "name": "StringList", "spec": "" },
+       ],
+       "spec": "",
+     },
+diff --git a/webapi-gen/parser/typedef_attributes_test.mbt b/webapi-gen/parser/typedef_attributes_test.mbt
+new file mode 100644
+index 0000000..d536598
+--- /dev/null
++++ b/webapi-gen/parser/typedef_attributes_test.mbt
+@@ -0,0 +1,23 @@
++///|
++test "typedef preserves type attributes separately from definition attributes" {
++  let parsed = @parser.parse(
++    "[Exposed=Window] typedef [EnforceRange] unsigned long Flags;",
++  )
++  guard parsed[0].definition is Typedef(definition) else {
++    fail("expected typedef")
++  }
++  assert_eq(definition.type_, UnsignedLong)
++  assert_eq(definition.name, "Flags")
++  assert_eq(definition.type_extended_attributes, [NoArgs("EnforceRange")])
++  assert_eq(parsed[0].extended_attributes, [Ident("Exposed", "Window")])
++}
++
++///|
++test "typedef without type attributes retains an empty list" {
++  let parsed = @parser.parse("typedef unsigned long Flags;")
++  guard parsed[0].definition is Typedef(definition) else {
++    fail("expected typedef")
++  }
++  assert_eq(definition.type_extended_attributes, [])
++  assert_eq(definition.type_, UnsignedLong)
++}
+diff --git a/webapi-gen/partial_merged/partial_merged_dictionary_wbtest.mbt b/webapi-gen/partial_merged/partial_merged_dictionary_wbtest.mbt
+index e2a9129..4b7b9ae 100644
+--- a/webapi-gen/partial_merged/partial_merged_dictionary_wbtest.mbt
++++ b/webapi-gen/partial_merged/partial_merged_dictionary_wbtest.mbt
+@@ -4,6 +4,7 @@ test "MergedDictionary::merge() combines members and inheritance" {
+   let _dict2 = dict1.merge(
+     [
+       @parser.DictionaryMember::{
++        type_extended_attributes: [],
+         extended_attributes: [],
+         type_: @parser.Type::Identifier("DOMString"),
+         name: "id",
+@@ -14,18 +15,5 @@ test "MergedDictionary::merge() combines members and inheritance" {
+     Some("NodeInit"),
+     "",
+   )
+-  json_inspect(_dict2, content={
+-    "name": "ElementInit",
+-    "members": [
+-      {
+-        "extended_attributes": [],
+-        "type_": ["Identifier", "DOMString"],
+-        "name": "id",
+-        "required": false,
+-        "default_value": ["String", ""],
+-      },
+-    ],
+-    "inheritance": "NodeInit",
+-    "specs": [""],
+-  })
++  json_inspect(_dict2, content=({"name":"ElementInit","members":[{"extended_attributes":[],"type_extended_attributes":[],"type_":["Identifier","DOMString"],"name":"id","required":false,"default_value":["String",""]}],"inheritance":"NodeInit","specs":[""]}))
+ }
+diff --git a/webapi-gen/partial_merged/partial_merged_interface_wbtest.mbt b/webapi-gen/partial_merged/partial_merged_interface_wbtest.mbt
+index 16a6700..c06d0ff 100644
+--- a/webapi-gen/partial_merged/partial_merged_interface_wbtest.mbt
++++ b/webapi-gen/partial_merged/partial_merged_interface_wbtest.mbt
+@@ -33,7 +33,7 @@ test "MergedInterface::merge() combines members and inheritance" {
+     @hashset.HashSet::from_array(["dom.idl"]),
+   )
+   inspect(iface2.name, content="Element")
+-  inspect(iface2.inheritance, content="Some(\"HTMLElement\")")
++  assert_eq(iface2.inheritance, Some("HTMLElement"))
+   inspect(iface2.members.length(), content="2")
+   inspect(iface2.specs.length(), content="2")
+   assert_true(iface2.specs.contains("html.idl"))
+@@ -64,7 +64,7 @@ test "MergedInterface::merge() retains existing inheritance if none provided" {
+     @hashset.HashSet::from_array(["dom.idl"]),
+   )
+   inspect(iface2.name, content="Element")
+-  inspect(iface2.inheritance, content="Some(\"Node\")")
++  assert_eq(iface2.inheritance, Some("Node"))
+   inspect(iface2.members.length(), content="1")
+   inspect(iface2.specs.length(), content="2")
+   assert_true(iface2.specs.contains("html.idl"))
+diff --git a/webapi-gen/partial_merged/partial_merged_wbtest.mbt b/webapi-gen/partial_merged/partial_merged_wbtest.mbt
+index 65c4afb..718769e 100644
+--- a/webapi-gen/partial_merged/partial_merged_wbtest.mbt
++++ b/webapi-gen/partial_merged/partial_merged_wbtest.mbt
+@@ -122,25 +122,7 @@ test "PartialMergeVisitor merges dictionary and partial dictionary" {
+   let defs = @parser.parse(widl)
+   let partial_merged = merge_partials(defs)
+   let merged = partial_merged.dictionaries["EventInit"]
+-  json_inspect(merged, content={
+-    "name": "EventInit",
+-    "members": [
+-      {
+-        "extended_attributes": [],
+-        "type_": "DOMString",
+-        "name": "type",
+-        "required": true,
+-      },
+-      {
+-        "extended_attributes": [],
+-        "type_": "Boolean",
+-        "name": "bubbles",
+-        "required": false,
+-        "default_value": ["ConstValue", ["Boolean", "false"]],
+-      },
+-    ],
+-    "specs": [""],
+-  })
++  json_inspect(merged, content=({"name":"EventInit","members":[{"extended_attributes":[],"type_extended_attributes":[],"type_":"DOMString","name":"type","required":true},{"extended_attributes":[],"type_extended_attributes":[],"type_":"Boolean","name":"bubbles","required":false,"default_value":["ConstValue",["Boolean","false"]]}],"specs":[""]}))
+ }
+ 
+ ///|
+@@ -152,19 +134,7 @@ test "PartialMergeVisitor merges dictionary with inheritance" {
+   let defs = @parser.parse(widl)
+   let partial_merged = merge_partials(defs)
+   let merged = partial_merged.dictionaries["UIEventInit"]
+-  json_inspect(merged, content={
+-    "name": "UIEventInit",
+-    "members": [
+-      {
+-        "extended_attributes": [],
+-        "type_": ["Identifier", "Window"],
+-        "name": "view",
+-        "required": false,
+-      },
+-    ],
+-    "inheritance": "EventInit",
+-    "specs": [""],
+-  })
++  json_inspect(merged, content=({"name":"UIEventInit","members":[{"extended_attributes":[],"type_extended_attributes":[],"type_":["Identifier","Window"],"name":"view","required":false}],"inheritance":"EventInit","specs":[""]}))
+ }
+ 
+ ///|
+@@ -216,160 +186,5 @@ test "PartialMergeVisitor merges interfaces, mixins, dictionaries, enums, callba
+     #|MyInterface includes MyMixin;
+   let defs = @parser.parse(widl)
+   let partial_merged = merge_partials(defs)
+-  json_inspect(partial_merged, content={
+-    "interfaces": {
+-      "MyInterface": {
+-        "name": "MyInterface",
+-        "members": [
+-          {
+-            "extended_attributes": [],
+-            "interface_member": [
+-              "Attribute",
+-              {
+-                "type_": ["Nullable", "DOMString"],
+-                "name": "textContent",
+-                "is_readonly": false,
+-                "static_": false,
+-                "is_inherit": false,
+-              },
+-            ],
+-          },
+-          {
+-            "extended_attributes": [],
+-            "interface_member": [
+-              "RegularOperation",
+-              {
+-                "return_type": ["Identifier", "Node"],
+-                "name": "appendChild",
+-                "arguments": [
+-                  {
+-                    "extended_attributes": [],
+-                    "type_": {
+-                      "extended_attributes": [],
+-                      "type_": ["Identifier", "Element"],
+-                    },
+-                    "name": "newChild",
+-                    "optional": false,
+-                    "variadic": false,
+-                  },
+-                ],
+-                "static_": false,
+-              },
+-            ],
+-          },
+-        ],
+-        "specs": [""],
+-      },
+-    },
+-    "mixins": {
+-      "MyMixin": {
+-        "name": "MyMixin",
+-        "members": [
+-          {
+-            "extended_attributes": [],
+-            "interface_member": [
+-              "Attribute",
+-              {
+-                "type_": ["Nullable", "DOMString"],
+-                "name": "textContent2",
+-                "is_readonly": false,
+-                "static_": false,
+-                "is_inherit": false,
+-              },
+-            ],
+-          },
+-          {
+-            "extended_attributes": [],
+-            "interface_member": [
+-              "RegularOperation",
+-              {
+-                "return_type": "Undefined",
+-                "name": "doSomething",
+-                "arguments": [],
+-                "static_": false,
+-              },
+-            ],
+-          },
+-        ],
+-        "specs": [""],
+-      },
+-    },
+-    "dictionaries": {
+-      "EventInit": {
+-        "name": "EventInit",
+-        "members": [
+-          {
+-            "extended_attributes": [],
+-            "type_": "DOMString",
+-            "name": "type",
+-            "required": true,
+-          },
+-          {
+-            "extended_attributes": [],
+-            "type_": "Boolean",
+-            "name": "bubbles",
+-            "required": false,
+-            "default_value": ["ConstValue", ["Boolean", "false"]],
+-          },
+-        ],
+-        "inheritance": "Event",
+-        "specs": [""],
+-      },
+-    },
+-    "namespaces": {},
+-    "enums": {
+-      "MyEnum": { "name": "MyEnum", "values": ["value1", "value2"], "spec": "" },
+-    },
+-    "typedefs": {},
+-    "callback_functions": {
+-      "MyCallback": {
+-        "name": "MyCallback",
+-        "return_type": "Undefined",
+-        "arguments": [
+-          {
+-            "extended_attributes": [],
+-            "type_": { "extended_attributes": [], "type_": "DOMString" },
+-            "name": "arg",
+-            "optional": false,
+-            "variadic": false,
+-          },
+-        ],
+-        "spec": "",
+-      },
+-    },
+-    "callback_interfaces": {
+-      "MyCallbackInterface": {
+-        "name": "MyCallbackInterface",
+-        "members": [
+-          {
+-            "extended_attributes": [],
+-            "callback_interface_member": [
+-              "Operation",
+-              {
+-                "return_type": "Undefined",
+-                "name": "onEvent",
+-                "arguments": [
+-                  {
+-                    "extended_attributes": [],
+-                    "type_": {
+-                      "extended_attributes": [],
+-                      "type_": ["Identifier", "Event"],
+-                    },
+-                    "name": "e",
+-                    "optional": false,
+-                    "variadic": false,
+-                  },
+-                ],
+-                "static_": false,
+-              },
+-            ],
+-          },
+-        ],
+-        "spec": "",
+-      },
+-    },
+-    "include_statements": [
+-      { "interface_name": "MyInterface", "mixin_name": "MyMixin" },
+-    ],
+-  })
++  json_inspect(partial_merged, content=({"interfaces":{"MyInterface":{"name":"MyInterface","members":[{"extended_attributes":[],"interface_member":["Attribute",{"type_":["Nullable","DOMString"],"name":"textContent","is_readonly":false,"static_":false,"is_inherit":false}]},{"extended_attributes":[],"interface_member":["RegularOperation",{"return_type":["Identifier","Node"],"name":"appendChild","arguments":[{"extended_attributes":[],"type_":{"extended_attributes":[],"type_":["Identifier","Element"]},"name":"newChild","optional":false,"variadic":false}],"static_":false}]}],"specs":[""]}},"mixins":{"MyMixin":{"name":"MyMixin","members":[{"extended_attributes":[],"interface_member":["Attribute",{"type_":["Nullable","DOMString"],"name":"textContent2","is_readonly":false,"static_":false,"is_inherit":false}]},{"extended_attributes":[],"interface_member":["RegularOperation",{"return_type":"Undefined","name":"doSomething","arguments":[],"static_":false}]}],"specs":[""]}},"dictionaries":{"EventInit":{"name":"EventInit","members":[{"extended_attributes":[],"type_extended_attributes":[],"type_":"DOMString","name":"type","required":true},{"extended_attributes":[],"type_extended_attributes":[],"type_":"Boolean","name":"bubbles","required":false,"default_value":["ConstValue",["Boolean","false"]]}],"inheritance":"Event","specs":[""]}},"namespaces":{},"enums":{"MyEnum":{"name":"MyEnum","values":["value1","value2"],"spec":""}},"typedefs":{},"callback_functions":{"MyCallback":{"name":"MyCallback","return_type":"Undefined","arguments":[{"extended_attributes":[],"type_":{"extended_attributes":[],"type_":"DOMString"},"name":"arg","optional":false,"variadic":false}],"spec":""}},"callback_interfaces":{"MyCallbackInterface":{"name":"MyCallbackInterface","members":[{"extended_attributes":[],"callback_interface_member":["Operation",{"return_type":"Undefined","name":"onEvent","arguments":[{"extended_attributes":[],"type_":{"extended_attributes":[],"type_":["Identifier","Event"]},"name":"e","optional":false,"variadic":false}],"static_":false}]}],"spec":""}},"include_statements":[{"interface_name":"MyInterface","mixin_name":"MyMixin"}]}))
+ }
+diff --git a/webapi-gen/type_mapping/numeric_alias_wbtest.mbt b/webapi-gen/type_mapping/numeric_alias_wbtest.mbt
+new file mode 100644
+index 0000000..6ff01ef
+--- /dev/null
++++ b/webapi-gen/type_mapping/numeric_alias_wbtest.mbt
+@@ -0,0 +1,20 @@
++///|
++test "numeric aliases retain their public name and primitive ABI classification" {
++  let definitions = @parser.parse(
++    "typedef unsigned long Flags; typedef unsigned long long Size; typedef Size Alias; typedef DOMString Text; typedef B A; typedef A B;",
++  )
++  let registry = @type_registry.TypeRegistry::new(definitions)
++  let aliases = {}
++  for definition in definitions {
++    if definition.definition is Typedef(td) { aliases[td.name] = td }
++  }
++  registry.set_typedef_defs(aliases)
++  for name in ["Flags", "Size", "Alias"] {
++    let (mapped, _) = arg_mbt_type(Identifier(name), "Probe", "method", "value", registry)
++    assert_eq(mapped, Primitive(name))
++  }
++  for name in ["Text", "A", "Missing"] {
++    let (mapped, _) = arg_mbt_type(Identifier(name), "Probe", "method", "value", registry)
++    assert_eq(mapped, Other(name))
++  }
++}
+diff --git a/webapi-gen/type_mapping/type_mapping.mbt b/webapi-gen/type_mapping/type_mapping.mbt
+index cccb7dd..640407e 100644
+--- a/webapi-gen/type_mapping/type_mapping.mbt
++++ b/webapi-gen/type_mapping/type_mapping.mbt
+@@ -258,8 +258,12 @@ pub fn arg_mbt_type(
+         @type_registry.NamedTypeKind::Interface => ArgMbtType::Interface(name)
+         @type_registry.NamedTypeKind::Enum => ArgMbtType::Enum(name)
+         @type_registry.NamedTypeKind::Dictionary => ArgMbtType::Dictionary(name)
++        @type_registry.NamedTypeKind::Typedef =>
++          match type_registry.resolve_type(Identifier(name)) {
++            Some(LongLong | UnsignedLongLong | Bigint | Long | UnsignedLong | Short | UnsignedShort | Byte | Octet | Boolean | Float | UnrestrictedFloat | Double | UnrestrictedDouble) => ArgMbtType::Primitive(name)
++            _ => ArgMbtType::Other(name)
++          }
+         @type_registry.NamedTypeKind::UnionTypedef
+-        | @type_registry.NamedTypeKind::Typedef
+         | @type_registry.NamedTypeKind::Callback
+         | @type_registry.NamedTypeKind::Unknown => ArgMbtType::Other(name)
+       }
+diff --git a/webapi-gen/type_registry/resolve_type.mbt b/webapi-gen/type_registry/resolve_type.mbt
+new file mode 100644
+index 0000000..04c68cd
+--- /dev/null
++++ b/webapi-gen/type_registry/resolve_type.mbt
+@@ -0,0 +1,26 @@
++///|
++pub fn TypeRegistry::resolve_type(
++  self : TypeRegistry,
++  type_ : @parser.Type,
++) -> @parser.Type? {
++  let visited : @hashset.HashSet[String] = @hashset.new()
++  let mut current = type_
++  let mut nullable = false
++  loop current {
++    @parser.Type::Nullable(inner) => {
++      nullable = true
++      current = inner
++      continue current
++    }
++    @parser.Type::Identifier(name) => {
++      guard self.typedef_defs.get(name) is Some(definition) else {
++        return Some(if nullable { @parser.Type::Nullable(current) } else { current })
++      }
++      if visited.contains(name) { return None }
++      visited.add(name)
++      current = definition.type_
++      continue current
++    }
++    _ => return Some(if nullable { @parser.Type::Nullable(current) } else { current })
++  }
++}
+diff --git a/webapi-gen/type_registry/resolve_type_wbtest.mbt b/webapi-gen/type_registry/resolve_type_wbtest.mbt
+new file mode 100644
+index 0000000..b822208
+--- /dev/null
++++ b/webapi-gen/type_registry/resolve_type_wbtest.mbt
+@@ -0,0 +1,34 @@
++///|
++fn registry_for(source : String) -> TypeRegistry raise {
++  let definitions = @parser.parse(source)
++  let registry = TypeRegistry::new(definitions)
++  let aliases = {}
++  for definition in definitions {
++    if definition.definition is Typedef(td) {
++      aliases[td.name] = td
++    }
++  }
++  registry.set_typedef_defs(aliases)
++  registry
++}
++
++///|
++test "alias resolution retains numeric identity and nullable wrappers" {
++  let registry = registry_for(
++    "typedef unsigned long long Size; typedef Size Alias; typedef Alias? Maybe; typedef bigint Big; typedef Big BigAlias;",
++  )
++  assert_eq(registry.resolve_type(Identifier("Alias")), Some(UnsignedLongLong))
++  assert_eq(registry.resolve_type(Identifier("Maybe")), Some(Nullable(UnsignedLongLong)))
++  assert_eq(registry.resolve_type(Nullable(Identifier("Alias"))), Some(Nullable(UnsignedLongLong)))
++  assert_eq(registry.resolve_type(Identifier("BigAlias")), Some(Bigint))
++  assert_eq(registry.resolve_type(Identifier("Unknown")), Some(Identifier("Unknown")))
++  assert_eq(registry.resolve_type(LongLong), Some(LongLong))
++}
++
++///|
++test "self and mutual alias cycles terminate without a resolved type" {
++  let registry = registry_for("typedef B A; typedef A B; typedef Self Self;")
++  assert_eq(registry.resolve_type(Identifier("A")), None)
++  assert_eq(registry.resolve_type(Identifier("Self")), None)
++  assert_eq(registry.resolve_type(Nullable(Identifier("A"))), None)
++}

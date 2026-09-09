@@ -119,6 +119,13 @@ pub fn font_commit() -> Int {
 }
 
 ///|
+#cfg(target="js")
+#export_name("font_receive")
+pub fn font_receive(bytes : FixedArray[Byte]) -> Int {
+  @app.font_receive(bytes)
+}
+
+///|
 #export_name("text_width")
 pub fn text_width() -> Int {
   @app.text_width()
@@ -212,6 +219,20 @@ pub fn view_layer_field(layer : Int, field : Int) -> Int {
 #export_name("view_layer_pixel")
 pub fn view_layer_pixel(layer : Int, index : Int) -> Int {
   @app.view_layer_pixel(layer, index)
+}
+
+///|
+#cfg(target="js")
+#export_name("view_layer_bytes")
+pub fn view_layer_bytes(layer : Int) -> Bytes {
+  @app.view_layer_bytes(layer)
+}
+
+///|
+#cfg(target="wasm-gc")
+#export_name("view_layer_bytes")
+pub fn view_layer_bytes(layer : Int) -> String {
+  @app.view_layer_bytes(layer).to_unchecked_string()
 }
 
 ///|

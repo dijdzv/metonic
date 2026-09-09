@@ -1,4 +1,27 @@
 ///|
+test "bulk font receive rejects invalid input and clears pending words" {
+  assert_eq(font_begin(4), 1)
+  assert_eq(font_put(0x01020304), 1)
+  assert_eq(font_receive(FixedArray::make(0, b'\x00')), 0)
+  assert_eq(font_commit(), 0)
+  assert_eq(font_receive(FixedArray::make(4, b'\x00')), 0)
+  assert_eq(font_put(0), 0)
+  assert_eq(font_commit(), 0)
+  assert_eq(font_receive(FixedArray::make(16777217, b'\x00')), 0)
+  assert_eq(font_commit(), 0)
+  text_dispose()
+}
+
+///|
+test "layer bytes reject unavailable indices after disposal" {
+  text_dispose()
+  assert_eq(view_layer_bytes(-1), b"")
+  assert_eq(view_layer_bytes(1), b"")
+  assert_eq(view_layer_count(), 0)
+  assert_eq(view_layer_bytes(0), b"")
+}
+
+///|
 test "text contract accepts ASCII Japanese surrogate pair and combining mark" {
   text_dispose()
   assert_eq(text_begin(7), 1)

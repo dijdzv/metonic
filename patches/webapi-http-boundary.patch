@@ -1,0 +1,96 @@
+diff --git a/webapi/response_interface.mbt b/webapi/response_interface.mbt
+--- a/webapi/response_interface.mbt
++++ b/webapi/response_interface.mbt
+@@ -67,7 +67,7 @@ pub trait TResponse: TJsValue {
+   status_text(self : Self) -> String = _
+   headers(self : Self) -> Headers = _
+   clone(self : Self) -> Response = _
+-  body(self : Self) -> ReadableStream = _
++  body(self : Self) -> ReadableStream? = _
+   body_used(self : Self) -> Bool = _
+   array_buffer(self : Self) -> JsPromise[ArrayBuffer] = _
+   blob(self : Self) -> JsPromise[Blob] = _
+@@ -145,8 +145,8 @@ impl TResponse with clone(self : Self) -> Response {
+ 
+ ///|
+ /// [Response.body](https://developer.mozilla.org/en-US/docs/Web/API/Response/body)
+-impl TResponse with body(self : Self) -> ReadableStream {
+-  response_body_ffi(TJsValue::to_js(self))
++impl TResponse with body(self : Self) -> ReadableStream? {
++  response_body_ffi(TJsValue::to_js(self)).to_option()
+ }
+ 
+ ///|
+@@ -314,7 +314,7 @@ extern "js" fn response_body_ffi_js(obj : JsValue) -> JsValue = "(obj) => obj.bo
+ 
+ ///|
+ #cfg(target="js")
+-fn response_body_ffi(obj : JsValue) -> ReadableStream {
++fn response_body_ffi(obj : JsValue) -> JsValue {
+   response_body_ffi_js(obj).unsafe_cast()
+ }
+ 
+@@ -456,7 +456,7 @@ fn response_clone_ffi(obj : JsValue) -> Response = "webapi_Response" "clone"
+ 
+ ///|
+ #cfg(target="wasm-gc")
+-fn response_body_ffi(obj : JsValue) -> ReadableStream = "webapi_Response" "get_body"
++fn response_body_ffi(obj : JsValue) -> JsValue = "webapi_Response" "get_body"
+ 
+ ///|
+ #cfg(target="wasm-gc")
+diff --git a/webapi/typed_arrays.mbt b/webapi/typed_arrays.mbt
+--- a/webapi/typed_arrays.mbt
++++ b/webapi/typed_arrays.mbt
+@@ -100,6 +100,36 @@ pub impl TJsValue for Uint8Array with to_js(self : Uint8Array) -> JsValue = "%id
+ ///|
+ pub impl FromJsAny for Uint8Array with from_js_any(value : JsAny) -> Uint8Array = "%identity"
+ 
++///|
++pub fn Uint8Array::length(self : Uint8Array) -> UInt {
++  uint8_array_length_ffi(self)
++}
++
++///|
++pub fn Uint8Array::get(self : Uint8Array, index : Int) -> Byte? {
++  if index < 0 || index.to_uint() >= self.length() {
++    None
++  } else {
++    Some(uint8_array_get_ffi(self, index).to_byte())
++  }
++}
++
++///|
++#cfg(target="js")
++extern "js" fn uint8_array_length_ffi(value : Uint8Array) -> UInt = "(value) => value.length"
++
++///|
++#cfg(target="js")
++extern "js" fn uint8_array_get_ffi(value : Uint8Array, index : Int) -> Int = "(value, index) => value[index]"
++
++///|
++#cfg(target="wasm-gc")
++fn uint8_array_length_ffi(value : Uint8Array) -> UInt = "webapi_Uint8Array" "length"
++
++///|
++#cfg(target="wasm-gc")
++fn uint8_array_get_ffi(value : Uint8Array, index : Int) -> Int = "webapi_Uint8Array" "get"
++
+ ///|
+ #external
+ pub type Uint16Array
+diff --git a/webapi/webapi.mjs b/webapi/webapi.mjs
+--- a/webapi/webapi.mjs
++++ b/webapi/webapi.mjs
+@@ -61,6 +61,11 @@ export const wasmImportObject = {
+     navigator: () => navigator
+   },
+ 
++  webapi_Uint8Array: {
++    length: (value) => value.length,
++    get: (value, index) => value[index]
++  },
++
+   webapi_JsPromise: {
+     resolve: (value) => Promise.resolve(value),
+     reject: (reason) => Promise.reject(reason),
