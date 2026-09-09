@@ -53,6 +53,22 @@ application state and the UI host remain MoonBit, with the C ABI boundary below.
 
 ## Boundary and lifetime
 
+### Read-only focus diagnosis
+
+After `mise run native:accessibility-probe-build`, run
+`.work/native-host-build/native/debug/build/local/native_host/accessibility_probe/accessibility_probe.exe <pid> observe-focus`
+against an already running Metonic window. This mode does not set focus, inject
+input, replace values, or close the window. It reports each control's
+`HasKeyboardFocus` and compares the global focused node, reporting its name only
+when its process ID matches the supplied PID. Keep the target in the foreground
+when comparing global focus; another foreground process is reported as unowned.
+
+The probe reuses its SDK cache/VARIANT boundary for `UiaNodeFromFocus`. Microsoft
+[deprecates this C API in favor of COM](https://learn.microsoft.com/en-us/windows/win32/api/uiautomationcoreapi/nf-uiautomationcoreapi-uianodefromfocus);
+the result is an independent diagnostic, not proof of every COM client or
+screen reader's behavior. The normal production check also verifies that the
+root exposes the UIA Window control type, rather than merely matching its name.
+
 MoonBit creates trees, translates state, processes actions and asserts results.
 `native_host/accessibility/mailbox.c` owns at most 32 pending official request
 objects under an SRW lock. The foreign-thread callback cannot safely use a

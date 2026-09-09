@@ -81,6 +81,9 @@ extern "C" fn node_from_handle(
 extern "C" fn navigate(node : UInt64, direction : Int) -> UInt64 = "metonic_uia_navigate"
 
 ///|
+extern "C" fn focused_node() -> UInt64 = "metonic_uia_focused_node"
+
+///|
 #borrow(result)
 extern "C" fn pattern(
   node : UInt64,
@@ -336,9 +339,33 @@ async fn main {
       fail("production UIA root missing")
     }
     defer ignore(release_node(root[0]))
+    if @env.args().length() == 3 && @env.args()[2] == "observe-focus" {
+      let current = focused_node()
+      guard current != 0UL else { fail("global UIA focus unavailable") }
+      defer ignore(release_node(current))
+      let owned = integer(current, 30002) == pid
+      println("UIA_GLOBAL_FOCUS_OWNED " + owned.to_string())
+      for name in ["Text", "User ID", "Load user", "Move after delay", "Cancel"] {
+        let node = child_named(root[0], name)
+        guard node != 0UL else {
+          fail("focus observation node missing: " + name)
+        }
+        defer ignore(release_node(node))
+        let value = FixedArray::make(3, 0UL)
+        assert_eq(property(node, 30008, value), 0)
+        defer ignore(clear(value))
+        guard value[0] == 11UL else { fail("focus property is not Boolean") }
+        let focused = (value[1] & 65535UL) != 0UL
+        println("UIA_FOCUS " + name + " " + focused.to_string())
+        if owned && text_is(current, 30005, name) {
+          println("UIA_GLOBAL_FOCUS " + name)
+        }
+      }
+      return
+    }
     stage("window attached")
-    guard text_is(root[0], 30005, "Metonic") else {
-      fail("production UIA root name mismatch")
+    guard text_is(root[0], 30005, "Metonic") && integer(root[0], 30003) == 50032 else {
+      fail("production UIA root Window role/name mismatch")
     }
     let button = child_named(root[0], "Toggle")
     guard button != 0UL else { fail("production UIA button missing") }

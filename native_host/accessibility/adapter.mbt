@@ -136,7 +136,7 @@ let current : Ref[Bridge?] = { val: None, }
 ///|
 fn tree(_data : UInt64) -> UInt64 {
   let bridge = current.val.unwrap()
-  let root = node_new(114)
+  let root = node_new(133)
   label(root, b"Metonic", 7UL)
   bounds(root, 0, 0, bridge.width.to_double(), bridge.height.to_double())
   let mut focus = 0UL
