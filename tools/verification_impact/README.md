@@ -211,3 +211,16 @@ Existing hooks still run their normal verification. Hook integration must first
 provide fresh graphs for every required workspace/target, classify critical and
 environment-dependent checks, and account for pushed Git revisions and successful
 verification of identical inputs. A stale graph must not authorize skipping tests.
+
+`verification_impact_cli --record-index <checkout> <expected-tree> <config>
+<record> <command> [args...]` records a command against staged input, including
+an initial commit. Its configuration context must identify `tree`, canonical
+`checkout`, serialized `command`, and `base_commit` (the current HEAD commit, or
+`unborn` before the first commit), in addition to the fingerprint context fields.
+Before and after execution it checks the index tree, unstaged/untracked changes,
+hidden index flags and comparison HEAD. Failure invalidates the previous success
+record. Committing the same staged tree preserves the input fingerprint.
+
+This only binds the supplied input configuration and command. It does not prove
+that the configuration enumerates every dependency, tool or environment input,
+and it does not install a hook or authorize a pre-push skip on its own.

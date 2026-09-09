@@ -62,10 +62,10 @@ async fn main {
     println(output.stringify())
     return
   }
-  if args[1] == "--record-checkout" {
+  if args[1] == "--record-checkout" || args[1] == "--record-index" {
     assert_true(
       args.length() >= 7,
-      msg="usage: --record-checkout directory expected-tree config record command [args...]",
+      msg="usage: --record-checkout|--record-index directory expected-tree config record command [args...]",
     )
     record_checkout(
       args[2],
@@ -74,6 +74,7 @@ async fn main {
       args[5],
       args[6],
       args[7:].to_owned(),
+      staged=args[1] == "--record-index",
     )
     return
   }
