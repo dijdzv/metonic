@@ -112,3 +112,18 @@ test('invalid arguments rejection preserves session', { timeout: 10000 }, async 
   try { await assert.rejects(session.client.request('snapshot', null), /invalid native session request/); await assert.rejects(session.client.request('snapshot', []), /invalid native session request/); assert.equal((await session.client.request('snapshot')).ok, true); assert.equal(session.diagnostics().pending, 0); }
   finally { await session.close(); assert.equal(session.diagnostics().exit_code, 0); assert.equal(session.diagnostics().forced_kill, false); }
 });
+
+test('serialized non-object arguments reject before transport and preserve session', { timeout: 10000 }, async () => {
+  const session = await createMoonBitSession(opts('normal'));
+  try {
+    for (const value of [null, [], 'text', 1]) {
+      await assert.rejects(session.client.request('echo', { toJSON: () => value }), /invalid native session request/);
+      assert.equal(session.diagnostics().pending, 0);
+    }
+    assert.equal((await session.client.request('snapshot')).ok, true);
+  } finally {
+    await session.close();
+    assert.equal(session.diagnostics().exit_code, 0);
+    assert.equal(session.diagnostics().forced_kill, false);
+  }
+});
