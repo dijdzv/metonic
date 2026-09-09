@@ -2,6 +2,24 @@ import {
   "moonbitlang/async@0.21.2",
   "moonbitlang/async@0.21.2/process",
   "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/os_error",
+  "moonbitlang/core/ref",
+}
+
+///|
+async fn require_absent_pipe(path : String) -> Unit {
+  let file = @fs.open(path, mode=ReadWrite) catch {
+    @os_error.OSError(code, context~) => {
+      let error = @os_error.OSError(code, context~)
+      if error.is_ENOENT() {
+        return
+      }
+      raise error
+    }
+    error => raise error
+  }
+  file.close()
+  fail("ordinary production app opened a development endpoint")
 }
 
 ///|
@@ -27,13 +45,37 @@ async fn main {
       }
       let env : Map[String, String] = Map([])
       env.set("METONIC_RPC_BASE", "http://" + ready[10:].to_owned())
+      let reservation = @fs.tmpdir(prefix="metonic-production-endpoint")
+      let name = reservation
+        .replace_all(old="\\", new="/")
+        .split("/")
+        .last()
+        .unwrap()
+        .to_owned()
+      let pipe = "\\\\.\\pipe\\" + name
+      require_absent_pipe(pipe)
+      env.set("METONIC_DEV_PIPE", name)
+      let errors = @process.redirect_to_file(reservation + "/stderr.log")
+      defer errors.close()
+      errdefer println(
+        "production endpoint diagnostic: " + reservation + "/stderr.log",
+      )
       let app = @process.spawn(
         group,
         root + "/release/build/local/native_host/window_app/window_app.exe",
         [],
         extra_env=env,
+        stderr=errors,
         no_console_window=true,
       )
+      let checks = @ref.new(0)
+      let monitor = group.spawn(() => {
+        while app.try_wait() is None {
+          require_absent_pipe(pipe)
+          checks.val += 1
+          @async.sleep(25)
+        }
+      })
       let client = @process.spawn(
         group,
         root +
@@ -45,6 +87,20 @@ async fn main {
       guard app.wait() == 0 else {
         fail("production UI failed during UIA verification")
       }
+      monitor.wait()
+      assert_true(checks.val > 0)
+      require_absent_pipe(pipe)
+      let output = @fs.read_file(reservation + "/stderr.log").text()
+      assert_false(
+        output.contains("METONIC_DEV_SESSION") ||
+        output.contains("METONIC_DEV_PIPE_READY"),
+      )
+      println(
+        "WINDOW_PRODUCTION_ENDPOINT_ABSENT checks=" + checks.val.to_string(),
+      )
+      errors.close()
+      @fs.remove(reservation + "/stderr.log")
+      @fs.rmdir(reservation)
       println("WINDOW_PRODUCTION_UIA_PROCESSES_OK")
     }
   })
