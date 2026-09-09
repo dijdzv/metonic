@@ -37,6 +37,30 @@ packages. Callers must supply every owned module and required fresh target graph
 this CLI cannot prove that a configuration is complete or up to date. Its output
 is a reviewable plan, not permission to skip verification.
 
+## Push revision inspection
+
+`verification_impact_cli --push-plan -` reads Git pre-push records from stdin
+(at most 1 MiB); a filename can replace `-` for reproduction. It resolves each
+non-deletion object to a local commit and tree using Git, preserving destination
+refs and deletion records. Missing/non-commit objects fail rather than falling
+back to HEAD. It does not execute tests or certify working-tree contents. The
+runner still needs successful-input records and committed-input verification.
+
+## Verification input inspection
+
+`verification_impact_cli --fingerprint <config.json>` records raw Git blob hashes
+for the explicit `files` array and sorted `context` string fields. Context must
+include `target`, `toolchain`, `command` and `policy`. Paths are canonicalized;
+duplicate paths and input ordering do not change the output. Raw file bytes are
+hashed without Git clean filters, so the record describes actual working files.
+
+This is not a success record or a complete cache key by itself. The caller must
+enumerate all transitive implementation/test inputs, manifests, locks, generated
+sources and relevant configuration, obtain the actual toolchain/environment
+identity, and compare inputs before and after a successful verification. Caller
+supplied context is not independently authenticated. No test is skipped by this
+command and no Git object is written.
+
 ## Legacy check metadata
 
 The Wasm CLI in `tools/verification_impact_cli` accepts a metadata filename,

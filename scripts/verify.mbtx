@@ -25,6 +25,43 @@ async fn run_checked(
 
 ///|
 async fn main {
+  let args = @env.args()
+  let contracts_only = args.length() == 2 && args[1] == "--contracts-only"
+  let selected_only = args.length() > 1 && !contracts_only
+  let packages : Array[String] = []
+  if selected_only {
+    assert_true(
+      args.length() > 2 && args[1] == "--tests-only",
+      msg="usage: verify.mbtx [--tests-only package-directory... | --contracts-only]",
+    )
+    let root = @fs.realpath(".").replace_all(old="\\", new="/").to_lower()
+    for argument in args[2:] {
+      let directory = @fs.realpath(argument).replace_all(old="\\", new="/")
+      assert_true(
+        directory.to_lower().has_prefix(root + "/"),
+        msg="selected package must be inside the repository",
+      )
+      assert_true(
+        @fs.exists(directory + "/moon.pkg") ||
+        @fs.exists(directory + "/moon.pkg.json"),
+        msg="selected package manifest missing",
+      )
+      let ancestors = directory
+        .split("/")
+        .map(part => part.to_owned())
+        .collect()
+      while ancestors.join("/").to_lower() != root {
+        let ancestor = ancestors.join("/")
+        assert_false(
+          @fs.exists(ancestor + "/moon.mod") ||
+          @fs.exists(ancestor + "/moon.mod.json"),
+          msg="selected package belongs to a separate module; use its workspace runner",
+        )
+        ignore(ancestors.pop())
+      }
+      packages.push(directory)
+    }
+  }
   @async.with_timeout(120000, async fn() {
     let moon = @fs.realpath(".tools/moonbit/bin/moon.exe")
     let moon_home = @fs.realpath(".tools/moonbit")
@@ -100,10 +137,22 @@ async fn main {
       ],
       envmap,
     )
-    run_checked(moon, ["fmt", "--check"], envmap)
+    if !selected_only && !contracts_only {
+      run_checked(moon, ["fmt", "--check"], envmap)
+    }
     let targets = if native { ["native"] } else { ["wasm-gc", "js"] }
     for target in targets {
-      run_checked(moon, ["test", "--target", target, "--deny-warn"], envmap)
+      if !contracts_only {
+        let test_args = ["test"]
+        for package_path in packages {
+          test_args.push(package_path)
+        }
+        test_args.append(["--target", target, "--deny-warn"])
+        run_checked(moon, test_args, envmap)
+      }
+      if selected_only {
+        continue
+      }
       run_checked(
         moon,
         ["run", "examples/p0/frontend/app", "--target", target],

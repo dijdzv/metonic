@@ -55,6 +55,9 @@ async fn main {
   )
   run(moon, ["check", "--target", "js", "--deny-warn"])
   run(moon, ["check", "--target", "wasm-gc", "--deny-warn"])
+  run(moon, [
+    "test", "tools/verification_impact_cli", "--target", "wasm", "--deny-warn",
+  ])
   let gates = [
     "verify", "verify-native", "browser:verify", "browser:server-test", "browser:supervisor-test",
     "browser:headless", "browser:async", "devtools:test", "native:headless", "native:control",
