@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { chromium } from 'playwright'
+import { observedPage, reportFailure } from '../tools/devtools/browser-observation.mjs'
 import { verify as verifyPixels, runScene, runFailures, runFontFailures, runText, runDpr, runSuite, runRelease } from '../_build/js/release/build/tools/verify_browser_pixels/verify_browser_pixels.js'
 
 if (process.env.METONIC_BROWSER_SUPERVISED !== '1') throw new Error('Run mise run browser:async/headless')
@@ -52,7 +53,7 @@ async function waitStatus(page, expected) {
 }
 
 async function runTargetUnsafe(browser, target) {
-  const page = await browser.newPage({ viewport: { width: 1000, height: 800 }, deviceScaleFactor: 1 })
+  const page = await observedPage(browser, { viewport: { width: 1000, height: 800 }, deviceScaleFactor: 1 })
   await page.route('**/text-renderer.mjs', async (route) => {
     const response = await route.fetch()
     const source = await response.text()
@@ -151,7 +152,7 @@ async function negativeTests(browser, verifier = runFailures) {
   const hostCommand = async (request) => {
     switch (request.op) {
       case 'open':
-        page = await browser.newPage({ viewport: { width: 1000, height: 800 }, deviceScaleFactor: 1 })
+        page = await observedPage(browser, { viewport: { width: 1000, height: 800 }, deviceScaleFactor: 1 })
         errors = []
         page.on('pageerror', (error) => errors.push(String(error)))
         break
@@ -266,6 +267,7 @@ async function negativeTests(browser, verifier = runFailures) {
     return null
   }
   try { return JSON.parse(await verifier(hostCommand)) }
+  catch (error) { await reportFailure(page); throw error }
   finally { release?.(); await page?.close() }
 }
 
@@ -274,12 +276,8 @@ async function runTarget(browser, target) {
     return await runTargetUnsafe(browser, target)
   } catch (error) {
     console.error(error);
-    let status = ''
-    if (activePage) {
-      status = await activePage.locator('#status').textContent().catch(() => '')
-      await activePage.screenshot({ path: path.join(outputDir, `${target}-failure.png`) }).catch(() => {})
-    }
-    throw new Error(`${target} failed (status=${status?.trim() || 'unknown'})`, { cause: error })
+    await reportFailure(activePage)
+    throw error
   } finally {
     await activePage?.close().catch(() => {})
     activePage = undefined
@@ -303,7 +301,7 @@ try {
   await fs.writeFile(path.join(outputDir, 'gpu-info.json'), JSON.stringify(gpuInfo, null, 2))
   let cropIndex = 0
   async function textTarget(browser, target, reference) {
-      const page = await browser.newPage({ viewport: { width: 1000, height: 800 }, deviceScaleFactor: 1 })
+      const page = await observedPage(browser, { viewport: { width: 1000, height: 800 }, deviceScaleFactor: 1 })
       try {
         await page.goto(`${baseUrl}/?target=${target}`)
         await page.waitForFunction((expected) => document.querySelector('#status')?.textContent?.trim() === expected, `Ready: ${target}`, { timeout: 60000 })
@@ -341,10 +339,11 @@ try {
           return null
         }
         return JSON.parse(await runText(hostCommand, target, reference))
-      } finally { await page.close() }
+      } catch (error) { await reportFailure(page); throw error }
+      finally { await page.close() }
   }
   async function dprTarget(browser, reference) {
-    const dpr = await browser.newPage({ viewport: { width: 1000, height: 800 }, deviceScaleFactor: 2 })
+    const dpr = await observedPage(browser, { viewport: { width: 1000, height: 800 }, deviceScaleFactor: 2 })
     try {
       await runDpr(async (request) => {
         switch (request.op) {
@@ -360,13 +359,14 @@ try {
         }
         return null
       }, reference)
-    } finally { await dpr.close() }
+    } catch (error) { await reportFailure(dpr); throw error }
+    finally { await dpr.close() }
     return true
   }
   const output = await runSuite(async (request) => {
     switch (request.op) {
       case 'release': {
-        const page = await browser.newPage({ viewport: { width: 1000, height: 800 }, deviceScaleFactor: 1 });
+        const page = await observedPage(browser, { viewport: { width: 1000, height: 800 }, deviceScaleFactor: 1 });
         const fixture = process.env.METONIC_RPC_FIXTURE;
         if (!fixture || !/^http:\/\/127\.0\.0\.1:\d+$/.test(fixture)) throw new Error('Missing supervised HTTP fixture');
         const faultRoute = (route) => route.continue({ url: `${fixture}/rpc` });
@@ -426,18 +426,20 @@ try {
             }
             return null;
           }));
-        } finally { await page.close(); }
+        } catch (error) { await reportFailure(page); throw error }
+        finally { await page.close(); }
       }
       case 'default-target': {
-        const page = await browser.newPage();
+        const page = await observedPage(browser);
         try {
           await page.goto(`${baseUrl}/`);
           await waitStatus(page, 'Ready: wasm-gc');
           return await text(page, '#target');
-        } finally { await page.close(); }
+        } catch (error) { await reportFailure(page); throw error }
+        finally { await page.close(); }
       }
       case 'editor-flow': {
-        const page = await browser.newPage();
+        const page = await observedPage(browser);
         try {
           await page.goto(`${baseUrl}/?target=${encodeURIComponent(request.target)}`);
           await waitStatus(page, `Ready: ${request.target}`);
@@ -472,10 +474,11 @@ try {
             return window.metonicAsyncProbe.editor();
           });
           return { preview, committed, reset, stopped };
-        } finally { await page.close(); }
+        } catch (error) { await reportFailure(page); throw error }
+        finally { await page.close(); }
       }
       case 'rpc': {
-        const page = await browser.newPage();
+        const page = await observedPage(browser);
         let release;
         try {
           await page.goto(`${baseUrl}/?target=${encodeURIComponent(request.target)}`);
@@ -514,7 +517,8 @@ try {
             result: document.querySelector('#rpc-result').textContent,
             status: JSON.parse(document.querySelector('#task-state').textContent)[0],
           }));
-        } finally { release?.(); await page.close(); }
+        } catch (error) { await reportFailure(page); throw error }
+        finally { release?.(); await page.close(); }
       }
       case 'scene': return runTarget(browser, request.target)
       case 'failures': return negativeTests(browser)
