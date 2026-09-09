@@ -55,12 +55,30 @@ async fn main {
   let args = @env.args()
   let integration_only = args.length() == 2 && args[1] == "--integration"
   let commit_only = args.length() == 2 && args[1] == "--commit"
+  let push_only = args.length() == 3 && args[1] == "--push"
   assert_true(
-    args.length() == 1 || integration_only || commit_only,
-    msg="usage: pre-commit [--integration | --commit]",
+    args.length() == 1 || integration_only || commit_only || push_only,
+    msg="usage: pre-commit [--integration | --commit | --push base-commit]",
   )
+  let push_base = if push_only {
+    let (code, output, _) = @process.collect_output(
+      "git",
+      ["rev-parse", "--verify", "--end-of-options", args[2] + "^{commit}"],
+      no_console_window=true,
+    )
+    assert_eq(
+      code,
+      0,
+      msg="push lane requires the commit lane's comparison commit",
+    )
+    let base = output.text().trim().to_owned()
+    assert_false(base.is_empty() || base.contains("\n"))
+    Some(base)
+  } else {
+    None
+  }
   let moon = ".tools/moonbit/bin/moon.exe"
-  if !integration_only {
+  if !integration_only && !push_only {
     expect_clean(["diff", "--quiet"], "unstaged changes detected")
     run("git", ["diff", "--cached", "--check"])
     run(moon, ["run", "scripts/prepare-wgpu.mbtx"])
@@ -102,6 +120,14 @@ async fn main {
     )
     return
   }
+  if push_base is Some(base) {
+    for target in ["js", "wasm-gc", "wasm", "native"] {
+      run(moon, [
+        "run", "scripts/plan-local-verification.mbtx", "--", target, "--run-remainder",
+        base,
+      ])
+    }
+  }
   let policy : Map[String, Json] = @json.from_json(
     @json.parse(@fs.read_file("verification.json").text()),
   )
@@ -116,7 +142,8 @@ async fn main {
     seen[gate] = true
   }
   for gate in gates {
-    if integration_only && (gate == "verify" || gate == "verify-native") {
+    if (integration_only || push_only) &&
+      (gate == "verify" || gate == "verify-native") {
       continue
     }
     println("pre-commit gate: mise run " + gate)
@@ -124,7 +151,7 @@ async fn main {
   }
   run(moon, ["run", "scripts/verify-window-fixture-exclusion.mbtx"])
   run(moon, ["run", "scripts/verify-window-production-exclusion.mbtx"])
-  if !integration_only {
+  if !integration_only && !push_only {
     println("pre-commit gate: docs")
     run(moon, ["run", "scripts/verify-docs.mbtx"])
   }
