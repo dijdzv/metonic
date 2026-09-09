@@ -320,6 +320,15 @@ may leave diagnostic files under `.work`; inspect those before removing them.
 
 ## Local pre-commit checks
 
+The optional `mise run verify:commit` lane also checks every owned native-host
+package and selects affected native tests from a newly exported Moon package
+graph. Dependencies outside the native module conservatively select all native
+packages. Its dedicated test directory enables the debug IME fixture symbols;
+the prepared dependency manifest is restored after success, failure or handled
+cancellation. This does not replace production exclusion checks or change the
+installed full pre-commit hook. Pre-push installation and result reuse remain
+tracked in issue #225.
+
 Tracked Markdown links are checked by `moon run scripts/verify-docs.mbtx`.
 The check resolves relative file targets and ignores external URLs and fragments;
 it does not validate heading anchors or implement a complete Markdown parser.
