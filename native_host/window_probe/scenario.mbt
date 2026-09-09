@@ -360,6 +360,35 @@ async fn Scenario::step(self : Scenario, view : @ui.Observation) -> Unit {
       view.accessibility_runs[0] != self.precomposition_run,
       "cancel reused an invalidated text range",
     )
+    self.stage = 34
+    post(view.hwnd, 0x010DU, 0UL, 0L)
+  } else if self.stage == 34 && view.composing {
+    self.stage = 35
+    (view.inject)(CompositionUpdate("つぎ", Some(1)))
+  } else if self.stage == 35 &&
+    view.rendered_text == Some("つぎの描画を確認します ABC 123") {
+    require(
+      view.editor.value == "日本語の描画を確認します ABC 123",
+      "restarted composition mutated committed text",
+    )
+    require(view.preedit_cursor == 1, "restarted composition lost cursor")
+    require(
+      view.accessibility_runs.is_empty(),
+      "restarted composition retained committed geometry",
+    )
+    self.stage = 36
+    post(view.hwnd, 0x010EU, 0UL, 0L)
+  } else if self.stage == 36 &&
+    !view.composing &&
+    view.rendered_text == Some("日本語の描画を確認します ABC 123") {
+    require(
+      view.editor.selection_start == 0 && view.editor.selection_end == 3,
+      "restarted composition cancellation changed selection",
+    )
+    require(
+      !view.accessibility_runs.is_empty(),
+      "restarted composition cancellation lost text geometry",
+    )
     self.stage = 3
     post(view.hwnd, 0x0102U, 0x8A9EUL, 0L)
     post(view.hwnd, 0x0102U, 0xD83DUL, 0L)
