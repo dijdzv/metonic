@@ -171,6 +171,15 @@ after that endpoint closes. Abrupt process termination can leave metadata on
 disk and is not a proof of normal cleanup. Cancellation disconnects the client;
 it cannot undo an operation the application already applied.
 
+The production UIA verification supplies a unique `METONIC_DEV_PIPE` name to the
+ordinary release application. Before startup, periodically during UI operations,
+and after exit, opening that pipe must report absence; access-denied and other
+errors are failures. Captured stderr must contain no development readiness or
+session announcement. This is sampled runtime evidence, paired with development
+attachment positive controls and generated-code/link/binary exclusion checks;
+it does not prove that an endpoint could never exist between samples. Diagnostic
+stderr is retained on failure and removed after success.
+
 Browser input ownership and the pinned DOM binding are described in
 [Browser input host](verification/browser-input.md). `browser:build` prepares the
 dependency and builds the dedicated browser workspace; root and native build
