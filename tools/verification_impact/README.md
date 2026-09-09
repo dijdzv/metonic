@@ -183,8 +183,26 @@ Not every check mode emits this metadata. In the pinned Moon version, a browser
 workspace check with an explicit package selector emits `all_pkgs.json`, which
 has artifact locations but lacks the dependency edges required here. It is not
 a substitute for `packages.json`, and a pre-existing file is not evidence of a
-fresh graph. The CLI must not be connected to a skipping hook until graph export
-and freshness are established for all required checks.
+fresh graph. Checking the entire browser workspace without a package selector
+does emit `packages.json` in a fresh target directory:
+
+```text
+mise exec -- .tools/moonbit/bin/moon.exe -C browser_host check --target wasm-gc --deny-warn --target-dir ../.work/browser-verification-graph
+```
+
+The graph includes workspace members outside `browser_host`, including shared
+root packages and generated browser bindings. `--partition-workspace <policy>
+<target> <metadata> <absolute-scope> [absolute-changed-paths...]` follows all
+dependency edges before restricting execution candidates to the scope directory.
+Output paths are relative to that scope; `.` identifies its root package.
+Critical package names must also be relative to that scope. The ordinary
+`--partition-metadata` command still rejects owned packages outside its metadata
+source directory; it must not silently discard other workspace members.
+
+The browser app currently has no Moon package test files. The commit command
+checks both browser targets with warnings denied; artifact, DOM and GPU behavior
+remain integration checks. An empty package-test inventory is not evidence that
+those runtime checks may be skipped.
 
 The result covers only the supplied graphs. Packages shared across graphs retain
 the union of dependency edges and are included if any graph identifies them as

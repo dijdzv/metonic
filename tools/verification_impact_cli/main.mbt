@@ -18,16 +18,19 @@ async fn main {
     )
     return
   }
-  if args[1] == "--partition-metadata" {
+  if args[1] == "--partition-metadata" || args[1] == "--partition-workspace" {
+    let scoped = args[1] == "--partition-workspace"
+    let start = if scoped { 6 } else { 5 }
     assert_true(
-      args.length() >= 5,
-      msg="usage: --partition-metadata policy target metadata [absolute changed paths...]",
+      args.length() >= start,
+      msg="usage: --partition-metadata policy target metadata [changes...] | --partition-workspace policy target metadata absolute-scope [changes...]",
     )
     let (commit, push) = @impact.partition_metadata(
       @json.parse(@fs.read_file(args[2]).text()),
       args[3],
       @json.parse(@fs.read_file(args[4]).text()),
-      args[5:].to_owned(),
+      args[start:].to_owned(),
+      scope?=if scoped { Some(args[5]) } else { None },
     )
     let output : Json = { "pre_commit": commit, "pre_push": push }
     println(output.stringify())

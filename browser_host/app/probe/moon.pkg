@@ -3,4 +3,6 @@ import {
   "local/p0/examples/p0/browser" @app,
   "bikallem/webapi" @dom,
 }
+supported_targets = "+js+wasm-gc"
+
 options("is-main": true, link: { "wasm-gc": { "imported-string-constants": "_", "use-js-builtin-string": true } })

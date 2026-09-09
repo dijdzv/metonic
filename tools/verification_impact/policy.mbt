@@ -51,6 +51,7 @@ pub fn partition_metadata(
   target : String,
   metadata : Json,
   changes : Array[String],
+  scope? : String,
 ) -> (Array[String], Array[String]) raise {
   let backend = match target {
     "js" => "Js"
@@ -59,7 +60,9 @@ pub fn partition_metadata(
     "native" => "Native"
     _ => fail("unsupported verification target")
   }
-  let root = path(@json.from_json(field(metadata, "source_dir"))) + "/"
+  let root = path(
+    scope.unwrap_or(@json.from_json(field(metadata, "source_dir"))),
+  )
   let selected = select(metadata, changes)
   let entries : Array[Json] = @json.from_json(field(metadata, "packages"))
   let available : Array[String] = []
@@ -76,15 +79,26 @@ pub fn partition_metadata(
       continue
     }
     let directory = path(@json.from_json(field(entry, "root-path")))
-    assert_true(
-      directory.has_prefix(root),
-      msg="owned package outside metadata source root",
-    )
-    let relative = directory[root.length():].to_owned()
+    if directory != root && !directory.has_prefix(root + "/") {
+      assert_true(
+        scope is Some(_),
+        msg="owned package outside metadata source root",
+      )
+      continue
+    }
+    let relative = if directory == root {
+      "."
+    } else {
+      directory[root.length() + 1:].to_owned()
+    }
     available.push(relative)
     if selected.packages.contains(directory) {
       affected.push(relative)
     }
   }
+  assert_false(
+    available.is_empty(),
+    msg="no supported owned packages in verification scope",
+  )
   partition_tests(policy, target, available, affected)
 }
