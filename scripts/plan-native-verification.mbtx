@@ -1,0 +1,114 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/json",
+}
+
+///|
+async fn checked(command : String, arguments : Array[String]) -> String {
+  let (code, output, error) = @process.collect_output(
+    command,
+    arguments,
+    no_console_window=true,
+  )
+  assert_eq(code, 0, msg=output.text() + error.text())
+  output.text()
+}
+
+///|
+async fn main {
+  let root = @fs.realpath(".")
+  let moon = @fs.realpath(".tools/moonbit/bin/moon.exe")
+  let directory = root + "/.work/native-verification-plan"
+  let metadata = directory + "/package_graph.dot"
+  if @fs.exists(metadata) {
+    @fs.remove(metadata)
+  }
+  let checks = ["-C", "native_host", "-Z", "rr_export_package_graph", "check"]
+  let available : Array[String] = []
+  for
+    filename in checked("git", [
+      "ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", "native_host/**/moon.pkg",
+      "native_host/**/moon.pkg.json",
+    ]).split("\u0000") {
+    if filename.is_empty() {
+      continue
+    }
+    let relative = filename.strip_prefix("native_host/").unwrap()
+    let package_path = relative
+      .strip_suffix("/moon.pkg")
+      .unwrap_or_else(() => relative.strip_suffix("/moon.pkg.json").unwrap())
+    checks.push(package_path.to_owned())
+    available.push(
+      @fs.realpath("native_host/" + package_path.to_owned())
+      .replace_all(old="\\", new="/")
+      .to_lower(),
+    )
+  }
+  assert_false(available.is_empty(), msg="native package inventory missing")
+  checks.append(["--target", "native", "--deny-warn", "--target-dir", directory])
+  println(checked(moon, checks))
+  assert_true(
+    @fs.exists(metadata),
+    msg="fresh native workspace metadata missing",
+  )
+  let changes : Array[String] = []
+  for
+    options in [
+      ["diff", "--name-only", "-z", "HEAD", "--"],
+      ["ls-files", "--others", "--exclude-standard", "-z"],
+    ] {
+    for filename in checked("git", options).split("\u0000") {
+      if !filename.is_empty() {
+        changes.push(root + "/" + filename.to_owned())
+      }
+    }
+  }
+  let graph_config : Json = {
+    "graphs": [metadata],
+    "modules": { "local/native_host": @fs.realpath("native_host") },
+  }
+  let graph_file = directory + "/graph.json"
+  @fs.write_file(graph_file, graph_config.stringify())
+  let command = [
+    "run", "tools/verification_impact_cli", "--target", "wasm", "--", "--plan", graph_file,
+  ]
+  command.append(changes)
+  let plan = checked(moon, command)
+  println(plan)
+  let fields : Map[String, Json] = @json.from_json(@json.parse(plan))
+  let packages : Array[String] = @json.from_json(
+    fields.get("packages").unwrap(),
+  )
+  for selected in packages {
+    assert_true(
+      available.contains(selected),
+      msg="selected package not checked",
+    )
+  }
+  if !packages.is_empty() {
+    // Environment-only flags would bypass Moon's incremental compilation key.
+    let manifest = ".work/native-deps/sources/window-ime-observed/modules/window/windows/moon.pkg"
+    let original = @fs.read_file(manifest).text()
+    assert_false(original.contains("stub-cc-flags"))
+    assert_eq(original.split("options(").count(), 2)
+    let flags : Json = "/UMETONIC_IME_TRACE /DMETONIC_IME_TRACE=1 /UMETONIC_IME_TRACE_TEST /DMETONIC_IME_TRACE_TEST=1"
+    @fs.write_file(
+      manifest,
+      original.replace_all(
+        old="options(",
+        new="options(\n  link: { \"native\": { \"stub-cc-flags\": " +
+          flags.stringify() +
+          " } },",
+      ),
+    )
+    defer @async.protect_from_cancel(() => @fs.write_file(manifest, original))
+    let tests = ["-C", "native_host", "test"]
+    tests.append(packages)
+    tests.append([
+      "--target", "native", "--deny-warn", "--target-dir", directory,
+    ])
+    println(checked(moon, tests))
+  }
+}

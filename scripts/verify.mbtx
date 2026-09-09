@@ -26,12 +26,15 @@ async fn run_checked(
 ///|
 async fn main {
   let args = @env.args()
+  let native_workspace = args.length() == 2 && args[1] == "--native-workspace"
   let target_contracts = args.length() == 3 && args[1] == "--target-contracts"
   let contracts_only = (args.length() == 2 && args[1] == "--contracts-only") ||
     target_contracts
-  let selected_only = args.length() > 1 && !contracts_only
+  let selected_only = args.length() > 1 && !contracts_only && !native_workspace
   let target_only = args.length() > 1 && args[1] == "--target-tests"
-  let requested_target = if target_only || target_contracts {
+  let requested_target = if native_workspace {
+    Some("native")
+  } else if target_only || target_contracts {
     assert_true(target_contracts || args.length() > 3)
     assert_true(["js", "wasm-gc", "wasm", "native"].contains(args[2]))
     Some(args[2])
@@ -141,6 +144,25 @@ async fn main {
       envmap.set("MOON_CC", "cl")
       envmap.set("VSLANG", "1033")
       envmap.set("MOON_HOME", moon_home)
+    }
+    if native_workspace {
+      run_checked(moon, ["run", "scripts/prepare-native-deps.mbtx"], envmap)
+      run_checked(moon, ["run", "scripts/prepare-accesskit.mbtx"], envmap)
+      run_checked(moon, ["run", "scripts/prepare-accesskit-focus.mbtx"], envmap)
+      let accesskit = @fs.realpath(".work/accesskit-assets/accesskit-c-0.22.3")
+      let libraries = accesskit + "/lib/windows/x86_64/msvc/shared"
+      envmap.set(
+        "INCLUDE",
+        accesskit + "/include;" + envmap.get("INCLUDE").unwrap_or(""),
+      )
+      envmap.set("LIB", libraries + ";" + envmap.get("LIB").unwrap_or(""))
+      envmap.set("PATH", libraries + ";" + envmap.get("PATH").unwrap_or(""))
+      run_checked(
+        moon,
+        ["run", "scripts/plan-native-verification.mbtx"],
+        envmap,
+      )
+      return
     }
     run_checked(moon, ["run", "scripts/doctor.mbtx"], envmap)
     run_checked(
