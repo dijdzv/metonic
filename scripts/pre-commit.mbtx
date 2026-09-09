@@ -80,6 +80,11 @@ async fn main {
     ])
   }
   if commit_only {
+    for target in ["js", "wasm-gc"] {
+      run(moon, [
+        "-C", "browser_host", "check", "--target", target, "--deny-warn",
+      ])
+    }
     for target in ["js", "wasm-gc", "wasm", "native"] {
       run(moon, [
         "run", "scripts/plan-local-verification.mbtx", "--", target, "--run-commit",
