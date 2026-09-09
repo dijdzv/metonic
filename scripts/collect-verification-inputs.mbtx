@@ -1,0 +1,147 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+}
+
+///|
+async fn checked(command : String, args : Array[String]) -> String {
+  let (code, output, _) = @process.collect_output(
+    command,
+    args,
+    no_console_window=true,
+  )
+  assert_eq(code, 0, msg="input discovery failed: " + command)
+  output.text().trim().to_owned()
+}
+
+///|
+async fn main {
+  let args = @env.args()
+  assert_eq(
+    args.length() == 2 || args.length() == 3,
+    true,
+    msg="usage: collect-verification-inputs output.json [base-commit]",
+  )
+  let root = @fs.realpath(".")
+  let files : Array[String] = []
+  for path in checked("git", ["ls-files", "--cached", "-z"]).split("\u0000") {
+    if !path.is_empty() {
+      files.push(@fs.realpath(path.to_owned()))
+    }
+  }
+  let trees : Array[String] = []
+  for
+    path in [
+      ".tools/moonbit/bin", ".tools/moonbit/lib", ".tools/moonbit/include", ".tools/moonbit/cache/deps/v1/sources",
+      ".mooncakes", "native_host/.mooncakes", "browser_host/.mooncakes", ".work/browser-gpu/generated",
+      ".work/wgpu-assets", ".work/text-assets", ".work/native-deps/sources/window-ime-observed",
+      ".work/native-deps/sources/async-local-control", ".work/accesskit-assets/accesskit-c-0.22.3/include",
+      ".work/accesskit-assets/accesskit-c-0.22.3/lib/windows/x86_64/msvc/shared",
+    ] {
+    trees.push(@fs.realpath(path))
+  }
+  files.push(@fs.realpath(".work/accesskit-focus-build/release/accesskit.dll"))
+  for
+    command in [
+      "git.exe", "node.exe", "mise.exe", "pwsh.exe", "cargo.exe", "rustc.exe",
+    ] {
+    let output = checked("where.exe", [command])
+    let selected = output.split("\n").next().unwrap().trim().to_owned()
+    files.push(@fs.realpath(selected))
+  }
+  let vswhere = @env.get_env_var("ProgramFiles(x86)").unwrap_or(
+      "C:/Program Files (x86)",
+    ) +
+    "/Microsoft Visual Studio/Installer/vswhere.exe"
+  files.push(@fs.realpath(vswhere))
+  let install = checked(vswhere, [
+    "-utf8", "-latest", "-products", "*", "-requires", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+    "-property", "installationPath",
+  ])
+  assert_false(
+    install.is_empty() ||
+    install.contains("\n") ||
+    install.contains("\"") ||
+    install.contains("%"),
+  )
+  let directory = ".work/verification-input-discovery"
+  if !@fs.exists(directory) {
+    @fs.mkdir(directory, recursive=true)
+  }
+  let script = directory + "/environment.cmd"
+  @fs.write_file(
+    script,
+    "@echo off\r\nchcp 65001>nul\r\ncall \"" +
+    install +
+    "/Common7/Tools/VsDevCmd.bat\" -no_logo -arch=x64 -host_arch=x64\r\nif errorlevel 1 exit /b 1\r\nset\r\n",
+  )
+  let output = checked("cmd.exe", [
+    "/d",
+    "/c",
+    script.replace_all(old="/", new="\\"),
+  ])
+  let native_env : Map[String, String] = Map([])
+  for line in output.split("\n") {
+    if line.find("=") is Some(index) {
+      native_env[line[:index].to_owned().to_upper()] = line[index + 1:]
+        .trim_end(chars="\r")
+        .to_owned()
+    }
+  }
+  for name in ["INCLUDE", "LIB"] {
+    for path in native_env.get(name).unwrap().split(";") {
+      if !path.is_empty() {
+        trees.push(@fs.realpath(path.to_owned()))
+      }
+    }
+  }
+  for name in ["VCTOOLSINSTALLDIR", "WINDOWSSDKDIR"] {
+    let path = native_env.get(name).unwrap()
+    trees.push(@fs.realpath(path + "/bin"))
+  }
+  let moon = @fs.realpath(".tools/moonbit/bin/moon.exe")
+  let command : Json = [
+    moon, "run", "scripts/pre-commit.mbtx", "--", "--commit",
+  ]
+  let environment = [
+    "PATH", "PATHEXT", "MOON_HOME", "MOON_CC", "CL", "_CL_", "INCLUDE", "LIB", "LIBPATH",
+    "NODE_OPTIONS", "RUSTFLAGS", "CARGO_HOME", "RUSTUP_HOME", "METONIC_GPU_BACKEND",
+    "METONIC_GPU_FALLBACK", "METONIC_SURFACE_RAW", "SYSTEMROOT", "WINDIR", "COMSPEC",
+    "TEMP", "TMP",
+  ]
+  for name, _ in @env.get_env_vars() {
+    let upper = name.to_upper()
+    if ["MOON", "METONIC_", "CARGO_", "RUST", "NODE_"].any(prefix => {
+        upper.has_prefix(prefix)
+      }) &&
+      !environment.contains(upper) {
+      environment.push(upper)
+    }
+  }
+  environment.sort()
+  let config : Json = {
+    "files": files,
+    "trees": trees,
+    "environment": environment,
+    "context": {
+      "target": "commit-lane",
+      "toolchain": checked(moon, ["version", "--all"]),
+      "policy": "conservative-input-discovery-v1",
+      "command": command.stringify(),
+      "checkout": root,
+      "tree": checked("git", ["write-tree"]),
+      "base_commit": checked("git", [
+        "rev-parse",
+        "--verify",
+        "--end-of-options",
+        (if args.length() == 3 { args[2] } else { "HEAD" }) + "^{commit}",
+      ]),
+      "native_installation": install,
+    },
+  }
+  @fs.write_file(args[1], config.stringify())
+  println("VERIFICATION_INPUT_CONFIG_WRITTEN")
+}

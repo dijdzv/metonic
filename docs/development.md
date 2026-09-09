@@ -123,6 +123,26 @@ Git's pushed refs or a previous success record. An absent or invalid comparison
 commit fails before verification. The ordinary pre-commit still runs the full
 gate until those input and result checks are connected.
 
+The manual `mise run verify:commit-recorded` command collects current tracked
+files, prepared dependencies, MoonBit tools, selected MSVC/SDK directories and
+declared environment inputs, runs the commit lane, and repeats discovery before
+publishing `.work/local-verification-records/commit.json`. Failed discovery or
+verification invalidates the previous record. The staged tree and comparison HEAD
+must remain unchanged. Preparation must already be available; these commands are
+not bootstrap replacements.
+
+`mise run --raw verify:push-recorded <input-file>` accepts Git pre-push ref lines;
+omit the file to read stdin. It requires the checkout to match every non-deletion
+pushed tree. Matching freshly discovered inputs select the complementary lane;
+missing/mismatched records select the full gate. Different trees are rejected
+instead of being checked against unrelated HEAD. Deletion-only input runs neither
+discovery nor verification. Inputs are discovered again after verification.
+
+These manual commands do not install hooks. The input collector uses the current
+repository's dependency layout; its policy and unsupported cases must be reviewed
+before enabling automatic reuse. A passing generic dispatcher test is not proof
+that every future tool or dependency is covered by that layout.
+
 ## Integrated window HTTP requests
 
 For an interactive session, run `mise run demo`. It builds the browser host and

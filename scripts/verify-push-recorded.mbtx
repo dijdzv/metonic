@@ -1,0 +1,52 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/async@0.21.2/stdio",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+}
+
+///|
+async fn main {
+  let args = @env.args()
+  assert_true(
+    args.length() <= 2,
+    msg="usage: verify-push-recorded [input-file]",
+  )
+  let moon = @fs.realpath(".tools/moonbit/bin/moon.exe")
+  let discovery : Json = [
+    moon, "run", "scripts/collect-verification-inputs.mbtx", "--",
+  ]
+  let commit : Json = [moon, "run", "scripts/pre-commit.mbtx", "--", "--commit"]
+  let full : Json = [moon, "run", "scripts/pre-commit.mbtx"]
+  let remainder : Json = [
+    moon, "run", "scripts/pre-commit.mbtx", "--", "--push",
+  ]
+  let code = @process.run(
+    moon,
+    [
+      "run",
+      "tools/verification_impact_cli",
+      "--target",
+      "wasm",
+      "--",
+      "--run-discovered-push",
+      @fs.realpath("."),
+      if args.length() == 2 {
+        args[1]
+      } else {
+        "-"
+      },
+      ".work/local-verification-records/commit.json",
+      discovery.stringify(),
+      commit.stringify(),
+      full.stringify(),
+      remainder.stringify(),
+    ],
+    stdin=@stdio.stdin,
+    no_console_window=true,
+  )
+  assert_eq(code, 0, msg="push verification failed")
+  println("PUSH_VERIFICATION_OK")
+}
