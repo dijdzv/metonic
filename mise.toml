@@ -95,6 +95,7 @@ run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/report-browser-comparison.m
 [tasks."browser:headless"]
 depends = ["browser:package"]
 run = [
+  'node --test tools/devtools/browser-observation.test.mjs',
   '.\\.tools\\moonbit\\bin\\moon.exe build tools/rpc_fault_server --target wasm --release --frozen --deny-warn',
   '.\\.tools\\moonbit\\bin\\moon.exe build tools/verify_browser_pixels --target js --release --frozen --deny-warn',
   '.\\.tools\\moonbit\\bin\\moon.exe test tools/verify_browser_pixels --target js --release --frozen --deny-warn',
