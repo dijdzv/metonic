@@ -16,12 +16,14 @@ async fn App::dispatch_development(
     Capture(result) =>
       result.val = Some(
         try {
+          let state = app.snapshot()
           let pixels = app.renderer.unwrap().capture_frame()
           Ok(Captured::{
+            state,
             pixels,
-            width: @scene.field(app.model.scene, 6),
-            height: @scene.field(app.model.scene, 7),
-            frame: app.diagnostics.frames,
+            width: state.width,
+            height: state.height,
+            frame: state.frames,
           })
         } catch {
           error => Err(error)

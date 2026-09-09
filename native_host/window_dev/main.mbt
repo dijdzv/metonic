@@ -26,6 +26,7 @@ async fn respond(
   }
   let mut error = ""
   let mut captured_image : Json = Json::null()
+  let mut captured_state : @ui.Snapshot? = None
   if request.id < 1 {
     error = "invalid_id"
   } else if identity is Some(expected) &&
@@ -40,6 +41,7 @@ async fn respond(
       "snapshot" | "capabilities" => ()
       "capture" => {
         let captured = (handle.capture)()
+        captured_state = Some(captured.state)
         let png = @image.encode_png(@image.ImageData::{
           width: captured.width,
           height: captured.height,
@@ -82,7 +84,10 @@ async fn respond(
       _ => error = "unknown_operation"
     }
   }
-  let state = (handle.inspect)()
+  let state = match captured_state {
+    Some(state) => state
+    None => (handle.inspect)()
+  }
   let response : Json = {
     "id": request.id,
     "error": error,

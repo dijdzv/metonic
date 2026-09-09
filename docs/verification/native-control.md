@@ -1,5 +1,24 @@
 # Native CLI and MCP verification
 
+## Integrated window capture consistency
+
+The window capture response carries the snapshot taken immediately before its
+shared offscreen pass. Subsequent queued events can advance the application while
+the caller resumes; they must not replace the image's state with a later snapshot.
+The response's frame counter is the application's submitted-frame counter at that
+observation, not an independently confirmed presentation timestamp. The image
+remains explicitly attributed to `shared_offscreen_pass`.
+
+`mise run native:window` includes a capture followed by a queued move on both
+default and fallback adapters. It checks that the live state advances while the
+captured frame, coordinates, scene revision and dimensions retain their original
+values, followed by normal cleanup. Substituting a post-capture snapshot makes
+the regression fail with different frame counters. This tests the native Handle
+and GPU readback; it does not establish real IME or a specified presented-frame
+capture/wait contract. Production-window presentation remains a separate check.
+
+## Original launch-scoped verification
+
 Date: 2026-09-06.
 
 The launch-scoped control experiment uses a MoonBit client from both the JSON-line

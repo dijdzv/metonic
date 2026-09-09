@@ -1,6 +1,10 @@
 ///|
 async fn main {
   let mode = @env.get_env_var("METONIC_WINDOW_INIT_TEST").unwrap_or("normal")
+  if mode == "capture" {
+    @ui.run(controller=Some(capture_observation), hidden=true)
+    return
+  }
   require(
     mode == "normal" || mode == "input" || mode == "close",
     "unknown initialization test",

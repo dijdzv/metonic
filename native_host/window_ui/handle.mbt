@@ -51,6 +51,7 @@ pub struct Handle {
 
 ///|
 pub struct Captured {
+  state : Snapshot
   pixels : Bytes
   width : Int
   height : Int
@@ -95,63 +96,69 @@ fn App::handle(self : App) -> Handle {
       }
       result.val.unwrap_or("closed")
     },
-    inspect: () => {
-      let node = @semantics.snapshot(self.model.editor)[1]
-      {
-        view: self.model.view(),
-        input: self.diagnostics.input,
-        x: @scene.field(self.model.scene, 0),
-        y: @scene.field(self.model.scene, 1),
-        ime_events: self.diagnostics.ime_events.map(value => value),
-        raw_ime_events: self.raw_ime_events(),
-        raw_ime_dropped: self.raw_ime_dropped(),
-        ime_dropped: self.diagnostics.ime_dropped,
-        width: @scene.field(self.model.scene, 6),
-        height: @scene.field(self.model.scene, 7),
-        semantic_revision: @semantics.revision(self.model.editor),
-        scene_revision: @scene.field(self.model.scene, 5),
-        text: node.value,
-        selection_start: node.selection_start,
-        selection_end: node.selection_end,
-        selection_anchor: node.selection_anchor,
-        caret: @semantics.caret(node),
-        frames: self.diagnostics.frames,
-        task_status: self.model.task_field(0),
-        rpc_result: self.model.result,
-        composing: self.composition is Some(_),
-        preedit: self.preedit,
-        preedit_cursor: if self.composition is Some(_) {
-          Some(self.preedit_cursor)
-        } else {
-          None
-        },
-        ime_requested_x: self.window.map(window => {
-          window.ime_cursor_area_position().x()
-        }),
-        ime_requested_y: self.window.map(window => {
-          window.ime_cursor_area_position().y()
-        }),
-        closed: self.closed,
-      }
+    inspect: () => self.snapshot(),
+    apply: action => self.apply_action(action),
+  }
+}
+
+///|
+fn App::snapshot(self : App) -> Snapshot {
+  let node = @semantics.snapshot(self.model.editor)[1]
+  {
+    view: self.model.view(),
+    input: self.diagnostics.input,
+    x: @scene.field(self.model.scene, 0),
+    y: @scene.field(self.model.scene, 1),
+    ime_events: self.diagnostics.ime_events.map(value => value),
+    raw_ime_events: self.raw_ime_events(),
+    raw_ime_dropped: self.raw_ime_dropped(),
+    ime_dropped: self.diagnostics.ime_dropped,
+    width: @scene.field(self.model.scene, 6),
+    height: @scene.field(self.model.scene, 7),
+    semantic_revision: @semantics.revision(self.model.editor),
+    scene_revision: @scene.field(self.model.scene, 5),
+    text: node.value,
+    selection_start: node.selection_start,
+    selection_end: node.selection_end,
+    selection_anchor: node.selection_anchor,
+    caret: @semantics.caret(node),
+    frames: self.diagnostics.frames,
+    task_status: self.model.task_field(0),
+    rpc_result: self.model.result,
+    composing: self.composition is Some(_),
+    preedit: self.preedit,
+    preedit_cursor: if self.composition is Some(_) {
+      Some(self.preedit_cursor)
+    } else {
+      None
     },
-    apply: action => {
-      require(!self.closed, "window closed")
-      let event = match action {
-        Move(x, y) => Input(@scene.Action::Move(x, y))
-        Activate => Input(@scene.Action::Activate)
-        Insert(text) => Commit(text)
-        Backspace => Event::Backspace
-        StartUpdate => Event::StartUpdate
-        LoadUser(id) => Event::LoadUser(id)
-        CancelUpdate => Event::CancelUpdate
-        Close => Event::Close
-      }
-      let applied = Ref(false)
-      self.events.put(event)
-      self.events.put(Development(Barrier(applied)))
-      while !applied.val && !self.closed {
-        @async.sleep(1)
-      }
-    },
+    ime_requested_x: self.window.map(window => {
+      window.ime_cursor_area_position().x()
+    }),
+    ime_requested_y: self.window.map(window => {
+      window.ime_cursor_area_position().y()
+    }),
+    closed: self.closed,
+  }
+}
+
+///|
+async fn App::apply_action(self : App, action : Action) -> Unit {
+  require(!self.closed, "window closed")
+  let event = match action {
+    Move(x, y) => Input(@scene.Action::Move(x, y))
+    Activate => Input(@scene.Action::Activate)
+    Insert(text) => Commit(text)
+    Backspace => Event::Backspace
+    StartUpdate => Event::StartUpdate
+    LoadUser(id) => Event::LoadUser(id)
+    CancelUpdate => Event::CancelUpdate
+    Close => Event::Close
+  }
+  let applied = Ref(false)
+  self.events.put(event)
+  self.events.put(Development(Barrier(applied)))
+  while !applied.val && !self.closed {
+    @async.sleep(1)
   }
 }
