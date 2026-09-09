@@ -10,6 +10,10 @@ async function loadFont(app, disposed) {
   if (disposed()) return false;
   const hash = [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, '0')).join('');
   if (hash !== FONT_HASH) throw new Error('NotoSansJP.ttf SHA-256 mismatch');
+  if (typeof app.font_receive === 'function') {
+    if (app.font_receive(bytes.slice()) !== 1) throw new Error('MoonBit font_receive rejected font');
+    return true;
+  }
   if (app.font_begin(bytes.length) !== 1) throw new Error('MoonBit font_begin rejected font');
   for (let index = 0; index < bytes.length; index += 4) {
     let word = 0;

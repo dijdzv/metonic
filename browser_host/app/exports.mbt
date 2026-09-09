@@ -119,6 +119,13 @@ pub fn font_commit() -> Int {
 }
 
 ///|
+#cfg(target="js")
+#export_name("font_receive")
+pub fn font_receive(bytes : FixedArray[Byte]) -> Int {
+  @app.font_receive(bytes)
+}
+
+///|
 #export_name("text_width")
 pub fn text_width() -> Int {
   @app.text_width()

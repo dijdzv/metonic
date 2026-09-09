@@ -14,6 +14,9 @@ export function wasmImports() {
 }
 
 export function validateExports(exports, target) {
+  if (target === 'js' && typeof exports.font_receive !== 'function') {
+    throw new Error('js artifact is missing required export: font_receive');
+  }
   for (const name of [...REQUIRED, 'view_layer_bytes', 'inputs_start', 'inputs_stop', 'inputs_error', 'inputs_composing', 'http_start', 'http_cancel', 'http_active', 'http_timeout']) {
     if (typeof exports[name] !== 'function') {
       throw new Error(`${target} artifact is missing required export: ${name}`);
