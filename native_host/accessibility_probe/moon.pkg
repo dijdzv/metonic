@@ -3,6 +3,7 @@ import {
   "moonbitlang/async/process",
   "moonbitlang/async/fs", "moonbitlang/core/json", "mizchi/image",
   "local/p0/text_raster" @raster,
+  "local/p0/tools/recording_contract" @recording,
   "local/native_host/accessibility" @accessibility,
 }
 pkgtype(kind: "executable")

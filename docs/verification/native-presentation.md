@@ -88,6 +88,23 @@ after restoring the short editor text. This detects the previous clipping of the
 result by editor contents. It does not establish scrolling of the editor's own
 offscreen lines.
 
+`native:presentation` also makes a separate, bounded one-second recording through
+the pinned CLI's `ui record --frames` API. It saves result metadata, the frame
+manifest/index and JPEGs in a fresh `.work/recording-*` directory, with owned
+HWND/PID and DPI observations. A `verified.json` marker is written only after
+checking mode, completion, dimensions, sample counts/order and contained image
+paths. JPEG signatures and nonempty video are checked; these are not lossless
+pixel assertions or a complete media decoder validation.
+
+The recorded mode can be `wgc` or `printwindow`; `screen` is rejected. Default and
+requested-fallback runs at 96 DPI reported `wgc`. This identifies the associated
+recording, not any separate screenshot PNG or application semantic frame. Sample
+times are recorder elapsed times. Different display scales and occlusion remain
+unverified. `METONIC_RECORDING_CANCEL_TEST=1` with `native:presentation` exercises
+a one-second timeout of a ten-second recording, requiring cancellation and child
+exit before the remaining owned-window checks continue. Partial artifacts remain
+for diagnosis and do not receive the verified marker.
+
 The CLI's screenshot JSON does not report capture mode. Its pinned source tries
 Windows Graphics Capture and may fall back to PrintWindow. Consequently this
 record calls the images HWND-scoped captures, not verified WGC frames. A
