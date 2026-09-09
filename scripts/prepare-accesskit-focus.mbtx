@@ -13,7 +13,12 @@ async fn run(command : String, args : Array[String]) -> Unit {
 }
 
 ///|
-async fn source(name : String, url : String, hash : String) -> Unit {
+async fn source(
+  name : String,
+  url : String,
+  hash : String,
+  stage : String,
+) -> Unit {
   let directory = ".work/accesskit-focus-source"
   let archive = directory + "/" + name + ".tar.gz"
   if !@fs.exists(archive) {
@@ -30,7 +35,49 @@ async fn source(name : String, url : String, hash : String) -> Unit {
     .any(line => line.trim().to_owned().to_lower() == hash) else {
     fail("AccessKit source hash mismatch: " + name)
   }
-  run("tar", ["-xf", archive, "-C", directory])
+  run("tar", ["-xf", archive, "-C", stage])
+}
+
+///|
+async fn checked_path(path : String) -> Unit {
+  let expected = @fs.realpath(".").replace_all(old="\\", new="/") + "/" + path
+  assert_eq(
+    @fs.realpath(path).replace_all(old="\\", new="/").to_lower(),
+    expected.to_lower(),
+  )
+}
+
+///|
+async fn publish(name : String, stage : String) -> Unit {
+  let fresh = stage + "/" + name
+  let existing = ".work/accesskit-focus-source/" + name
+  checked_path(fresh)
+  if @fs.exists(existing) {
+    checked_path(existing)
+    let (code, _, stderr) = @process.collect_output(
+      "git",
+      [
+        "diff", "--no-index", "--quiet", "--exit-code", "--no-ext-diff", "--no-textconv",
+        fresh, existing,
+      ],
+      no_console_window=true,
+    )
+    if code == 0 {
+      println("ACCESSKIT_SOURCE_UNCHANGED " + name)
+      return
+    }
+    assert_eq(code, 1, msg="AccessKit source comparison: " + stderr.text())
+    let backup = stage + "/previous-" + name
+    assert_true(!@fs.exists(backup))
+    @fs.rename(existing, backup, replace=false)
+    errdefer @async.protect_from_cancel(() => {
+      @fs.rename(backup, existing, replace=false)
+    })
+    @fs.rename(fresh, existing, replace=false)
+  } else {
+    @fs.rename(fresh, existing, replace=false)
+  }
+  println("ACCESSKIT_SOURCE_UPDATED " + name)
 }
 
 ///|
@@ -47,17 +94,31 @@ async fn main {
     if !@fs.exists(".work/accesskit-focus-source") {
       @fs.mkdir(".work/accesskit-focus-source", recursive=true)
     }
+    checked_path(".work/accesskit-focus-source")
+    let lock_dir = ".work/accesskit-focus-source/prepare.lock"
+    @fs.mkdir(lock_dir)
+    defer @async.protect_from_cancel(() => @fs.rmdir(lock_dir))
+    let stage = ".work/accesskit-focus-source/stage"
+    assert_true(
+      !@fs.exists(stage),
+      msg="unexpected AccessKit staging directory",
+    )
+    @fs.mkdir(stage)
+    defer @async.protect_from_cancel(() => {
+      checked_path(stage)
+      @fs.rmdir(stage, recursive=true)
+    })
     source(
       "accesskit-c-0.22.3", "https://github.com/AccessKit/accesskit-c/archive/refs/tags/0.22.3.tar.gz",
-      "9e487bb5ce917b230ce36463cf65113a57878555376109ebbd4a5c551595c60e",
+      "9e487bb5ce917b230ce36463cf65113a57878555376109ebbd4a5c551595c60e", stage,
     )
     source(
       "accesskit_windows-0.34.0", "https://static.crates.io/crates/accesskit_windows/accesskit_windows-0.34.0.crate",
-      "106c2b961215864d1c2e703ee63269c25c4e80a577ffb2c1017b9c17dcdf83a1",
+      "106c2b961215864d1c2e703ee63269c25c4e80a577ffb2c1017b9c17dcdf83a1", stage,
     )
     source(
       "accesskit_consumer-0.38.0", "https://static.crates.io/crates/accesskit_consumer/accesskit_consumer-0.38.0.crate",
-      "5d10a236f96f87d70732e44520046785431ef01d5bcd6b041317bfadd2f88245",
+      "5d10a236f96f87d70732e44520046785431ef01d5bcd6b041317bfadd2f88245", stage,
     )
     for
       item in [
@@ -68,11 +129,11 @@ async fn main {
         ),
       ] {
       let (name, patch) = item
-      let directory = ".work/accesskit-focus-source/" + name
+      let directory = stage + "/" + name
       run("git", ["apply", "--check", "--directory=" + directory, patch])
       run("git", ["apply", "--directory=" + directory, patch])
     }
-    let root = ".work/accesskit-focus-source/accesskit-c-0.22.3"
+    let root = stage + "/accesskit-c-0.22.3"
     let manifest = @fs.read_file(root + "/Cargo.toml").text()
     @fs.write_file(
       root + "/Cargo.toml",
@@ -100,14 +161,15 @@ async fn main {
     }
     guard removed == 4 else { fail("unexpected AccessKit lockfile") }
     @fs.write_file(root + "/Cargo.lock", lock)
+    for
+      name in [
+        "accesskit-c-0.22.3", "accesskit_windows-0.34.0", "accesskit_consumer-0.38.0",
+      ] {
+      publish(name, stage)
+    }
     run("cargo", [
-      "build",
-      "--locked",
-      "--release",
-      "--manifest-path",
-      root + "/Cargo.toml",
-      "--target-dir",
-      ".work/accesskit-focus-build",
+      "build", "--locked", "--release", "--manifest-path", ".work/accesskit-focus-source/accesskit-c-0.22.3/Cargo.toml",
+      "--target-dir", ".work/accesskit-focus-build",
     ])
     println("ACCESSKIT_FOCUS_BUILD_OK version=0.22.3 rust=1.93.0")
   })
