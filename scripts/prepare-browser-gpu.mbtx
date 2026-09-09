@@ -107,9 +107,13 @@ async fn main {
     ]),
   )
   @fs.write_file(
-    root + "/generated/moon.mod.json",
-    "{\"name\":\"bikallem/webapi\",\"version\":\"0.5.0\"}\n",
+    root + "/generated/moon.mod",
+    "name = \"bikallem/webapi\"\nversion = \"0.5.0\"\n",
   )
+  let legacy_manifest = root + "/generated/moon.mod.json"
+  if @fs.exists(legacy_manifest) {
+    @fs.remove(legacy_manifest)
+  }
   @fs.write_file(
     root + "/generated/moon.pkg",
     "// Preserve upstream generated names; application warnings remain enabled.\nwarnings = \"-53-20-35-83\"\nsupported_targets = \"js+wasm-gc\"\n",
