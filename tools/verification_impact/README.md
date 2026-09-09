@@ -18,8 +18,9 @@ errors. The caller must provide fresh target-specific inventory and dependency
 selection; this command does not discover packages or infer purity. `pre_push`
 is a remainder plan, not authorization to skip a previously verified test.
 
-Installed pre-commit still uses `full_gate_tasks` in the policy and runs the full
-gate. Partition plans are not yet installed as hooks.
+The repository's paired hooks use recorded input discovery around these plans.
+`full_gate_tasks` remains the fallback when a record cannot certify prior work.
+See the development guide for installation and supported checkout cases.
 
 From the configured repository environment, run
 `moon run scripts/plan-local-verification.mbtx -- <target>` to refresh root-module
@@ -33,8 +34,7 @@ This root-module runner is not a commit hook: it includes unstaged changes, does
 not format, does not cover the separate browser/native workspaces or integration
 gates, and does not save reusable success records. Changes outside the supported
 source paths conservatively select all root packages supported on that target.
-Push refs and cached-input records must be connected before replacing the full
-installed gate.
+The recorded hook wrappers supply pushed refs and input records separately.
 
 ## Workspace graph plans
 
@@ -189,8 +189,8 @@ successful record with the current fingerprint. Missing, malformed or failed
 records do not match. Lock contention and input read failures are errors. This
 inspection does not keep the inputs fixed after returning or authorize skipping
 tests by itself. It does not establish complete inputs, actual environment
-identity or correspondence to a pushed Git tree. Installed hooks still run the
-full gate; no automatic cache reuse is enabled.
+identity or correspondence to a pushed Git tree. The repository wrappers add
+discovery and Git-tree validation before using this primitive.
 
 ## Legacy check metadata
 
@@ -232,10 +232,10 @@ those runtime checks may be skipped.
 The result covers only the supplied graphs. Packages shared across graphs retain
 the union of dependency edges and are included if any graph identifies them as
 owned. It does not refresh or authenticate metadata, run tests, or cache results.
-Existing hooks still run their normal verification. Hook integration must first
-provide fresh graphs for every required workspace/target, classify critical and
-environment-dependent checks, and account for pushed Git revisions and successful
-verification of identical inputs. A stale graph must not authorize skipping tests.
+The hook wrappers provide fresh workspace checks, separate runtime gates and
+bind prior success to discovered inputs and pushed trees. A stale graph must not
+authorize skipping tests; new external input layouts need corresponding collector
+updates.
 
 `verification_impact_cli --record-index <checkout> <expected-tree> <config>
 <record> <command> [args...]` records a command against staged input, including

@@ -58,8 +58,8 @@ description = "Verify supplied push refs using freshly discovered commit records
 run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-push-recorded.mbtx'
 
 [tasks."hooks:install"]
-description = "Install the mise-managed Git pre-commit hook"
-run = "mise generate git-pre-commit --write --task pre-commit"
+description = "Install the paired mise-driven pre-commit and pre-push hooks"
+run = "git config --local core.hooksPath .githooks"
 
 [tasks.fmt]
 run = '.\\.tools\\moonbit\\bin\\moon.exe fmt'

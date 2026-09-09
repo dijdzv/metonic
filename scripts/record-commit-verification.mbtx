@@ -7,6 +7,7 @@ import {
 
 ///|
 async fn main {
+  let started = @async.now()
   let root = @fs.realpath(".")
   let moon = @fs.realpath(".tools/moonbit/bin/moon.exe")
   let directory = ".work/local-verification-records"
@@ -37,4 +38,8 @@ async fn main {
   )
   assert_eq(code, 0, msg="commit verification was not recorded")
   println("COMMIT_VERIFICATION_RECORDED")
+  println(
+    "recorded pre-commit total_ms: " +
+    (@async.now() - started).to_int().to_string(),
+  )
 }

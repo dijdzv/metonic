@@ -1,0 +1,2 @@
+#!/bin/sh
+exec mise run --raw verify:push-recorded
