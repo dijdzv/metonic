@@ -1,0 +1,86 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/encoding/utf8",
+}
+
+///|
+async fn run(command : String, args : Array[String]) -> String {
+  let (code, output, error) = @process.collect_output(
+    command,
+    args,
+    no_console_window=true,
+  )
+  if code != 0 {
+    abort(
+      command +
+      " failed: " +
+      @utf8.decode_lossy(output.binary()) +
+      @utf8.decode_lossy(error.binary()),
+    )
+  }
+  @utf8.decode_lossy(output.binary())
+}
+
+///|
+async fn main {
+  @async.with_timeout(180000, () => {
+    let archive = ".work/native-deps/cache/async-0.21.2.zip"
+    let hash = run("certutil.exe", ["-hashfile", archive, "SHA256"])
+    guard hash.contains(
+      "742ee3d84d33d4602953741fb49f310ae5c8814648079facaa4b595d986c1618",
+    ) else {
+      abort("async archive checksum mismatch")
+    }
+    let root = @fs.realpath(".").replace_all(old="\\", new="/")
+    let source = ".work/verify-named-pipe-source"
+    guard !@fs.exists(source) else {
+      abort(
+        "previous named-pipe verification source exists; inspect it before removing it: " +
+        source,
+      )
+    }
+    @fs.mkdir(source)
+    let resolved = @fs.realpath(source).replace_all(old="\\", new="/")
+    guard resolved.to_lower() == (root + "/" + source).to_lower() else {
+      abort("verification source escaped repository")
+    }
+    ignore(run("tar.exe", ["-xf", archive, "-C", source]))
+    for
+      patch in [
+        "experiments/async_waiter_handles/windows-waiter.patch", "experiments/async_named_pipe/windows-named-pipe.patch",
+      ] {
+      ignore(run("git", ["apply", "--check", "--directory=" + source, patch]))
+      ignore(run("git", ["apply", "--directory=" + source, patch]))
+    }
+    guard @fs.exists(source + "/src/internal/event_loop/pipe_accept_wbtest.mbt") else {
+      abort("named-pipe test patch was not applied")
+    }
+    let output = run(".tools/moonbit/bin/moon.exe", [
+      "-C", source, "test", "src/internal/event_loop", "--target", "native", "--filter",
+      "*pipe*",
+    ])
+    @fs.write_file(".work/named-pipe-verification.log", output)
+    guard output.contains("Total tests: 5, passed: 5, failed: 0.") else {
+      abort(
+        "expected five passing named-pipe tests; inspect .work/named-pipe-verification.log",
+      )
+    }
+    let public_output = run(".tools/moonbit/bin/moon.exe", [
+      "-C", source, "test", "src/named_pipe", "--target", "native", "--filter", "*public Windows pipe*",
+    ])
+    @fs.write_file(".work/named-pipe-public-verification.log", public_output)
+    guard public_output.contains("Total tests: 1, passed: 1, failed: 0.") else {
+      abort("expected public pipe reconnection test")
+    }
+    // Keep failed sources for diagnosis; remove only this verified, owned extraction.
+    guard @fs.realpath(source).replace_all(old="\\", new="/") == resolved else {
+      abort("verification source changed during execution")
+    }
+    @fs.rmdir(source, recursive=true)
+    println(
+      "NAMED_PIPE_VERIFICATION_OK: 5 internal + 1 public tests; patches combined",
+    )
+  })
+}

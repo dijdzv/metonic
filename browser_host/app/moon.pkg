@@ -1,0 +1,18 @@
+import {
+  "bikallem/webapi" @dom,
+  "local/p0/examples/p0/browser" @app,
+}
+
+pkgtype(kind: "foreign_library")
+
+supported_targets = "+js+wasm-gc"
+
+options(
+  link: {
+    "js": { "format": "esm" },
+    "wasm-gc": {
+      "imported-string-constants": "_",
+      "use-js-builtin-string": true,
+    },
+  },
+)

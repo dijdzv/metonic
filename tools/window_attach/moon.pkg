@@ -1,0 +1,9 @@
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/core/json",
+  "moonbitlang/core/encoding/utf8",
+  "local/p0/tools/session_wire" @wire,
+}
+
+supported_targets = "+native+wasm"

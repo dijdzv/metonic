@@ -12,6 +12,10 @@ pub(all) enum Action {
 
 ///|
 pub struct Snapshot {
+  ime_events : Array[Json]
+  raw_ime_events : Array[Json]
+  raw_ime_dropped : Int64
+  ime_dropped : Int64
   input : InputObservation
   view : @application.View
   x : Int
@@ -98,6 +102,10 @@ fn App::handle(self : App) -> Handle {
         input: self.diagnostics.input,
         x: @scene.field(self.model.scene, 0),
         y: @scene.field(self.model.scene, 1),
+        ime_events: self.diagnostics.ime_events.map(value => value),
+        raw_ime_events: self.raw_ime_events(),
+        raw_ime_dropped: self.raw_ime_dropped(),
+        ime_dropped: self.diagnostics.ime_dropped,
         width: @scene.field(self.model.scene, 6),
         height: @scene.field(self.model.scene, 7),
         semantic_revision: @semantics.revision(self.model.editor),

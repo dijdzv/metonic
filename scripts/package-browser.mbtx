@@ -11,6 +11,8 @@ async fn main {
     @fs.mkdir(dist, recursive=true)
   }
   let entries = [
+    (".work/browser-dist/webapi.mjs", "webapi.mjs"),
+    (".work/browser-dist/LICENSE-webapi", "LICENSE-webapi"),
     ("examples/p0/browser/host/release.html", "index.html"),
     ("examples/p0/browser/host/style.css", "style.css"),
     ("examples/p0/browser/host/host.mjs", "host.mjs"),

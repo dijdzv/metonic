@@ -9,8 +9,9 @@ const MAX_STDOUT = 32 * 1024 * 1024;
 const MAX_STDERR = 16 * 1024;
 
 export async function createMoonBitSession(options = {}) {
-  const windowProtocol = options.protocol === 'window';
-  if (options.protocol !== undefined && !['window', 'headless'].includes(options.protocol)) throw new Error('unknown session protocol');
+  const attached = options.protocol === 'window-attach';
+  const windowProtocol = options.protocol === 'window' || attached;
+  if (options.protocol !== undefined && !['window', 'window-attach', 'headless'].includes(options.protocol)) throw new Error('unknown session protocol');
   const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
   const executable = options.executable ?? path.join(repo, '.tools', 'moonbit', 'bin', 'moonrun.exe');
   const program = path.join(repo, '_build', 'wasm', 'release', 'build', 'tools', 'native_session', 'native_session.wasm');
@@ -27,7 +28,7 @@ export async function createMoonBitSession(options = {}) {
   let lineParts = [];
   let lineBytes = 0;
   let nextId = 1;
-  let sessionId = windowProtocol ? randomUUID() : undefined;
+  let sessionId = windowProtocol && !attached ? randomUUID() : undefined;
   let fatalError;
   let closing = false;
   let closePromise;
@@ -61,6 +62,11 @@ export async function createMoonBitSession(options = {}) {
     void close().catch(error => console.error(error));
   }
   function dispatch(value) {
+    if (attached) {
+      if (typeof value.session_id !== 'string' || !value.session_id ||
+          (sessionId && sessionId !== value.session_id)) return fail(new Error('attachment session identity mismatch'));
+      sessionId = value.session_id;
+    }
     if (windowProtocol) {
       value = { id: value.id, ok: value.error === '', error: value.error, response: value };
     }

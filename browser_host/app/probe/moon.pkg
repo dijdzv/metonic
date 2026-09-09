@@ -1,0 +1,6 @@
+import {
+  "local/browser_host" @host,
+  "local/p0/examples/p0/browser" @app,
+  "bikallem/webapi" @dom,
+}
+options("is-main": true, link: { "wasm-gc": { "imported-string-constants": "_", "use-js-builtin-string": true } })

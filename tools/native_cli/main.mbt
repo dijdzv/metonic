@@ -109,6 +109,16 @@ async fn process_line(client : @control.Client, raw : Bytes) -> Unit {
 ///|
 async fn main {
   let cli_args = @env.args()
+  if cli_args.length() == 3 &&
+    (cli_args[1] == "--session" || cli_args[1] == "--session-wire") {
+    run_attached(cli_args[2], wire=cli_args[1] == "--session-wire") catch {
+      error => {
+        @stdio.stderr.write(@debug.to_string(error) + "\n")
+        abort("attachment failed")
+      }
+    }
+    return
+  }
   let root = try {
     let mut value = @fs.realpath(".")
     let mut i = 1

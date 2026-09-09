@@ -47,6 +47,19 @@ async fn verify_case(fallback : Bool) -> Unit {
   assert_eq(code, 0)
   let rows = out.text().trim().split("\n").to_array()
   assert_eq(rows.length(), 11)
+  for index in [0, 1, 2, 3, 4, 7, 8, 9, 10] {
+    let value = @json.parse(rows[index].to_owned())
+    guard value is Object(fields) else { fail("snapshot is not an object") }
+    guard fields.get("ime_events") is Some(Array(events)) else {
+      fail("snapshot omitted IME history")
+    }
+    assert_true(events.length() <= 128)
+    guard fields.get("raw_ime_events") is Some(Array(raw_events)) else {
+      fail("snapshot omitted raw IME history")
+    }
+    assert_true(raw_events.length() <= 128)
+    assert_eq(fields.get("ime_dropped"), Some(0L.to_json()))
+  }
   let replies : Array[Reply] = rows.map(row => {
     @json.from_json(@json.parse(row.to_owned()))
   })

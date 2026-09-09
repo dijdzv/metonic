@@ -5,6 +5,37 @@ Date: 2026-09-06.
 Status: experimental implementation. The window, semantic, attach, and production
 gates in [ADR 023](023-development-automation.md) remain open.
 
+## Scope relative to independent attachment
+
+Launch ownership remains useful for automated fixtures, but is not the final P0
+interaction model. A developer may start a development application independently;
+CLI and MCP clients must be able to connect afterward, disconnect and reconnect
+without ending that application. MCP does not need to launch the application.
+The inherited-stdio mode below retains its explicit child-process ownership.
+Its close/kill rules must not be applied to an attached application.
+
+The development window also supports an explicit Windows named-pipe listener
+selected by `METONIC_DEV_PIPE`. It shares request dispatch and bounded framing
+with stdio, allocates request-ID state per connection, and closes only the
+connection on client EOF. Window shutdown cancels the listener/controller before
+the pipe is released. `mise run native:window-attach` verifies reconnection with
+preserved editor state and window closure during accept, read and blocked capture
+output.
+
+The host publishes `session.json` in its uniquely reserved temporary directory
+and prints its path with `METONIC_DEV_SESSION` on stderr after writing it.
+The document contains `pipe`, `session_id` and `protocol_version`. Clients must
+read it, require a supported version, and compare `capabilities` with the expected
+session before sending operations. Pipe requests other than `capabilities` require
+that session ID; stale IDs do not mutate state. The ID is not a secret credential.
+Normal app exit removes the document and reservation. The shared MoonBit client
+in `tools/window_attach` validates discovery and correlates bounded responses;
+both CLI and MCP select it with `--session`. A timeout, cancellation or malformed
+response closes that connection without owning the application's lifetime.
+Abnormal exit can retain metadata: clients reject an unavailable endpoint or a
+different session identity instead of retrying against another application.
+Automatic stale-record deletion is not implemented.
+
 ## Composition
 
 The CLI and MCP session host use the MoonBit native-control client. The external

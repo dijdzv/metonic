@@ -1,0 +1,157 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/encoding/utf8",
+}
+
+///|
+async fn checked(command : String, args : Array[String]) -> String {
+  let (code, out, err) = @async.with_timeout(90000, async fn() {
+    @process.collect_output(command, args, no_console_window=true)
+  })
+  assert_eq(code, 0, msg=command + ": " + @utf8.decode_lossy(err.binary()))
+  @utf8.decode_lossy(out.binary())
+}
+
+///|
+fn normalized(path : String) -> String {
+  path.replace_all(old="\\", new="/").to_lower()
+}
+
+///|
+async fn main {
+  let repo = @fs.realpath(".")
+  assert_true(
+    @fs.exists("moon.mod") &&
+    @fs.exists("patches/webapi-closure-identity.patch"),
+    msg="run from the Metonic repository root",
+  )
+  let root = repo + "/.work/browser-deps"
+  if !@fs.exists(root) {
+    @fs.mkdir(root, recursive=true)
+  }
+  assert_eq(
+    normalized(@fs.realpath(root)),
+    normalized(root),
+    msg="dependency root must not be redirected",
+  )
+  let lock = root + "/prepare.lock"
+  @fs.mkdir(lock)
+  defer @fs.rmdir(lock)
+  let stage = root + "/staging"
+  assert_true(
+    !@fs.exists(stage),
+    msg="unexpected existing browser dependency staging directory",
+  )
+  @fs.mkdir(stage)
+  defer (if @fs.exists(stage) {
+    assert_eq(
+      normalized(@fs.realpath(stage)),
+      normalized(stage),
+      msg="staging path changed",
+    )
+    @fs.rmdir(stage, recursive=true)
+  })
+  let revision = "ecae5a4b07b011e46de343efe2ac1c450b7ed3a2"
+  let expected = "27bdc19617fe0d2253f1f9584b55b7b6b871d7a4f01a2f2c775702a40c15fa1f"
+  let archive = root + "/webapi-" + revision + ".tar.gz"
+  let verify = async fn(path : String) {
+    let output = checked("certutil.exe", ["-hashfile", path, "SHA256"])
+    assert_true(
+      output
+      .to_lower()
+      .split("\n")
+      .any(line => line.trim().to_owned() == expected),
+      msg="webapi archive SHA256 mismatch",
+    )
+  }
+  if !@fs.exists(archive) {
+    let part = stage + "/download.tar.gz"
+    ignore(
+      checked("curl.exe", [
+        "--fail",
+        "--location",
+        "--max-time",
+        "60",
+        "https://codeload.github.com/bikallem/webapi/tar.gz/" + revision,
+        "-o",
+        part,
+      ]),
+    )
+    verify(part)
+    @fs.rename(part, archive, replace=false)
+  }
+  verify(archive)
+  ignore(
+    checked("tar", [
+      "-xf",
+      archive,
+      "-C",
+      stage,
+      "webapi-" + revision + "/webapi",
+      "webapi-" + revision + "/LICENSE",
+    ]),
+  )
+  let extracted = stage + "/webapi-" + revision
+  let relative = ".work/browser-deps/staging/webapi-" + revision
+  ignore(
+    checked("git", [
+      "apply",
+      "--check",
+      "--directory=" + relative,
+      "patches/webapi-closure-identity.patch",
+    ]),
+  )
+  ignore(
+    checked("git", [
+      "apply",
+      "--directory=" + relative,
+      "patches/webapi-closure-identity.patch",
+    ]),
+  )
+  ignore(
+    checked("git", [
+      "apply",
+      "--check",
+      "--directory=" + relative,
+      "patches/webapi-compiler-warnings.patch",
+    ]),
+  )
+  ignore(
+    checked("git", [
+      "apply",
+      "--directory=" + relative,
+      "patches/webapi-compiler-warnings.patch",
+    ]),
+  )
+  let destination = root + "/webapi-input"
+  if @fs.exists(destination) {
+    ignore(
+      checked("git", [
+        "diff",
+        "--no-index",
+        "--quiet",
+        "--no-ext-diff",
+        "--no-textconv",
+        extracted + "/webapi",
+        destination,
+      ]),
+    )
+  } else {
+    @fs.rename(extracted + "/webapi", destination, replace=false)
+  }
+  let license = @fs.read_file(extracted + "/LICENSE").binary()
+  let license_path = root + "/LICENSE-webapi"
+  if @fs.exists(license_path) {
+    assert_eq(@fs.read_file(license_path).binary(), license)
+  } else {
+    @fs.write_file(license_path, license)
+  }
+  let cache = "browser_host/.mooncakes"
+  if !@fs.exists(cache) {
+    @fs.mkdir(cache, recursive=true)
+  }
+  @fs.write_file(cache + "/package.json", "{\"type\":\"commonjs\"}\n")
+  println("BROWSER_DEPS_OK webapi=" + revision + " callback_identity_patch")
+}
