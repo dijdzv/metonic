@@ -201,10 +201,38 @@ async fn Scenario::step(self : Scenario, view : @ui.Observation) -> Unit {
     post(view.hwnd, 0x0100U, 0x09UL, 0L)
   } else if self.stage == 27 && view.request_focused {
     require(!view.editor.focused, "request and editor both focused")
+    self.stage = 271
+    post(view.hwnd, 0x0100U, 0x09UL, 0L)
+    post(view.hwnd, 0x0100U, 0x09UL, 0L)
+    post(view.hwnd, 0x0100U, 0x09UL, 0L)
+  } else if self.stage == 271 && !view.request_focused && !view.editor.focused {
+    self.stage = 272
+    (view.inject)(CompositionStart)
+  } else if self.stage == 272 && view.composing {
+    require(view.preedit_cursor == 0, "query composition did not start at zero")
+    self.stage = 273
+    (view.inject)(CompositionUpdate("あ", Some(1)))
+  } else if self.stage == 273 && view.preedit_cursor == 1 {
+    let fields = match view.ime_events[view.ime_events.length() - 1] {
+      Json::Object(fields) => fields
+      _ => abort("query composition trace is not an object")
+    }
+    require(
+      fields.get("field") == Some(Json::string("query")),
+      "query composition mislabeled as editor",
+    )
+    require(
+      fields.get("applied_cursor") == Some(Json::number(1)),
+      "query cursor trace mismatch",
+    )
+    require(
+      view.editor.value == "A😀 語",
+      "query preedit changed editor text",
+    )
+    self.stage = 274
+    (view.inject)(CompositionCancel)
+  } else if self.stage == 274 && !view.composing {
     self.stage = 29
-    post(view.hwnd, 0x0100U, 0x09UL, 0L)
-    post(view.hwnd, 0x0100U, 0x09UL, 0L)
-    post(view.hwnd, 0x0100U, 0x09UL, 0L)
     post(view.hwnd, 0x0100U, 0x09UL, 0L)
   } else if self.stage == 29 && view.editor.focused {
     require(!view.request_focused, "return to editor retained request focus")
@@ -363,6 +391,10 @@ async fn Scenario::step(self : Scenario, view : @ui.Observation) -> Unit {
     self.stage = 34
     post(view.hwnd, 0x010DU, 0UL, 0L)
   } else if self.stage == 34 && view.composing {
+    require(
+      view.preedit_cursor == 0,
+      "new composition retained previous cursor",
+    )
     self.stage = 35
     (view.inject)(CompositionUpdate("つぎ", Some(1)))
   } else if self.stage == 35 &&

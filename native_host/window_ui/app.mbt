@@ -759,6 +759,7 @@ async fn run_loop(
                   target=app.input_node().reference,
                 )
                 app.preedit = ""
+                app.preedit_cursor = 0
                 app.draw()
               }
             CompositionUpdate(value, cursor) => {
