@@ -236,34 +236,44 @@ async fn main {
       } else {
         " /UMETONIC_IME_TRACE"
       }
-      envmap.set("_CL_", envmap.get("_CL_").unwrap_or("") + trace_flags)
       let trace_test_flags = if host_app == "window_probe" {
         " /UMETONIC_IME_TRACE_TEST /DMETONIC_IME_TRACE_TEST=1"
       } else {
         " /UMETONIC_IME_TRACE_TEST"
       }
-      envmap.set("_CL_", envmap.get("_CL_").unwrap_or("") + trace_test_flags)
-      // CL environment changes do not invalidate Moon's C-stub cache.
-      let window_object = native_host_build_dir +
-        "/native/" +
-        profile +
-        "/build/wzzc-dev/window/windows/native_window.obj"
-      if (
-          host_app == "window_app" ||
-          host_app == "window_dev" ||
-          host_app == "window_probe" ||
-          host_app == "async_app"
-        ) &&
-        @fs.exists(window_object) {
-        @fs.remove(window_object)
+      for variable in ["CL", "_CL_"] {
+        assert_false(
+          envmap.get(variable).unwrap_or("").contains("METONIC_IME_TRACE"),
+          msg="IME trace settings must come from the build mode, not " +
+            variable,
+        )
       }
-      if @process.run(
-          moon,
-          build_args,
-          extra_env=envmap,
-          no_console_window=true,
-        ) !=
-        0 {
+      // Environment-only flags are invisible to Moon's incremental command key.
+      let window_manifest = ".work/native-deps/sources/window-ime-observed/modules/window/windows/moon.pkg"
+      let original_manifest = @fs.read_file(window_manifest).text()
+      assert_false(original_manifest.contains("stub-cc-flags"))
+      assert_eq(original_manifest.split("options(").count(), 2)
+      let flags : Json = Json::string(trace_flags + trace_test_flags)
+      let configured_manifest = original_manifest.replace_all(
+        old="options(",
+        new="options(\n  link: { \"native\": { \"stub-cc-flags\": " +
+          flags.stringify() +
+          " } },",
+      )
+      @fs.write_file(window_manifest, configured_manifest)
+      let mut restored_manifest = false
+      defer (if !restored_manifest {
+        @fs.write_file(window_manifest, original_manifest)
+      })
+      let build_code = @process.run(
+        moon,
+        build_args,
+        extra_env=envmap,
+        no_console_window=true,
+      )
+      @fs.write_file(window_manifest, original_manifest)
+      restored_manifest = true
+      if build_code != 0 {
         fail("MoonBit host " + mode + " build failed")
       }
       let required_exe = native_host_build_dir +
