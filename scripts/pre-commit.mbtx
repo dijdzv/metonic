@@ -20,7 +20,15 @@ let gpu_env : Map[String, String] = Map([
 ///|
 async fn run(cmd : String, args : Array[String]) -> Unit {
   println("pre-commit: " + cmd + " " + args.join(" "))
+  let started = @async.now()
   let code = @process.run(cmd, args, extra_env=gpu_env, no_console_window=true)
+  let timing : Json = {
+    "command": cmd,
+    "args": args,
+    "elapsed_ms": (@async.now() - started).to_int(),
+    "exit_code": code,
+  }
+  println("pre-commit timing: " + timing.stringify())
   if code != 0 {
     fail("command failed (" + code.to_string() + "): " + cmd)
   }
@@ -40,6 +48,7 @@ async fn expect_clean(args : Array[String], label : String) -> Unit {
 
 ///|
 async fn main {
+  let started = @async.now()
   expect_clean(["diff", "--quiet"], "unstaged changes detected")
   run("git", ["diff", "--cached", "--check"])
   let moon = ".tools/moonbit/bin/moon.exe"
@@ -76,4 +85,7 @@ async fn main {
   run(moon, ["run", "scripts/verify-window-production-exclusion.mbtx"])
   println("pre-commit gate: docs")
   run(moon, ["run", "scripts/verify-docs.mbtx"])
+  println(
+    "pre-commit total_ms: " + (@async.now() - started).to_int().to_string(),
+  )
 }
