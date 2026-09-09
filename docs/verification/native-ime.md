@@ -8,7 +8,12 @@ any GCS flags as cancellation, following the
 [Windows message contract](https://learn.microsoft.com/en-us/windows/win32/intl/wm-ime-composition).
 Attribute-only and clause-only notifications must not cancel a composition.
 `mise run native:window` stages a synthetic preedit, posts those updates and then
-posts the no-GCS message, checking cancellation and restored text geometry.
+posts result-only and cursor-only notifications, waiting for their received raw
+message records before checking that composition remains active and committed
+text/selection remain intact. The result-only case has no actual IMM result
+string: it verifies classification and absence of a fabricated commit, not
+delivery of a real conversion result. The test then posts the no-GCS message,
+checking cancellation and restored text geometry.
 It then posts a new `WM_IME_STARTCOMPOSITION`, supplies a synthetic preedit,
 and verifies its display and cursor without changing committed text. Posting
 `WM_IME_ENDCOMPOSITION` restores the original selection and text geometry,
@@ -84,7 +89,8 @@ For that development session, `window_snapshot` exposes `composing`, `preedit`,
 `preedit_cursor` and `ime_requested_x/y`. The last two are requested client-area
 physical coordinates, not measured OS candidate-window positions. MCP capture
 contains the application's shared offscreen pass, not the external IME popup.
-Human observation is required for the popup; Computer Use is not used.
+Direct visual observation, including Computer Use when available, is required
+for the popup; an application snapshot cannot establish its placement.
 
 Development snapshots also include `host_input_events`: session-local, saturating
 key/pointer press counts, the last key category, the last pointer press position
