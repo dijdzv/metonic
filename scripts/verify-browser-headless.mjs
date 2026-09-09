@@ -56,7 +56,7 @@ async function runTargetUnsafe(browser, target) {
   await page.route('**/text-renderer.mjs', async (route) => {
     const response = await route.fetch()
     const source = await response.text()
-    const marker = 'const texture = device.createTexture('
+    const marker = 'if (app.text_gpu_add(index, pixels)'
     assert.equal(source.split(marker).length, 2)
     const transferStart = source.indexOf('const transferred = app.view_layer_bytes(index);')
     assert(transferStart >= 0)

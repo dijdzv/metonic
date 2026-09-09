@@ -25,23 +25,16 @@ async function loadFont(app, disposed) {
 export async function createTextRenderer({ app, device, format, disposed }) {
   const loaded = await loadFont(app, disposed);
   if (!loaded || disposed()) return null;
-  const shader = device.createShaderModule({ code: `
-struct U { viewport: vec2f, origin: vec2f, size: vec2f, tex: vec2f };
-@group(0) @binding(0) var<uniform> u: U;
-@group(0) @binding(1) var text_tex: texture_2d<f32>;
-struct VertexOut { @builtin(position) position: vec4f, @location(0) uv: vec2f };
-@vertex fn vs(@builtin(vertex_index) i:u32)->VertexOut { var p=array<vec2f,6>(vec2f(0,0),vec2f(1,0),vec2f(0,1),vec2f(0,1),vec2f(1,0),vec2f(1,1)); let q=u.origin+p[i]*u.size; var out:VertexOut; out.position=vec4f(q.x/u.viewport.x*2-1,1-q.y/u.viewport.y*2,0,1); out.uv=p[i]; return out; }
-@fragment fn fs(in:VertexOut)->@location(0) vec4f { let dims=vec2i(textureDimensions(text_tex)); let pos=min(vec2i(in.uv*vec2f(dims)),dims-vec2i(1)); return textureLoad(text_tex,pos,0); }` });
-  const pipeline = device.createRenderPipeline({ layout: 'auto', vertex: { module: shader, entryPoint: 'vs' }, fragment: { module: shader, entryPoint: 'fs', targets: [{ format }] }, primitive: { topology: 'triangle-list' } });
+  if (app.text_gpu_init(device, format) !== 1) throw new Error('MoonBit GPU initialization rejected format');
   let layers = [];
   let uploaded = 0;
   let renders = 0;
-  function releaseLayers(values) { for (const layer of values) { layer.texture.destroy(); layer.uniform.destroy(); } }
   function rasterText(cssWidth) {
     const result = app.editor_render(Math.trunc(cssWidth));
     if (result === 2) return;
     if (result !== 1) throw new Error('MoonBit editor_render rejected input');
     const next = [];
+    app.text_gpu_abort();
     try {
       for (let index = 0; index < app.view_layer_count(); index += 1) {
         const x = app.view_layer_field(index, 0), y = app.view_layer_field(index, 1);
@@ -61,29 +54,24 @@ struct VertexOut { @builtin(position) position: vec4f, @location(0) uv: vec2f };
           throw new Error('MoonBit returned an unsupported pixel buffer');
         }
         if (pixels.byteLength !== width * height * 4) throw new Error('MoonBit pixel buffer size mismatch');
-        const texture = device.createTexture({ size: { width, height }, format: 'rgba8unorm', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
-        const uniform = device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-        const layer = { x, y, width, height, texture, uniform };
+        if (app.text_gpu_add(index, pixels) !== 1) throw new Error('MoonBit GPU layer rejected upload');
+        const layer = { x, y, width, height };
         next.push(layer);
-        device.queue.writeTexture({ texture }, pixels, { bytesPerRow: width * 4 }, { width, height });
-        layer.bindGroup = device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: uniform } }, { binding: 1, resource: texture.createView() }] });
         uploaded += pixels.byteLength;
       }
-    } catch (error) { releaseLayers(next); throw error; }
-    releaseLayers(layers);
+      if (app.text_gpu_commit() !== 1) throw new Error('MoonBit GPU batch rejected commit');
+    } catch (error) { app.text_gpu_abort(); throw error; }
     layers = next;
     renders += 1;
   }
   return {
     rasterText,
     record(pass, cssW, cssH) {
-      pass.setPipeline(pipeline);
-      for (const layer of layers) {
-        device.queue.writeBuffer(layer.uniform, 0, new Float32Array([cssW, cssH, layer.x, layer.y, layer.width, layer.height, 0, 0]));
-        pass.setBindGroup(0, layer.bindGroup); pass.draw(6);
+      for (const [index, layer] of layers.entries()) {
+        if (app.text_gpu_record(pass, index, new Float32Array([cssW, cssH, layer.x, layer.y, layer.width, layer.height, 0, 0])) !== 1) throw new Error('MoonBit GPU layer rejected draw');
       }
     },
     stats: () => ({ width: app.text_width(), renders, uploaded }),
-    dispose() { releaseLayers(layers); layers = []; app.text_dispose(); },
+    dispose() { app.text_gpu_dispose(); layers = []; app.text_dispose(); },
   };
 }

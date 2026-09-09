@@ -21,26 +21,33 @@ fn InputElement::value(self : InputElement) -> String {
 }
 
 ///|
-fn InputElement::selection(self : InputElement) -> (Int, Int, Bool) {
+fn InputElement::selection(self : InputElement) -> (Int, Int, Bool)? {
   match self {
     Editor(value) =>
-      (
-        value.selection_start().reinterpret_as_int(),
-        value.selection_end().reinterpret_as_int(),
-        value.selection_direction() == "backward",
+      Some(
+        (
+          value.selection_start().reinterpret_as_int(),
+          value.selection_end().reinterpret_as_int(),
+          value.selection_direction() == "backward",
+        ),
       )
-    Query(value) =>
-      (
-        value.selection_start().reinterpret_as_int(),
-        value.selection_end().reinterpret_as_int(),
-        value.selection_direction() == "backward",
+    Query(value) => {
+      guard value.selection_start() is Some(start) else { return None }
+      guard value.selection_end() is Some(end) else { return None }
+      Some(
+        (
+          start.reinterpret_as_int(),
+          end.reinterpret_as_int(),
+          value.selection_direction() == Some("backward"),
+        ),
       )
+    }
   }
 }
 
 ///|
 fn InputElement::active(self : InputElement) -> Bool {
-  let active = @dom.document().active_element()
+  guard @dom.document().active_element() is Some(active) else { return false }
   match self {
     Editor(value) => active.is_same_node(value)
     Query(value) => active.is_same_node(value)
@@ -77,7 +84,10 @@ fn InputState::sync(self : InputState) -> Unit {
   if self.stopped {
     return
   }
-  let (start, end, backward) = self.element.selection()
+  guard self.element.selection() is Some((start, end, backward)) else {
+    notify_input(0)
+    return
+  }
   if self.composing {
     if @app.input_cursor(
         self.query,

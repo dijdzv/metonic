@@ -1,0 +1,127 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/encoding/utf8",
+}
+
+///|
+async fn checked(command : String, args : Array[String]) -> String {
+  let (code, out, err) = @process.collect_output(
+    command,
+    args,
+    no_console_window=true,
+  )
+  assert_eq(code, 0, msg=command + ": " + @utf8.decode_lossy(err.binary()))
+  @utf8.decode_lossy(out.binary())
+}
+
+///|
+async fn verify(path : String, algorithm : String, expected : String) -> Unit {
+  let output = checked("certutil.exe", ["-hashfile", path, algorithm])
+  assert_true(
+    output
+    .to_lower()
+    .split("\n")
+    .any(line => line.trim().to_owned() == expected),
+    msg="archive digest mismatch: " + path,
+  )
+}
+
+///|
+async fn main {
+  let repo = @fs.realpath(".").replace_all(old="\\", new="/")
+  let moon = repo + "/.tools/moonbit/bin/moon.exe"
+  assert_true(@fs.exists("patches/webapi-webgpu-generator.patch"))
+  let root = repo + "/.work/browser-gpu"
+  if !@fs.exists(root) {
+    @fs.mkdir(root, recursive=true)
+  }
+  assert_eq(
+    @fs.realpath(root).replace_all(old="\\", new="/").to_lower(),
+    root.to_lower(),
+  )
+  @fs.mkdir(root + "/prepare.lock")
+  defer @fs.rmdir(root + "/prepare.lock")
+  let stage = root + "/stage"
+  assert_true(!@fs.exists(stage), msg="unexpected GPU staging directory")
+  @fs.mkdir(stage)
+  defer {
+    assert_eq(
+      @fs.realpath(stage).replace_all(old="\\", new="/").to_lower(),
+      stage.to_lower(),
+    )
+    @fs.rmdir(stage, recursive=true)
+  }
+  let revision = "ecae5a4b07b011e46de343efe2ac1c450b7ed3a2"
+  let archive = repo + "/.work/browser-deps/webapi-" + revision + ".tar.gz"
+  if !@fs.exists(archive) {
+    ignore(checked(moon, ["run", "scripts/prepare-browser-deps.mbtx"]))
+  }
+  verify(
+    archive, "SHA256", "27bdc19617fe0d2253f1f9584b55b7b6b871d7a4f01a2f2c775702a40c15fa1f",
+  )
+  let idl = stage + "/idl.tgz"
+  ignore(
+    checked("curl.exe", [
+      "--fail", "--location", "--max-time", "60", "https://registry.npmjs.org/@webref/idl/-/idl-3.73.1.tgz",
+      "-o", idl,
+    ]),
+  )
+  verify(
+    idl, "SHA512", "6c21c0b02b513b80e67957842adb40c901e92f2f37a6fe5598056d3afa33b2545295df47f10b64ac72821662b7e03f2aef0c528e3e2c64fbe1dc952f3d6f7e59",
+  )
+  ignore(checked("tar", ["-xf", idl, "-C", stage]))
+  ignore(
+    checked("tar", [
+      "-xf",
+      archive,
+      "-C",
+      stage,
+      "webapi-" + revision + "/webapi-gen",
+      "webapi-" + revision + "/LICENSE",
+    ]),
+  )
+  let source = stage + "/webapi-" + revision
+  @fs.write_file(source + "/moon.work", "members = [\"webapi-gen\"]\n")
+  ignore(
+    checked("git", [
+      "apply",
+      "--directory=.work/browser-gpu/stage/webapi-" + revision,
+      "patches/webapi-webgpu-generator.patch",
+    ]),
+  )
+  let config = @fs.read_file("scripts/webgpu-generator.json")
+    .text()
+    .replace_all(old="@IDL@", new=stage + "/package")
+    .replace_all(old="@OUTPUT@", new=root + "/generated")
+  @fs.write_file(stage + "/config.json", config)
+  ignore(
+    checked(moon, [
+      "-C",
+      source,
+      "run",
+      "webapi-gen",
+      "--",
+      stage + "/config.json",
+    ]),
+  )
+  @fs.write_file(
+    root + "/generated/moon.mod.json",
+    "{\"name\":\"bikallem/webapi\",\"version\":\"0.5.0\"}\n",
+  )
+  @fs.write_file(
+    root + "/generated/moon.pkg",
+    "// Preserve upstream generated names; application warnings remain enabled.\nwarnings = \"-53-20-35-83\"\nsupported_targets = \"js+wasm-gc\"\n",
+  )
+  @fs.write_file(
+    root + "/LICENSE-webapi",
+    @fs.read_file(source + "/LICENSE").binary(),
+  )
+  let cache = "browser_host/.mooncakes"
+  if !@fs.exists(cache) {
+    @fs.mkdir(cache, recursive=true)
+  }
+  @fs.write_file(cache + "/package.json", "{\"type\":\"commonjs\"}\n")
+  println("BROWSER_GPU_DEPS_OK webapi=" + revision + " webref-idl=3.73.1")
+}
