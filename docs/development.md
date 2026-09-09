@@ -109,6 +109,20 @@ They do not replace formatting or the complete gate. With no arguments,
 `verify.mbtx` retains its existing full behavior; installed Git hooks still run
 the complete gate and do not use success caching or automatic impact selection.
 
+`mise run verify:push <base-commit>` runs the complementary root-package tests
+on JS, WasmGC, Wasm and native, followed by the environment and production
+integration gates. Supply the same comparison commit used for the commit lane;
+the command resolves it once before running checks. It does not repeat formatting,
+the root full-test commands or root contract fixtures. Integration gates retain
+their own release-profile tests and runtime prerequisites: debug package results
+do not certify those different configurations.
+
+This command is a manual lane, not an installed pre-push hook or permission to
+skip the commit lane. It uses the current working files; it does not authenticate
+Git's pushed refs or a previous success record. An absent or invalid comparison
+commit fails before verification. The ordinary pre-commit still runs the full
+gate until those input and result checks are connected.
+
 ## Integrated window HTTP requests
 
 For an interactive session, run `mise run demo`. It builds the browser host and
