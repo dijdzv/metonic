@@ -26,10 +26,18 @@ preedit end merely because the displayed caret is unexpected.
 ## Build boundary
 
 Use the supported mise build tasks. The MoonBit build script selects the C
-diagnostic macro for debug, undefines it for release and regenerates the specific
-Windows C object. Environment-only compiler flag changes do not invalidate that
-object in the evaluated compiler cache. C-stub `targets` declarations did not
-provide the expected profile selection in a minimal probe.
+diagnostic macro for debug and undefines it for release. It temporarily supplies
+the flags through `link.native.stub-cc-flags` in the prepared Windows dependency
+manifest, then restores that manifest after the build. Moon can therefore track
+mode changes in its incremental compilation inputs and reuse an unchanged C
+object for repeated builds in the same mode. The script no longer deletes the
+object unconditionally.
+
+Environment-only compiler flag changes do not invalidate that object in the
+evaluated compiler cache; externally supplied IME trace flags in `CL` or `_CL_`
+are rejected. C-stub `targets` declarations did not provide the expected profile
+selection in a minimal probe. Abrupt process termination can interrupt manifest
+restoration; dependency preparation rejects the changed source on the next run.
 
 The raw record is captured at the existing IMM call site; no additional IMM query
 is performed to manufacture diagnostic values. The small C addition retains the
