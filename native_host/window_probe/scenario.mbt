@@ -371,6 +371,43 @@ async fn Scenario::step(self : Scenario, view : @ui.Observation) -> Unit {
     post(view.hwnd, 0x010FU, 0UL, 0x20L)
   } else if self.stage == 33 {
     require(view.composing, "attribute or clause update canceled composition")
+    self.stage = 37
+    post(view.hwnd, 0x010FU, 0UL, 0x800L)
+  } else if self.stage == 37 &&
+    !view.raw_ime_events.is_empty() &&
+    (match view.raw_ime_events[view.raw_ime_events.length() - 1] {
+      Object(fields) =>
+        fields.get("message") == Some(271L.to_json()) &&
+        fields.get("flags") == Some(2048L.to_json())
+      _ => false
+    }) {
+    require(
+      view.composing,
+      "result-only notification without IMM text canceled composition",
+    )
+    require(
+      view.editor.value == "日本語の描画を確認します ABC 123",
+      "result-only notification fabricated committed text",
+    )
+    self.stage = 38
+    post(view.hwnd, 0x010FU, 0UL, 0x80L)
+  } else if self.stage == 38 &&
+    !view.raw_ime_events.is_empty() &&
+    (match view.raw_ime_events[view.raw_ime_events.length() - 1] {
+      Object(fields) =>
+        fields.get("message") == Some(271L.to_json()) &&
+        fields.get("flags") == Some(128L.to_json())
+      _ => false
+    }) {
+    require(view.composing, "cursor-only notification canceled composition")
+    require(
+      view.editor.value == "日本語の描画を確認します ABC 123",
+      "cursor-only notification mutated committed text",
+    )
+    require(
+      view.editor.selection_start == 0 && view.editor.selection_end == 3,
+      "GCS notification changed committed selection",
+    )
     self.stage = 31
     post(view.hwnd, 0x010FU, 0UL, 0L)
   } else if self.stage == 31 &&
