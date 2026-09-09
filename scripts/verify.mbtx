@@ -26,16 +26,27 @@ async fn run_checked(
 ///|
 async fn main {
   let args = @env.args()
-  let contracts_only = args.length() == 2 && args[1] == "--contracts-only"
+  let target_contracts = args.length() == 3 && args[1] == "--target-contracts"
+  let contracts_only = (args.length() == 2 && args[1] == "--contracts-only") ||
+    target_contracts
   let selected_only = args.length() > 1 && !contracts_only
+  let target_only = args.length() > 1 && args[1] == "--target-tests"
+  let requested_target = if target_only || target_contracts {
+    assert_true(target_contracts || args.length() > 3)
+    assert_true(["js", "wasm-gc", "wasm", "native"].contains(args[2]))
+    Some(args[2])
+  } else {
+    None
+  }
   let packages : Array[String] = []
   if selected_only {
     assert_true(
-      args.length() > 2 && args[1] == "--tests-only",
+      args.length() > 2 && (args[1] == "--tests-only" || target_only),
       msg="usage: verify.mbtx [--tests-only package-directory... | --contracts-only]",
     )
     let root = @fs.realpath(".").replace_all(old="\\", new="/").to_lower()
-    for argument in args[2:] {
+    let start = if target_only { 3 } else { 2 }
+    for argument in args[start:] {
       let directory = @fs.realpath(argument).replace_all(old="\\", new="/")
       assert_true(
         directory.to_lower().has_prefix(root + "/"),
@@ -65,7 +76,10 @@ async fn main {
   @async.with_timeout(120000, async fn() {
     let moon = @fs.realpath(".tools/moonbit/bin/moon.exe")
     let moon_home = @fs.realpath(".tools/moonbit")
-    let native = @env.get_env_var("METONIC_VERIFY_NATIVE") == Some("1")
+    let native = match requested_target {
+      Some(target) => target == "native"
+      None => @env.get_env_var("METONIC_VERIFY_NATIVE") == Some("1")
+    }
     let envmap : Map[String, String] = Map([])
     envmap.set("MOON_HOME", moon_home)
     run_checked(moon, ["run", "scripts/prepare-wgpu.mbtx"], envmap)
@@ -140,7 +154,10 @@ async fn main {
     if !selected_only && !contracts_only {
       run_checked(moon, ["fmt", "--check"], envmap)
     }
-    let targets = if native { ["native"] } else { ["wasm-gc", "js"] }
+    let targets = match requested_target {
+      Some(target) => [target]
+      None => if native { ["native"] } else { ["wasm-gc", "js"] }
+    }
     for target in targets {
       if !contracts_only {
         let test_args = ["test"]

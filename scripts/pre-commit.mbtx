@@ -1,6 +1,9 @@
 import {
   "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
   "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/json",
+  "moonbitlang/core/env",
 }
 
 ///|
@@ -49,42 +52,76 @@ async fn expect_clean(args : Array[String], label : String) -> Unit {
 ///|
 async fn main {
   let started = @async.now()
-  expect_clean(["diff", "--quiet"], "unstaged changes detected")
-  run("git", ["diff", "--cached", "--check"])
-  let moon = ".tools/moonbit/bin/moon.exe"
-  run(moon, ["run", "scripts/prepare-wgpu.mbtx"])
-  run(moon, ["run", "scripts/prepare-browser-gpu.mbtx"])
-  run(moon, ["fmt"])
-  run(moon, ["run", "scripts/format-scripts.mbtx"])
-  run(moon, ["-C", "experiments/wgpu_binding", "fmt"])
-  run(moon, ["-C", "browser_host", "fmt", "app"])
-  expect_clean(
-    ["diff", "--exit-code"],
-    "formatting changed files; review and stage explicitly",
+  let args = @env.args()
+  let integration_only = args.length() == 2 && args[1] == "--integration"
+  let commit_only = args.length() == 2 && args[1] == "--commit"
+  assert_true(
+    args.length() == 1 || integration_only || commit_only,
+    msg="usage: pre-commit [--integration | --commit]",
   )
-  run(moon, ["check", "--target", "js", "--deny-warn"])
-  run(moon, ["check", "--target", "wasm-gc", "--deny-warn"])
-  run(moon, [
-    "test", "tools/verification_impact_cli", "--target", "wasm", "--deny-warn",
-  ])
-  let gates = [
-    "verify", "verify-native", "browser:verify", "browser:server-test", "browser:supervisor-test",
-    "browser:headless", "browser:async", "devtools:test", "native:headless", "native:control",
-    "native:mcp-test", "native:session-test", "native:semantics", "native:client-test",
-    "native:cli-test", "native:window", "native:window-control", "native:window-attach",
-    "native:pipe-verify", "native:window-rpc", "native:window-mcp", "native:host-verify",
-    "native:async", "native:surface", "native:binding", "rpc:verify", "native:release-lifecycle",
-    "native:accessibility", "native:mailbox", "native:sdk-mailbox", "demo:test",
-    "prerequisites:test",
-  ]
+  let moon = ".tools/moonbit/bin/moon.exe"
+  if !integration_only {
+    expect_clean(["diff", "--quiet"], "unstaged changes detected")
+    run("git", ["diff", "--cached", "--check"])
+    run(moon, ["run", "scripts/prepare-wgpu.mbtx"])
+    run(moon, ["run", "scripts/prepare-browser-gpu.mbtx"])
+    run(moon, ["fmt"])
+    run(moon, ["run", "scripts/format-scripts.mbtx"])
+    run(moon, ["-C", "experiments/wgpu_binding", "fmt"])
+    run(moon, ["-C", "browser_host", "fmt", "app"])
+    expect_clean(
+      ["diff", "--exit-code"],
+      "formatting changed files; review and stage explicitly",
+    )
+    run(moon, ["check", "--target", "js", "--deny-warn"])
+    run(moon, ["check", "--target", "wasm-gc", "--deny-warn"])
+    run(moon, [
+      "test", "tools/verification_impact_cli", "--target", "wasm", "--deny-warn",
+    ])
+  }
+  if commit_only {
+    for target in ["js", "wasm-gc", "wasm", "native"] {
+      run(moon, [
+        "run", "scripts/plan-local-verification.mbtx", "--", target, "--run-commit",
+      ])
+    }
+    for target in ["js", "wasm-gc", "native"] {
+      run(moon, [
+        "run", "scripts/verify.mbtx", "--", "--target-contracts", target,
+      ])
+    }
+    run(moon, ["run", "scripts/verify-docs.mbtx"])
+    println(
+      "pre-commit total_ms: " + (@async.now() - started).to_int().to_string(),
+    )
+    return
+  }
+  let policy : Map[String, Json] = @json.from_json(
+    @json.parse(@fs.read_file("verification.json").text()),
+  )
+  assert_eq(policy.get("version"), Some(Json::number(1)))
+  let gates : Array[String] = @json.from_json(
+    policy.get("full_gate_tasks").unwrap(),
+  )
+  assert_false(gates.is_empty())
+  let seen : Map[String, Bool] = Map([])
   for gate in gates {
+    assert_false(gate.is_empty() || gate.has_prefix("-") || seen.contains(gate))
+    seen[gate] = true
+  }
+  for gate in gates {
+    if integration_only && (gate == "verify" || gate == "verify-native") {
+      continue
+    }
     println("pre-commit gate: mise run " + gate)
     run("mise", ["run", gate])
   }
   run(moon, ["run", "scripts/verify-window-fixture-exclusion.mbtx"])
   run(moon, ["run", "scripts/verify-window-production-exclusion.mbtx"])
-  println("pre-commit gate: docs")
-  run(moon, ["run", "scripts/verify-docs.mbtx"])
+  if !integration_only {
+    println("pre-commit gate: docs")
+    run(moon, ["run", "scripts/verify-docs.mbtx"])
+  }
   println(
     "pre-commit total_ms: " + (@async.now() - started).to_int().to_string(),
   )

@@ -5,6 +5,83 @@ async fn main {
     args.length() >= 2,
     msg="usage: verification_impact_cli packages.json [--metadata packages.json] [absolute changed paths...]",
   )
+  if args[1] == "--run-push-checkout" {
+    assert_true(
+      args.length() >= 5,
+      msg="usage: --run-push-checkout directory input command [args...]",
+    )
+    run_push_checkout(
+      args[2],
+      read_push_input(args[3]),
+      args[4],
+      args[5:].to_owned(),
+    )
+    return
+  }
+  if args[1] == "--partition-metadata" {
+    assert_true(
+      args.length() >= 5,
+      msg="usage: --partition-metadata policy target metadata [absolute changed paths...]",
+    )
+    let (commit, push) = @impact.partition_metadata(
+      @json.parse(@fs.read_file(args[2]).text()),
+      args[3],
+      @json.parse(@fs.read_file(args[4]).text()),
+      args[5:].to_owned(),
+    )
+    let output : Json = { "pre_commit": commit, "pre_push": push }
+    println(output.stringify())
+    return
+  }
+  if args[1] == "--partition-tests" {
+    assert_eq(
+      args.length(),
+      5,
+      msg="usage: --partition-tests policy target inventory",
+    )
+    let policy = @json.parse(@fs.read_file(args[2]).text())
+    let inventory : Map[String, Json] = @json.from_json(
+      @json.parse(@fs.read_file(args[4]).text()),
+    )
+    let available : Array[String] = @json.from_json(
+      inventory.get("available").unwrap(),
+    )
+    let affected : Array[String] = @json.from_json(
+      inventory.get("affected").unwrap(),
+    )
+    let (commit, push) = @impact.partition_tests(
+      policy,
+      args[3],
+      available,
+      affected,
+    )
+    let output : Json = { "pre_commit": commit, "pre_push": push }
+    println(output.stringify())
+    return
+  }
+  if args[1] == "--record-checkout" {
+    assert_true(
+      args.length() >= 7,
+      msg="usage: --record-checkout directory expected-tree config record command [args...]",
+    )
+    record_checkout(
+      args[2],
+      args[3],
+      args[4],
+      args[5],
+      args[6],
+      args[7:].to_owned(),
+    )
+    return
+  }
+  if args[1] == "--run-checkout" {
+    assert_true(
+      args.length() >= 5,
+      msg="usage: --run-checkout directory expected-tree command [args...]",
+    )
+    run_checkout(args[2], args[3], args[4], args[5:].to_owned())
+    return
+  }
   if args[1] == "--source-inputs" {
     assert_true(args.length() >= 4, msg="expected metadata and package paths")
     let metadata = [@json.parse(@fs.read_file(args[2]).text())]
@@ -75,19 +152,7 @@ async fn main {
   }
   if args[1] == "--push-plan" {
     assert_eq(args.length(), 3, msg="expected pre-push input filename")
-    let input = if args[2] == "-" {
-      let buffer = Buffer()
-      while @stdio.stdin.read_some(max_len=4096) is Some(chunk) {
-        buffer.write_bytes(chunk)
-        assert_true(
-          buffer.length() <= 1048576,
-          msg="pre-push input exceeds 1 MiB",
-        )
-      }
-      @utf8.decode(buffer.to_bytes())
-    } else {
-      @fs.read_file(args[2]).text()
-    }
+    let input = read_push_input(args[2])
     println(resolve_push(input).stringify())
     return
   }

@@ -7,6 +7,35 @@ It returns owned package paths, not individual tests or a purity judgement.
 Unknown paths and changes outside the supported source suffixes select the whole
 input graph. Missing required metadata is an error, not an empty selection.
 
+## Hook partition planning
+
+`--partition-tests <policy> <target> <inventory>` reads `verification.json` and an
+inventory containing `available` and `affected` package-path arrays. It preserves
+inventory order, assigns critical packages supported on that target plus affected
+packages to `pre_commit`, and assigns the remaining packages to `pre_push`.
+Packages appear only once. Missing affected or required critical packages are
+errors. The caller must provide fresh target-specific inventory and dependency
+selection; this command does not discover packages or infer purity. `pre_push`
+is a remainder plan, not authorization to skip a previously verified test.
+
+Installed pre-commit still uses `full_gate_tasks` in the policy and runs the full
+gate. Partition plans are not yet installed as hooks.
+
+From the configured repository environment, run
+`moon run scripts/plan-local-verification.mbtx -- <target>` to refresh root-module
+check metadata and plan against tracked changes from HEAD plus untracked files.
+The script removes the previous metadata file before checking, requires a fresh
+replacement, and filters packages using their declared supported targets.
+`--run-commit` after the target executes the selected package tests through the
+existing verification runner, including native compiler setup when needed.
+
+This root-module runner is not a commit hook: it includes unstaged changes, does
+not format, does not cover the separate browser/native workspaces or integration
+gates, and does not save reusable success records. Changes outside the supported
+source paths conservatively select all root packages supported on that target.
+Push refs and cached-input records must be connected before replacing the full
+installed gate.
+
 ## Workspace graph plans
 
 The pinned Moon supports `-Z rr_export_package_graph` before the `check`
@@ -45,6 +74,35 @@ non-deletion object to a local commit and tree using Git, preserving destination
 refs and deletion records. Missing/non-commit objects fail rather than falling
 back to HEAD. It does not execute tests or certify working-tree contents. The
 runner still needs successful-input records and committed-input verification.
+
+`--run-push-checkout <directory> <input-file-or-dash> <command> <args>...` validates
+all non-deletion refs against the checkout before invoking the command once.
+Empty/deletion-only pushes invoke nothing; multiple refs with the same tree
+share one invocation. A different tree is rejected before execution, even when
+an earlier ref matches. This entry point does not prepare alternate checkouts or
+reuse success records, and is not yet an installed pre-push hook.
+
+`--run-checkout <directory> <expected-tree> <command> <args>...` runs a command
+in an existing checkout only when its HEAD tree matches the expected tree and
+Git reports no staged, unstaged or untracked changes. It repeats these checks
+after the command and rejects nonzero exit status. This does not create or
+switch checkouts, write a success record, or install a pre-push hook.
+
+This guard is only the tracked-checkout part of verification. Ignored inputs,
+toolchain and environment identity need separate fingerprints. Index entries
+marked assume-unchanged or skip-worktree are rejected. Git clean filters
+and changes reverted during execution are
+not authenticated by a clean status result. Do not use this guard alone to
+authorize cached verification or certify immutable pushed inputs.
+
+`--record-checkout <directory> <expected-tree> <config> <record> <command> <args>...`
+combines that guard with the successful-record protocol below. The config context
+must also contain `tree` equal to the expected Git tree and `checkout` equal to
+the checkout's canonical path, and its `command` must match the invocation.
+Invalid attempts invalidate any previous success under the record lock. Use
+absolute input paths when the caller's directory differs from the checkout;
+fingerprints are evaluated in the caller's directory. These checks still require
+a complete input inventory and do not install or enable skipping in hooks.
 
 ## Verification input inspection
 

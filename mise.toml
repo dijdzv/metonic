@@ -37,6 +37,14 @@ env = { METONIC_VERIFY_NATIVE = "1" }
 description = "Run checks for staged changes"
 run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/pre-commit.mbtx'
 
+[tasks."verify:integration"]
+description = "Run environment and production-artifact checks without root contract gates"
+run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/pre-commit.mbtx -- --integration'
+
+[tasks."verify:commit"]
+description = "Run formatting, static checks, critical and affected root tests"
+run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/pre-commit.mbtx -- --commit'
+
 [tasks."hooks:install"]
 description = "Install the mise-managed Git pre-commit hook"
 run = "mise generate git-pre-commit --write --task pre-commit"

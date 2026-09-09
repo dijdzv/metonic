@@ -5,6 +5,7 @@ fn fixture_package(
   test_deps? : Array[String] = [],
   wb_deps? : Array[String] = [],
   third_party? : Bool = false,
+  targets? : Array[String] = ["Js", "Wasm", "WasmGC", "Native"],
 ) -> Json {
   fn edges(paths : Array[String]) -> Json {
     Json::array(paths.map(path => { "fspath": path }))
@@ -12,6 +13,7 @@ fn fixture_package(
   {
     "root-path": path,
     "is-third-party": third_party,
+    "supported-targets": targets,
     "deps": edges(deps),
     "test-deps": edges(test_deps),
     "wbtest-deps": edges(wb_deps),
