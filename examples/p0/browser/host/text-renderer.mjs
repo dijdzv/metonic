@@ -1,10 +1,7 @@
-const FONT_URL = './NotoSansJP.ttf';
 const FONT_HASH = 'c2f3b4d463500a2ddcd3849cded1fceeb9fd6d1c32e6cbecd568453ba50fc68f';
 
 async function loadFont(app, disposed) {
-  const response = await fetch(FONT_URL, { cache: 'no-cache' });
-  if (!response.ok) throw new Error(`Unable to fetch ${FONT_URL} (${response.status})`);
-  const bytes = new Uint8Array(await response.arrayBuffer());
+  const bytes = new Uint8Array(await app.font_fetch());
   if (disposed()) return false;
   const digest = await crypto.subtle.digest('SHA-256', bytes);
   if (disposed()) return false;

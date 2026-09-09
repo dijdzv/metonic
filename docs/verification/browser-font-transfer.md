@@ -30,9 +30,25 @@ The browser MoonBit tests check empty, invalid and oversized bulk input, and
 that rejected replacement clears pending word input. Both targets passed 14
 package tests with the transfer change.
 
-Font fetch and Web Crypto hashing remain JavaScript browser boundaries. A
-generated Web Crypto binding was separately prototyped and tested under issue
-#216, but is not an application dependency. This change does not add streaming
-limits before fetch collection, abort a pending fetch, or complete font-loading
-lifecycle migration. Those requirements remain on #216; physical IME acceptance
-is unrelated to these synthetic and headless checks.
+Font fetching now uses the MoonBit browser host and the existing Fetch bindings.
+The loader checks the cumulative 16-MiB bound before retaining each stream chunk.
+Stopping the host aborts the request, cancels an active reader and releases its
+lock. The response is assembled through the browser Blob API; the bound limits
+retained payload bytes, not total browser memory or transient assembly copies.
+
+Web Crypto hashing remains a JavaScript browser boundary. The generated binding
+prototype requires upstream generator corrections tracked in #218 and is not an
+application dependency. Hash completion after disposal is ignored; this does not
+cancel Web Crypto computation itself.
+
+The headless suite exercises HTTP 503, wrong digest, a 16-MiB-plus-one-byte
+response, stop before headers, stop while a controlled ReadableStream waits for
+more body data, and stop before a held digest result returns, on both targets.
+The stream fixture verifies one abort, one cancel and an unlocked reader. It
+does not establish server-side disconnect behavior. All failure/stop scenarios
+require zero submitted frames and no uncaught page errors. A loader-level test
+delivers an obsolete response after replacement, checks that both promises reject
+when cancelled, verifies that old cleanup preserves cancellation of the current
+reader, and loads the actual font again. This exercises one module instance; it
+does not add restart support to the stopped UI. Physical IME acceptance is
+unrelated to these synthetic and headless checks.

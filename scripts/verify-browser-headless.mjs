@@ -157,9 +157,80 @@ async function negativeTests(browser, verifier = runFailures) {
         break
       case 'close': release?.(); await page.close(); page = undefined; break
       case 'fail-route': await page.route(request.pattern, (route) => route.fulfill({ status: 503, body: 'unavailable' })); break
-      case 'respond-route': await page.route(request.pattern, (route) => route.fulfill({ status: request.status, body: request.body })); break
+      case 'respond-route': await page.route(request.pattern, (route) => route.fulfill({ status: request.status, body: request.body.repeat(request.repeat ?? 1) })); break
       case 'unroute': await page.unroute(request.pattern); break
       case 'reload': await page.reload({ waitUntil: 'domcontentloaded' }); break
+      case 'stream-font':
+        await page.addInitScript(() => {
+          const fetch = window.fetch.bind(window)
+          window.fetch = (input, init) => {
+            if (!String(input).endsWith('/NotoSansJP.ttf')) return fetch(input, init)
+            const observation = globalThis.fontStreamObservation = { pulls: 0, aborts: 0, cancels: 0 }
+            init.signal.addEventListener('abort', () => { observation.aborts++ }, { once: true })
+            const stream = new ReadableStream({
+              pull(controller) {
+                observation.pulls++
+                if (observation.pulls === 1) controller.enqueue(new Uint8Array(1024))
+              },
+              cancel() { observation.cancels++ },
+            })
+            globalThis.fontTestStream = stream
+            return Promise.resolve(new Response(stream))
+          }
+        })
+        break
+      case 'hold-digest':
+        await page.addInitScript(() => {
+          const digest = crypto.subtle.digest.bind(crypto.subtle)
+          crypto.subtle.digest = async (...args) => {
+            const result = await digest(...args)
+            globalThis.fontDigestHeld = true
+            await new Promise(resolve => { globalThis.releaseFontDigest = resolve })
+            globalThis.fontDigestReleased = true
+            return result
+          }
+        })
+        break
+      case 'digest-held': await page.waitForFunction(() => globalThis.fontDigestHeld === true); break
+      case 'font-replace': return page.evaluate(async (target) => {
+        const { loadApp } = await import('./loader.mjs')
+        const { app } = await loadApp(target)
+        const originalFetch = window.fetch.bind(window)
+        let resolveOld, reads = 0, oldAborts = 0, newAborts = 0, cancels = 0
+        let stream
+        window.fetch = (input, init) => {
+          if (!String(input).endsWith('/NotoSansJP.ttf')) return originalFetch(input, init)
+          if (++reads === 1) {
+            init.signal.addEventListener('abort', () => oldAborts++, { once: true })
+            return new Promise(resolve => { resolveOld = resolve })
+          }
+          init.signal.addEventListener('abort', () => newAborts++, { once: true })
+          stream = new ReadableStream({ cancel() { cancels++ } })
+          return Promise.resolve(new Response(stream))
+        }
+        try {
+          const old = app.font_fetch().then(() => false, () => true)
+          const current = app.font_fetch().then(() => false, () => true)
+          resolveOld(new Response(new Uint8Array([1, 2, 3])))
+          const oldRejected = await old
+          app.font_fetch_cancel()
+          const currentRejected = await current
+          await Promise.resolve()
+          window.fetch = originalFetch
+          const fresh = await app.font_fetch()
+          return { oldRejected, currentRejected, oldAborts, newAborts, cancels, locked: stream.locked, freshBytes: fresh.byteLength }
+        } finally { window.fetch = originalFetch; app.font_fetch_cancel() }
+      }, request.target)
+      case 'release-digest':
+        await page.evaluate(() => globalThis.releaseFontDigest())
+        await page.waitForFunction(() => globalThis.fontDigestReleased === true)
+        break
+      case 'stream-reading':
+        await page.waitForFunction(() => globalThis.fontStreamObservation?.pulls >= 2 && globalThis.fontTestStream.locked)
+        break
+      case 'stream-cleaned':
+        await page.waitForFunction(() => globalThis.fontStreamObservation?.cancels > 0 && !globalThis.fontTestStream.locked)
+        return page.evaluate(() => ({ ...globalThis.fontStreamObservation, locked: globalThis.fontTestStream.locked }))
       case 'hold-route': {
         let markSeen
         seen = new Promise((resolve) => { markSeen = resolve })

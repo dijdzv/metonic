@@ -246,6 +246,7 @@ function renderEditor() {
 function stop(reason = 'Stopped.', error = false) {
   if (disposed) return;
   disposed = true;
+  app?.font_fetch_cancel?.();
   document.removeEventListener('metonic-input', onInputChanged);
   document.removeEventListener('metonic-rpc', onRpcChanged);
   app?.inputs_stop?.();

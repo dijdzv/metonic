@@ -39,7 +39,10 @@ fn verify_initialization(request : Json) -> Json raise VerifyFailure {
     "stopped" => status == "Stopped."
     "font503" => status.contains("Unable to fetch") && status.contains("503")
     "font-hash" => status.contains("SHA-256 mismatch")
+    "font-limit" => status == "Font exceeds 16 MiB"
     "font-stopped" => status == "Stopped."
+    "font-body-stopped" => status == "Stopped."
+    "font-digest-stopped" => status == "Stopped."
     _ => false
   }
   require(expected, "unexpected initialization status: " + status)
