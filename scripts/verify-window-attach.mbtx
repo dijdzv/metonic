@@ -211,8 +211,11 @@ async fn main {
           [child.pid.to_string(), "close-only"],
           no_console_window=true,
         )
+        println("WINDOW_ATTACH_STAGE mode=" + mode + " stage=close-probe")
         assert_eq(closer.wait(), 0)
+        println("WINDOW_ATTACH_STAGE mode=" + mode + " stage=process-exit")
         assert_eq(@async.with_timeout(2000, () => child.wait()), 0)
+        println("WINDOW_ATTACH_STAGE mode=" + mode + " stage=discovery-cleanup")
         assert_true(
           !@fs.exists(discovery_path),
           msg="discovery survived normal app exit",
@@ -223,10 +226,12 @@ async fn main {
           msg="session reservation survived app exit",
         )
         if pending_read {
+          println("WINDOW_ATTACH_STAGE mode=" + mode + " stage=read-eof")
           assert_eq(second.read_until("\n"), None)
           second.close()
         }
         if mode == "write" {
+          println("WINDOW_ATTACH_STAGE mode=" + mode + " stage=drain-capture")
           let tail = second.read_all().text()
           let incomplete = try {
             ignore(@json.parse("{" + tail))
@@ -240,6 +245,7 @@ async fn main {
           )
           second.close()
         }
+        println("WINDOW_ATTACH_STAGE mode=" + mode + " stage=expired-client")
         let (expired_code, _, _) = @process.collect_output(
           ".tools/moonbit/bin/moonrun.exe",
           [
