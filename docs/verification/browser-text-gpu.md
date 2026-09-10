@@ -9,7 +9,7 @@ textures/buffers and drops references to the remaining GPU objects.
 The JavaScript text host retains font digest verification, conversion of the
 MoonBit byte representation to Uint8Array, Float32Array construction for uniform
 data, and the boundary that catches synchronous browser exceptions. Device and
-canvas setup, frame submission and scheduling remain in the host. GPU migration does not
+canvas setup and frame scheduling remain in the host. GPU migration does not
 claim that all browser JavaScript has been removed.
 
 `browser_host/app/scene_gpu.mbt` owns the scene pipeline, uniform buffer, bind
@@ -19,6 +19,16 @@ callback before it can allocate buffers; a partially created buffer remains
 owned until the host's error cleanup calls disposal. Repeated disposal is safe.
 The headless suite checks this lifetime contract on JS and WasmGC separately
 from the real GPU pixel, resize, movement and stop scenarios.
+
+`browser_host/app/frame_gpu.mbt` owns each frame's command encoder, canvas texture
+view, render pass and queue submission. Scene and text recording share that pass.
+Submission consumes the pending frame before ending/finishing it, so an exception
+cannot leave a frame available for a second submission. Rejected drawing,
+initialization replacement and disposal discard pending frames; the JavaScript
+exception boundary aborts before stopping. Unfinished WebGPU encoders have no
+destroy method and are released without finishing or submitting their commands.
+The lifecycle fixture checks duplicate submission, rejected text drawing, surface
+acquisition and finish exceptions, and disposal, alongside real GPU frame checks.
 
 ## Dependency preparation
 

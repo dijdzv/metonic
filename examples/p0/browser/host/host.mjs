@@ -92,16 +92,14 @@ function draw() {
   try {
     const data = new Float32Array([field(0), field(1), field(2), field(3), cssW, cssH, field(4) === 1 ? 1 : 0, 0]);
     transferred += data.byteLength;
-    const encoder = device.createCommandEncoder();
-    const view = context.getCurrentTexture().createView();
-    const pass = encoder.beginRenderPass({ colorAttachments: [{ view, clearValue: { r: .02, g: .08, b: .15, a: 1 }, loadOp: 'clear', storeOp: 'store' }] });
-    if (app.scene_gpu_record(pass, data) !== 1) throw new Error('MoonBit scene GPU rejected draw');
-    textRenderer?.record(pass, cssW, cssH);
-    pass.end();
-    device.queue.submit([encoder.finish()]);
+    if (app.gpu_frame_begin(context) !== 1) throw new Error('MoonBit GPU rejected frame');
+    if (app.gpu_frame_scene(data) !== 1) throw new Error('MoonBit scene GPU rejected draw');
+    textRenderer?.record(cssW, cssH);
+    if (app.gpu_frame_submit() !== 1) throw new Error('MoonBit GPU rejected submission');
     submitted += 1;
     renderStats();
   } catch (error) {
+    app.gpu_frame_abort();
     stop(error?.message || String(error), true);
   }
 }

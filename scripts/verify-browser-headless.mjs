@@ -242,6 +242,47 @@ async function negativeTests(browser, verifier = runFailures) {
         try { await partialInit } catch { rejected = true }
         app.scene_gpu_dispose()
         result.partial = { rejected, ...partial.counts }
+        const frames = fixture()
+        let submitted = 0, ended = 0, finished = 0, failFinish = false
+        const context = { getCurrentTexture: () => ({ createView: () => ({}) }) }
+        frames.device.queue.submit = () => submitted++
+        frames.device.createCommandEncoder = () => ({
+          beginRenderPass(descriptor) {
+            const attachment = descriptor.colorAttachments[0]
+            if (attachment.loadOp !== 'clear' || attachment.storeOp !== 'store'
+              || attachment.clearValue.r !== .02 || attachment.clearValue.g !== .08
+              || attachment.clearValue.b !== .15 || attachment.clearValue.a !== 1) throw new Error('frame attachment changed')
+            return { ...pass(frames), end() { ended++ } }
+          },
+          finish() { finished++; if (failFinish) throw new Error('finish failure'); return {} },
+        })
+        const frameInit = app.scene_gpu_init(frames.device, 'bgra8unorm')
+        frames.resolve()
+        await frameInit
+        const empty = app.gpu_frame_submit()
+        const begun = app.gpu_frame_begin(context)
+        const nested = app.gpu_frame_begin(context)
+        const scene = app.gpu_frame_scene(new Float32Array(8))
+        const sent = app.gpu_frame_submit()
+        const duplicate = app.gpu_frame_submit()
+        app.gpu_frame_begin(context)
+        const invalidText = app.gpu_frame_text(-1, new Float32Array(8))
+        const rejectedFrame = app.gpu_frame_submit()
+        app.gpu_frame_begin(context)
+        failFinish = true
+        let finishRejected = false
+        try { app.gpu_frame_submit() } catch { finishRejected = true }
+        const retryFailed = app.gpu_frame_submit()
+        failFinish = false
+        let acquisitionRejected = false
+        try { app.gpu_frame_begin({ getCurrentTexture() { throw new Error('surface failure') } }) } catch { acquisitionRejected = true }
+        const absentAfterAcquisition = app.gpu_frame_submit()
+        app.gpu_frame_begin(context)
+        app.scene_gpu_dispose()
+        const disposedFrame = app.gpu_frame_submit()
+        result.frames = { empty, begun, nested, scene, sent, duplicate, invalidText, rejectedFrame,
+          finishRejected, retryFailed, acquisitionRejected, absentAfterAcquisition, disposedFrame,
+          submitted, ended, finished }
         return result
       }, request.target)
       case 'font-replace': return page.evaluate(async (target) => {
