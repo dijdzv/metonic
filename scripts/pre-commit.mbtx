@@ -52,6 +52,32 @@ async fn expect_clean(args : Array[String], label : String) -> Unit {
 ///|
 async fn main {
   let started = @async.now()
+  let ime_manifest = ".work/native-deps/sources/window-ime-observed/modules/window/windows/moon.pkg"
+  let initial_ime_manifest = if @fs.exists(ime_manifest) {
+    Some(@fs.read_file(ime_manifest).text())
+  } else {
+    None
+  }
+  // Keep dependency bytes identical across recorded verification without
+  // rewriting them between every build inside the gate. Unknown changes must
+  // fail validation rather than being hidden by restoring the entry state.
+  defer @async.protect_from_cancel(() => {
+    if initial_ime_manifest is Some(initial) {
+      if @fs.read_file(ime_manifest).text() != initial {
+        let code = @process.run(
+          ".tools/moonbit/bin/moon.exe",
+          ["run", "scripts/prepare-native-deps.mbtx", "--", "--offline"],
+          no_console_window=true,
+        )
+        assert_eq(
+          code,
+          0,
+          msg="cannot restore an unvalidated IME configuration",
+        )
+        @fs.write_file(ime_manifest, initial)
+      }
+    }
+  })
   let args = @env.args()
   let integration_only = args.length() == 2 && args[1] == "--integration"
   let commit_only = args.length() == 2 && args[1] == "--commit"

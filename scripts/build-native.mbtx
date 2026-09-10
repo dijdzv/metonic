@@ -175,15 +175,6 @@ async fn main {
       } else {
         "window_app"
       }
-      if @process.run(
-          moon,
-          ["run", "scripts/prepare-native-deps.mbtx"],
-          extra_env=envmap,
-          no_console_window=true,
-        ) !=
-        0 {
-        fail("native dependency preparation failed")
-      }
       let native_host_build_dir = @fs.realpath(".") + "/.work/native-host-build"
       let build_args = [
         "-C", "native_host", "build", host_app, "--target", "native", "--target-dir",
@@ -231,15 +222,10 @@ async fn main {
       } else {
         "debug"
       }
-      let trace_flags = if profile == "debug" {
-        " /UMETONIC_IME_TRACE /DMETONIC_IME_TRACE=1"
+      let ime_config = if host_app == "window_probe" {
+        "fixture"
       } else {
-        " /UMETONIC_IME_TRACE"
-      }
-      let trace_test_flags = if host_app == "window_probe" {
-        " /UMETONIC_IME_TRACE_TEST /DMETONIC_IME_TRACE_TEST=1"
-      } else {
-        " /UMETONIC_IME_TRACE_TEST"
+        profile
       }
       for variable in ["CL", "_CL_"] {
         assert_false(
@@ -248,31 +234,23 @@ async fn main {
             variable,
         )
       }
-      // Environment-only flags are invisible to Moon's incremental command key.
-      let window_manifest = ".work/native-deps/sources/window-ime-observed/modules/window/windows/moon.pkg"
-      let original_manifest = @fs.read_file(window_manifest).text()
-      assert_false(original_manifest.contains("stub-cc-flags"))
-      assert_eq(original_manifest.split("options(").count(), 2)
-      let flags : Json = Json::string(trace_flags + trace_test_flags)
-      let configured_manifest = original_manifest.replace_all(
-        old="options(",
-        new="options(\n  link: { \"native\": { \"stub-cc-flags\": " +
-          flags.stringify() +
-          " } },",
-      )
-      @fs.write_file(window_manifest, configured_manifest)
-      let mut restored_manifest = false
-      defer (if !restored_manifest {
-        @fs.write_file(window_manifest, original_manifest)
-      })
+      guard @process.run(
+          moon,
+          [
+            "run", "scripts/prepare-native-deps.mbtx", "--", "--ime-config", ime_config,
+          ],
+          extra_env=envmap,
+          no_console_window=true,
+        ) ==
+        0 else {
+        fail("native IME configuration failed")
+      }
       let build_code = @process.run(
         moon,
         build_args,
         extra_env=envmap,
         no_console_window=true,
       )
-      @fs.write_file(window_manifest, original_manifest)
-      restored_manifest = true
       if build_code != 0 {
         fail("MoonBit host " + mode + " build failed")
       }
