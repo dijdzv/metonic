@@ -6,7 +6,7 @@ const $ = (id) => document.getElementById(id);
 const canvas = $('canvas');
 const status = $('status');
 const target = environment.target;
-let app, device, context, pipeline, uniform, bindGroup, observer, raf = 0, disposed = false, dirty = false;
+let app, device, context, observer, raf = 0, disposed = false, dirty = false;
 let cssW = 0, cssH = 0, backingW = 0, backingH = 0, submitted = 0, transferred = 0, format;
 const textInput = $('text-input');
 const DEFAULT_TEXT = textInput.value;
@@ -91,14 +91,11 @@ function draw() {
   dirty = false;
   try {
     const data = new Float32Array([field(0), field(1), field(2), field(3), cssW, cssH, field(4) === 1 ? 1 : 0, 0]);
-    device.queue.writeBuffer(uniform, 0, data);
     transferred += data.byteLength;
     const encoder = device.createCommandEncoder();
     const view = context.getCurrentTexture().createView();
     const pass = encoder.beginRenderPass({ colorAttachments: [{ view, clearValue: { r: .02, g: .08, b: .15, a: 1 }, loadOp: 'clear', storeOp: 'store' }] });
-    pass.setPipeline(pipeline);
-    pass.setBindGroup(0, bindGroup);
-    pass.draw(6);
+    if (app.scene_gpu_record(pass, data) !== 1) throw new Error('MoonBit scene GPU rejected draw');
     textRenderer?.record(pass, cssW, cssH);
     pass.end();
     device.queue.submit([encoder.finish()]);
@@ -266,7 +263,7 @@ function stop(reason = 'Stopped.', error = false) {
   environment.detach();
   $('task-cancel').removeEventListener('click', onTaskCancel);
   try { context?.unconfigure?.(); } catch {}
-  try { uniform?.destroy(); } catch {}
+  try { app?.scene_gpu_dispose(); } catch {}
   try { device?.destroy(); } catch {}
   setStatus(reason, error);
 }
@@ -298,36 +295,12 @@ async function main() {
   context = canvas.getContext('webgpu');
   if (!context) throw new Error('Could not acquire a WebGPU canvas context.');
   format = navigator.gpu.getPreferredCanvasFormat();
-  const shader = device.createShaderModule({ code: `
-struct U { rect: vec4f, viewport: vec2f, enabled: f32, pad: f32 };
-@group(0) @binding(0) var<uniform> u: U;
-@vertex fn vs(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
-  var p = array<vec2f, 6>(vec2f(0,0), vec2f(1,0), vec2f(0,1), vec2f(0,1), vec2f(1,0), vec2f(1,1));
-  let px = u.rect.xy + p[i] * u.rect.zw;
-  let clip = vec2f(px.x / u.viewport.x * 2.0 - 1.0, 1.0 - px.y / u.viewport.y * 2.0);
-  return vec4f(clip, 0, 1);
-}
-@fragment fn fs() -> @location(0) vec4f {
-  return select(vec4f(0.08, 0.65, 0.68, 1), vec4f(0.95, 0.38, 0.10, 1), u.enabled > 0.5);
-}` });
-  pipeline = await device.createRenderPipelineAsync({
-    layout: 'auto',
-    vertex: { module: shader },
-    fragment: { module: shader, targets: [{ format }] },
-    primitive: { topology: 'triangle-list' },
-  });
-  if (disposed) return;
-  uniform = device.createBuffer({
-    size: 32,
-    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-  });
-  bindGroup = device.createBindGroup({
-    layout: pipeline.getBindGroupLayout(0),
-    entries: [{ binding: 0, resource: { buffer: uniform } }],
-  });
   const loaded = await loadApp(target);
   if (disposed) return;
   app = loaded.app;
+  const sceneReady = await app.scene_gpu_init(device, format);
+  if (disposed) return;
+  if (sceneReady !== 1) throw new Error('MoonBit scene GPU initialization rejected format');
   textRenderer = await createTextRenderer({ app, device, format, disposed: () => disposed });
   if (disposed) return;
   environment.loaded(loaded, adapter);

@@ -193,6 +193,57 @@ async function negativeTests(browser, verifier = runFailures) {
         })
         break
       case 'digest-held': await page.waitForFunction(() => globalThis.fontDigestHeld === true); break
+      case 'scene-gpu-lifecycle': return page.evaluate(async (target) => {
+        const { loadApp } = await import('/loader.mjs')
+        const { app } = await loadApp(target)
+        const result = {}
+        const fixture = (failGroup = false) => {
+          const counts = { created: 0, destroyed: 0, writes: 0, draws: 0 }
+          let resolve, reject
+          const pending = new Promise((yes, no) => { resolve = yes; reject = no })
+          const device = {
+            createShaderModule: () => ({}),
+            createRenderPipelineAsync: () => pending,
+            createBuffer: () => { counts.created++; return { destroy: () => counts.destroyed++ } },
+            createBindGroup: () => { if (failGroup) throw new Error('group failure'); return {} },
+            queue: { writeBuffer: () => counts.writes++ },
+          }
+          return { counts, device, resolve: () => resolve({ getBindGroupLayout: () => ({}) }), reject: () => reject(new Error('pipeline failure')) }
+        }
+        const pass = (entry) => ({ setPipeline() {}, setBindGroup() {}, draw() { entry.counts.draws++ } })
+        const canceled = fixture()
+        const canceledInit = app.scene_gpu_init(canceled.device, 'bgra8unorm')
+        app.scene_gpu_dispose()
+        canceled.resolve()
+        result.canceled = { ready: await canceledInit, ...canceled.counts }
+        const obsolete = fixture(), current = fixture()
+        const oldInit = app.scene_gpu_init(obsolete.device, 'bgra8unorm')
+        const currentInit = app.scene_gpu_init(current.device, 'bgra8unorm')
+        current.resolve()
+        const ready = await currentInit
+        obsolete.resolve()
+        const oldReady = await oldInit
+        const drawn = app.scene_gpu_record(pass(current), new Float32Array(8))
+        app.scene_gpu_dispose()
+        app.scene_gpu_dispose()
+        const afterDispose = app.scene_gpu_record(pass(current), new Float32Array(8))
+        result.replaced = { ready, oldReady, drawn, afterDispose, obsoleteCreated: obsolete.counts.created, ...current.counts }
+        const failed = fixture()
+        const failedInit = app.scene_gpu_init(failed.device, 'bgra8unorm')
+        failed.reject()
+        let rejected = false
+        try { await failedInit } catch { rejected = true }
+        app.scene_gpu_dispose()
+        result.rejected = { rejected, ...failed.counts }
+        const partial = fixture(true)
+        const partialInit = app.scene_gpu_init(partial.device, 'bgra8unorm')
+        partial.resolve()
+        rejected = false
+        try { await partialInit } catch { rejected = true }
+        app.scene_gpu_dispose()
+        result.partial = { rejected, ...partial.counts }
+        return result
+      }, request.target)
       case 'font-replace': return page.evaluate(async (target) => {
         const { loadApp } = await import('./loader.mjs')
         const { app } = await loadApp(target)

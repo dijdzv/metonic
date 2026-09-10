@@ -8,9 +8,17 @@ textures/buffers and drops references to the remaining GPU objects.
 
 The JavaScript text host retains font digest verification, conversion of the
 MoonBit byte representation to Uint8Array, Float32Array construction for uniform
-data, and the boundary that catches synchronous browser exceptions. Scene
-rendering and frame scheduling remain in the host. Text GPU migration does not
+data, and the boundary that catches synchronous browser exceptions. Device and
+canvas setup, frame submission and scheduling remain in the host. GPU migration does not
 claim that all browser JavaScript has been removed.
+
+`browser_host/app/scene_gpu.mbt` owns the scene pipeline, uniform buffer, bind
+group and draw recording. Initialization retains the asynchronous WebGPU
+pipeline API. Disposing or replacing a pending initialization invalidates its
+callback before it can allocate buffers; a partially created buffer remains
+owned until the host's error cleanup calls disposal. Repeated disposal is safe.
+The headless suite checks this lifetime contract on JS and WasmGC separately
+from the real GPU pixel, resize, movement and stop scenarios.
 
 ## Dependency preparation
 
