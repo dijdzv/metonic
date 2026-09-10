@@ -12,7 +12,6 @@ const textInput = $('text-input');
 const DEFAULT_TEXT = textInput.value;
 let textRenderer;
 const taskButtons = [$('task-start'), $('task-cancel'), $('rpc-load')];
-let rpcTimer;
 function rpcOutput(kind) {
   return new TextDecoder('utf-8', { fatal: true }).decode(Uint8Array.from({ length: Number(app.rpc_output_length(kind)) }, (_, i) => Number(app.rpc_output_byte(kind, i))));
 }
@@ -26,18 +25,13 @@ function loadUser() {
   app.view_focus(1);
   renderEditor();
   if (app.http_start() !== 1) return;
-  clearTimeout(rpcTimer);
-  rpcTimer = setTimeout(() => app.http_timeout(), 3000);
   updateTaskDiagnostics();
 }
 function onRpcChanged() {
   if (disposed) return;
-  if (!app.http_active()) { clearTimeout(rpcTimer); rpcTimer = undefined; }
   renderRpc();
 }
 function cancelHttp() {
-  clearTimeout(rpcTimer);
-  rpcTimer = undefined;
   app?.http_cancel();
 }
 let lastTaskStatus;

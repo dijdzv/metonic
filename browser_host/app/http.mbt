@@ -4,6 +4,7 @@ priv struct HttpRequest {
   controller : @dom.AbortController
   mut reader : @dom.ReadableStreamDefaultReader?
   mut live : Bool
+  mut timer : Int?
   bytes : Array[Byte]
 }
 
@@ -13,6 +14,10 @@ let pending_http : Ref[HttpRequest?] = Ref(None)
 ///|
 fn HttpRequest::cleanup(self : HttpRequest) -> Unit {
   self.live = false
+  if self.timer is Some(timer) {
+    self.timer = None
+    @dom.window().clear_timeout(id=timer)
+  }
   self.controller.abort()
   if self.reader is Some(reader) {
     self.reader = None
@@ -97,24 +102,6 @@ pub fn http_cancel() -> Unit {
 }
 
 ///|
-#export_name("http_active")
-pub fn http_active() -> Int {
-  if pending_http.val is Some(_) {
-    1
-  } else {
-    0
-  }
-}
-
-///|
-#export_name("http_timeout")
-pub fn http_timeout() -> Unit {
-  if pending_http.val is Some(request) {
-    request.finish(0, Some(1))
-  }
-}
-
-///|
 #export_name("http_start")
 pub fn http_start() -> Int {
   if inputs_composing() != 0 {
@@ -137,9 +124,15 @@ pub fn http_start() -> Int {
     controller: @dom.AbortController::new(),
     reader: None,
     live: true,
+    timer: None,
     bytes: [],
   }
   pending_http.val = Some(request)
+  let timeout = @dom.Function::new(fn(_) {
+    request.finish(0, Some(1))
+    @dom.JsValue::undefined()
+  })
+  request.timer = Some(@dom.window().set_timeout(timeout, timeout=3000, []))
   let headers = [["Content-Type", "application/json"]]
   ignore(
     @dom.window()
