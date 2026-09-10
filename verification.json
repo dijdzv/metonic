@@ -14,6 +14,6 @@
     "native:host-verify", "native:async",
     "native:surface", "native:binding", "rpc:verify", "native:release-lifecycle",
     "native:accessibility", "native:mailbox", "native:sdk-mailbox", "demo:test",
-    "prerequisites:test"
+    "prerequisites:test", "bootstrap:test"
   ]
 }

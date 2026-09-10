@@ -50,14 +50,28 @@ accepts an explicit version and installs/bundles core, but the reviewed script
 does not verify this project's two pinned hashes or retain the previous install
 before overwriting it. It is not an equivalent replacement for this contract.
 
-Retain `scripts/bootstrap.ps1` for compiler acquisition and installation before
-MoonBit is available. Subsequent development automation remains MoonBit. The
-current script stages downloads and verifies their hashes, bundles core and
-checks versions before moving the existing installation to a backup. Keeping
-that backup is recovery material, not proof of automatic rollback if the final
-directory move fails. This source-level comparison is not a fresh-machine or
-failure-injection test. Revisit the boundary when an existing installer can
-satisfy the complete pinned-pair contract. Investigation evidence is in #82.
+Use mise's HTTP backend for compiler acquisition and MoonBit for installation
+orchestration. A compiler need not already be installed: mise 2026.9.4 was
+verified to acquire the pinned compiler and core into a separate directory,
+after which that compiler bundled core and executed a MoonBit script. The
+earlier conclusion that a fresh checkout requires a PowerShell bootstrap was
+too strong. mise can also load `toolchain.json` through `vars._.file`, avoiding
+a second copy of the version and checksum pins.
+
+The bootstrap entry point acquires an invocation-specific runtime, then runs
+`scripts/bootstrap.mbtx` to stage, bundle and validate the compiler/core pair.
+It runs outside the installation being replaced so Windows does not need to move
+the currently executing compiler. A directory lock excludes simultaneous
+promotions; a failed promotion restores the previous installation. Successful
+setup removes the temporary runtime, while retaining the previous installation.
+mise 2026.9.4 is the minimum verified acquisition implementation.
+
+Windows registry pack files are read-only. The Wasm filesystem runtime rejects
+`chmod`, so cleanup uses Windows `attrib.exe` solely to clear that attribute,
+after validating containment and rejecting links or special files. Traversal,
+deletion, installation and recovery remain MoonBit code. This narrow OS boundary
+does not require a PowerShell script. Track the unsupported filesystem operation
+and the scope of installation/recovery validation in #82.
 
 ## Consequences
 

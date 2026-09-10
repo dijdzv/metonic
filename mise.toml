@@ -1,3 +1,9 @@
+min_version = "2026.9.4"
+
+[vars]
+_.file = "toolchain.json"
+bootstrap_runtime = "{{config_root}}/.tools/bootstrap-runtime-{{mise_pid}}"
+
 [tools]
 pnpm = "12.3.4"
 node = "26.8.1"
@@ -10,7 +16,37 @@ _.path = ["{{config_root}}/.tools/moonbit/bin"]
 
 [tasks.bootstrap]
 description = "Install the pinned current MoonBit toolchain with SHA256 verification"
-run = ["pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap.ps1", '.\\.tools\\moonbit\\bin\\moon.exe update', '.\\.tools\\moonbit\\bin\\moon.exe run scripts/check-prerequisites.mbtx -- bootstrap', '.\\.tools\\moonbit\\bin\\moon.exe run scripts/prepare-wgpu.mbtx']
+depends = ["bootstrap:moonbit"]
+shell = "cmd /d /s /c"
+run = [
+  '.\\.tools\\moonbit\\bin\\moon.exe update',
+  '.\\.tools\\moonbit\\bin\\moon.exe run scripts/bootstrap.mbtx --target wasm -- --cleanup-runtime "{{vars.bootstrap_runtime}}"',
+  '.\\.tools\\moonbit\\bin\\moon.exe run scripts/check-prerequisites.mbtx -- bootstrap',
+  '.\\.tools\\moonbit\\bin\\moon.exe run scripts/prepare-wgpu.mbtx',
+]
+
+[tasks."bootstrap:runtime"]
+description = "Acquire a separate pinned MoonBit runtime for the installer"
+shell = "cmd /d /s /c"
+env.MOON_HOME = "{{vars.bootstrap_runtime}}"
+run = [
+  '"{{mise_bin}}" install-into "http:metonic-moonbit[url={{vars.archiveUrl}},checksum=sha256:{{vars.archiveSha256}}]@{{vars.archiveSha256}}" "{{vars.bootstrap_runtime}}"',
+  '"{{mise_bin}}" install-into "http:metonic-moonbit-core[url={{vars.coreUrl}},checksum=sha256:{{vars.coreSha256}}]@{{vars.coreSha256}}" "{{vars.bootstrap_runtime}}/lib/core"',
+  '"{{vars.bootstrap_runtime}}/bin/moon.exe" -C "{{vars.bootstrap_runtime}}/lib/core" bundle --warn-list -a --all',
+  '"{{vars.bootstrap_runtime}}/bin/moon.exe" update',
+]
+
+[tasks."bootstrap:test"]
+description = "Verify installer rollback, exclusion and temporary-runtime cleanup"
+run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/bootstrap.mbtx --target wasm -- --test-promotion'
+
+[tasks."bootstrap:moonbit"]
+description = "Install MoonBit using mise acquisition and MoonBit orchestration"
+depends = ["bootstrap:runtime"]
+shell = "cmd /d /s /c"
+env.MOON_HOME = "{{vars.bootstrap_runtime}}"
+env.METONIC_MISE_BIN = "{{mise_bin}}"
+run = '"{{vars.bootstrap_runtime}}/bin/moon.exe" run scripts/bootstrap.mbtx --target wasm'
 
 [tasks.prerequisites]
 description = "Check tools and authentication required by the integrated Windows demo"

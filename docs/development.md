@@ -44,7 +44,7 @@ Issue-local notes belong on the task that needs them, not in public handoff logs
 
 ## Windows x64 setup
 
-Install mise, PowerShell 7 (`pwsh`), Git for Windows, GitHub CLI (`gh`), and
+Install mise 2026.9.4 or newer, Git for Windows, GitHub CLI (`gh`), and
 Visual Studio C++ x64 build tools with the Windows SDK. Keep the Windows
 `curl.exe`, `tar.exe`, `certutil.exe` and `cmd.exe` available on PATH.
 Native AccessKit source preparation additionally requires Rust 1.93.0 (`rustc`
@@ -89,9 +89,14 @@ mise exec -- ./.tools/moonbit/bin/moon.exe check --target js
 
 The explicit path avoids falling back to an older global executable. mise supplies
 MOON_HOME, PATH and the pinned wgpu library environment from `mise.toml`; a separate
-PowerShell activation or command wrapper is unnecessary. Bootstrap remains a
-PowerShell installation boundary because MoonBit is not yet available on a fresh
-checkout.
+PowerShell activation or command wrapper is unnecessary. mise acquires a separate
+pinned compiler/core pair for bootstrap, then runs the MoonBit installer. Each
+invocation uses its own runtime directory. The installer validates a staged pair
+before replacing `.tools/moonbit`, retains the previous pair, and restores it if
+promotion fails. Successful bootstrap removes its temporary runtime after the
+installer exits. Failed runs retain staging for diagnosis; a forcibly terminated
+installer can leave `.tools/bootstrap.lock`. Remove that empty lock only after
+confirming no bootstrap process is running. PowerShell is not a setup dependency.
 
 ## Selective root-module verification
 
@@ -436,7 +441,7 @@ dependency's source files.
 `mise run hooks:install` sets this clone's `core.hooksPath` to the tracked
 `.githooks` directory. It activates both hooks and leaves old hook files intact;
 an existing custom hooksPath is replaced by this local setting. Git must find
-`mise` and PowerShell 7 on PATH. The shell hooks only invoke mise with raw stdin
+`mise` on PATH. The shell hooks only invoke mise with raw stdin
 forwarding; verification remains MoonBit code.
 
 Pre-commit runs formatting, static checks, critical and affected package tests,
