@@ -5,6 +5,20 @@ async fn release_crop(host : BrowserHost, name : String) -> Json {
 }
 
 ///|
+async fn release_task_status(host : BrowserHost, name : String) -> Bytes {
+  let image = decode_png(
+    { "png": command(host, { "op": "image", "name": name }) },
+    "png",
+  )
+  require(image.width >= 208 && image.height >= 352, "release status bounds")
+  Bytes::makei(200 * 32 * 4, index => {
+    let pixel = index / 4
+    image.data[((320 + pixel / 200) * image.width + 8 + pixel % 200) * 4 +
+    index % 4]
+  })
+}
+
+///|
 async fn release_result(host : BrowserHost, name : String) -> Bytes {
   let image = decode_png(
     { "png": command(host, { "op": "image", "name": name }) },
@@ -159,6 +173,12 @@ async fn run_release(host : BrowserHost) -> String {
   require(
     movement_canceled == movement_before,
     "canceled movement changed presented position",
+  )
+  let canceled_status = release_task_status(host, "canceled-status")
+  ignore(command(host, { "op": "focus", "selector": "#canvas" }))
+  require(
+    release_task_status(host, "canceled-status-redrawn") == canceled_status,
+    "canceled status only becomes visible after an unrelated redraw",
   )
   ignore(
     command(host, { "op": "press", "selector": "#task-start", "key": "Enter" }),
