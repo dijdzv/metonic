@@ -17,6 +17,9 @@ extern "C" fn visible(hwnd : UInt64) -> Int = "IsWindowVisible"
 extern "C" fn is_window(hwnd : UInt64) -> Int = "IsWindow"
 
 ///|
+extern "C" fn window_title_length(hwnd : UInt64) -> Int = "GetWindowTextLengthW"
+
+///|
 #borrow(text)
 extern "C" fn window_title(
   hwnd : UInt64,
@@ -134,20 +137,27 @@ extern "C" fn copy_name(
 ) -> Unit = "RtlMoveMemory"
 
 ///|
-fn owned_window(pid : Int) -> UInt64 {
+fn owned_window(pid : Int) -> UInt64 raise {
   let owner = FixedArray::make(1, 0)
+  let title = FixedArray::make(16, b'\x00')
+  let mut selected = 0UL
   let mut cursor = 0UL
   for _ in 0..<4096 {
     cursor = next_window(0UL, cursor, 0UL, 0UL)
     if cursor == 0UL {
-      return 0UL
+      return selected
     }
-    ignore(window_pid(cursor, owner))
-    if owner[0] == pid && visible(cursor) != 0 {
-      return cursor
+    if window_pid(cursor, owner) != 0U &&
+      owner[0] == pid && visible(cursor) != 0 &&
+      window_title_length(cursor) == 7 &&
+      window_title(cursor, title, 8) == 7 && title == utf16z("Metonic") {
+      guard selected == 0UL else {
+        fail("multiple owned Metonic windows")
+      }
+      selected = cursor
     }
   }
-  0UL
+  fail("owned window enumeration exceeded its bound")
 }
 
 ///|
