@@ -440,6 +440,26 @@ async fn prepare(args : Array[String]) -> Unit raise Error {
     args.push("patches/window-ime-trace.patch")
     ignore(run_checked("git", args, repo_root))
   }
+  let system_key_suffix = "/modules/window/windows/native_window.c"
+  let previous_system_keys = @fs.read_file(window_stage + system_key_suffix).text()
+  for check_only in [true, false] {
+    let args = ["apply", "--directory=" + window_stage_relative]
+    if check_only {
+      args.push("--check")
+    }
+    args.push("patches/window-system-keys.patch")
+    ignore(run_checked("git", args, repo_root))
+  }
+  let corrected_system_keys = @fs.read_file(window_stage + system_key_suffix).text()
+  let upgrade_system_keys = if @fs.exists(window_existing + system_key_suffix) {
+    @fs.read_file(window_existing + system_key_suffix).text() ==
+    previous_system_keys
+  } else {
+    false
+  }
+  if upgrade_system_keys {
+    @fs.write_file(window_stage + system_key_suffix, previous_system_keys)
+  }
   let async_existing = sources + "/async-local-control"
   let manifest_suffix = "/modules/window/windows/moon.pkg"
   let baseline = @fs.read_file(window_stage + manifest_suffix).text()
@@ -482,6 +502,18 @@ async fn prepare(args : Array[String]) -> Unit raise Error {
   // Compare every existing destination before publishing any absent source.
   compare_sources(window_stage, window_existing, repo_root)
   compare_sources(async_stage, async_existing, repo_root)
+  if upgrade_system_keys {
+    if !is_strictly_inside(
+        @fs.realpath(window_existing + system_key_suffix),
+        root_real,
+      ) {
+      fail("Windows source upgrade escaped the native dependency root")
+    }
+    @fs.write_file(window_stage + system_key_suffix, corrected_system_keys)
+    let replacement = window_stage + "/system-key-upgrade.c"
+    @fs.write_file(replacement, corrected_system_keys)
+    @fs.rename(replacement, window_existing + system_key_suffix, replace=true)
+  }
   if !@fs.exists(sources) {
     @fs.mkdir(sources, recursive=true)
   }

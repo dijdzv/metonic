@@ -42,13 +42,19 @@ fn owned_window(pid : Int) -> UInt64 {
 }
 
 ///|
-async fn main {
+async fn verify_close(system_key : Bool) -> Unit raise Error {
   @async.with_timeout(15000, async fn() {
     @async.with_task_group() <| group => {
       let executable = @fs.realpath(
         ".work/native-host-build/native/release/build/local/native_host/window_app/window_app.exe",
       )
-      let child = @process.spawn(group, executable, [], no_console_window=true)
+      let child = @process.spawn(
+        group,
+        executable,
+        [],
+        no_console_window=true,
+        cancel_handler=@process.hard_cancel(),
+      )
       let mut hwnd = 0UL
       while hwnd == 0UL {
         guard child.try_wait() is None else {
@@ -61,16 +67,32 @@ async fn main {
       guard child.try_wait() is None else {
         fail("production host exited during initialization")
       }
-      guard post(hwnd, 0x0010U, 0UL, 0L) != 0 else {
-        fail("production close request failed")
+      let sent = if system_key {
+        println("WINDOW_RELEASE_SYSTEM_KEY_CLOSE_BEGIN")
+        post(hwnd, 0x0104U, 0x73UL, 0x203e0001L)
+      } else {
+        post(hwnd, 0x0010U, 0UL, 0L)
       }
+      guard sent != 0 else { fail("production close request failed") }
       guard child.wait() == 0 else {
         fail("production host failed during shutdown")
       }
       guard is_window(hwnd) == 0 else {
         fail("production window survived shutdown")
       }
-      println("WINDOW_RELEASE_LIFECYCLE_OK owned_process_start_close")
+      println(
+        if system_key {
+          "WINDOW_RELEASE_SYSTEM_KEY_CLOSE_OK"
+        } else {
+          "WINDOW_RELEASE_LIFECYCLE_OK owned_process_start_close"
+        },
+      )
     }
   })
+}
+
+///|
+async fn main {
+  verify_close(false)
+  verify_close(true)
 }
