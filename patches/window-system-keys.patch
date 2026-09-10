@@ -1,0 +1,18 @@
+diff --git a/modules/window/windows/native_window.c b/modules/window/windows/native_window.c
+--- a/modules/window/windows/native_window.c
++++ b/modules/window/windows/native_window.c
+@@ -538,12 +538,12 @@
+     case WM_SYSKEYDOWN:
+       g_input_event_trampoline(g_input_event_closure, state->raw_id, 32,
+                                wparam, lparam);
+-      return 0;
++      return DefWindowProcW(hwnd, msg, wparam, lparam);
+ 
+     case WM_SYSKEYUP:
+       g_input_event_trampoline(g_input_event_closure, state->raw_id, 33,
+                                wparam, lparam);
+-      return 0;
++      return DefWindowProcW(hwnd, msg, wparam, lparam);
+ 
+     case WM_IME_STARTCOMPOSITION:
+       mbw_ime_trace_begin(state, msg, lparam);
