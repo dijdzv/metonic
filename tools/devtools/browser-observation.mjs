@@ -3,7 +3,15 @@ const failures = new WeakMap();
 export async function observedPage(browser, options) {
   const page = await browser.newPage(options);
   const errors = [];
-  failures.set(page, errors);
+  const requests = [];
+  failures.set(page, { errors, requests });
+  page.on('requestfailed', request => {
+    // Queries and credentials are irrelevant to identifying the failed asset.
+    let path = '(invalid URL)';
+    try { path = new URL(request.url()).pathname.slice(0, 512); } catch {}
+    requests.push({ path, method: request.method(), error: String(request.failure()?.errorText ?? '').slice(0, 512) });
+    if (requests.length > 8) requests.shift();
+  });
   page.on('pageerror', error => {
     errors.push(String(error).slice(0, 512));
     if (errors.length > 8) errors.shift();
@@ -13,8 +21,10 @@ export async function observedPage(browser, options) {
 
 export async function observeFailure(page) {
   if (!page) return { observation: 'no-page', errors: [] };
-  const errors = [...(failures.get(page) ?? [])];
-  if (page.isClosed()) return { observation: 'closed', errors };
+  const saved = failures.get(page);
+  const errors = [...(saved?.errors ?? [])];
+  const requests = [...(saved?.requests ?? [])];
+  if (page.isClosed()) return { observation: 'closed', errors, requests };
   let timer;
   try {
     // A stalled renderer must not turn failure reporting into another unbounded wait.
@@ -26,9 +36,9 @@ export async function observeFailure(page) {
       })),
       new Promise(resolve => { timer = setTimeout(() => resolve(null), 500); }),
     ]);
-    return state ? { observation: 'available', ...state, errors } : { observation: 'timeout', errors };
+    return state ? { observation: 'available', ...state, errors, requests } : { observation: 'timeout', errors, requests };
   } catch {
-    return { observation: 'unavailable', errors };
+    return { observation: 'unavailable', errors, requests };
   } finally { clearTimeout(timer); }
 }
 
