@@ -41,7 +41,7 @@ function updateTaskDiagnostics() {
   const values = [];
   for (let index = 0; index < 6; index += 1) values.push(taskField(index));
   environment.task(values, Number(app.scheduled_task_count()), Number(app.scheduled_task_rejections()));
-  if (!disposed && lastTaskStatus !== values[0]) { lastTaskStatus = values[0]; dirty = true; schedule(); }
+  if (!disposed && lastTaskStatus !== values[0]) { lastTaskStatus = values[0]; renderEditor(); }
 }
 function dispatchTask(delayMs, value, fail = false) {
   if (disposed || !app || !Number.isSafeInteger(delayMs) || delayMs < -2147483648 || delayMs > 2147483647
