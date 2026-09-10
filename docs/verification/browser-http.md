@@ -16,10 +16,12 @@ rejected before its bytes are appended; the complete payload is decoded as stric
 UTF-8. Empty bodies reach the ordinary invalid-JSON path. Content-type acceptance
 and the three-second deadline match the previous transport.
 
-JavaScript retains the browser timer call and clears it on completion, replacement
-or disposal. The timeout callback delegates the failure and cleanup decision to
-MoonBit. DOM result notification connects the transport to the existing renderer.
-GPU calls, other scheduling and module bootstrap remain separate host boundaries.
+Each MoonBit request owns its deadline timer through the existing webapi Window
+and Function bindings. Common cleanup clears it on completion, cancellation,
+replacement or disposal. Its callback captures the original request, whose live
+flag rejects late completion; it never selects a replacement request from global
+state. DOM result notification connects the transport to the existing renderer.
+GPU calls, frame scheduling and module bootstrap remain separate host boundaries.
 
 ## Binding selection
 
