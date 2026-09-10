@@ -3,6 +3,33 @@ import {
   "moonbitlang/async@0.21.2/fs",
   "moonbitlang/async@0.21.2/process",
   "moonbitlang/core/json",
+  "moonbitlang/core/env",
+}
+
+///|
+async fn capture_exit_dump(pid : Int) -> Unit raise Error {
+  let path = ".work/attach-exit-" +
+    pid.to_string() +
+    "-" +
+    @async.now().to_string() +
+    ".dmp"
+  @async.with_timeout(10000, () => {
+    let log = @process.redirect_to_file(path + ".log")
+    defer log.close()
+    let code = @process.run(
+      ".work/procdump64.exe",
+      ["-accepteula", "-mm", "-at", "8", pid.to_string(), path],
+      no_console_window=true,
+      stdout=log,
+      stderr=log,
+      cancel_handler=@process.hard_cancel(),
+    )
+    println("WINDOW_ATTACH_DUMP_EXIT " + code.to_string())
+    // ProcDump 12.01 returns 1 after one completed dump, not the usual zero.
+    assert_eq(code, 1, msg="attachment dump failed; inspect " + path + ".log")
+    assert_true(@fs.file_size(path) > 0L)
+  })
+  println("WINDOW_ATTACH_DUMP_SAVED " + path)
 }
 
 ///|
@@ -205,6 +232,10 @@ async fn main {
         @async.sleep(50)
         assert_true(child.try_wait() is None)
         @fs.write_file(stale_path, @fs.read_file(discovery_path))
+        if mode == "accept" &&
+          @env.get_env_var("METONIC_ATTACH_DUMP_CHECK") == Some("1") {
+          capture_exit_dump(child.pid)
+        }
         let closer = @process.spawn(
           group,
           ".work/native-host-build/native/debug/build/local/native_host/accessibility_probe/accessibility_probe.exe",
@@ -214,7 +245,14 @@ async fn main {
         println("WINDOW_ATTACH_STAGE mode=" + mode + " stage=close-probe")
         assert_eq(closer.wait(), 0)
         println("WINDOW_ATTACH_STAGE mode=" + mode + " stage=process-exit")
-        assert_eq(@async.with_timeout(2000, () => child.wait()), 0)
+        {
+          errdefer (if @env.get_env_var("METONIC_ATTACH_DUMP") == Some("1") {
+            @async.protect_from_cancel(() => capture_exit_dump(child.pid)) catch {
+              error => println("WINDOW_ATTACH_DUMP_FAILED " + error.to_string())
+            }
+          })
+          assert_eq(@async.with_timeout(2000, () => child.wait()), 0)
+        }
         println("WINDOW_ATTACH_STAGE mode=" + mode + " stage=discovery-cleanup")
         assert_true(
           !@fs.exists(discovery_path),
