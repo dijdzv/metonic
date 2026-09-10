@@ -88,22 +88,11 @@ async fn main {
     )
   }
   if !packages.is_empty() {
-    // Environment-only flags would bypass Moon's incremental compilation key.
-    let manifest = ".work/native-deps/sources/window-ime-observed/modules/window/windows/moon.pkg"
-    let original = @fs.read_file(manifest).text()
-    assert_false(original.contains("stub-cc-flags"))
-    assert_eq(original.split("options(").count(), 2)
-    let flags : Json = "/UMETONIC_IME_TRACE /DMETONIC_IME_TRACE=1 /UMETONIC_IME_TRACE_TEST /DMETONIC_IME_TRACE_TEST=1"
-    @fs.write_file(
-      manifest,
-      original.replace_all(
-        old="options(",
-        new="options(\n  link: { \"native\": { \"stub-cc-flags\": " +
-          flags.stringify() +
-          " } },",
-      ),
+    println(
+      checked(moon, [
+        "run", "scripts/prepare-native-deps.mbtx", "--", "--ime-config", "fixture",
+      ]),
     )
-    defer @async.protect_from_cancel(() => @fs.write_file(manifest, original))
     let tests = ["-C", "native_host", "test"]
     tests.append(packages)
     tests.append([

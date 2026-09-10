@@ -237,8 +237,12 @@ async fn prepare(args : Array[String]) -> Unit raise Error {
   let offline = match args.length() {
     1 => false
     2 if args[1] == "--offline" => true
+    3 if args[1] == "--ime-config" &&
+      ["debug", "release", "fixture"].contains(args[2]) => false
     _ => {
-      fail("usage: prepare-native-deps [--offline]")
+      fail(
+        "usage: prepare-native-deps [--offline | --ime-config debug|release|fixture]",
+      )
       false
     }
   }
@@ -437,6 +441,44 @@ async fn prepare(args : Array[String]) -> Unit raise Error {
     ignore(run_checked("git", args, repo_root))
   }
   let async_existing = sources + "/async-local-control"
+  let manifest_suffix = "/modules/window/windows/moon.pkg"
+  let baseline = @fs.read_file(window_stage + manifest_suffix).text()
+  assert_false(baseline.contains("stub-cc-flags"))
+  assert_eq(baseline.split("options(").count(), 2)
+  let configurations : Map[String, String] = Map([])
+  for mode in ["debug", "release", "fixture"] {
+    let trace = if mode == "release" {
+      " /UMETONIC_IME_TRACE"
+    } else {
+      " /UMETONIC_IME_TRACE /DMETONIC_IME_TRACE=1"
+    }
+    let fixture = if mode == "fixture" {
+      " /UMETONIC_IME_TRACE_TEST /DMETONIC_IME_TRACE_TEST=1"
+    } else {
+      " /UMETONIC_IME_TRACE_TEST"
+    }
+    let flags : Json = Json::string(trace + fixture)
+    configurations[mode] = baseline.replace_all(
+      old="options(",
+      new="options(\n  link: { \"native\": { \"stub-cc-flags\": " +
+        flags.stringify() +
+        " } },",
+    )
+  }
+  let existing_manifest = window_existing + manifest_suffix
+  let current = if @fs.exists(window_existing) {
+    @fs.read_file(existing_manifest).text()
+  } else {
+    baseline
+  }
+  assert_true(
+    current == baseline ||
+    configurations.values().any(value => value == current),
+    msg="prepared Windows manifest differs from every supported IME configuration",
+  )
+  // Compare the complete source tree with only an exact owned configuration
+  // admitted; ignoring the manifest would hide unrelated dependency edits.
+  @fs.write_file(window_stage + manifest_suffix, current)
   // Compare every existing destination before publishing any absent source.
   compare_sources(window_stage, window_existing, repo_root)
   compare_sources(async_stage, async_existing, repo_root)
@@ -448,6 +490,13 @@ async fn prepare(args : Array[String]) -> Unit raise Error {
   }
   if !@fs.exists(async_existing) {
     @fs.rename(async_stage, async_existing, replace=false)
+  }
+  if args.length() == 3 {
+    let requested = configurations.get(args[2]).unwrap()
+    // Rewriting identical content invalidates Moon's application build graph.
+    if current != requested {
+      @fs.write_file(existing_manifest, requested)
+    }
   }
 
   let work_package = root + "/package.json"

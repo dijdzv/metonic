@@ -368,8 +368,9 @@ The optional `mise run verify:commit` lane also checks every owned native-host
 package and selects affected native tests from a newly exported Moon package
 graph. Dependencies outside the native module conservatively select all native
 packages. Its dedicated test directory enables the debug IME fixture symbols;
-the prepared dependency manifest is restored after success, failure or handled
-cancellation. Production exclusion and environment-sensitive checks remain in the
+the prepared dependency manifest retains that exact validated configuration.
+Subsequent builds select their own debug, release or fixture configuration and
+rewrite it only when it changes. Production exclusion and environment-sensitive checks remain in the
 push lane. Further input-policy and checkout support work is tracked in #225.
 
 For root package selection, `scripts/plan-local-verification.mbtx` accepts a
