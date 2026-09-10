@@ -445,6 +445,12 @@ and runs remaining package tests plus runtime/production checks. A missing or
 mismatched record runs the full gate. Both report total elapsed time including
 input discovery. Automatic CI does not duplicate these local checks.
 
+The runtime gate groups window control, attachment, RPC and MCP under
+`native:window-integration`. A single mise invocation shares their development
+build prerequisite and runs tasks with one job, since native build modes and
+test processes share local resources. All four checks remain available as
+individual tasks; the group does not cache or omit any verification result.
+
 Push verification currently requires a clean checkout matching every pushed tree.
 Multiple refs sharing that tree are supported; different trees must be pushed
 from their matching checkouts separately. Deletion-only pushes need no checkout
