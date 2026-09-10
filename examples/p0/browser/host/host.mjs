@@ -40,44 +40,32 @@ function cancelHttp() {
   rpcTimer = undefined;
   app?.http_cancel();
 }
-const taskTimers = new Map();
-let taskEpoch = 0;
-let rejectedCallbacks = 0;
 let lastTaskStatus;
 
 function taskField(index) { return Number(app.task_field(index)); }
 function updateTaskDiagnostics() {
   const values = [];
   for (let index = 0; index < 6; index += 1) values.push(taskField(index));
-  environment.task(values, taskTimers.size, rejectedCallbacks);
+  environment.task(values, Number(app.scheduled_task_count()), Number(app.scheduled_task_rejections()));
   if (!disposed && lastTaskStatus !== values[0]) { lastTaskStatus = values[0]; dirty = true; schedule(); }
 }
 function dispatchTask(delayMs, value, fail = false) {
-  if (disposed || !app || !Number.isInteger(delayMs) || delayMs < 0 || delayMs > 5000
-    || !Number.isInteger(value) || value < 0 || value > 2048 || typeof fail !== 'boolean'
-    || taskTimers.size >= 16) return false;
-  const id = app.task_begin();
-  if (Number(id) < 0) return false;
+  if (disposed || !app || !Number.isSafeInteger(delayMs) || delayMs < -2147483648 || delayMs > 2147483647
+    || !Number.isSafeInteger(value) || value < -2147483648 || value > 2147483647 || typeof fail !== 'boolean') return false;
+  if (Number(app.schedule_task(delayMs, value, fail ? 1 : 0)) !== 1) return false;
   cancelHttp();
-  const epoch = taskEpoch;
-  const timer = setTimeout(() => {
-    taskTimers.delete(id);
-    if (disposed || epoch !== taskEpoch) return;
-    const accepted = fail ? app.task_fail(id, 7) : app.task_complete(id, value);
-    if (Number(accepted) === 1 && !fail) { dirty = true; schedule(); }
-    else if (Number(accepted) !== 1) rejectedCallbacks += 1;
-    updateTaskDiagnostics();
-  }, delayMs);
-  taskTimers.set(id, timer);
   updateTaskDiagnostics();
   return true;
+}
+function onTaskChanged(event) {
+  if (disposed) return;
+  if (event.type === 'metonic-task-render') { dirty = true; schedule(); }
+  updateTaskDiagnostics();
 }
 function cancelTask() { if (!disposed && app) { app.task_cancel(); cancelHttp(); updateTaskDiagnostics(); } }
 function resetTasks() {
   cancelHttp();
-  for (const timer of taskTimers.values()) clearTimeout(timer);
-  taskTimers.clear();
-  taskEpoch += 1;
+  app?.scheduled_tasks_reset();
   if (app) updateTaskDiagnostics();
 }
 function onTaskStart() { if (!disposed && app) dispatchTask(1000, Number(app.task_movement_target())); }
@@ -249,6 +237,8 @@ function stop(reason = 'Stopped.', error = false) {
   app?.font_fetch_cancel?.();
   document.removeEventListener('metonic-input', onInputChanged);
   document.removeEventListener('metonic-rpc', onRpcChanged);
+  document.removeEventListener('metonic-task', onTaskChanged);
+  document.removeEventListener('metonic-task-render', onTaskChanged);
   app?.inputs_stop?.();
   cancelHttp();
   $('rpc-load').removeEventListener('click', loadUser);
@@ -262,9 +252,7 @@ function stop(reason = 'Stopped.', error = false) {
   try { app?.text_dispose?.(); } catch {}
   textInput.disabled = true;
   try { app?.editor_dispose?.(); } catch {}
-  for (const timer of taskTimers.values()) clearTimeout(timer);
-  taskTimers.clear();
-  taskEpoch += 1;
+  app?.scheduled_tasks_reset();
   try { app?.task_dispose?.(); } catch {}
   if (app) updateTaskDiagnostics();
   if (raf) cancelAnimationFrame(raf);
@@ -355,6 +343,8 @@ struct U { rect: vec4f, viewport: vec2f, enabled: f32, pad: f32 };
   if (disposed) return;
   document.addEventListener('metonic-input', onInputChanged);
   document.addEventListener('metonic-rpc', onRpcChanged);
+  document.addEventListener('metonic-task', onTaskChanged);
+  document.addEventListener('metonic-task-render', onTaskChanged);
   observer = new ResizeObserver(onResize);
   observer.observe(canvas);
   window.addEventListener('resize', onResize);
@@ -373,8 +363,8 @@ struct U { rect: vec4f, viewport: vec2f, enabled: f32, pad: f32 };
   for (const button of taskButtons) button.disabled = false;
   updateTaskDiagnostics();
   environment.attach({
-    app, dispatchTask, cancelTask, taskTimers,
-    get rejectedCallbacks() { return rejectedCallbacks; },
+    app, dispatchTask, cancelTask,
+    get rejectedCallbacks() { return Number(app.scheduled_task_rejections()); },
     get disposed() { return disposed; },
   });
   setStatus(environment.ready);

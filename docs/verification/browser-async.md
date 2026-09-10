@@ -9,15 +9,17 @@ Replacing, cancelling, or disposing that request prevents subsequent writes from
 an old completion. Success, failure, cancellation, and disposal are separate
 states. Request identifiers are not reused within a scope.
 
-The browser host owns bounded timers (at most 16). A completion crosses the
-JS/WasmGC export boundary using an integer request ID and result/error value.
+The MoonBit browser adapter owns bounded timers (at most 16), admission checks,
+pending handles and callback epochs. It uses the pinned webapi Window timer and
+Function bindings on JS and WasmGC. JavaScript validates numeric representation
+before passing integers across the export boundary and observes task events.
 Only an accepted success changes the rectangle. Accepted task-status transitions,
 including failure and cancellation, also schedule rendering of the shared status
 label. Rejected completions cannot move the rectangle; an unchanged task status
 does not itself schedule another frame.
 
-Reset clears callbacks and advances a host epoch before replacing the MoonBit
-scope. Stop clears callbacks and disposes the scope. Host-side epoch checks and
+Reset clears callbacks and advances the adapter epoch before replacing the MoonBit
+scope. Stop clears callbacks and disposes the scope. Adapter epoch checks and
 MoonBit request checks serve different lifetime boundaries.
 
 ## Evidence
@@ -26,6 +28,9 @@ Six scope-state tests passed on JS and WasmGC. Real headless Chromium GPU checks
 passed for both targets with normal adapter selection and explicit SwiftShader:
 
 - ArrowRight changes the scene revision while a delayed completion is pending.
+- Invalid delay/value bounds preserve the complete task snapshot. Sixteen pending
+  timers are admitted; the seventeenth is rejected without replacing the current
+  request. Reset then clears all sixteen handles before the ordinary scenarios.
 - Success moves the rendered rectangle to x=40; PNG pixels verify its bounds.
 - A newer completion moves it to x=90; a late older result is counted as rejected.
 - Cancellation and failure preserve rectangle pixels while presenting their status.
@@ -60,9 +65,10 @@ sequence remains the positive integration check for both application targets.
 
 This proves timer-driven completion and explicit result/error transfer. It does
 not implement a general async runtime, network cancellation, worker-thread wakeup,
-or a native interactive event loop. The host retains numeric tokens rather than
-MoonBit closure objects, so it does not establish arbitrary callback/closure FFI
-lifetime support. The diagnostic global belongs to the development harness;
+or a native interactive event loop. Timer cancellation and expiry release the
+browser's callback references; the adapter retains numeric handles. These checks
+establish observable timer cleanup, not garbage-collection timing or arbitrary
+callback/closure FFI lifetime support. The diagnostic global belongs to the development harness;
 production exclusion is verified separately in the [browser package record](browser-target.md).
 The local pre-commit
 gate runs this verification; automatic PR/push CI does not duplicate it.
