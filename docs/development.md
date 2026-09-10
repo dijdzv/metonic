@@ -106,8 +106,8 @@ modules are rejected; browser/native host modules need their own workspace runne
 and positive/negative compiler fixtures without repeating package tests.
 Both focused modes retain toolchain verification and dependency preparation.
 They do not replace formatting or the complete gate. With no arguments,
-`verify.mbtx` retains its existing full behavior; installed Git hooks still run
-the complete gate and do not use success caching or automatic impact selection.
+`verify.mbtx` retains its existing full behavior. The paired Git hooks described
+below add input recording and complementary commit/push execution.
 
 `mise run verify:push <base-commit>` runs the complementary root-package tests
 on JS, WasmGC, Wasm and native, followed by the environment and production
@@ -120,8 +120,8 @@ do not certify those different configurations.
 This command is a manual lane, not an installed pre-push hook or permission to
 skip the commit lane. It uses the current working files; it does not authenticate
 Git's pushed refs or a previous success record. An absent or invalid comparison
-commit fails before verification. The ordinary pre-commit still runs the full
-gate until those input and result checks are connected.
+commit fails before verification. Use the recorded commands through the hooks
+to bind the comparison to verified inputs.
 
 The manual `mise run verify:commit-recorded` command collects current tracked
 files, prepared dependencies, MoonBit tools, selected MSVC/SDK directories and
@@ -138,10 +138,11 @@ missing/mismatched records select the full gate. Different trees are rejected
 instead of being checked against unrelated HEAD. Deletion-only input runs neither
 discovery nor verification. Inputs are discovered again after verification.
 
-These manual commands do not install hooks. The input collector uses the current
-repository's dependency layout; its policy and unsupported cases must be reviewed
-before enabling automatic reuse. A passing generic dispatcher test is not proof
-that every future tool or dependency is covered by that layout.
+These commands do not install hooks themselves. The collector covers the current
+repository's prepared dependency layout. Changes to workspace members, external
+tool invocation or dependency placement must update this inventory before records
+can cover the new inputs. A passing generic dispatcher test does not prove that
+future tools or dependencies are included automatically.
 
 ## Integrated window HTTP requests
 
@@ -368,9 +369,8 @@ package and selects affected native tests from a newly exported Moon package
 graph. Dependencies outside the native module conservatively select all native
 packages. Its dedicated test directory enables the debug IME fixture symbols;
 the prepared dependency manifest is restored after success, failure or handled
-cancellation. This does not replace production exclusion checks or change the
-installed full pre-commit hook. Pre-push installation and result reuse remain
-tracked in issue #225.
+cancellation. Production exclusion and environment-sensitive checks remain in the
+push lane. Further input-policy and checkout support work is tracked in #225.
 
 For root package selection, `scripts/plan-local-verification.mbtx` accepts a
 target, `--plan`, `--run-commit` or `--run-remainder`, and an optional base commit.
@@ -432,10 +432,25 @@ boundary under `.mooncakes` for the upstream prebuild hook; the repository root
 remains ESM for generated browser verification modules. It does not patch the
 dependency's source files.
 
-`mise run hooks:install` uses mise's built-in Git hook generator. Run it once per
-clone with the default Git hooks directory; it replaces `.git/hooks/pre-commit`,
-so preserve any custom hook before running it. Git must be able to find `mise`
-and PowerShell 7 on PATH.
+`mise run hooks:install` sets this clone's `core.hooksPath` to the tracked
+`.githooks` directory. It activates both hooks and leaves old hook files intact;
+an existing custom hooksPath is replaced by this local setting. Git must find
+`mise` and PowerShell 7 on PATH. The shell hooks only invoke mise with raw stdin
+forwarding; verification remains MoonBit code.
+
+Pre-commit runs formatting, static checks, critical and affected package tests,
+and contract checks, then records successful inputs. Pre-push refreshes inputs
+and runs remaining package tests plus runtime/production checks. A missing or
+mismatched record runs the full gate. Both report total elapsed time including
+input discovery. Automatic CI does not duplicate these local checks.
+
+Push verification currently requires a clean checkout matching every pushed tree.
+Multiple refs sharing that tree are supported; different trees must be pushed
+from their matching checkouts separately. Deletion-only pushes need no checkout
+verification. The repository collector expects an existing HEAD and prepared
+dependencies; its initial empty-repository case is not supported. Stage or remove
+untracked files and review formatter changes before retrying. On failure, retry
+the failed gate; do not delete a record lock while another verifier is running.
 
 The pinned formatter does not directly accept `.mbtx`. The local hook runs
 `scripts/format-scripts.mbtx`, which formats tracked scripts' import blocks as
@@ -443,7 +458,7 @@ The pinned formatter does not directly accept `.mbtx`. The local hook runs
 back only after all formatter invocations succeed and rejects unsupported
 frontmatter instead of silently skipping it.
 
-`mise run pre-commit` runs the same local gate manually. The MoonBit `.mbtx`
+`mise run pre-commit` retains the complete gate for manual checks. The MoonBit `.mbtx`
 orchestrator rejects tracked unstaged edits, checks staged whitespace, runs
 MoonBit formatters and stops if formatting changes files. Review and stage
 those changes before retrying; the hook never stages or stashes them for you.
@@ -452,7 +467,7 @@ artifact/server/GPU/async checks, and native GPU/control/MCP/semantics/window/as
 tests, including the existing-binding comparison. Markdown links are also checked.
 Dependencies and headless Chromium must already be installed.
 
-All of these checks are required before a commit and push. The existing PS/MJS
+The paired hooks complete these checks across commit and push. The existing PS/MJS
 test implementations remain temporarily behind the MoonBit orchestration; this
 does not count as migrating their implementation. Untracked experiments are not
 validated by this gate until explicitly integrated into its checks.
