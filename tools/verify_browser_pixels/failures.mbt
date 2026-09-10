@@ -10,6 +10,64 @@ async fn initialization_observation(host : BrowserHost, stage : String) -> Json 
 }
 
 ///|
+async fn run_scene_gpu_lifecycle(
+  host : BrowserHost,
+  results : Array[Json],
+) -> Unit {
+  for target in ["js", "wasm-gc"] {
+    ignore(command(host, { "op": "open" }))
+    ignore(command(host, { "op": "goto", "target": "invalid" }))
+    ignore(command(host, { "op": "settled-status" }))
+    let observed = command(host, {
+      "op": "scene-gpu-lifecycle",
+      "target": Json::string(target),
+    })
+    let canceled = field(observed, "canceled").unwrap()
+    require(
+      int_field(canceled, "ready") == 0 && int_field(canceled, "created") == 0,
+      "canceled GPU initialization allocated a buffer",
+    )
+    let replaced = field(observed, "replaced").unwrap()
+    require(
+      int_field(replaced, "ready") == 1 &&
+      int_field(replaced, "oldReady") == 0 &&
+      int_field(replaced, "obsoleteCreated") == 0,
+      "obsolete GPU initialization replaced current resources",
+    )
+    require(
+      int_field(replaced, "drawn") == 1 &&
+      int_field(replaced, "writes") == 1 &&
+      int_field(replaced, "draws") == 1,
+      "current scene resources did not draw",
+    )
+    require(
+      int_field(replaced, "afterDispose") == 0 &&
+      int_field(replaced, "created") == 1 &&
+      int_field(replaced, "destroyed") == 1,
+      "scene disposal was not exactly once",
+    )
+    let rejected = field(observed, "rejected").unwrap()
+    require(
+      field(rejected, "rejected") == Some(Json::boolean(true)) &&
+      int_field(rejected, "created") == 0,
+      "pipeline rejection was lost",
+    )
+    let partial = field(observed, "partial").unwrap()
+    require(
+      field(partial, "rejected") == Some(Json::boolean(true)) &&
+      int_field(partial, "created") == 1 &&
+      int_field(partial, "destroyed") == 1,
+      "partial scene resources leaked",
+    )
+    results.push({
+      "name": Json::string(target + "-scene-gpu-lifecycle"),
+      "observed": observed,
+    })
+    ignore(command(host, { "op": "close" }))
+  }
+}
+
+///|
 async fn run_failures(host : BrowserHost) -> String {
   let results : Array[Json] = []
   for target in ["invalid", "js", "wasm-gc"] {
@@ -55,6 +113,7 @@ async fn run_failures(host : BrowserHost) -> String {
   ignore(initialization_observation(host, "stopped"))
   results.push({ "name": "wasm-init-race", "status": "Stopped.", "frames": 0 })
   ignore(command(host, { "op": "close" }))
+  run_scene_gpu_lifecycle(host, results)
   Json::array(results).stringify()
 }
 
