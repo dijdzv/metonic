@@ -25,6 +25,14 @@ extern "js" fn can_start(page : Page) -> @js_async.Promise[Bool] =
   #| async (page) => await page.evaluate(() => window.metonicAsyncProbe.start(1, 1))
 
 ///|
+extern "js" fn admit(
+  page : Page,
+  delay : Int,
+  value : Int,
+) -> @js_async.Promise[Bool] =
+  #| async (page, delay, value) => await page.evaluate(([delay, value]) => window.metonicAsyncProbe.start(delay, value), [delay, value])
+
+///|
 extern "js" fn text(
   page : Page,
   selector : String,
@@ -299,6 +307,46 @@ async fn verify_checked(
 ) -> String raise VerifyFailure {
   let initial = read(page)
   require(state(initial)[0] == 0, target + " initial")
+  for entry in [(-1, 0), (5001, 0), (0, -1), (0, 2049)] {
+    let (delay, value) = entry
+    let accepted = @js_async.Promise::wait(admit(page, delay, value)) catch {
+      _ => {
+        fail("admission transport")
+        false
+      }
+    }
+    require(!accepted, target + " invalid task rejected")
+    require(
+      read(page).stringify() == initial.stringify(),
+      target + " invalid task preserves state",
+    )
+  }
+  for index = 0; index < 16; index = index + 1 {
+    let accepted = @js_async.Promise::wait(admit(page, 5000, index)) catch {
+      _ => {
+        fail("admission transport")
+        false
+      }
+    }
+    require(accepted, target + " task admitted below limit")
+  }
+  let full = read(page)
+  require(int_field(full, "pending") == 16, target + " pending limit")
+  let overflow = @js_async.Promise::wait(admit(page, 5000, 40)) catch {
+    _ => {
+      fail("admission transport")
+      false
+    }
+  }
+  require(!overflow, target + " task rejected at limit")
+  require(
+    read(page).stringify() == full.stringify(),
+    target + " rejected task preserves current request",
+  )
+  @js_async.Promise::wait(action(page, "reset", 0, 0, false)) catch {
+    _ => fail("admission reset")
+  }
+  ignore(wait_state(page, 0, 0, 0))
   @js_async.Promise::wait(action(page, "start", 500, 40, false)) catch {
     _ => fail("start")
   }

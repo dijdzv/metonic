@@ -27,7 +27,7 @@ export function loaded(value, adapter) {
   $('adapter').textContent = adapter.info?.description || adapter.info?.vendor || 'available';
 }
 export function attach(session) {
-  const { app, dispatchTask, cancelTask, taskTimers } = session;
+  const { app, dispatchTask, cancelTask } = session;
   fail = () => dispatchTask(250, 0, true);
   $('task-fail').addEventListener('click', fail);
   $('task-fail').disabled = false;
@@ -36,7 +36,7 @@ export function attach(session) {
     editor: () => ({ text: units(app.editor_field(0), (i) => app.editor_unit(i)), display: units(app.editor_field(4), (i) => app.editor_display_unit(i)), start: Number(app.editor_field(1)), end: Number(app.editor_field(2)), composing: Number(app.editor_field(5)), disposed: session.disposed }),
     start: (delayMs, value, failure = false) => dispatchTask(delayMs, value, failure),
     cancel: cancelTask,
-    snapshot: () => ({ task: Array.from({ length: 6 }, (_, i) => Number(app.task_field(i))), pending: taskTimers.size, rejected: session.rejectedCallbacks, disposed: session.disposed }),
+    snapshot: () => ({ task: Array.from({ length: 6 }, (_, i) => Number(app.task_field(i))), pending: Number(app.scheduled_task_count()), rejected: session.rejectedCallbacks, disposed: session.disposed }),
   };
 }
 export function detach() {
