@@ -66,9 +66,9 @@ export async function createTextRenderer({ app, device, format, disposed }) {
   }
   return {
     rasterText,
-    record(pass, cssW, cssH) {
+    record(cssW, cssH) {
       for (const [index, layer] of layers.entries()) {
-        if (app.text_gpu_record(pass, index, new Float32Array([cssW, cssH, layer.x, layer.y, layer.width, layer.height, 0, 0])) !== 1) throw new Error('MoonBit GPU layer rejected draw');
+        if (app.gpu_frame_text(index, new Float32Array([cssW, cssH, layer.x, layer.y, layer.width, layer.height, 0, 0])) !== 1) throw new Error('MoonBit GPU layer rejected draw');
       }
     },
     stats: () => ({ width: app.text_width(), renders, uploaded }),

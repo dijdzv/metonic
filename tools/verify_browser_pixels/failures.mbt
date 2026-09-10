@@ -59,6 +59,27 @@ async fn run_scene_gpu_lifecycle(
       int_field(partial, "destroyed") == 1,
       "partial scene resources leaked",
     )
+    let frames = field(observed, "frames").unwrap()
+    for name in ["begun", "scene", "sent", "submitted"] {
+      require(int_field(frames, name) == 1, "frame failed: " + name)
+    }
+    for
+      name in [
+        "empty", "nested", "duplicate", "invalidText", "rejectedFrame", "retryFailed",
+        "absentAfterAcquisition", "disposedFrame",
+      ] {
+      require(int_field(frames, name) == 0, "invalid frame accepted: " + name)
+    }
+    require(
+      int_field(frames, "ended") == 2 && int_field(frames, "finished") == 2,
+      "aborted frame was finished",
+    )
+    for name in ["finishRejected", "acquisitionRejected"] {
+      require(
+        field(frames, name) == Some(Json::boolean(true)),
+        "GPU error lost: " + name,
+      )
+    }
     results.push({
       "name": Json::string(target + "-scene-gpu-lifecycle"),
       "observed": observed,

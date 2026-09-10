@@ -13,6 +13,7 @@ let scene_gpu : Ref[SceneGpu?] = Ref(None)
 ///|
 #export_name("scene_gpu_dispose")
 pub fn scene_gpu_dispose() -> Unit {
+  gpu_frame_abort()
   if scene_gpu.val is Some(gpu) {
     scene_gpu.val = None
     gpu.live = false
