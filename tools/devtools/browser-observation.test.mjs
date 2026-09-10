@@ -3,6 +3,29 @@ import test from 'node:test';
 import { chromium } from 'playwright';
 import { observedPage, observeFailure } from './browser-observation.mjs';
 
+test('failed asset requests survive page closure without query contents', async () => {
+  const browser = await chromium.launch({ headless: true });
+  const page = await observedPage(browser);
+  try {
+    await page.route('http://fixture.invalid/**', route => route.abort('failed'));
+    for (let index = 0; index < 10; index += 1) {
+      const failed = page.waitForEvent('requestfailed');
+      await page.evaluate(async index => {
+        try { await fetch(`http://fixture.invalid/asset-${index}.wasm?token=private-value`); } catch {}
+      }, index);
+      await failed;
+    }
+    await page.close();
+    const result = await observeFailure(page);
+    assert.equal(result.observation, 'closed');
+    assert.equal(result.requests.length, 8);
+    assert.equal(result.requests[0].path, '/asset-2.wasm');
+    assert.equal(result.requests[7].path, '/asset-9.wasm');
+    assert(result.requests.every(request => request.method === 'GET' && request.error.length > 0));
+    assert(!JSON.stringify(result).includes('private-value'));
+  } finally { await browser.close(); }
+});
+
 test('timeout retains bounded status and page errors before cleanup', async () => {
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext();
