@@ -452,7 +452,9 @@ input discovery. Automatic CI does not duplicate these local checks.
 
 The runtime gate groups window control, attachment, RPC and MCP under
 `native:window-integration`. A single mise invocation shares their development
-build prerequisite and runs tasks with one job, since native build modes and
+build prerequisite. Control and attachment also share the ordered accessibility
+probe preparation through `native:window-control-build`. The group runs tasks
+with one job, since native build modes and
 test processes share local resources. All four checks remain available as
 individual tasks; the group does not cache or omit any verification result.
 
