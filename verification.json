@@ -10,8 +10,8 @@
     "browser:supervisor-test", "browser:headless", "browser:async", "devtools:test",
     "native:headless", "native:control", "native:mcp-test", "native:session-test",
     "native:semantics", "native:client-test", "native:cli-test", "native:window",
-    "native:window-control", "native:window-attach", "native:pipe-verify",
-    "native:window-rpc", "native:window-mcp", "native:host-verify", "native:async",
+    "native:window-integration", "native:pipe-verify",
+    "native:host-verify", "native:async",
     "native:surface", "native:binding", "rpc:verify", "native:release-lifecycle",
     "native:accessibility", "native:mailbox", "native:sdk-mailbox", "demo:test",
     "prerequisites:test"

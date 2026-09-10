@@ -288,6 +288,10 @@ run = [
   '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-window-control.mbtx',
 ]
 
+[tasks."native:window-integration"]
+description = "Verify window control, attachment, RPC and MCP with shared build prerequisites"
+run = 'mise run --jobs 1 native:window-control ::: native:window-attach ::: native:window-rpc ::: native:window-mcp'
+
 [tasks."native:window-attach"]
 depends = ["native:window-dev-build"]
 run = [
