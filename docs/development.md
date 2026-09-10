@@ -211,6 +211,24 @@ after that endpoint closes. Abrupt process termination can leave metadata on
 disk and is not a proof of normal cleanup. Cancellation disconnects the client;
 it cannot undo an operation the application already applied.
 
+For intermittent exit failures, optionally place the signed Windows x64
+[Microsoft ProcDump 12.01](https://learn.microsoft.com/en-us/sysinternals/downloads/procdump)
+at `.work/procdump64.exe` and enable `METONIC_ATTACH_DUMP=1` in the verification
+environment. The attachment verifier then attempts a mini dump of its own child
+only when the existing process-exit assertion fails. The original failure is
+preserved even if capture fails. ProcDump has an eight-second capture limit;
+the supervisor cancels it after ten seconds. Neither changes the application's
+two-second exit deadline or makes a failed test pass.
+
+`METONIC_ATTACH_DUMP_CHECK=1` explicitly captures the live accept-case child before
+close to test the diagnostic setup, then continues the three shutdown cases.
+It is not evidence of a shutdown hang. This path was checked with ProcDump 12.01
+(exit code 1 for one completed dump), and a self-check dump was opened with CDB
+10.0.29617.1000 to read thread stacks. Dumps and tool output remain in
+`.work/attach-exit-<pid>-<time>.dmp` and the adjacent `.dmp.log`; retain only those
+needed for the investigation. They may contain process memory and are not public
+test artifacts. ProcDump is not required by default and is not part of the app.
+
 The production UIA verification supplies a unique `METONIC_DEV_PIPE` name to the
 ordinary release application. Before startup, periodically during UI operations,
 and after exit, opening that pipe must report absence; access-denied and other
