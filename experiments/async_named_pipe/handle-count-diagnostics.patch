@@ -1,0 +1,13 @@
+diff --git a/src/internal/event_loop/pipe_accept_wbtest.mbt b/src/internal/event_loop/pipe_accept_wbtest.mbt
+--- a/src/internal/event_loop/pipe_accept_wbtest.mbt
++++ b/src/internal/event_loop/pipe_accept_wbtest.mbt
+@@ -62,3 +62,4 @@
+     let server = IoHandle::from_fd(fd, kind=Pipe)
++    defer server.close()
+     assert_true(@async.with_timeout_opt(1, () => server.accept_pipe()) is None)
+     server.close()
+@@ -68,3 +69,3 @@
+   let after = process_handle_count()
+-  assert_true(after > 0 && after <= before)
++  assert_true(after > 0 && after <= before, msg="process handles before=\{before} after=\{after}")
+ }
