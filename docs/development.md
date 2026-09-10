@@ -720,8 +720,11 @@ headless and window response schemas, serialized request envelopes, the
 between serialized and allocated request IDs/operation names. Node retains
 host-object checks and JSON serialization, including cyclic-object failures;
 MoonBit rejects non-object headless arguments produced by custom `toJSON`.
-Node also retains stream decoding, response byte limits, pending-request
-ownership and SDK/process APIs. The raw native wire protocol's
+MoonBit also accumulates decoded response fragments, splits LF/CRLF records,
+checks their UTF-8 byte size and rejects an incomplete line at EOF. Node retains
+strict streaming UTF-8 decoding through TextDecoder, pending-request ownership
+and SDK/process APIs. The pinned MoonBit core provides whole-buffer UTF-8
+decoding; this adapter does not add a custom streaming decoder. The raw native wire protocol's
 64-KiB response limit is not substituted for the session's 32-MiB image envelope.
 The server exposes `native_snapshot`, `native_move`, `native_resize`,
 `native_activate`, and `native_capture`. Errors use MCP error content. Unknown
