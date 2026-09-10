@@ -2,10 +2,9 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
-import { validate_response, validate_request } from '../../_build/js/release/build/tools/session_wire/session_wire.js';
+import { validate_response, validate_request, new_response_framer, clear_response_framer, append_response_text, response_framing_error, finish_response_framer } from '../../_build/js/release/build/tools/session_wire/session_wire.js';
 
 const MAX_PENDING = 16;
-const MAX_STDOUT = 32 * 1024 * 1024;
 const MAX_STDERR = 16 * 1024;
 
 export async function createMoonBitSession(options = {}) {
@@ -25,8 +24,7 @@ export async function createMoonBitSession(options = {}) {
   const child = spawn(executable, args, { cwd: repo, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
   const pending = new Map();
   const decoder = new TextDecoder('utf-8', { fatal: true });
-  let lineParts = [];
-  let lineBytes = 0;
+  const responseFramer = new_response_framer();
   let nextId = 1;
   let sessionId = windowProtocol && !attached ? randomUUID() : undefined;
   let fatalError;
@@ -57,8 +55,7 @@ export async function createMoonBitSession(options = {}) {
     readyReject(fatalError);
     for (const waiter of pending.values()) waiter.reject(fatalError);
     pending.clear();
-    lineParts = [];
-    lineBytes = 0;
+    clear_response_framer(responseFramer);
     void close().catch(error => console.error(error));
   }
   function dispatch(value) {
@@ -90,14 +87,7 @@ export async function createMoonBitSession(options = {}) {
     let decoded;
     try { decoded = decoder.decode(chunk, { stream: true }); }
     catch (error) { fail(new Error(`invalid UTF-8 from native session: ${error.message}`)); return; }
-    const parts = decoded.split('\n');
-    for (let i = 0; i < parts.length - 1; i += 1) {
-      lineParts.push(parts[i]);
-      lineBytes += Buffer.byteLength(parts[i], 'utf8');
-      if (lineBytes > MAX_STDOUT) return fail(new Error('native session response line exceeds 32MiB'));
-      const text = lineParts.join('').replace(/\r$/, '');
-      lineParts = [];
-      lineBytes = 0;
+    for (const text of append_response_text(responseFramer, decoded)) {
       try {
         const error = validate_response(text, windowProtocol, !sessionId);
         if (error) { fail(new Error(error)); return; }
@@ -105,16 +95,15 @@ export async function createMoonBitSession(options = {}) {
       } catch (error) { fail(new Error(`invalid native session response: ${error.message}`)); return; }
       if (fatalError) return;
     }
-    const tail = parts[parts.length - 1];
-    lineParts.push(tail);
-    lineBytes += Buffer.byteLength(tail, 'utf8');
-    if (lineBytes > MAX_STDOUT) return fail(new Error('native session response line exceeds 32MiB'));
+    const framingError = response_framing_error(responseFramer);
+    if (framingError) fail(new Error(framingError));
   });
   child.stdout.on('end', () => {
     if (fatalError) return;
     try {
-      lineParts.push(decoder.decode());
-      if (lineParts.join('').length > 0) fail(new Error('truncated native session response line'));
+      append_response_text(responseFramer, decoder.decode());
+      const framingError = finish_response_framer(responseFramer);
+      if (framingError) fail(new Error(framingError));
     } catch (error) { fail(new Error(`invalid UTF-8 at native session EOF: ${error.message}`)); }
   });
   child.stdout.on('error', fail);
