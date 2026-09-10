@@ -1,0 +1,303 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/env",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/json",
+}
+
+///|
+struct Toolchain {
+  compiler : String
+  moon : String
+  platform : String
+  archiveUrl : String
+  archiveSha256 : String
+  coreUrl : String
+  coreSha256 : String
+} derive(FromJson)
+
+///|
+suberror BootstrapError {
+  Failed(String)
+} derive(Debug)
+
+///|
+fn fail(message : String) -> Unit raise BootstrapError {
+  println(message)
+  raise BootstrapError::Failed(message)
+}
+
+///|
+async fn checked(
+  command : String,
+  args : Array[String],
+  home : String,
+) -> String raise Error {
+  let (code, out, err) = @process.collect_output(
+    command,
+    args,
+    extra_env={ "MOON_HOME": home },
+    no_console_window=true,
+  )
+  if code != 0 {
+    fail(
+      command +
+      " failed: " +
+      @utf8.decode_lossy(out.binary()) +
+      "\n" +
+      @utf8.decode_lossy(err.binary()),
+    )
+  }
+  @utf8.decode_lossy(out.binary())
+}
+
+///|
+async fn verify(home : String, pin : Toolchain) -> Unit raise Error {
+  let version = checked(home + "/bin/moon.exe", ["version", "--all"], home)
+  if !version.contains("moonc " + pin.compiler) ||
+    !version.contains("moon " + pin.moon) {
+    fail("Unexpected toolchain version: " + version)
+  }
+}
+
+///|
+fn normalized(path : String) -> String {
+  path.replace_all(old="\\", new="/").to_lower()
+}
+
+///|
+async fn require_child(path : String, root : String) -> Unit raise Error {
+  let resolved = normalized(@fs.realpath(path))
+  if !resolved.has_prefix(normalized(root) + "/") {
+    fail("Installation path escapes repository .tools: " + path)
+  }
+}
+
+///|
+async fn promote(
+  stage : String,
+  active : String,
+  backup : String,
+) -> Unit raise Error {
+  let had_active = @fs.exists(active)
+  if had_active {
+    @fs.rename(active, backup, replace=false)
+  }
+  errdefer (if had_active {
+    @async.protect_from_cancel(() => @fs.rename(backup, active, replace=false))
+  })
+  @fs.rename(stage, active, replace=false)
+}
+
+///|
+async fn install(name : String) -> Unit raise Error {
+  if name.is_empty() ||
+    name
+    .iter()
+    .any(c => !(c >= 'a' && c <= 'z') && !(c >= '0' && c <= '9') && c != '-') {
+    fail(
+      "Installation name must contain only lowercase letters, digits and hyphens",
+    )
+  }
+  let pin_text = @fs.read_file("toolchain.json").text()
+  let pin : Toolchain = @json.from_json(@json.parse(pin_text))
+  if pin.platform != "windows-x86_64" ||
+    @env.get_env_var("OS") != Some("Windows_NT") ||
+    @env.get_env_var("PROCESSOR_ARCHITECTURE") != Some("AMD64") {
+    fail("The pinned bootstrap supports Windows x64 only")
+  }
+  let repo = @fs.realpath(".")
+  if !@fs.exists(".tools") {
+    @fs.mkdir(".tools")
+  }
+  let tools = @fs.realpath(".tools")
+  require_child(tools, repo)
+  let active = tools + "/" + name
+  let runtime = @fs.realpath(@env.get_env_var("MOON_HOME").unwrap_or(""))
+  if normalized(runtime) == normalized(active) ||
+    normalized(runtime).has_prefix(normalized(active) + "/") {
+    fail("Run bootstrap from a separate MoonBit runtime")
+  }
+  let lock = tools + "/bootstrap.lock"
+  @fs.mkdir(lock)
+  defer @async.protect_from_cancel(() => @fs.rmdir(lock))
+  if @fs.exists(active) {
+    require_child(active, tools)
+    let marker = active + "/metonic-toolchain.json"
+    if @fs.exists(marker) && @fs.read_file(marker).text() == pin_text {
+      verify(active, pin)
+      println("Toolchain already installed: " + active)
+      return
+    }
+  }
+  let stage_root = tools + "/bootstrap-stage-" + @async.now().to_string()
+  @fs.mkdir(stage_root)
+  require_child(stage_root, tools)
+  let payload = stage_root + "/payload"
+  let mise = @env.get_env_var("METONIC_MISE_BIN").unwrap_or("mise")
+  for
+    entry in [
+      ("metonic-moonbit", pin.archiveUrl, pin.archiveSha256, payload),
+      (
+        "metonic-moonbit-core",
+        pin.coreUrl,
+        pin.coreSha256,
+        payload + "/lib/core",
+      ),
+    ] {
+    let (asset, url, hash, destination) = entry
+    ignore(
+      checked(
+        mise,
+        [
+          "install-into",
+          "http:" +
+          asset +
+          "[url=" +
+          url +
+          ",checksum=sha256:" +
+          hash +
+          "]@" +
+          hash,
+          destination,
+        ],
+        runtime,
+      ),
+    )
+  }
+  require_child(payload, tools)
+  ignore(
+    checked(
+      payload + "/bin/moon.exe",
+      ["-C", payload + "/lib/core", "bundle", "--warn-list", "-a", "--all"],
+      payload,
+    ),
+  )
+  verify(payload, pin)
+  @fs.write_file(payload + "/metonic-toolchain.json", pin_text)
+  promote(payload, active, stage_root + "/previous")
+  println("Installed " + pin.compiler + ": " + active)
+}
+
+///|
+async fn verify_promotion() -> Unit raise Error {
+  let root = @fs.realpath(".tools")
+  let test_root = root + "/bootstrap-test-" + @async.now().to_string()
+  @fs.mkdir(test_root)
+  require_child(test_root, root)
+  let active = test_root + "/active"
+  let staged = test_root + "/staged"
+  let backup = test_root + "/backup"
+  @fs.mkdir(active)
+  @fs.mkdir(staged)
+  @fs.write_file(active + "/identity", "old")
+  @fs.write_file(staged + "/identity", "new")
+  let failed = try {
+    promote(test_root + "/missing", active, backup)
+    false
+  } catch {
+    _ => true
+  }
+  assert_true(failed)
+  assert_eq(@fs.read_file(active + "/identity").text(), "old")
+  assert_eq(@fs.read_file(staged + "/identity").text(), "new")
+  assert_false(@fs.exists(backup))
+  promote(staged, active, backup)
+  assert_eq(@fs.read_file(active + "/identity").text(), "new")
+  assert_eq(@fs.read_file(backup + "/identity").text(), "old")
+  assert_false(@fs.exists(staged))
+  let lock = root + "/bootstrap.lock"
+  @fs.mkdir(lock)
+  defer @fs.rmdir(lock)
+  let excluded = try {
+    install("bootstrap-lock-probe")
+    false
+  } catch {
+    _ => true
+  }
+  assert_true(excluded)
+  assert_true(@fs.exists(lock))
+  assert_false(@fs.exists(root + "/bootstrap-lock-probe"))
+  let cleanup = root + "/bootstrap-runtime-test-" + @async.now().to_string()
+  @fs.mkdir(cleanup)
+  let readonly_file = cleanup + "/readonly"
+  @fs.write_file(readonly_file, "temporary")
+  let system = @env.get_env_var("SystemRoot").unwrap_or("C:/Windows")
+  let runtime = @env.get_env_var("MOON_HOME").unwrap_or("")
+  ignore(
+    checked(
+      system + "/System32/attrib.exe",
+      ["+R", readonly_file.replace_all(old="/", new="\\")],
+      runtime,
+    ),
+  )
+  cleanup_runtime(cleanup)
+  assert_false(@fs.exists(cleanup))
+  println("Bootstrap promotion and rollback passed")
+}
+
+///|
+async fn validate_cleanup_tree(
+  path : String,
+  root : String,
+) -> Unit raise Error {
+  require_child(path, root)
+  match @fs.kind(path, follow_symlink=false) {
+    Regular => ()
+    Directory =>
+      for name in @fs.readdir(path, include_hidden=true) {
+        validate_cleanup_tree(path + "/" + name, root)
+      }
+    _ =>
+      fail("Refusing bootstrap cleanup through a link or special file: " + path)
+  }
+}
+
+///|
+async fn cleanup_runtime(path : String) -> Unit raise Error {
+  let root = @fs.realpath(".tools")
+  require_child(root, @fs.realpath("."))
+  let resolved = @fs.realpath(path)
+  require_child(resolved, root)
+  let prefix = normalized(root) + "/bootstrap-runtime-"
+  if !normalized(resolved).has_prefix(prefix) {
+    fail("Cleanup only accepts a bootstrap-runtime directory")
+  }
+  let runtime = @env.get_env_var("MOON_HOME").unwrap_or("")
+  let running = normalized(@fs.realpath(runtime))
+  if running == normalized(resolved) ||
+    running.has_prefix(normalized(resolved) + "/") {
+    fail("Cannot remove the running bootstrap runtime")
+  }
+  validate_cleanup_tree(resolved, root)
+  // chmod is unsupported by the Wasm filesystem runtime on Windows; Git packs are read-only.
+  let system = @env.get_env_var("SystemRoot").unwrap_or("C:/Windows")
+  ignore(
+    checked(
+      system + "/System32/attrib.exe",
+      ["-R", resolved.replace_all(old="/", new="\\") + "\\*", "/S", "/D", "/L"],
+      runtime,
+    ),
+  )
+  @fs.rmdir(resolved, recursive=true)
+  println("Removed temporary bootstrap runtime: " + resolved)
+}
+
+///|
+async fn main {
+  let args = @env.args()
+  if args.length() == 3 && args[1] == "--cleanup-runtime" {
+    cleanup_runtime(args[2])
+    return
+  }
+  guard args.length() <= 2 else {
+    fail("usage: bootstrap.mbtx [installation-name]")
+  }
+  if args.length() == 2 && args[1] == "--test-promotion" {
+    verify_promotion()
+  } else {
+    install(if args.length() == 2 { args[1] } else { "moonbit" })
+  }
+}

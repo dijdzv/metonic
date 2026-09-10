@@ -15,19 +15,23 @@ jobs:
     name: Windows verification
     runs-on: windows-2022
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: cmd
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
         with:
-          version: 2026.8.5
+          version: 2026.9.4
           cache: false
       - name: Bootstrap pinned MoonBit
         run: mise run bootstrap
+      - name: Verify bootstrap recovery
+        run: mise run bootstrap:test
       - name: Verify tracked Markdown links
-        shell: pwsh
-        run: ./.tools/moonbit/bin/moon.exe run scripts/verify-docs.mbtx
+        run: .\.tools\moonbit\bin\moon.exe run scripts/verify-docs.mbtx
       - name: Verify WasmGC and JavaScript
         run: mise run verify
       - name: Verify browser artifacts

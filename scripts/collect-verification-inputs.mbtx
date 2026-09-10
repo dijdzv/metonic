@@ -44,10 +44,7 @@ async fn main {
     trees.push(@fs.realpath(path))
   }
   files.push(@fs.realpath(".work/accesskit-focus-build/release/accesskit.dll"))
-  for
-    command in [
-      "git.exe", "node.exe", "mise.exe", "pwsh.exe", "cargo.exe", "rustc.exe",
-    ] {
+  for command in ["git.exe", "node.exe", "mise.exe", "cargo.exe", "rustc.exe"] {
     let output = checked("where.exe", [command])
     let selected = output.split("\n").next().unwrap().trim().to_owned()
     files.push(@fs.realpath(selected))
