@@ -92,6 +92,16 @@ async fn promote(
 }
 
 ///|
+async fn marker_matches(path : String, expected : String) -> Bool raise Error {
+  // An async RHS of && is evaluated eagerly by the pinned compiler.
+  if @fs.exists(path) {
+    @fs.read_file(path).text() == expected
+  } else {
+    false
+  }
+}
+
+///|
 async fn install(name : String) -> Unit raise Error {
   if name.is_empty() ||
     name
@@ -126,7 +136,7 @@ async fn install(name : String) -> Unit raise Error {
   if @fs.exists(active) {
     require_child(active, tools)
     let marker = active + "/metonic-toolchain.json"
-    if @fs.exists(marker) && @fs.read_file(marker).text() == pin_text {
+    if marker_matches(marker, pin_text) {
       verify(active, pin)
       println("Toolchain already installed: " + active)
       return
@@ -194,6 +204,22 @@ async fn verify_promotion() -> Unit raise Error {
   @fs.mkdir(staged)
   @fs.write_file(active + "/identity", "old")
   @fs.write_file(staged + "/identity", "new")
+  let marker = active + "/metonic-toolchain.json"
+  assert_false(marker_matches(marker, "pin"))
+  @fs.write_file(marker, "old")
+  assert_false(marker_matches(marker, "pin"))
+  @fs.write_file(marker, "pin")
+  assert_true(marker_matches(marker, "pin"))
+  @fs.remove(marker)
+  @fs.mkdir(marker)
+  let invalid_marker = try {
+    ignore(marker_matches(marker, "pin"))
+    false
+  } catch {
+    _ => true
+  }
+  assert_true(invalid_marker)
+  @fs.rmdir(marker)
   let failed = try {
     promote(test_root + "/missing", active, backup)
     false
