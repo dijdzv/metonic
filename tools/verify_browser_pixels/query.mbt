@@ -3,6 +3,42 @@ async fn verify_query_pointer(host : BrowserHost) -> Unit {
   let original = command(host, { "op": "value", "selector": "#text-input" })
   for width in [1000, 600] {
     ignore(command(host, { "op": "viewport", "width": width }))
+    let long = "abc WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW"
+    ignore(
+      command(host, { "op": "fill", "selector": "#rpc-user", "value": long }),
+    )
+    ignore(
+      command(host, { "op": "press", "selector": "#rpc-user", "key": "End" }),
+    )
+    ignore(
+      command(host, {
+        "op": "press",
+        "selector": "#rpc-user",
+        "key": "Shift+ArrowLeft",
+      }),
+    )
+    ignore(
+      command(host, { "op": "press", "selector": "#rpc-user", "key": "x" }),
+    )
+    require(
+      command(host, { "op": "value", "selector": "#rpc-user" }) ==
+      Json::string(long[:long.length() - 1].to_owned() + "x"),
+      "scrolled query selection did not replace the final character",
+    )
+    ignore(
+      command(host, { "op": "press", "selector": "#rpc-user", "key": "Home" }),
+    )
+    ignore(
+      command(host, { "op": "click", "selector": "#rpc-user", "x": 10, "y": 16 }),
+    )
+    ignore(
+      command(host, { "op": "press", "selector": "#rpc-user", "key": "Delete" }),
+    )
+    require(
+      command(host, { "op": "value", "selector": "#rpc-user" }) ==
+      Json::string(long[1:long.length() - 1].to_owned() + "x"),
+      "query pointer did not return to the first glyph after scrolling",
+    )
     ignore(
       command(host, { "op": "fill", "selector": "#rpc-user", "value": "1" }),
     )
