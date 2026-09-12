@@ -54,6 +54,7 @@ struct App {
   mut shift_pressed : Bool
   mut raster : @raster.Engine?
   mut query_raster : @raster.Engine?
+  mut query_scroll : Int
   mut rendered_text : String?
   mut rendered_request_focus : Bool
   mut rendered_task_status : Int
@@ -269,6 +270,11 @@ fn App::draw(self : App) -> Unit raise Error {
         self.model.view()
       }
       let width = view.editor.bounds.width
+      let query_active_caret = if view.query.focused && self.composition is Some(_) {
+        self.input_node().selection_start + self.preedit_cursor
+      } else {
+        @semantics.caret(@semantics.snapshot(self.model.editor)[5])
+      }
       if self.rendered_text != Some(text) ||
         self.rendered_result != self.model.result ||
         self.rendered_request_focus != view.request.focused ||
@@ -280,25 +286,44 @@ fn App::draw(self : App) -> Unit raise Error {
           view.query.text,
           view.query.focused,
           view.query_selection,
-          view.query_caret,
+          Some(query_active_caret),
         ) ||
         self.text_width != width ||
         self.rendered_selection != selection ||
         self.rendered_caret != visible_caret {
+        let query_width = (view.query.bounds.width - 16).max(1)
+        ignore(
+          @raster.render(
+            self.query_raster.unwrap(),
+            view.query.text,
+            query_width,
+            32,
+            single_line_scroll=Some(0),
+          ),
+        )
+        let query_engine = self.query_raster.unwrap()
+        if @raster.caret_position(query_engine, view.query.text.length())
+          is Some((end_x, _)) {
+          self.query_scroll = self.query_scroll.min(
+            (end_x - query_width + 1).max(0),
+          )
+        }
+        if view.query.focused {
+          if @raster.caret_position(query_engine, query_active_caret) is Some((x, _)) {
+            if x < self.query_scroll {
+              self.query_scroll = x.max(0)
+            } else if x >= self.query_scroll + query_width {
+              self.query_scroll = (x - query_width + 1).max(0)
+            }
+          }
+        }
         let layers = @view_renderer.render(
           self.raster.unwrap(),
           view,
           text,
           selection~,
           caret=visible_caret,
-        )
-        ignore(
-          @raster.render(
-            self.query_raster.unwrap(),
-            view.query.text,
-            (view.query.bounds.width - 16).max(1),
-            32,
-          ),
+          query_scroll=Some(self.query_scroll),
         )
         renderer.set_text_layers(
           layers.map(layer => @gpu.TextLayer::{
@@ -317,7 +342,7 @@ fn App::draw(self : App) -> Unit raise Error {
           view.query.text,
           view.query.focused,
           view.query_selection,
-          view.query_caret,
+          Some(query_active_caret),
         )
         self.rendered_text = Some(text)
         self.rendered_result = self.model.result
@@ -347,7 +372,12 @@ fn App::draw(self : App) -> Unit raise Error {
         if self.window is Some(window) {
           window.set_ime_cursor_area(
             @dpi.PhysicalPosition(
-              x + (if query_focused { view.query.bounds.x + 8 } else { 8 }),
+              x +
+              (if query_focused {
+                view.query.bounds.x + 8 - self.query_scroll
+              } else {
+                8
+              }),
               y + (if query_focused { view.query.bounds.y + 2 } else { 8 }),
             ).into_position(),
             @dpi.PhysicalSize(1, 32).into_size(),
@@ -456,6 +486,7 @@ async fn run_loop(
     shift_pressed: false,
     raster: None,
     query_raster: None,
+    query_scroll: 0,
     rendered_text: None,
     rendered_result: "",
     rendered_request_focus: false,
@@ -836,7 +867,7 @@ async fn run_loop(
               if app.query_raster is Some(engine) {
                 if @raster.hit(
                     engine,
-                    (x - box.x - 8).max(0),
+                    (x - box.x - 8).max(0) + app.query_scroll,
                     (y - box.y - 2).max(0),
                   )
                   is Some(offset) {

@@ -2,6 +2,8 @@ import {
   "moonbitlang/async@0.21.2",
   "moonbitlang/async@0.21.2/fs",
   "moonbitlang/async@0.21.2/process",
+  "moonbitlang/async@0.21.2/http",
+  "moonbitlang/async@0.21.2/socket",
   "moonbitlang/core/env",
   "moonbitlang/core/json",
   "moonbitlang/core/debug",
@@ -297,6 +299,63 @@ async fn run_probe(
           env_map.set("METONIC_WINDOW_TEST", "1")
           env_map.set("METONIC_WINDOW_INIT_TEST", case_name)
           env_map.set("METONIC_GPU_FALLBACK", fallback)
+          let received = Ref(0)
+          let mut query_server_task : @async.Task[Unit]? = None
+          let query_case = case_name == "query" || case_name == "query-latin"
+          if query_case {
+            let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
+            group.add_defer(fn() { server.close() })
+            env_map.set("METONIC_RPC_BASE", "http://" + server.addr.to_string())
+            query_server_task = Some(
+              group.spawn(() => {
+                server.run_forever((request, body, conn) => {
+                  defer conn.close()
+                  assert_eq(request.meth, @http.Post)
+                  assert_eq(request.path, "/rpc")
+                  let bytes : Array[Byte] = []
+                  while body.read_some(max_len=4097 - bytes.length())
+                        is Some(chunk) {
+                    for byte in chunk {
+                      bytes.push(byte)
+                    }
+                    require(
+                      bytes.length() <= 4096,
+                      "query request exceeds fixture limit",
+                    )
+                  }
+                  let expected_id = if case_name == "query" {
+                    "日本語日本語 日本語日本語 日本語日本語 日本語日本語"
+                  } else {
+                    "abcdefghij abcdefghij abcdefghij abcdefghij abcdefghij"
+                  }
+                  let expected : Json = {
+                    "version": 1,
+                    "procedure": "users.get.v1",
+                    "input": { "id": expected_id },
+                  }
+                  assert_eq(
+                    @json.parse(@utf8.decode(Bytes::from_array(bytes))),
+                    expected,
+                  )
+                  received.val += 1
+                  let headers : Map[@http.CaseInsensitiveString, String] = Map([])
+                  headers.set(
+                    @http.CaseInsensitiveString("Content-Type"),
+                    "application/json",
+                  )
+                  headers.set(
+                    @http.CaseInsensitiveString("Connection"),
+                    "close",
+                  )
+                  conn.send_response(200, "", extra_headers=headers)
+                  conn.write_string(
+                    "{\"version\":1,\"ok\":false,\"error\":{\"kind\":\"domain\",\"code\":\"not_found\"}}",
+                  )
+                  conn.end_response()
+                })
+              }),
+            )
+          }
           if kind == "async" {
             let input = @env.get_env_var("METONIC_ASYNC_INPUT").unwrap_or(
               root.replace_all(old="\\", new="/") +
@@ -322,7 +381,18 @@ async fn run_probe(
           group.spawn_bg() <| () => {
             drain(stderr_reader, stderr_state, child)
           }
-          child.wait()
+          let code = child.wait()
+          if query_server_task is Some(task) {
+            task.cancel()
+            task.wait() catch {
+              error if @async.is_cancellation_error(error) => ()
+              error => raise error
+            }
+          }
+          if query_case && code == 0 {
+            assert_eq(received.val, 1)
+          }
+          code
         }
       }),
     )
@@ -438,6 +508,8 @@ async fn run_probe(
           "WINDOW_INIT_CLOSE_OK"
         } else if case_name == "capture" {
           "WINDOW_CAPTURE_OBSERVATION_OK"
+        } else if case_name == "query" || case_name == "query-latin" {
+          "WINDOW_QUERY_SCROLL_OK"
         } else {
           "WINDOW_PROBE_OK"
         }
@@ -500,7 +572,7 @@ async fn main {
   for kind in kinds {
     for mode in modes {
       let cases = if kind == "window" {
-        ["normal", "input", "close", "capture"]
+        ["normal", "input", "close", "capture", "query", "query-latin"]
       } else {
         ["normal"]
       }
