@@ -508,6 +508,8 @@ async fn run_probe(
           "WINDOW_INIT_CLOSE_OK"
         } else if case_name == "capture" {
           "WINDOW_CAPTURE_OBSERVATION_OK"
+        } else if case_name == "delete" {
+          "WINDOW_DELETE_OK"
         } else if case_name == "query" || case_name == "query-latin" {
           "WINDOW_QUERY_SCROLL_OK"
         } else {
@@ -572,7 +574,9 @@ async fn main {
   for kind in kinds {
     for mode in modes {
       let cases = if kind == "window" {
-        ["normal", "input", "close", "capture", "query", "query-latin"]
+        [
+          "normal", "input", "close", "capture", "query", "query-latin", "delete",
+        ]
       } else {
         ["normal"]
       }

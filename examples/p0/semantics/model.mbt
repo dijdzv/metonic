@@ -304,6 +304,42 @@ pub fn delete_backward(tree : Tree, reference : NodeRef) -> String {
 }
 
 ///|
+pub fn delete_forward(tree : Tree, reference : NodeRef) -> String {
+  let (kind, error) = resolve(tree, reference)
+  if kind < 0 {
+    return error
+  }
+  guard input_node(tree, kind) is Some(node) else {
+    return "unsupported_action"
+  }
+  if !node.enabled {
+    return "disabled"
+  }
+  if node.selection_start != node.selection_end {
+    return replace_selection(tree, reference, "")
+  }
+  let start = node.selection_start
+  if start == node.value.length() {
+    return ""
+  }
+  let mut end = start + 1
+  while !selection_boundary(node.value, end) {
+    end += 1
+  }
+  let value = node.value[:start].to_owned() + node.value[end:].to_owned()
+  let caret = if selection_boundary(value, start) { start } else { start + 1 }
+  store_input(tree, {
+    ..node,
+    value,
+    selection_start: caret,
+    selection_end: caret,
+    selection_anchor: caret,
+  })
+  tree.revision += 1
+  ""
+}
+
+///|
 fn selection_boundary(value : String, index : Int) -> Bool {
   // Splitting CRLF would expose a caret position that native text ranges cannot represent.
   @text_position.utf16_to_scalar(value, index) is Some(_) &&

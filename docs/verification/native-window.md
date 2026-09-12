@@ -30,6 +30,12 @@ Directed selection uses a debug-only semantic fixture; insertion, navigation and
 pointer input use owned-window messages. These checks do not certify physical IME,
 keyboard, or screen-reader behavior. Both application and fixture must terminate.
 
+The `delete` case posts native Delete key events to the focused editor. It checks
+supplementary-character and selected-range deletion, an unchanged caret at the
+end of the value, and no deletion during injected composition or outside an input
+field. The query cases also use Delete to remove their initial User ID. These
+are hidden owned-window messages, not physical keyboard or IME verification.
+
 ## Local evidence
 
 On 2026-09-07, the Windows x64 native host build using `Milky2018/wgpu_mbt` 0.16.0

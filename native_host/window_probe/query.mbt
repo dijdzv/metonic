@@ -92,8 +92,8 @@ async fn QueryScenario::step(
       self.stage = 1
       post(view.hwnd, 0x0201U, 1UL, 115L * 65536L + 240L)
       post(view.hwnd, 0x0202U, 0UL, 115L * 65536L + 240L)
-      post(view.hwnd, 0x0100U, 0x23UL, 0L)
-      post(view.hwnd, 0x0100U, 0x08UL, 0L)
+      post(view.hwnd, 0x0100U, 0x24UL, 0L)
+      post(view.hwnd, 0x0100U, 0x2EUL, 0L)
       for i in 0..<self.text.length() {
         post(view.hwnd, 0x0102U, self.text[i].to_int().to_uint64(), 0L)
       }
