@@ -4,7 +4,9 @@ The packaged browser application links `browser_host/app` and the shared
 `examples/p0/browser` state once. MoonBit owns listeners for the main textarea
 and User ID input, including composition, selection, focus and disposal.
 Direct string calls share validation with the numeric control API. The remaining
-JavaScript host owns scene WebGPU calls and frame scheduling; the
+JavaScript adapter acquires the GPU adapter/device and coordinates canvas/DOM
+presentation and frame scheduling. MoonBit `scene_gpu.mbt` and `frame_gpu.mbt`
+own scene drawing and frame encoding/submission through generated webapi; the
 [MoonBit text GPU renderer](browser-text-gpu.md) owns text GPU resources and draws. The
 [MoonBit HTTP host](browser-http.md) owns bounded fetch and cancellation.
 `metonic-input` requests a render after an input update.

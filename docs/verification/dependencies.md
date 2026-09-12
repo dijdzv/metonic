@@ -1,6 +1,7 @@
 # Dependency record
 
 Reconciled with the module manifests and preparation scripts on 2026-09-08.
+Browser binding adoption and distribution were reconciled on 2026-09-13.
 
 | Dependency | Pin | Purpose | License/distribution status |
 | --- | --- | --- | --- |
@@ -16,6 +17,7 @@ Reconciled with the module manifests and preparation scripts on 2026-09-08.
 | Milky2018/moon_cosmic | 0.3.3 | Shared text shaping/layout and raster experiments | Apache-2.0 module; transitive modules and font notices remain separate |
 | Milky2018/wgpu_mbt | 0.16.0 | Native offscreen, window and worker rendering; isolated binding comparison | See the [binding record](wgpu-mbt.md) for its pinned native library boundary and notices |
 | wzzc-dev/window and its windowing workspace | b33c9f0ac85002bca4a9cceccbbcd512d13b7ceb; window manifest 0.5.4-0.1.7 | Ordinary native window, input and event loop | Apache-2.0; pinned source plus pump/IME corrections prepared by `scripts/prepare-native-deps.mbtx`; not an unmodified registry package |
+| bikallem/webapi | ecae5a4b07b011e46de343efe2ac1c450b7ed3a2; generated module version 0.5.0; Web IDL input 3.73.1 | Generated browser API bindings used by the MoonBit GPU/input/HTTP/timer/font host on JS and WasmGC | Apache-2.0; pinned generator plus `patches/webapi-webgpu-generator.patch`; generated `webapi.mjs` and `LICENSE-webapi` ship in the browser package; generator and IDL archive are build inputs |
 | AccessKit C | 0.22.3 | Production Windows accessibility through the official C ABI | MIT OR Apache-2.0; locally built DLL includes focus/clipping corrections; both licenses copied beside the window executable; [build and boundary](native-accessibility.md) |
 | Rust / Cargo | 1.93.0 | Build the patched AccessKit dependency | Build prerequisite, not a custom Metonic renderer or application runtime |
 | @modelcontextprotocol/client and server / zod | 2.0.0 / 4.5.4 | Development MCP protocol and transport adapter | MIT; npm development dependencies, excluded from production UI artifacts |
@@ -27,8 +29,11 @@ transitive package. Native application state, rendering orchestration and task
 policy are MoonBit. The window dependency retains its OS implementation, and
 Metonic retains the foreign-thread accessibility mailbox and wake thunk described
 in the [reuse record](library-reuse.md). The custom Rust GPU renderer was removed.
-The browser host uses the browser's WebGPU implementation; npm dependencies remain
-development tools. Font selection and bundled notices are recorded in the
+The browser host uses the browser's WebGPU implementation through generated
+webapi bindings. The [browser input record](browser-input.md) describes preparation
+and the callback-identity correction; the [reuse record](library-reuse.md)
+separates adopted MoonBit responsibilities from remaining JavaScript adapters.
+The npm dependencies remain development tools. Font selection and bundled notices are recorded in the
 [text evaluation](text-layout.md). These adoption records do not establish real
 IME or assistive-technology acceptance.
 

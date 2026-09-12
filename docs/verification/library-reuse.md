@@ -1,6 +1,6 @@
 # Library reuse evaluation
 
-Initial evaluation: 2026-09-06; current boundaries reconciled on 2026-09-08.
+Initial evaluation: 2026-09-06; current boundaries reconciled on 2026-09-13.
 This supplements dependency selection; it does not replace the
 architecture or authorize adoption of every candidate. Working implementations
 remain comparison baselines until equivalent requirements pass.
@@ -14,7 +14,8 @@ remain comparison baselines until equivalent requirements pass.
 | `tools/native_surface_probe/window.c` | Isolated device-replacement diagnostic HWND | Ordinary window migrated to `wzzc-dev/window/windows`; diagnostic retained for comparison |
 | `native_host/async_app`, `native_host/windows_loop` | Async jobs, cancellation, completion delivery and UI wakeup | Adopted `moonbitlang/async` structured tasks and external-loop API with the prepared window library; custom C workers replaced after [comparison](native-async.md); context-free C wake thunk retained |
 | `native_gpu`, `examples/p0/native_headless` | Persistent offscreen GPU resources, readback and capture | Adopted `Milky2018/wgpu_mbt@0.16.0`; headless C stub removed, stdio and file writing use MoonBit async |
-| `examples/p0/browser/host/*.mjs` | WebGPU, DOM/input and host scheduling | Compare required calls against `mizchi/js_browser` and `bikallem/webapi` |
+| `browser_host/app` | Scene/text GPU resources and frame submission, text-input listeners, HTTP, timers and bounded font download | Adopted generated `bikallem/webapi` bindings for JS/WasmGC; [input](browser-input.md), [HTTP](browser-http.md) and [text GPU](browser-text-gpu.md) records define the verified scope |
+| `examples/p0/browser/host/*.mjs` | Browser startup, adapter/device acquisition, canvas and semantic DOM coordination, animation-frame scheduling, module loading and buffer transfer | Remaining JavaScript adapter; GPU drawing and text-input ownership have moved to MoonBit. Web Crypto conversion follow-ups remain separate from this adoption |
 | `tools/devtools/*.mjs`, `scripts/*` | CLI/MCP transport and development verification | MoonBit orchestration first; external SDK adapters scoped separately |
 | `examples/p0/text_position`, `semantics`, `task_scope` | Position validity, semantic actions and cancellation policy | Framework responsibilities; library presence does not replace these contracts |
 
@@ -37,12 +38,41 @@ The initial checkout checks below remain historical results, not adoption claims
 The font-backed browser integration now uses a root `text_raster` package and pins
 moon_cosmic in the root module. Demonstration hosts remain under `examples/p0`.
 
+## Remaining project-owned foreign-language files
+
+The tracked-source inventory on 2026-09-13 contains 10 C and 20 `.mjs` files,
+with no tracked PowerShell or Rust source. This excludes downloaded dependencies,
+generated bindings/build output, and ignored local experiments. It does not imply
+that every line in the remaining adapters is irreducible.
+
+| Files | Current boundary and status |
+| --- | --- |
+| `native_host/windows_loop/wake.c`, `experiments/window_async_contract/wake.c` | Context-free callbacks from foreign threads into the window wake mechanism; application task policy is MoonBit |
+| `native_host/accessibility/mailbox.c` | AccessKit callbacks and bounded native request ownership; semantic state and action handling are MoonBit |
+| `native_host/accessibility_probe/navigate.c` | Windows UIA/COM client and owned-window input observation used by verification, not the production editor |
+| `native_host/mailbox_probe/boundary.c`, `native_host/sdk_mailbox_probe/boundary.c` | Native-thread/SDK callback ownership and lifetime verification |
+| `experiments/async_waiter_handles/host.c` | Windows handle-count observation and a native callback for the async regression |
+| `experiments/wgpu_binding/window_bridge.c`, `tools/native_surface_probe/window.c`, `tools/native_surface_probe/bridge.c` | Diagnostic HWND/handle boundaries for binding and device-replacement comparisons; not the ordinary application's window implementation |
+| Seven `examples/p0/browser/host/*.mjs` files | Development/release loader and environment adapters, browser startup/presentation coordination, Web Crypto font validation and buffer transfer |
+| Five `scripts/*.mjs` files | Browser/Node API endpoints for artifact, headless, async and MCP verification; their MoonBit verifier packages own the corresponding protocol/pixel assertions |
+| Eight `tools/devtools/*.mjs` files | Node subprocess/stream and MCP SDK adapters, browser observation and their API-boundary tests; shared session framing/admission policy is imported from generated MoonBit |
+
+The [surface-reuse investigation](https://github.com/dijdzv/metonic/issues/58)
+and [window upstream proposals](https://github.com/dijdzv/metonic/issues/88)
+own further diagnostic/native-boundary evaluation. Browser Web Crypto generator
+corrections are tracked in [#218](https://github.com/dijdzv/metonic/issues/218)
+and [#293](https://github.com/dijdzv/metonic/issues/293). A retained comparison
+fixture is not evidence that its implementation is required in the application.
+WGSL shader text and HTML/CSS remain GPU/web formats, distinct from orchestration
+scripts. The generated Visual Studio environment `.cmd` bridge invokes the vendor
+build environment; it is not a PowerShell setup dependency.
+
 ## Initial results
 
 These are source-checkout results unless explicitly identified as published
 package tests. Checkout version fields do not prove registry equivalence.
 
-| Area | Current implementation | Candidate/version | Required behavior | Native result | Browser result | Gap and decision | Evidence |
+| Area | Implementation at initial evaluation | Candidate/version | Required behavior | Native result | Browser result | Gap and decision | Evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | GPU | MoonBit offscreen and surface renderers | Published `Milky2018/wgpu_mbt@0.16.0` | DX12, pixels, surface lifetime | Headless readback, hidden HWND input and worker completion passed on both local adapters | Not a browser binding | Adopted for native rendering; Win32 and worker C boundaries remain | [GPU evaluation](wgpu-mbt.md), [worker verification](native-async.md) |
 | Window | Direct Win32 C host | `wzzc-dev/window` checkout version `0.5.4-0.1.7` | Hidden HWND, events, resize, wakeup and cleanup | `moon check --target native` passed, one warning | Not run | No event-loop or IME execution claim; compare before replacement | [Pinned fork](https://github.com/wzzc-dev/window/tree/b33c9f0ac85002bca4a9cceccbbcd512d13b7ceb) |
@@ -84,10 +114,11 @@ Open Issues own current priority and acceptance criteria.
   behavior has automated evidence. `Milky2018/moon_accesskit` is not adopted;
   further data-model reuse must preserve that OS adapter and semantic contract.
   Actual assistive-technology acceptance remains separate.
-- Browser: inventory required WebGPU, input and semantic DOM calls before choosing
-  `mizchi/js_browser` or `bikallem/webapi`; JS/WasmGC coverage must be demonstrated.
-- RPC: inspect `moonbitlang/protoc-gen-mbt` generator/runtime compatibility before
-  adding codec code. Native gRPC remains distinct from Node grpc-js bindings.
+- Browser: retain the adopted webapi path and its JS/WasmGC comparison. Further
+  reductions concern the remaining startup/presentation, Web Crypto and buffer
+  adapters; `mizchi/js_browser` has not been selected as an additional runtime.
+- RPC: the integrated UI uses standard HTTP/JSON. Protobuf/gRPC remains an optional
+  adapter evaluation, not a prerequisite for that path or the P0 application.
 
 MoUI and Kagura are integration references, not selected framework dependencies.
 Additional candidates are pending investigation, not rejected. Adoption decisions
