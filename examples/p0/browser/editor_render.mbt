@@ -24,6 +24,18 @@ let rendered_editor : Ref[
 let view_layers : Ref[Array[@view_renderer.Layer]] = Ref([])
 
 ///|
+let query_scroll_x : Ref[Int] = Ref(0)
+
+///|
+pub fn query_scroll(value : Int) -> Unit {
+  let value = value.max(0)
+  if query_scroll_x.val != value {
+    query_scroll_x.val = value
+    rendered_editor.val = None
+  }
+}
+
+///|
 #export_name("editor_render")
 pub fn editor_render(viewport_width : Int) -> Int {
   let engine = match bridge.engine {
@@ -79,6 +91,7 @@ pub fn editor_render(viewport_width : Int) -> Int {
     text,
     selection=(start, end),
     caret~,
+    query_scroll=Some(query_scroll_x.val),
   )
   view_layers.val = layers
   let editor = layers[0].pixels
