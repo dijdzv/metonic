@@ -61,7 +61,7 @@ async fn main {
     for
       patch in [
         "experiments/async_waiter_handles/windows-waiter.patch", "experiments/async_named_pipe/windows-named-pipe.patch",
-        "experiments/async_named_pipe/handle-count-diagnostics.patch",
+        "experiments/async_named_pipe/handle-count-diagnostics.patch", "patches/async-worker-handle.patch",
       ] {
       ignore(run("git", ["apply", "--check", "--directory=" + source, patch]))
       ignore(run("git", ["apply", "--directory=" + source, patch]))

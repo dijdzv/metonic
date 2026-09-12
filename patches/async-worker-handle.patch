@@ -1,0 +1,10 @@
+diff --git a/src/internal/event_loop/thread_pool.c b/src/internal/event_loop/thread_pool.c
+--- a/src/internal/event_loop/thread_pool.c
++++ b/src/internal/event_loop/thread_pool.c
+@@ -342,5 +342,6 @@ void moonbitlang_async_free_worker(struct worker *worker) {
+ #ifdef _WIN32
+   WaitForSingleObject(worker->id, INFINITE);
++  CloseHandle(worker->id);
+ #else
+   pthread_join(worker->id, 0);
+ #endif

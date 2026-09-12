@@ -381,7 +381,12 @@ mise exec -- ./.tools/moonbit/bin/moon.exe run scripts/prepare-native-deps.mbtx 
 
 Archive SHA256 values are fixed in the preparation tool. Source-tree comparison
 rejects edits to prepared dependencies; make deliberate changes to the tracked
-patches rather than editing the generated source tree. A source mismatch is an
+patches rather than editing the generated source tree. The async worker patch
+closes each Windows thread handle after its worker has terminated; it is also
+applied by the isolated named-pipe verifier. This fixes retained handles on worker
+teardown, without changing job cancellation or worker creation policy. The
+preparer upgrades an exact previously prepared worker source only after comparing
+the complete dependency trees. A source mismatch is an
 error, not permission to overwrite that tree. A failed or interrupted preparation
 may leave diagnostic files under `.work`; inspect those before removing them.
 

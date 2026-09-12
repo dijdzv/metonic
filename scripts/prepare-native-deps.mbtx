@@ -461,6 +461,25 @@ async fn prepare(args : Array[String]) -> Unit raise Error {
     @fs.write_file(window_stage + system_key_suffix, previous_system_keys)
   }
   let async_existing = sources + "/async-local-control"
+  let worker_suffix = "/src/internal/event_loop/thread_pool.c"
+  let previous_worker = @fs.read_file(async_stage + worker_suffix).text()
+  for check_only in [true, false] {
+    let args = ["apply", "--directory=" + async_stage_relative]
+    if check_only {
+      args.push("--check")
+    }
+    args.push("patches/async-worker-handle.patch")
+    ignore(run_checked("git", args, repo_root))
+  }
+  let corrected_worker = @fs.read_file(async_stage + worker_suffix).text()
+  let upgrade_worker = if @fs.exists(async_existing + worker_suffix) {
+    @fs.read_file(async_existing + worker_suffix).text() == previous_worker
+  } else {
+    false
+  }
+  if upgrade_worker {
+    @fs.write_file(async_stage + worker_suffix, previous_worker)
+  }
   let manifest_suffix = "/modules/window/windows/moon.pkg"
   let baseline = @fs.read_file(window_stage + manifest_suffix).text()
   assert_false(baseline.contains("stub-cc-flags"))
@@ -502,6 +521,18 @@ async fn prepare(args : Array[String]) -> Unit raise Error {
   // Compare every existing destination before publishing any absent source.
   compare_sources(window_stage, window_existing, repo_root)
   compare_sources(async_stage, async_existing, repo_root)
+  if upgrade_worker {
+    if !is_strictly_inside(
+        @fs.realpath(async_existing + worker_suffix),
+        root_real,
+      ) {
+      fail("Async worker source upgrade escaped the native dependency root")
+    }
+    @fs.write_file(async_stage + worker_suffix, corrected_worker)
+    let replacement = async_stage + "/worker-handle-upgrade.c"
+    @fs.write_file(replacement, corrected_worker)
+    @fs.rename(replacement, async_existing + worker_suffix, replace=true)
+  }
   if upgrade_system_keys {
     if !is_strictly_inside(
         @fs.realpath(window_existing + system_key_suffix),
