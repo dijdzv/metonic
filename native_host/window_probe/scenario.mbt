@@ -184,11 +184,35 @@ async fn Scenario::step(self : Scenario, view : @ui.Observation) -> Unit {
     self.stage = 25
     self.scene_revision = (view.scene)(5)
     post(view.hwnd, 0x0100U, 0x20UL, 0L)
-    post(view.hwnd, 0x0100U, 0x0DUL, 0L)
     post(view.hwnd, 0x0100U, 0x26UL, 0L)
   } else if self.stage == 25 && view.editor.value == "A😀 語" {
     require((view.scene)(5) == self.scene_revision, "editing changed the scene")
     require(view.editor.focused, "typing lost editor focus")
+    self.stage = 251
+    post(view.hwnd, 0x0100U, 0x0DUL, 0L)
+  } else if self.stage == 251 && view.editor.value == "A😀 \n語" {
+    require(view.editor.selection_start == 5, "newline caret is not after LF")
+    require(view.editor.selection_end == 5, "newline left a selection")
+    require((view.scene)(5) == self.scene_revision, "newline activated scene")
+    require(view.editor.focused, "newline lost editor focus")
+    self.stage = 252
+    require((view.select)(1, 4) == "", "newline replacement selection rejected")
+    post(view.hwnd, 0x0100U, 0x0DUL, 0L)
+  } else if self.stage == 252 && view.editor.value == "A\n\n語" {
+    require(view.editor.selection_start == 2, "replacement caret differs")
+    require(view.editor.selection_end == 2, "replacement selection not collapsed")
+    self.stage = 253
+    require((view.set_text)("A😀 \n語") == "", "composition text rejected")
+    require((view.select)(1, 4) == "", "composition selection rejected")
+    post(view.hwnd, 0x010DU, 0UL, 0L)
+    post(view.hwnd, 0x0100U, 0x0DUL, 0L)
+    post(view.hwnd, 0x0102U, 120UL, 0L)
+  } else if self.stage == 253 && view.editor.value == "Ax\n語" && !view.composing {
+    require(view.editor.selection_start == 2, "composition Enter moved caret")
+    require(view.editor.selection_end == 2, "composition selection not collapsed")
+    require((view.scene)(5) == self.scene_revision, "composition Enter activated scene")
+    require((view.set_text)("A😀 \n語") == "", "scene test text rejected")
+    require((view.select)(5, 5) == "", "scene test caret rejected")
     self.stage = 26
     post(view.hwnd, 0x0100U, 0x09UL, 0L)
     post(view.hwnd, 0x0100U, 0x0DUL, 0L)
@@ -196,7 +220,7 @@ async fn Scenario::step(self : Scenario, view : @ui.Observation) -> Unit {
     post(view.hwnd, 0x0100U, 0x08UL, 0L)
   } else if self.stage == 26 && (view.scene)(5) == self.scene_revision + 2 {
     require(!view.editor.focused, "scene activation stole editor focus")
-    require(view.editor.value == "A😀 語", "scene keys edited text")
+    require(view.editor.value == "A😀 \n語", "scene keys edited text")
     self.stage = 27
     post(view.hwnd, 0x0100U, 0x09UL, 0L)
   } else if self.stage == 27 && view.request_focused {
@@ -226,7 +250,7 @@ async fn Scenario::step(self : Scenario, view : @ui.Observation) -> Unit {
       "query cursor trace mismatch",
     )
     require(
-      view.editor.value == "A😀 語",
+      view.editor.value == "A😀 \n語",
       "query preedit changed editor text",
     )
     self.stage = 274
