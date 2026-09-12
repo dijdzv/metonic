@@ -111,7 +111,7 @@ async fn verify_window_close(fallback : Bool, pending? : Bool = false) -> Unit {
         stdout~,
         no_console_window=true,
         extra_env=Map([
-          ("METONIC_DEV_HIDDEN", "0"),
+          ("METONIC_DEV_HIDDEN", "1"),
           ("METONIC_GPU_FALLBACK", if fallback { "1" } else { "0" }),
         ]),
       )
@@ -128,7 +128,7 @@ async fn verify_window_close(fallback : Bool, pending? : Bool = false) -> Unit {
       let closer = @process.spawn(
         group,
         ".work/native-host-build/native/debug/build/local/native_host/accessibility_probe/accessibility_probe.exe",
-        [ui.pid.to_string(), "close-only"],
+        [ui.pid.to_string(), "close-hidden"],
         no_console_window=true,
       )
       assert_eq(closer.wait(), 0)

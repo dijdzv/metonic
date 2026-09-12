@@ -81,7 +81,7 @@ async fn main {
           [],
           extra_env=Map([
             ("METONIC_DEV_PIPE", "metonic_attach_smoke"),
-            ("METONIC_DEV_HIDDEN", "0"),
+            ("METONIC_DEV_HIDDEN", "1"),
           ]),
           stdout=log,
           stderr=log,
@@ -239,7 +239,7 @@ async fn main {
         let closer = @process.spawn(
           group,
           ".work/native-host-build/native/debug/build/local/native_host/accessibility_probe/accessibility_probe.exe",
-          [child.pid.to_string(), "close-only"],
+          [child.pid.to_string(), "close-hidden"],
           no_console_window=true,
         )
         println("WINDOW_ATTACH_STAGE mode=" + mode + " stage=close-probe")
