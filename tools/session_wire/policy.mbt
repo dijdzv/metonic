@@ -4,12 +4,38 @@ pub struct SessionPolicy {
   pending : Map[Int, Bool]
   mut closed : Bool
   mut identity : String
+  mut capture_busy : Bool
 }
 
 ///|
 #export_name("new_session_policy")
 pub fn new_session_policy() -> SessionPolicy {
-  { next_id: 1L, pending: {}, closed: false, identity: "", }
+  {
+    next_id: 1L,
+    pending: {},
+    closed: false,
+    identity: "",
+    capture_busy: false,
+  }
+}
+
+///|
+#export_name("begin_session_capture")
+pub fn begin_session_capture(state : SessionPolicy) -> String {
+  if state.closed {
+    return "native session is closed"
+  }
+  if state.capture_busy {
+    return "native session capture already in progress"
+  }
+  state.capture_busy = true
+  ""
+}
+
+///|
+#export_name("finish_session_capture")
+pub fn finish_session_capture(state : SessionPolicy) -> Unit {
+  state.capture_busy = false
 }
 
 ///|

@@ -1,4 +1,20 @@
 ///|
+test "capture exclusion does not block ordinary requests or reopen a closed session" {
+  let state = new_session_policy()
+  assert_eq(begin_session_capture(state), "")
+  assert_eq(
+    begin_session_capture(state),
+    "native session capture already in progress",
+  )
+  assert_eq(session_admission_error(state), "")
+  finish_session_capture(state)
+  assert_eq(begin_session_capture(state), "")
+  close_session_policy(state)
+  finish_session_capture(state)
+  assert_eq(begin_session_capture(state), "native session is closed")
+}
+
+///|
 test "last request ID is valid and exhaustion cannot wrap" {
   let state = new_session_policy()
   state.next_id = 2147483647L
