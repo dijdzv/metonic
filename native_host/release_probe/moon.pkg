@@ -3,6 +3,11 @@ import {
   "moonbitlang/async/process",
   "moonbitlang/async/fs",
 }
+
 pkgtype(kind: "executable")
+
 supported_targets = "native"
-options("link": { "native": { "cc-link-flags": "user32.lib" } })
+
+options(
+  link: { "native": { "cc-link-flags": "user32.lib" } },
+)
