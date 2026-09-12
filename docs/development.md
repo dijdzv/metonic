@@ -744,7 +744,8 @@ strict streaming UTF-8 decoding through TextDecoder, pending-request ownership
 and SDK/process APIs. The pinned MoonBit core provides whole-buffer UTF-8
 decoding; this adapter does not add a custom streaming decoder. The raw native wire protocol's
 64-KiB response limit is not substituted for the session's 32-MiB image envelope.
-MoonBit owns request ID allocation, pending request admission and response
+MoonBit owns capture admission and release, request ID allocation, pending
+request admission and response
 identity consumption, terminal admission, and attachment session identity checks.
 Node retains the Promise callbacks, timers, AbortSignal listeners and child
 streams; these callbacks are settled when the MoonBit policy accepts a response

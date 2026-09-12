@@ -9,6 +9,32 @@ const moonrun = path.join(repo, '.tools', 'moonbit', 'bin', 'moonrun.exe');
 const fixture = path.join(repo, '_build', 'wasm', 'release', 'build', 'tools', 'session_fixture', 'session_fixture.wasm');
 const opts = (mode, extra = {}) => ({ executable: moonrun, args: [fixture, mode], readyTimeoutMs: 2000, requestTimeoutMs: 2000, closeTimeoutMs: 200, ...extra });
 
+test('capture exclusion releases after image failure and permits ordinary requests', async () => {
+  const session = await createMoonBitSession(opts('normal'));
+  try {
+    const first = assert.rejects(session.client.capture(), /no valid image/);
+    await assert.rejects(session.client.capture(), /already in progress/);
+    assert.equal((await session.client.request('snapshot')).ok, true);
+    await first;
+    await assert.rejects(session.client.capture(), /no valid image/);
+  } finally { await session.close(); }
+});
+
+for (const ending of ['close', 'abort']) {
+  test(`pending capture rejects on ${ending} and cannot reopen admission`, async () => {
+    const session = await createMoonBitSession(opts('normal'));
+    const controller = new AbortController();
+    try {
+      const capture = assert.rejects(session.client.capture({ signal: controller.signal }), /closed|aborted/);
+      if (ending === 'abort') controller.abort();
+      else await session.close();
+      await capture;
+      await assert.rejects(session.client.capture(), /closed/);
+      assert.equal(session.diagnostics().pending, 0);
+    } finally { await session.close(); }
+  });
+}
+
 for (const mode of ['attachment-change', 'attachment-empty']) {
   test(`${mode} rejects outstanding requests and releases the child`, { timeout: 10000 }, async () => {
     const session = await createMoonBitSession(opts(mode, { protocol: 'window-attach' }));

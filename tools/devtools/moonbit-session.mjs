@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { validate_response, validate_request, new_response_framer, clear_response_framer, append_response_text, response_framing_error, finish_response_framer } from '../../_build/js/release/build/tools/session_wire/session_wire.js';
 
 import { new_session_policy, session_admission_error, allocate_session_id, track_session_request, consume_session_response, close_session_policy, accept_attachment_identity } from '../../_build/js/release/build/tools/session_wire/session_wire.js';
+import { begin_session_capture, finish_session_capture } from '../../_build/js/release/build/tools/session_wire/session_wire.js';
 const MAX_STDERR = 16 * 1024;
 
 export async function createMoonBitSession(options = {}) {
@@ -30,7 +31,6 @@ export async function createMoonBitSession(options = {}) {
   let fatalError;
   let closing = false;
   let closePromise;
-  let captureBusy = false;
   let readyResolve;
   let readyReject;
   const ready = new Promise((resolve, reject) => { readyResolve = resolve; readyReject = reject; });
@@ -163,13 +163,13 @@ export async function createMoonBitSession(options = {}) {
     return envelope.response;
   }
   async function capture({ expected_revision, signal } = {}) {
-    if (captureBusy) throw new Error('native session capture already in progress');
-    captureBusy = true;
+    const captureError = begin_session_capture(policy);
+    if (captureError) throw new Error(captureError);
     try {
       const value = await requestEnvelope('capture', { expected_revision }, { signal });
       if (!value.image || value.image.mimeType !== 'image/png' || typeof value.image.data !== 'string' || value.image.data.length === 0) throw new Error('native session capture has no valid image');
       return { response: value.response, image: value.image };
-    } finally { captureBusy = false; }
+    } finally { finish_session_capture(policy); }
   }
   async function close() {
     if (closePromise) return closePromise;

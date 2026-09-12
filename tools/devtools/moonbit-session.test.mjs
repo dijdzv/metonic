@@ -37,6 +37,9 @@ test('capture is exclusive and returns a PNG image', async () => {
     const captured = await first;
     assert.equal(captured.image.mimeType, 'image/png');
     assert.ok(captured.image.data.length > 0);
+    const next = await session.client.capture();
+    assert.equal(next.image.mimeType, 'image/png');
+    assert.ok(next.image.data.length > 0);
   } finally { await session.close(); }
 });
 
