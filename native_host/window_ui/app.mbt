@@ -27,6 +27,7 @@ priv enum Event {
   CompositionUpdate(String, Int?)
   CompositionCancel
   Backspace
+  Delete
   StartUpdate
   LoadUser(String)
   UserLoaded(Int, Result[String, String])
@@ -186,6 +187,7 @@ pub impl @windows.ApplicationHandler for App with fn window_event(
             self.queue(LoadUser(self.model.query()))
           @core.Key::Named(@core.NamedKey::F6) => self.queue(CancelUpdate)
           @core.Key::Named(@core.NamedKey::Backspace) => self.queue(Backspace)
+          @core.Key::Named(@core.NamedKey::Delete) => self.queue(Delete)
           @core.Key::Named(@core.NamedKey::ArrowLeft) =>
             self.queue(Navigate(false, self.shift_pressed))
           @core.Key::Named(@core.NamedKey::ArrowRight) =>
@@ -270,7 +272,8 @@ fn App::draw(self : App) -> Unit raise Error {
         self.model.view()
       }
       let width = view.editor.bounds.width
-      let query_active_caret = if view.query.focused && self.composition is Some(_) {
+      let query_active_caret = if view.query.focused &&
+        self.composition is Some(_) {
         self.input_node().selection_start + self.preedit_cursor
       } else {
         @semantics.caret(@semantics.snapshot(self.model.editor)[5])
@@ -309,7 +312,8 @@ fn App::draw(self : App) -> Unit raise Error {
           )
         }
         if view.query.focused {
-          if @raster.caret_position(query_engine, query_active_caret) is Some((x, _)) {
+          if @raster.caret_position(query_engine, query_active_caret)
+            is Some((x, _)) {
             if x < self.query_scroll {
               self.query_scroll = x.max(0)
             } else if x >= self.query_scroll + query_width {
@@ -847,13 +851,24 @@ async fn run_loop(
               )
               app.draw()
             }
-            Backspace if app.composition is Some(_) || !app.input_node().focused =>
-              ()
+            Backspace | Delete if app.composition is Some(_) ||
+              !app.input_node().focused => ()
             Backspace => {
               let reference = app.input_node().reference
               require(
                 @semantics.delete_backward(app.model.editor, reference) == "",
                 "backspace rejected",
+              )
+              app.draw()
+            }
+            Delete => {
+              require(
+                @semantics.delete_forward(
+                  app.model.editor,
+                  app.input_node().reference,
+                ) ==
+                "",
+                "forward deletion rejected",
               )
               app.draw()
             }

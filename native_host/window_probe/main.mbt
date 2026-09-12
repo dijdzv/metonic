@@ -1,6 +1,15 @@
 ///|
 async fn main {
   let mode = @env.get_env_var("METONIC_WINDOW_INIT_TEST").unwrap_or("normal")
+  if mode == "delete" {
+    let scenario : DeleteScenario = { stage: 0, keys: 0, }
+    @ui.run(
+      observer=Some(view => scenario.step(view)),
+      completed=Some(_ => assert_eq(scenario.stage, 9)),
+      hidden=true,
+    )
+    return
+  }
   if mode == "query" || mode == "query-latin" {
     let scenario : QueryScenario = {
       stage: 0,
