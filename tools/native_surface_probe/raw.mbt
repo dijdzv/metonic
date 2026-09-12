@@ -73,6 +73,9 @@ async fn raw_probe() -> Unit raise Error {
   )
   let device = adapter.request_device_sync(instance)
   let queue = device.queue()
+  if @env.get_env_var("METONIC_RETAINED_FRAME_PROBE") == Some("1") {
+    retained_frame_probe(instance, surface, adapter, device, queue)
+  }
   raw_draw(surface, adapter, device, queue)
   surface.unconfigure()
   queue.release()
@@ -94,6 +97,9 @@ async fn raw_probe() -> Unit raise Error {
   )
   let device2 = adapter2.request_device_sync(instance)
   let queue2 = device2.queue()
+  if @env.get_env_var("METONIC_RETAINED_FRAME_PROBE") == Some("1") {
+    retained_frame_probe(instance, surface, adapter2, device2, queue2)
+  }
   raw_draw(surface, adapter2, device2, queue2)
   surface.unconfigure()
   queue2.release()

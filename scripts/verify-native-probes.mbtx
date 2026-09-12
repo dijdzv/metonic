@@ -252,9 +252,16 @@ async fn run_probe(
 ) -> Unit raise Error {
   let fallback = if mode == "fallback" { "1" } else { "0" }
   let raw_surface = kind == "surface" &&
-    @env.get_env_var("METONIC_SURFACE_RAW") == Some("1")
+    (
+      case_name == "retained" ||
+      @env.get_env_var("METONIC_SURFACE_RAW") == Some("1")
+    )
   let fresh_surface = kind == "surface" &&
-    (!raw_surface || @env.get_env_var("METONIC_SURFACE_FRESH") == Some("1"))
+    (
+      !raw_surface ||
+      case_name == "retained" ||
+      @env.get_env_var("METONIC_SURFACE_FRESH") == Some("1")
+    )
   let executable = if kind == "async" {
     root +
     "/.work/native-host-build/native/debug/build/local/native_host/async_app/async_app.exe"
@@ -299,6 +306,11 @@ async fn run_probe(
           env_map.set("METONIC_WINDOW_TEST", "1")
           env_map.set("METONIC_WINDOW_INIT_TEST", case_name)
           env_map.set("METONIC_GPU_FALLBACK", fallback)
+          if kind == "surface" && case_name == "retained" {
+            env_map.set("METONIC_SURFACE_RAW", "1")
+            env_map.set("METONIC_SURFACE_FRESH", "1")
+            env_map.set("METONIC_RETAINED_FRAME_PROBE", "1")
+          }
           let received = Ref(0)
           let mut query_server_task : @async.Task[Unit]? = None
           let query_case = case_name == "query" || case_name == "query-latin"
@@ -432,7 +444,9 @@ async fn run_probe(
     "initCase": Json::string(case_name),
     "scope": Json::string(
       if kind == "surface" {
-        if raw_surface {
+        if case_name == "retained" {
+          "retained red surface pixels after blue submission, resize and unconfigure across two fresh generations; not display completion"
+        } else if raw_surface {
           "raw clear/present across device replacement; no renderer, resize or input coverage"
         } else {
           "hidden surface initial, resize, and three fresh renderer generations with close checks; not visible UI or desktop automation"
@@ -491,6 +505,15 @@ async fn run_probe(
     require(remaining == Some(0), "window remaining marker")
   }
   require(exit_code == Some(0), kind + " exit")
+  if kind == "surface" && case_name == "retained" {
+    require(
+      exact_line_count(
+        stdout, "RETAINED_SURFACE_PIXELS_OK red_after_blue_resize_unconfigure",
+      ) ==
+      2,
+      "both surface generations must retain the first frame pixels",
+    )
+  }
   require(!stdout.contains("FAILED"), kind + " FAILED marker")
   require(
     exact_line(
@@ -521,6 +544,12 @@ async fn run_probe(
     ),
     kind + " success marker",
   )
+  if kind == "window" && case_name == "capture" {
+    require(
+      exact_line_count(stdout, "WINDOW_RETAINED_FRAME_OK") == 1,
+      "retained frame success marker count",
+    )
+  }
   if kind == "async" {
     require(
       exact_line_count(stdout, "NATIVE_ASYNC_OK") == 1,
@@ -577,6 +606,8 @@ async fn main {
         [
           "normal", "input", "close", "capture", "query", "query-latin", "delete",
         ]
+      } else if kind == "surface" {
+        ["normal", "retained"]
       } else {
         ["normal"]
       }

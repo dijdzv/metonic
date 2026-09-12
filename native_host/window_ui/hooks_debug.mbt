@@ -217,6 +217,9 @@ fn Hooks::notify(
   phase : Lifecycle,
   app : App,
 ) -> Bool raise Error {
+  if phase is Ready && self.controller is Some(_) {
+    ignore(app.renderer.unwrap().enable_frame_retention())
+  }
   match self.lifecycle {
     Some(notify) => notify(phase, app.observation())
     None => true

@@ -17,6 +17,7 @@ pub struct SurfaceRenderer {
   mut poisoned : Bool
   mut text_layers : Array[SurfaceText]
   readbacks : Map[Int, ReadbackTicket]
+  retention : FrameRetention
 }
 
 ///|
@@ -58,12 +59,13 @@ pub async fn SurfaceRenderer::new(
   errdefer device.release()
   let queue = device.queue()
   errdefer queue.release()
+  let retention = FrameRetention::new(kept_surface, adapter)
   let format = kept_surface.configure_default(
     adapter,
     device,
     640U,
     360U,
-    @wgpu.TextureUsage::from_u64(@wgpu.TEXTURE_USAGE_RENDER_ATTACHMENT),
+    retention.usage(),
   )
   if format.to_u32() == 0U {
     kept_surface.unconfigure()
@@ -106,6 +108,7 @@ pub async fn SurfaceRenderer::new(
     poisoned: false,
     text_layers: [],
     readbacks: Map([]),
+    retention,
   }
 }
 
@@ -120,7 +123,7 @@ fn SurfaceRenderer::configure(
     self.device,
     width,
     height,
-    @wgpu.TextureUsage::from_u64(@wgpu.TEXTURE_USAGE_RENDER_ATTACHMENT),
+    self.retention.usage(),
   )
   if format.to_u32() == 0U || format != self.format {
     self.poisoned = true
@@ -128,6 +131,7 @@ fn SurfaceRenderer::configure(
   }
   self.width = width
   self.height = height
+  self.retention.reconfigured()
 }
 
 ///|
@@ -170,6 +174,7 @@ pub fn SurfaceRenderer::present(
   rw : Int,
   rh : Int,
   active : Int,
+  display_scale? : Double? = None,
 ) -> Unit raise Error {
   if self.closed {
     raise SurfaceRendererClosed
@@ -225,10 +230,21 @@ pub fn SurfaceRenderer::present(
   defer encoder.release()
   let pass = encoder.begin_render_pass_color(view)
   self.draw_pass(pass)
+  let retained = self.retention.copy(
+    self.device,
+    encoder,
+    texture,
+    width_u,
+    height_u,
+    self.format,
+    display_scale,
+  )
+  defer retained.close()
   let command = encoder.finish()
   defer command.release()
   self.queue.submit_one(command)
   self.surface.present_or_raise()
+  self.retention.publish(retained)
 }
 
 ///|
@@ -258,6 +274,7 @@ pub fn SurfaceRenderer::close(self : SurfaceRenderer) -> Unit {
     text.pool.release()
   }
   self.text_layers = []
+  self.retention.close()
   self.surface.unconfigure()
   self.pool.release()
   self.queue.release()

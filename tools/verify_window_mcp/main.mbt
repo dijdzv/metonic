@@ -130,6 +130,8 @@ struct State {
   session_id : String
   task_status : Int
   rpc_result : String
+  retained_frame_id : String
+  frame_scope : String
 } derive(FromJson)
 
 ///|
@@ -270,6 +272,39 @@ pub fn verify(client : Client) -> @js_async.Promise[String] {
       "arguments": {},
     })
     assert_eq(canceled.task_status, 4)
+    let retained_request : Json = {
+      "name": "window_capture_retained",
+      "arguments": {
+        "frame_id": canceled.retained_frame_id,
+        "frame_scope": canceled.frame_scope,
+      },
+    }
+    let retained_reply : ImageReply = @json.from_json(
+      @json.parse(call(client, retained_request.stringify()).wait()),
+    )
+    assert_eq(retained_reply.content[1].mimeType, Some("image/png"))
+    let retained_pixels = @image.decode_png(
+      @base64.decode(retained_reply.content[1].data.unwrap()),
+    )
+    assert_eq(retained_pixels.width, 640)
+    assert_eq(retained_pixels.height, 360)
+    let metadata = @json.parse(retained_reply.content[2].text.unwrap())
+    guard metadata is Object(fields) else {
+      fail("missing retained image metadata")
+    }
+    assert_eq(
+      fields.get("frame_scope"),
+      Some(Json::string(canceled.frame_scope)),
+    )
+    assert_eq(
+      fields.get("frame_id"),
+      Some(Json::string(canceled.retained_frame_id)),
+    )
+    assert_eq(fields.get("source"), Some(Json::string("retained_surface_copy")))
+    assert_eq(
+      fields.get("display_completion_confirmed"),
+      Some(Json::boolean(false)),
+    )
     let capture_request : Json = { "name": "window_capture", "arguments": {} }
     let captured : ImageReply = @json.from_json(
       @json.parse(call(client, capture_request.stringify()).wait()),
@@ -356,6 +391,7 @@ pub fn verify(client : Client) -> @js_async.Promise[String] {
 struct ImageContent {
   data : String?
   mimeType : String?
+  text : String?
 } derive(FromJson)
 
 ///|

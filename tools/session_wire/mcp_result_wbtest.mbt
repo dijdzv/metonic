@@ -39,6 +39,7 @@ test "window MCP separates image bytes from state and retains image metadata" {
       "height": 4,
       "frame": 42,
       "source": "offscreen",
+      "display_scale": 1.5,
     },
   }
   let result = @json.parse(window_mcp_result("session", state.stringify()))
@@ -54,7 +55,14 @@ test "window MCP separates image bytes from state and retains image metadata" {
   )
   assert_eq(
     @json.parse(@json.from_json(field(content[2], "text"))),
-    ({ "width": 3, "height": 4, "frame": 42, "source": "offscreen" } : Json),
+    (
+      {
+        "width": 3,
+        "height": 4,
+        "frame": 42,
+        "source": "offscreen",
+        "display_scale": 1.5,
+      } : Json),
   )
 }
 

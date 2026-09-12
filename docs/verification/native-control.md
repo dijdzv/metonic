@@ -160,6 +160,49 @@ directories to be empty after normal EOF or graceful cancellation. EOF also
 requires exit code zero. Each case is bounded by a timeout. This exercises the
 async library's Windows cancellation path, not every terminal or OS shutdown event.
 
+## Retained integrated surface copies
+
+The development window protocol exposes `retained_frame_id` and `frame_scope`
+in snapshots. Pass both to `capture_retained` (`frame_id` is the snapshot's
+`retained_frame_id`). MCP exposes the same operation as
+`window_capture_retained`. IDs are decimal strings to preserve Int64 precision
+across JavaScript clients. The scope belongs to the running development app;
+an attachment reconnect retains it, while another app start obtains a new scope.
+
+The renderer keeps the latest two surface copies taken before Present. The
+returned PNG identifies its frame, configuration generation, physical pixel
+dimensions, scope and `display_scale`. The integrated window records the window
+API's scale at draw time; renderers without a window may leave it null. A later
+edit does not redraw that image. `source: retained_surface_copy`
+and `display_completion_confirmed: false` distinguish this path from actual
+display feedback. The enclosing response describes current application state;
+it is not a historical semantic snapshot of the retained image. Existing
+`capture` continues to use its shared offscreen pass.
+
+An unmatched scope returns `stale_frame_scope`. Invalid, future and evicted IDs
+return `invalid_frame`, `frame_not_submitted` and `frame_evicted`, respectively.
+The surface must support COPY_SRC; otherwise retention is unavailable. Copies
+are development-only and released on eviction or renderer close.
+
+`native:window` checks preserved pixels, eviction, specific ID errors, recovery
+and an actual hidden-window resize from 640x360 to 800x480 with new generation
+and image dimensions. It also cancels an outstanding Handle capture request and
+checks that a subsequent capture of the same frame still returns identical pixels.
+This does not pin cancellation to a particular GPU mapping phase.
+`native:window-control` checks wire retrieval after an edit and scope
+rejection on both adapters. `native:window-mcp` decodes the retained PNG and
+checks its identity metadata. `native:window-attach` verifies CLI retrieval after
+disconnect/reconnect and rejection of a previous app start's scope.
+The production-exclusion verifier uses development
+generated code as a positive control for retained image and capture code.
+The control verifier additionally stops draining a retained PNG response after
+its first byte, queues an edit and closes the owned hidden window. It requires
+exit within two seconds, an incomplete response followed by EOF, no later reply
+and rejection of subsequent input. This checks response backpressure shutdown;
+it does not prove that an already applied action was rolled back.
+These tests do not establish display-completion feedback, physical IME input,
+or cross-monitor DPI/scale acceptance.
+
 ## Boundaries
 
 This is an offscreen, dedicated child-process probe. It does not attach to existing

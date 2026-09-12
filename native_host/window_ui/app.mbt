@@ -396,6 +396,7 @@ fn App::draw(self : App) -> Unit raise Error {
         @scene.field(self.model.scene, 2),
         @scene.field(self.model.scene, 3),
         @scene.field(self.model.scene, 4),
+        display_scale=self.window.map(window => window.scale_factor()),
       )
       self.diagnostics.presented()
     }
