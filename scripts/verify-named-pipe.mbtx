@@ -69,15 +69,24 @@ async fn main {
     guard @fs.exists(source + "/src/internal/event_loop/pipe_accept_wbtest.mbt") else {
       abort("named-pipe test patch was not applied")
     }
-    let output = run(".tools/moonbit/bin/moon.exe", [
-      "-C", source, "test", "src/internal/event_loop", "--target", "native", "--filter",
-      "*pipe*",
-    ])
-    @fs.write_file(".work/named-pipe-verification.log", output)
-    guard output.contains("Total tests: 5, passed: 5, failed: 0.") else {
-      abort(
-        "expected five passing named-pipe tests; inspect .work/named-pipe-verification.log",
-      )
+    let outputs : Array[String] = []
+    // Earlier cases leave runtime workers alive and can contaminate process-wide
+    // handle measurements even when the pipe itself releases its resources.
+    for
+      name in [
+        "pending pipe accept cancellation allows another accept", "pipe denies restricted token then accepts normal user",
+        "pipe cancellation and close release endpoint and handles", "pipe accepts early and delayed clients and transfers both ways",
+        "pipe reconnects after disconnect and recovers from cancelled read",
+      ] {
+      let output = run(".tools/moonbit/bin/moon.exe", [
+        "-C", source, "test", "src/internal/event_loop", "--target", "native", "--filter",
+        name,
+      ])
+      outputs.push(name + "\n" + output)
+      @fs.write_file(".work/named-pipe-verification.log", outputs.join("\n"))
+      guard output.contains("Total tests: 1, passed: 1, failed: 0.") else {
+        abort("expected exactly one passing named-pipe case: " + name)
+      }
     }
     let public_output = run(".tools/moonbit/bin/moon.exe", [
       "-C", source, "test", "src/named_pipe", "--target", "native", "--filter", "*public Windows pipe*",

@@ -22,6 +22,7 @@ priv enum Event {
   Resize(@dpi.PhysicalSize)
   Input(@scene.Action)
   Commit(String)
+  Enter
   CompositionStart
   CompositionUpdate(String, Int?)
   CompositionCancel
@@ -192,7 +193,7 @@ pub impl @windows.ApplicationHandler for App with fn window_event(
             self.queue(Input(Move(0, -10)))
           @core.Key::Named(@core.NamedKey::ArrowDown) =>
             self.queue(Input(Move(0, 10)))
-          @core.Key::Named(@core.NamedKey::Enter) => self.queue(Input(Activate))
+          @core.Key::Named(@core.NamedKey::Enter) => self.queue(Enter)
           @core.Key::Character(" ") => self.queue(Input(Activate))
           _ => ()
         }
@@ -543,7 +544,19 @@ async fn run_loop(
           }
         }
         while !app.closed && app.events.try_get() is Some(event) {
+          let event = match event {
+            Enter if app.composition is None => {
+              let node = app.input_node()
+              if node.focused && node.reference != app.model.query_input {
+                Commit("\n")
+              } else {
+                Input(Activate)
+              }
+            }
+            _ => event
+          }
           match event {
+            Enter => ()
             Development(request) => app.dispatch_development(request)
             Accessibility(_) if app.composition is Some(_) => ()
             Accessibility(request) => {
