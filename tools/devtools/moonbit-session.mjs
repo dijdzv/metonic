@@ -7,6 +7,7 @@ import { validate_response, validate_request, new_response_framer, clear_respons
 import { new_session_policy, session_admission_error, allocate_session_id, track_session_request, consume_session_response, close_session_policy, accept_attachment_identity } from '../../_build/js/release/build/tools/session_wire/session_wire.js';
 import { begin_session_capture, finish_session_capture } from '../../_build/js/release/build/tools/session_wire/session_wire.js';
 const MAX_STDERR = 16 * 1024;
+const MAX_TIMEOUT_MS = 2147483647;
 
 export async function createMoonBitSession(options = {}) {
   const attached = options.protocol === 'window-attach';
@@ -20,8 +21,7 @@ export async function createMoonBitSession(options = {}) {
   const requestTimeoutMs = options.requestTimeoutMs ?? 15000;
   const closeTimeoutMs = options.closeTimeoutMs ?? 2000;
   if (!path.isAbsolute(executable) || !Array.isArray(args) || !args.every(arg => typeof arg === 'string') ||
-      !Number.isFinite(readyTimeoutMs) || readyTimeoutMs <= 0 || !Number.isFinite(requestTimeoutMs) || requestTimeoutMs <= 0 ||
-      !Number.isFinite(closeTimeoutMs) || closeTimeoutMs <= 0) throw new Error('invalid MoonBit session launch options');
+      ![readyTimeoutMs, requestTimeoutMs, closeTimeoutMs].every(ms => Number.isFinite(ms) && ms > 0 && ms <= MAX_TIMEOUT_MS)) throw new Error('invalid MoonBit session launch options');
   const child = spawn(executable, args, { cwd: repo, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
   const pending = new Map();
   const decoder = new TextDecoder('utf-8', { fatal: true });
