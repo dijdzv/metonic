@@ -134,5 +134,5 @@ windows, produce semantic node references, test Windows IPC ACLs, or establish
 nonblocking UI-thread scheduling. Production accessibility and exclusion of the
 development composition still require paired artifact tests. Cancellation ends
 the session; it cannot prove that an already submitted action was never applied.
-The local pre-commit gate runs these checks. Automatic PR/push CI does not repeat
+The local pre-push runtime gate runs these checks. Automatic PR/push CI does not repeat
 the same verification; manual dispatch remains available for hosted diagnosis.

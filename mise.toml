@@ -200,6 +200,10 @@ run = [
   '.\\.tools\\moonbit\\bin\\moonrun.exe _build/wasm/release/build/tools/verify_native_headless/verify_native_headless.wasm',
 ]
 
+[tasks."native:headless-integration"]
+description = "Verify headless control, MCP, sessions, semantics and CLI with shared prerequisites"
+run = 'mise run --jobs 1 native:headless ::: native:control ::: native:mcp-test ::: native:session-test ::: native:semantics ::: native:client-test ::: native:cli-test'
+
 [tasks."native:session-build"]
 depends = ["devtools:wire-build"]
 run = '.\\.tools\\moonbit\\bin\\moon.exe build tools/native_session --target wasm --release --frozen --deny-warn'
@@ -216,7 +220,7 @@ run = '.\\.tools\\moonbit\\bin\\moon.exe build tools/control_fixture --target wa
 
 [tasks."devtools:test"]
 depends = ["native:build", "native:session-build", "devtools:fixture-build"]
-run = "node --test tools/devtools/moonbit-session.test.mjs tools/devtools/session-failure.test.mjs"
+run = "node --test tools/devtools/moonbit-session.test.mjs tools/devtools/session-failure.test.mjs tools/devtools/mcp-result.test.mjs"
 
 [tasks."devtools:fixture-build"]
 run = '.\\.tools\\moonbit\\bin\\moon.exe build tools/session_fixture --target wasm --release --frozen --deny-warn'
@@ -269,6 +273,10 @@ env = { METONIC_NATIVE_BUILD = "release-probe" }
 [tasks."native:release-lifecycle"]
 depends = ["native:release-probe-build"]
 run = '.\\.work\\native-host-build\\native\\debug\\build\\local\\native_host\\release_probe\\release_probe.exe'
+
+[tasks."native:production-integration"]
+description = "Verify production lifecycle and accessibility with shared build prerequisites"
+run = 'mise run --jobs 1 native:release-lifecycle ::: native:accessibility ::: native:mailbox ::: native:sdk-mailbox'
 
 [tasks."native:accessibility-probe-build"]
 depends = ["native:window-release-build"]

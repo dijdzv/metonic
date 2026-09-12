@@ -72,7 +72,7 @@ render again and leave no pending initialization tickets.
 
 This validates deliberate renderer replacement with a live HWND. It does not
 inject GPU loss, verify on-screen pixels or establish a responsive event loop
-during initialization. The normal pre-commit gate forces raw mode off so a
+during initialization. The normal pre-push runtime gate forces raw mode off so a
 diagnostic environment setting cannot substitute the smaller raw probe.
 
 The [native manifest](https://github.com/gfx-rs/wgpu-native/blob/v29.0.1.1/Cargo.toml)

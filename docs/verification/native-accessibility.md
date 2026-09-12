@@ -7,7 +7,7 @@ and a real loopback HTTP server under a 65-second deadline. The window is visibl
 briefly. The client selects
 only the supervisor's child PID; it does not inspect other applications.
 
-The normal pre-commit gate includes this check. No automatic PR/push CI is added.
+The normal pre-push runtime gate includes this check. No automatic PR/push CI is added.
 The optional [presentation check](native-presentation.md) captures the same owned
 window through the official winapp CLI and checks color transitions separately
 from UIA state.
@@ -148,7 +148,7 @@ proves the mailbox boundary under the fixture's schedule, not actual SDK
 provider destruction or application-state mutation during a physical close.
 The fixture is a separate build target; generated production code and link
 inputs exclude it, with the fixture artifact as a positive control. The task
-is part of pre-commit. The SDK and application checks below cover the subsequent boundaries.
+is part of the pre-push runtime gate. The SDK and application checks below cover the subsequent boundaries.
 
 `mise run native:sdk-mailbox` adds a real-SDK control. Its dedicated executable
 creates its own windows and uses the installed AccessKit DLL and UIA Invoke

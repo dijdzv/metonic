@@ -51,38 +51,17 @@ async fn fingerprint(config_file : String) -> Json {
   }
   paths.sort()
   let inputs : Array[Json] = []
-  let mut offset = 0
-  while offset < paths.length() {
-    let arguments = ["hash-object", "--no-filters", "--"]
-    let batch : Array[String] = []
-    let mut argument_units = 64
-    while offset < paths.length() {
-      let filename = paths[offset]
-      // Leave room for Windows argument quoting and the executable path.
-      let cost = filename.length() * 2 + 3
-      if !batch.is_empty() && argument_units + cost > 16000 {
-        break
-      }
-      batch.push(filename)
-      arguments.push(filename)
-      argument_units = argument_units + cost
-      offset = offset + 1
-    }
-    let (code, output, _) = @process.collect_output(
-      "git",
-      arguments,
-      no_console_window=true,
-    )
-    assert_eq(code, 0, msg="failed to fingerprint verification input")
-    let hashes = output.text().trim().split("\n").to_array()
-    assert_eq(hashes.length(), batch.length(), msg="incomplete Git hash output")
-    for index = 0; index < batch.length(); index = index + 1 {
+  if !paths.is_empty() {
+    let output = hash_input_paths(paths)
+    let hashes = output.trim().split("\n").to_array()
+    assert_eq(hashes.length(), paths.length(), msg="incomplete Git hash output")
+    for index = 0; index < paths.length(); index = index + 1 {
       let hash = hashes[index].trim().to_owned()
       assert_true(
         hash.length() == 40 || hash.length() == 64,
         msg="unexpected Git hash",
       )
-      inputs.push({ "path": batch[index], "blob": hash })
+      inputs.push({ "path": paths[index], "blob": hash })
     }
   }
   let keys = context.keys().collect()
@@ -135,4 +114,38 @@ async fn fingerprint(config_file : String) -> Json {
     "context": fields,
     "environment": environment,
   }
+}
+
+///|
+async fn hash_input_paths(paths : Array[String]) -> String {
+  @async.with_task_group(async fn(group) {
+    let (stdin, writer) = @process.write_to_process()
+    defer writer.close()
+    group.spawn_bg(async fn() {
+      for path in paths {
+        writer.write(git_input_path(path) + "\n")
+      }
+      writer.close()
+    })
+    let (code, output, _) = @process.collect_output(
+      "git",
+      ["hash-object", "--stdin-paths", "--no-filters"],
+      stdin~,
+      no_console_window=true,
+    )
+    assert_eq(code, 0, msg="failed to fingerprint verification input")
+    output.text()
+  })
+}
+
+///|
+fn git_input_path(path : String) -> String {
+  "\"" +
+  path
+  .replace_all(old="\\", new="\\\\")
+  .replace_all(old="\"", new="\\\"")
+  .replace_all(old="\n", new="\\n")
+  .replace_all(old="\r", new="\\r")
+  .replace_all(old="\t", new="\\t") +
+  "\""
 }

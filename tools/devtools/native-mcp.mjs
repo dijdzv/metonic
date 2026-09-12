@@ -2,20 +2,20 @@ import { McpServer } from '@modelcontextprotocol/server';
 import { serveStdio } from '@modelcontextprotocol/server/stdio';
 import { z } from 'zod/v4';
 import { createMoonBitSession } from './moonbit-session.mjs';
+import { native_mcp_result, native_mcp_failure } from '../../_build/js/release/build/tools/session_wire/session_wire.js';
 
 const session = await createMoonBitSession();
 const sessionId = session.client.session;
 let handle;
 let closePromise;
 
-function result(response, extra = {}) {
-  const text = JSON.stringify({ session_id: sessionId, ...response });
-  return { content: [{ type: 'text', text }], isError: response?.ok === false, ...extra };
+function result(response, image) {
+  return JSON.parse(native_mcp_result(sessionId, JSON.stringify(response), image === undefined ? '' : JSON.stringify(image)));
 }
 
 function failure(error) {
   const message = error instanceof Error ? error.message : String(error);
-  return { content: [{ type: 'text', text: JSON.stringify({ session_id: sessionId, ok: false, error: message }) }], isError: true };
+  return JSON.parse(native_mcp_failure(sessionId, message));
 }
 
 function nativeResponse(value) {
@@ -67,7 +67,7 @@ function factory() {
       const captured = await session.client.capture({ expected_revision, signal: ctx.mcpReq.signal });
       const response = captured.response ?? captured;
       const image = captured.image;
-      return result(response, { content: [{ type: 'text', text: JSON.stringify({ session_id: sessionId, ...response }) }, { type: 'image', data: image.data, mimeType: image.mimeType || 'image/png' }] });
+      return result(response, image);
     } catch (error) { return failure(error); }
   });
   return server;
