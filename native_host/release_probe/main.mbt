@@ -25,20 +25,41 @@ extern "C" fn is_window(hwnd : UInt64) -> Int = "IsWindow"
 extern "C" fn visible(hwnd : UInt64) -> Int = "IsWindowVisible"
 
 ///|
-fn owned_window(pid : Int) -> UInt64 {
+extern "C" fn window_title_length(hwnd : UInt64) -> Int = "GetWindowTextLengthW"
+
+///|
+#borrow(text)
+extern "C" fn window_title(
+  hwnd : UInt64,
+  text : FixedArray[Byte],
+  capacity : Int,
+) -> Int = "GetWindowTextW"
+
+///|
+fn owned_window(pid : Int) -> UInt64 raise {
   let owner = FixedArray::make(1, 0)
+  let title = FixedArray::make(16, b'\x00')
+  let expected : FixedArray[Byte] = [
+    b'M', 0, b'e', 0, b't', 0, b'o', 0, b'n', 0, b'i', 0, b'c', 0, 0, 0,
+  ]
+  let mut selected = 0UL
   let mut cursor = 0UL
   for _ in 0..<4096 {
     cursor = next_window(0UL, cursor, 0UL, 0UL)
     if cursor == 0UL {
-      return 0UL
+      return selected
     }
-    ignore(window_pid(cursor, owner))
-    if owner[0] == pid && visible(cursor) != 0 {
-      return cursor
+    if window_pid(cursor, owner) != 0U &&
+      owner[0] == pid &&
+      visible(cursor) != 0 &&
+      window_title_length(cursor) == 7 &&
+      window_title(cursor, title, 8) == 7 &&
+      title == expected {
+      guard selected == 0UL else { fail("multiple owned Metonic windows") }
+      selected = cursor
     }
   }
-  0UL
+  fail("owned window enumeration exceeded its bound")
 }
 
 ///|
@@ -56,6 +77,30 @@ async fn verify_close(system_key : Bool) -> Unit raise Error {
         cancel_handler=@process.hard_cancel(),
       )
       let mut hwnd = 0UL
+      let mut stage = "waiting-window"
+      let mut completed = false
+      defer (if !completed {
+        let process = match child.try_wait() {
+          Some(code) => code.to_string()
+          None => "running"
+        }
+        println(
+          "WINDOW_RELEASE_CLOSE_FAILURE system_key=" +
+          system_key.to_string() +
+          " stage=" +
+          stage +
+          " pid=" +
+          child.pid.to_string() +
+          " hwnd=" +
+          hwnd.to_string() +
+          " window=" +
+          is_window(hwnd).to_string() +
+          " visible=" +
+          visible(hwnd).to_string() +
+          " process=" +
+          process,
+        )
+      })
       while hwnd == 0UL {
         guard child.try_wait() is None else {
           fail("production host exited before creating a window")
@@ -63,10 +108,12 @@ async fn verify_close(system_key : Bool) -> Unit raise Error {
         hwnd = owned_window(child.pid)
         @async.sleep(20)
       }
+      stage = "initialization-delay"
       @async.sleep(500)
       guard child.try_wait() is None else {
         fail("production host exited during initialization")
       }
+      stage = "posting-close"
       let sent = if system_key {
         println("WINDOW_RELEASE_SYSTEM_KEY_CLOSE_BEGIN")
         post(hwnd, 0x0104U, 0x73UL, 0x203e0001L)
@@ -74,12 +121,15 @@ async fn verify_close(system_key : Bool) -> Unit raise Error {
         post(hwnd, 0x0010U, 0UL, 0L)
       }
       guard sent != 0 else { fail("production close request failed") }
+      stage = "waiting-process-exit"
       guard child.wait() == 0 else {
         fail("production host failed during shutdown")
       }
+      stage = "checking-window-destruction"
       guard is_window(hwnd) == 0 else {
         fail("production window survived shutdown")
       }
+      completed = true
       println(
         if system_key {
           "WINDOW_RELEASE_SYSTEM_KEY_CLOSE_OK"
