@@ -102,6 +102,54 @@ async fn verify_composition_presentation(host : BrowserHost) -> Unit {
       "composition cancellation did not restore pixels " + selector,
     )
     ignore(
+      command(host, {
+        "op": "fill",
+        "selector": selector,
+        "value": "あうえお",
+      }),
+    )
+    ignore(
+      command(host, {
+        "op": "input-event",
+        "selector": selector,
+        "type": "select",
+        "start": 1,
+        "end": 1,
+      }),
+    )
+    let existing = navigation_pixels(host, query, prefix + "existing")
+    ignore(
+      command(host, {
+        "op": "input-event",
+        "selector": selector,
+        "type": "compositionstart",
+      }),
+    )
+    ignore(
+      command(host, {
+        "op": "input-event",
+        "selector": selector,
+        "type": "compositionupdate",
+        "data": "あ",
+      }),
+    )
+    require(
+      navigation_pixels(host, query, prefix + "existing-preedit") == existing,
+      "existing-text composition duplicated text or guessed a range " + selector,
+    )
+    ignore(
+      command(host, {
+        "op": "input-event",
+        "selector": selector,
+        "type": "compositionend",
+        "data": "あ",
+      }),
+    )
+    require(
+      navigation_pixels(host, query, prefix + "existing-committed") == existing,
+      "existing-text composition changed text on commit " + selector,
+    )
+    ignore(
       command(host, { "op": "fill", "selector": selector, "value": original }),
     )
   }

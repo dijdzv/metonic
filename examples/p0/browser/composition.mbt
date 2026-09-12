@@ -62,3 +62,33 @@ pub fn input_cursor(query : Bool, value : String, cursor : Int) -> Int {
   geometry.val = Some((start, end, caret))
   1
 }
+
+///|
+pub fn input_dom_preview(query : Bool, value : String, cursor : Int) -> Int {
+  let composition = if query {
+    query_composition.val
+  } else {
+    editor_composition.val
+  }
+  guard value.length() <= 1024 &&
+    @text_position.utf16_to_scalar(value, value.length()) is Some(_) &&
+    @text_position.utf16_to_scalar(value, cursor) is Some(_) &&
+    composition is Some(composition) &&
+    composition.preview("") is Some(_) else {
+    return 0
+  }
+  if input_cursor(query, value, cursor) == 1 {
+    return 1
+  }
+  // A DOM selection does not identify an existing-text composition range.
+  // Guessing that range from repeated characters can duplicate or erase text.
+  let preview = if query { query_preview } else { editor_preview }
+  let geometry = if query {
+    query_preedit_geometry
+  } else {
+    editor_preedit_geometry
+  }
+  preview.val = Some(value)
+  geometry.val = Some((cursor, cursor, cursor))
+  1
+}

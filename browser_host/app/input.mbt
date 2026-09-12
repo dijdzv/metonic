@@ -60,6 +60,8 @@ priv struct InputState {
   query : Bool
   mut composing : Bool
   mut stopped : Bool
+  mut preedit : String
+  mut frame : UInt?
 }
 
 ///|
@@ -92,7 +94,8 @@ fn InputState::sync(self : InputState) -> Unit {
     return
   }
   if self.composing {
-    if @app.input_cursor(
+    ignore(@app.input_preedit(self.query, self.preedit))
+    if @app.input_dom_preview(
         self.query,
         self.element.value(),
         if backward {
@@ -167,8 +170,18 @@ fn bind_input(state : InputState) -> Unit {
       return
     }
     let event : @dom.CompositionEvent = event.unsafe_into()
-    if @app.input_preedit(state.query, event.data()) == 1 {
-      notify_input(1)
+    state.preedit = event.data()
+    // Chromium updates DOM text after compositionupdate and its microtasks.
+    // Existing-text composition may have no subsequent input event.
+    if state.frame is None {
+      state.frame = Some(
+        @dom.window().request_animation_frame(fn(_) {
+          state.frame = None
+          if state.composing && !state.stopped {
+            state.sync()
+          }
+        }),
+      )
     }
   })
   listen(target, "compositionend", fn(_) {
@@ -176,6 +189,11 @@ fn bind_input(state : InputState) -> Unit {
       return
     }
     state.composing = false
+    if state.frame is Some(frame) {
+      @dom.window().cancel_animation_frame(frame)
+      state.frame = None
+    }
+    state.preedit = ""
     if state.query {
       @app.query_composition_end()
     } else {
@@ -207,6 +225,10 @@ pub fn inputs_stop() -> Unit {
   for state in inputs {
     state.stopped = true
     state.composing = false
+    if state.frame is Some(frame) {
+      @dom.window().cancel_animation_frame(frame)
+      state.frame = None
+    }
   }
   for entry in listeners {
     let (target, name, callback) = entry
@@ -234,12 +256,16 @@ pub fn inputs_start() -> Unit {
     query: false,
     composing: false,
     stopped: false,
+    preedit: "",
+    frame: None,
   })
   inputs.push({
     element: Query(query),
     query: true,
     composing: false,
     stopped: false,
+    preedit: "",
+    frame: None,
   })
   for state in inputs {
     bind_input(state)
