@@ -67,7 +67,7 @@ NVIDIA GeForce RTX 3060 and Microsoft Basic Render Driver both passed this DX12
 test for all 61,440 pixels on 2026-09-06. The existing rectangle and hidden HWND
 tests also passed, for three tests total. GPU handles use scope-bound cleanup.
 No metonic Rust/C bridge code was added; file I/O uses the existing MoonBit library.
-The standalone `text:verify` task remains available, while pre-commit runs it
+The standalone `text:verify` task remains available, while the pre-push runtime gate runs it
 through `native:binding` to avoid generating the same fixture twice.
 
 ## Boundaries and next integration

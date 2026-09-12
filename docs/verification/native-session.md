@@ -15,7 +15,7 @@ mise run native:mcp-test
 ```
 
 Repeat with `METONIC_GPU_FALLBACK=1` to request the software adapter. The ordinary
-pre-commit gate includes these checks. The session verifier writes mode-specific
+pre-push runtime gate includes these checks. The session verifier writes mode-specific
 results to ignored `.work/native-session`; the existing MCP verifier writes its
 decoded image and result to `.work/native-mcp`.
 

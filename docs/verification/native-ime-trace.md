@@ -71,7 +71,7 @@ values are not evidence that the installed IME returned those values.
 histories in external snapshots and check that API edits do not fabricate OS
 input. Build both `native:window-dev-build` and `native:window-release-build`
 before running `scripts/verify-window-production-exclusion.mbtx`; the normal
-pre-commit gate supplies the probe and other prerequisite artifacts as well.
+pre-push runtime gate supplies the probe and other prerequisite artifacts as well.
 
 For a physical investigation, use the development window and capture snapshots
 before typing, during Space conversion, during Tab conversion and after Enter or

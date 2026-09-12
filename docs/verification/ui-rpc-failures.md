@@ -1,7 +1,13 @@
 # Integrated UI HTTP failures
 
 Run `mise run native:window-rpc` and `mise run browser:headless` with the pinned
-setup. Both are in pre-commit. Browser uses the packaged WasmGC page; native uses
+setup. The paired hooks run these runtime checks in the pre-push gate; native
+RPC checks are included through `native:window-integration`. The complete manual
+gate also includes them. See [local verification](../development.md#local-pre-commit-checks)
+for the commit/push split and successful-input record rules.
+`browser:headless` can run without desktop interaction; `native:window-rpc`
+requires the native window path and must be deferred during headless-only work.
+Browser uses the packaged WasmGC page; native uses
 `window_dev`, sharing the ordinary UI loop/client. This does not establish native
 production OS-input observation.
 

@@ -70,5 +70,5 @@ browser's callback references; the adapter retains numeric handles. These checks
 establish observable timer cleanup, not garbage-collection timing or arbitrary
 callback/closure FFI lifetime support. The diagnostic global belongs to the development harness;
 production exclusion is verified separately in the [browser package record](browser-target.md).
-The local pre-commit
+The local pre-push runtime
 gate runs this verification; automatic PR/push CI does not duplicate it.
