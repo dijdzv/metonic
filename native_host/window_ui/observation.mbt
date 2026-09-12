@@ -24,6 +24,12 @@ pub struct Observation {
   scene : (Int) -> Int
   task : (Int) -> Int
   editor : @semantics.Node
+  query : @semantics.Node
+  rpc_result : String
+  query_scroll : Int
+  capture_srgb : Bool
+  query_caret_position : (Int, Int)?
+  ime_position : (Int, Int)?
   request_focused : Bool
   accessibility_runs : Array[UInt64]
   rendered_text : String?
@@ -32,6 +38,7 @@ pub struct Observation {
   rejected_updates : Int
   resize : (Int, Int) -> Unit
   select : (Int, Int) -> String
+  select_query : (Int, Int) -> String
   set_text : (String) -> String
   draw : () -> Unit raise Error
   capture : async () -> Bytes
@@ -64,6 +71,34 @@ fn App::observation(self : App) -> Observation {
     scene: index => @scene.field(self.model.scene, index),
     task: index => self.model.task_field(index),
     editor: @semantics.snapshot(self.model.editor)[1],
+    query: @semantics.snapshot(self.model.editor)[5],
+    rpc_result: self.model.result,
+    query_scroll: self.query_scroll,
+    capture_srgb: self.renderer
+    .map(renderer => {
+      renderer.format.to_u32() == @wgpu.TEXTURE_FORMAT_BGRA8_UNORM_SRGB ||
+      renderer.format.to_u32() == @wgpu.TEXTURE_FORMAT_RGBA8_UNORM_SRGB
+    })
+    .unwrap_or(false),
+    query_caret_position: self.query_raster
+    .map(engine => {
+      @raster.caret_position(
+        engine,
+        if self.composition is Some(_) &&
+          self.input_node().reference == self.model.query_input {
+          self.input_node().selection_start + self.preedit_cursor
+        } else {
+          @semantics.caret(@semantics.snapshot(self.model.editor)[5])
+        },
+      )
+    })
+    .bind(value => value),
+    ime_position: self.window.map(window => {
+      (
+        window.ime_cursor_area_position().x(),
+        window.ime_cursor_area_position().y(),
+      )
+    }),
     request_focused: self.model.request_focused(),
     accessibility_runs: self.accessibility
     .map(bridge => bridge.fragments.map(fragment => fragment.id))
@@ -85,6 +120,14 @@ fn App::observation(self : App) -> Observation {
         @semantics.snapshot(self.model.editor)[1].reference,
         start,
         end,
+      )
+    },
+    select_query: (anchor, caret) => {
+      @semantics.set_selection_directed(
+        self.model.editor,
+        self.model.query_input,
+        anchor,
+        caret,
       )
     },
     set_text: text => {

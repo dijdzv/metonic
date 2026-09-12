@@ -20,6 +20,16 @@ pinned MoonBit async library. It shares process handling with the worker-complet
 probe while keeping their success and shutdown assertions separate. Each output
 stream is capped at 64 KiB during collection.
 
+The `query` and `query-latin` cases run hidden User ID editing against a private
+loopback HTTP fixture. They compare the complete submitted JSON body with the
+Japanese or Latin spaced value, and compare GPU captures with single-line text
+raster output using the surface's actual sRGB encoding. They cover Home/End,
+resize, scrolled pointer placement, Backspace, selection reversal and replacement,
+and cursor-area coordinates passed to Windows during injected preedit/cancellation.
+Directed selection uses a debug-only semantic fixture; insertion, navigation and
+pointer input use owned-window messages. These checks do not certify physical IME,
+keyboard, or screen-reader behavior. Both application and fixture must terminate.
+
 ## Local evidence
 
 On 2026-09-07, the Windows x64 native host build using `Milky2018/wgpu_mbt` 0.16.0

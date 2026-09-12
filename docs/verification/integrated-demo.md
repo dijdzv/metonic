@@ -51,6 +51,8 @@ failures readable in the result row; the semantic output and development
 diagnostics retain the detailed RPC error.
 The native F7 shortcut also uses the current User ID. Each app instance owns its
 query value. The ID field occupies the right side of the result row.
+Both hosts keep User ID on one line and scroll horizontally to its active caret
+or selection end. Spaces remain part of the value sent to the HTTP adapter.
 Native and browser HTTP results use a dedicated row below the GPU editor, so multiline editor
 contents do not push the result out of its viewport. The editor itself remains
 a fixed-height viewport without scrolling.
@@ -61,7 +63,7 @@ For viewports at least 400 pixels wide and 260 pixels high, a height below 352
 uses side-by-side task buttons and a status row above them. Taller viewports keep
 the stacked controls. Native uses client-area pixels; the browser uses CSS pixels.
 Below 400x260, complete control visibility is not supported; enlarge the viewport.
-This sample layout does not implement scrolling or a general responsive layout engine.
+This sample layout does not implement page scrolling or a general responsive layout engine.
 Native left/right keys edit while text is focused; Tab cycles through text, the
 scene, Load user, Move after delay, Cancel and User ID. Clicking the scene returns its keyboard focus. Scene focus enables
 Up/down movement and Enter/Space activation. Those keys do not operate the scene
