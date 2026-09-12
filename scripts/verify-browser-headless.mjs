@@ -583,6 +583,11 @@ try {
           await page.goto(`${baseUrl}/?target=${encodeURIComponent(request.target)}`);
           await waitStatus(page, `Ready: ${request.target}`);
           await page.locator('#text-input').fill(request.text);
+          if (request.prior_success) {
+            await page.locator('#rpc-user').fill('1');
+            await page.locator('#rpc-load').click();
+            await page.waitForFunction(() => JSON.parse(document.querySelector('#task-state').textContent)[0] === 2);
+          }
           let seen;
           if (request.mode) {
             let notify;
@@ -598,14 +603,21 @@ try {
           await page.locator('#rpc-load').click();
           if (request.mode) {
             await seen;
-            if (request.mode === 'cancel') await page.locator('#task-cancel').click();
-            else {
+            if (request.mode !== 'cancel') {
               await page.locator('#rpc-user').fill('missing');
-              await page.locator('#rpc-load').click();
             }
+            await page.evaluate(mode => {
+              const status = JSON.parse(document.querySelector('#task-state').textContent)[0];
+              if (status !== 1) throw new Error(`RPC pending precondition expired: status=${status}, result=${document.querySelector('#rpc-result').textContent}`);
+              document.querySelector(mode === 'cancel' ? '#task-cancel' : '#rpc-load').click();
+            }, request.mode);
             release();
           }
-          if (request.mode !== 'cancel') await page.waitForFunction(() => document.querySelector('#rpc-result').textContent !== '');
+          // A previous result remains visible while its replacement is still working.
+          if (request.mode !== 'cancel') await page.waitForFunction(() => {
+            const status = JSON.parse(document.querySelector('#task-state').textContent)[0];
+            return status === 2 || status === 3;
+          });
           await page.waitForLoadState('networkidle');
           if (request.after_text !== undefined) {
             await page.setViewportSize({ width: 740, height: 800 });

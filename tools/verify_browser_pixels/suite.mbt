@@ -132,6 +132,25 @@ async fn run_suite(host : BrowserHost, metadata : String) -> String {
   let mut reference = ""
   for target in ["js", "wasm-gc"] {
     let result = command(host, {
+      "op": "rpc",
+      "target": Json::string(target),
+      "mode": "replace",
+      "user": "1",
+      "text": "編集中 ABC 123",
+      "prior_success": true,
+    })
+    require(
+      string_field(result, "result") == "\nRPC: domain:not_found" &&
+      int_field(result, "status") == 3 &&
+      string_field(result, "text") == "編集中 ABC 123",
+      "Replacement did not settle after an existing result: target=" +
+      target +
+      " observed=" +
+      result.stringify(),
+    )
+  }
+  for target in ["js", "wasm-gc"] {
+    let result = command(host, {
       "op": "text",
       "target": Json::string(target),
       "reference": Json::string(reference),
