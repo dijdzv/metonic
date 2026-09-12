@@ -91,7 +91,9 @@ async fn write_bytes_all(data : Bytes) -> Bool {
 async fn main {
   let args = @env.args()
   let mode = if args.length() > 1 { args[1] } else { "normal" }
+  let attached = mode == "attachment-change" || mode == "attachment-empty"
   if mode != "normal" &&
+    !attached &&
     mode != "bad-ready" &&
     mode != "bad-utf8-ready" &&
     mode != "partial-ready" &&
@@ -122,7 +124,7 @@ async fn main {
       bytes.push(byte)
     }
     ignore(write_bytes_all(Bytes::from_array(bytes)))
-  } else {
+  } else if !attached {
     write(ready(mode))
   }
   if mode == "bad-ready" || mode == "bad-utf8-ready" {
@@ -158,6 +160,31 @@ async fn main {
           }
           let request = @json.parse(@utf8.decode(bytes)) catch { _ => continue }
           let id = integer(request, "id", 0)
+          if attached {
+            let identity = if id == 1 {
+              "fixture-session"
+            } else if mode == "attachment-empty" {
+              ""
+            } else {
+              "changed-session"
+            }
+            write({
+              "id": id,
+              "session_id": identity,
+              "error": "",
+              "text": "",
+              "semantic_revision": 0,
+              "frames": 0,
+              "task_status": 0,
+            })
+            if id != 1 {
+              while @stdio.stdin.read_some(max_len=8192) is Some(_) {
+                ()
+              }
+              return
+            }
+            continue
+          }
           if mode == "bad-response" {
             write(
               Json::object({

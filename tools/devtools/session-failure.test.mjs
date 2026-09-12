@@ -9,6 +9,26 @@ const moonrun = path.join(repo, '.tools', 'moonbit', 'bin', 'moonrun.exe');
 const fixture = path.join(repo, '_build', 'wasm', 'release', 'build', 'tools', 'session_fixture', 'session_fixture.wasm');
 const opts = (mode, extra = {}) => ({ executable: moonrun, args: [fixture, mode], readyTimeoutMs: 2000, requestTimeoutMs: 2000, closeTimeoutMs: 200, ...extra });
 
+for (const mode of ['attachment-change', 'attachment-empty']) {
+  test(`${mode} rejects outstanding requests and releases the child`, { timeout: 10000 }, async () => {
+    const session = await createMoonBitSession(opts(mode, { protocol: 'window-attach' }));
+    try {
+      assert.equal(session.client.session, 'fixture-session');
+      const results = await Promise.allSettled([session.client.request('snapshot'), session.client.request('snapshot')]);
+      for (const result of results) {
+        assert.equal(result.status, 'rejected');
+        assert.match(result.reason.message, /attachment session identity mismatch/);
+      }
+      assert.equal(session.diagnostics().pending, 0);
+      await assert.rejects(session.client.request('snapshot'), /closed/);
+    } finally {
+      await session.close();
+      assert.equal(session.diagnostics().exit_code, 0);
+      assert.equal(session.diagnostics().forced_kill, false);
+    }
+  });
+}
+
 test('missing executable preserves ENOENT', { timeout: 10000 }, async () => {
   await assert.rejects(createMoonBitSession(opts('normal', { executable: path.join(repo, 'missing-session-executable.exe') })), e => e?.code === 'ENOENT');
 });

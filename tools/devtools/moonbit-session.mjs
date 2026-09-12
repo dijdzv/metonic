@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { validate_response, validate_request, new_response_framer, clear_response_framer, append_response_text, response_framing_error, finish_response_framer } from '../../_build/js/release/build/tools/session_wire/session_wire.js';
 
-const MAX_PENDING = 16;
+import { new_session_policy, session_admission_error, allocate_session_id, track_session_request, consume_session_response, close_session_policy, accept_attachment_identity } from '../../_build/js/release/build/tools/session_wire/session_wire.js';
 const MAX_STDERR = 16 * 1024;
 
 export async function createMoonBitSession(options = {}) {
@@ -25,7 +25,7 @@ export async function createMoonBitSession(options = {}) {
   const pending = new Map();
   const decoder = new TextDecoder('utf-8', { fatal: true });
   const responseFramer = new_response_framer();
-  let nextId = 1;
+  const policy = new_session_policy();
   let sessionId = windowProtocol && !attached ? randomUUID() : undefined;
   let fatalError;
   let closing = false;
@@ -52,6 +52,7 @@ export async function createMoonBitSession(options = {}) {
   function fail(error) {
     if (fatalError) return;
     fatalError = error instanceof Error ? error : new Error(String(error));
+    close_session_policy(policy);
     readyReject(fatalError);
     for (const waiter of pending.values()) waiter.reject(fatalError);
     pending.clear();
@@ -60,8 +61,7 @@ export async function createMoonBitSession(options = {}) {
   }
   function dispatch(value) {
     if (attached) {
-      if (typeof value.session_id !== 'string' || !value.session_id ||
-          (sessionId && sessionId !== value.session_id)) return fail(new Error('attachment session identity mismatch'));
+      if (!accept_attachment_identity(policy, JSON.stringify(value))) return fail(new Error('attachment session identity mismatch'));
       sessionId = value.session_id;
     }
     if (windowProtocol) {
@@ -72,6 +72,7 @@ export async function createMoonBitSession(options = {}) {
       readyResolve(sessionId);
       return;
     }
+    if (!consume_session_response(policy, value.id)) return fail(new Error('unknown response id'));
     const waiter = pending.get(value.id);
     if (!waiter) return fail(new Error('unknown response id'));
     if (value.ok !== true) {
@@ -134,10 +135,10 @@ export async function createMoonBitSession(options = {}) {
   const abortError = () => new Error('native session request aborted');
   async function requestEnvelope(op, args = {}, options = {}) {
     if (options.signal?.aborted) return Promise.reject(abortError());
-    if (fatalError || closing) return Promise.reject(new Error('native session is closed'));
-    if (pending.size >= MAX_PENDING) return Promise.reject(new Error('native session pending limit exceeded'));
-    const id = nextId++;
-    if (id > 2147483647) return Promise.reject(new Error('native session request id exhausted'));
+    const admissionError = session_admission_error(policy);
+    if (admissionError) return Promise.reject(new Error(admissionError));
+    const id = allocate_session_id(policy);
+    if (id === 0) return Promise.reject(new Error('native session request id exhausted'));
     if (typeof op !== 'string' || !args || typeof args !== 'object' || Array.isArray(args)) return Promise.reject(new Error('invalid native session request'));
     let payload;
     try { payload = JSON.stringify(windowProtocol ? { ...args, id, op } : { id, op, args }); }
@@ -151,6 +152,7 @@ export async function createMoonBitSession(options = {}) {
       const timer = setTimeout(() => { cleanup(); pending.delete(id); fail(new Error('native session request timed out')); reject(new Error('native session request timed out')); }, requestTimeoutMs);
       const onAbort = () => { cleanup(); pending.delete(id); fail(abortError()); reject(abortError()); };
       pending.set(id, { resolve: value => { cleanup(); resolve(value); }, reject: error => { cleanup(); reject(error); } });
+      track_session_request(policy, id);
       signal?.addEventListener('abort', onAbort, { once: true });
       try { child.stdin.write(payload); }
       catch (error) { cleanup(); pending.delete(id); fail(error); reject(error); }
@@ -173,6 +175,7 @@ export async function createMoonBitSession(options = {}) {
     if (closePromise) return closePromise;
     closePromise = (async () => {
       closing = true;
+      close_session_policy(policy);
       for (const waiter of pending.values()) waiter.reject(new Error('native session closed'));
       pending.clear();
       if (!stdinEnded) { stdinEnded = true; child.stdin.end(); }
