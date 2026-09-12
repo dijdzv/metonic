@@ -322,10 +322,15 @@ so blocked UIA calls cannot leave the check waiting indefinitely. See
 [native accessibility](verification/native-accessibility.md) for the pinned
 dependency, small C ownership boundary and remaining text/selection requirements.
 
+`mise run native:production-integration` runs the lifecycle, accessibility,
+mailbox and real-SDK mailbox checks in one sequential task graph, sharing the
+production build prerequisite. The normal verification gate uses this group;
+each individual command remains available for focused checks.
+
 After both release and development builds,
 `moon run scripts/verify-window-production-exclusion.mbtx` checks generated C
 and link inputs with development code as a positive control. Both checks are
-included in pre-commit. Real input/IME and full accessibility must still be verified
+included in normal verification. Real input/IME and full accessibility must still be verified
 against this production candidate; initial UIA properties/actions do not prove them.
 
 `native:window-build` builds the ordinary `window_app` executable.
@@ -472,6 +477,14 @@ and contract checks, then records successful inputs. Pre-push refreshes inputs
 and runs remaining package tests plus runtime/production checks. A missing or
 mismatched record runs the full gate. Both report total elapsed time including
 input discovery. Automatic CI does not duplicate these local checks.
+
+The runtime gate groups the headless renderer, control, MCP, session, semantics,
+client and CLI checks under `native:headless-integration`. One mise invocation
+shares the native build and session prerequisites. Tasks run serially in
+dependency-graph order, which need not match the command-line argument order.
+Each verifier owns its processes and output location; none consumes a previous
+verifier's result. Standalone tasks remain available. The group retains every
+check and performs the normal source-dependent build without success stamps.
 
 The runtime gate groups window control, attachment, RPC and MCP under
 `native:window-integration`. A single mise invocation shares their development
@@ -731,6 +744,12 @@ strict streaming UTF-8 decoding through TextDecoder, pending-request ownership
 and SDK/process APIs. The pinned MoonBit core provides whole-buffer UTF-8
 decoding; this adapter does not add a custom streaming decoder. The raw native wire protocol's
 64-KiB response limit is not substituted for the session's 32-MiB image envelope.
+MoonBit assembles native and window MCP result content, including session
+metadata, native error envelopes and image content ordering. Node converts the
+generated result into an SDK object; SDK registration, Zod schemas, cancellation
+and process ownership remain in the host adapter. `devtools:test` compares the
+generated JS boundary with the existing content contract, independently of
+integrated window execution.
 The server exposes `native_snapshot`, `native_move`, `native_resize`,
 `native_activate`, and `native_capture`. Errors use MCP error content. Unknown
 arguments are rejected, and mutation/capture accepts `expected_revision`.

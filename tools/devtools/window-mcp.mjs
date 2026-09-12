@@ -4,6 +4,7 @@ import { z } from 'zod/v4';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createMoonBitSession } from './moonbit-session.mjs';
+import { window_mcp_result } from '../../_build/js/release/build/tools/session_wire/session_wire.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const launchArgs = process.argv.slice(2);
@@ -36,13 +37,7 @@ function factory() {
     server.registerTool(`window_${op}`, { description, inputSchema, annotations: { readOnlyHint } }, async (args, ctx) => {
       try {
         const state = await session.client.request(op, args, { signal: ctx.mcpReq.signal });
-        const { image, ...metadata } = state;
-        const content = [{ type: 'text', text: JSON.stringify({ session_id: session.client.session, ...metadata }) }];
-        if (image) {
-          content.push({ type: 'image', data: image.data, mimeType: image.mimeType });
-          content.push({ type: 'text', text: JSON.stringify({ width: image.width, height: image.height, frame: image.frame, source: image.source }) });
-        }
-        return { content };
+        return JSON.parse(window_mcp_result(session.client.session, JSON.stringify(state)));
       } catch (error) {
         return { isError: true, content: [{ type: 'text', text: error instanceof Error ? error.message : String(error) }] };
       }

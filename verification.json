@@ -8,12 +8,11 @@
   "full_gate_tasks": [
     "verify", "verify-native", "browser:verify", "browser:server-test",
     "browser:supervisor-test", "browser:headless", "browser:async", "devtools:test",
-    "native:headless", "native:control", "native:mcp-test", "native:session-test",
-    "native:semantics", "native:client-test", "native:cli-test", "native:window",
+    "native:headless-integration", "native:window",
     "native:window-integration", "native:pipe-verify",
     "native:host-verify", "native:async",
-    "native:surface", "native:binding", "rpc:verify", "native:release-lifecycle",
-    "native:accessibility", "native:mailbox", "native:sdk-mailbox", "demo:test",
+    "native:surface", "native:binding", "rpc:verify", "native:production-integration",
+    "demo:test",
     "prerequisites:test", "bootstrap:test"
   ]
 }

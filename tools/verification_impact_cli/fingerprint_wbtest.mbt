@@ -1,5 +1,11 @@
 ///|
-async test "batched hashes preserve every path across Windows command length boundaries" {
+test "Git input paths escape separators and control characters without splitting records" {
+  assert_eq(git_input_path("日本語 space.txt"), "\"日本語 space.txt\"")
+  assert_eq(git_input_path("a\\b\"c\nd\re\tf"), "\"a\\\\b\\\"c\\nd\\re\\tf\"")
+}
+
+///|
+async test "streamed hashes preserve every path across Windows command length boundaries" {
   let dir = @fs.tmpdir(prefix="metonic-fingerprint-batch")
   defer @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
   let files : Array[String] = []
@@ -47,6 +53,62 @@ async test "batched hashes preserve every path across Windows command length bou
       paths.contains(@fs.realpath(filename).replace_all(old="\\", new="/")),
     )
   }
+}
+
+///|
+async test "early Git failure releases a pending path writer and permits another hash" {
+  let dir = @fs.tmpdir(prefix="metonic-fingerprint-failure")
+  defer @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+  let valid = dir + "/日本語 valid.txt"
+  @fs.write_file(valid, "raw bytes\r\n")
+  let paths = [dir + "/missing.txt"]
+  for index = 0; index < 10000; index = index + 1 {
+    paths.push(valid)
+  }
+  @async.with_timeout(10000, async fn() {
+    let rejected = try {
+      ignore(hash_input_paths(paths))
+      false
+    } catch {
+      _ => true
+    }
+    assert_true(rejected)
+    let (code, output, _) = @process.collect_output(
+      "git",
+      ["hash-object", "--no-filters", "--", valid],
+      no_console_window=true,
+    )
+    assert_eq(code, 0)
+    assert_eq(hash_input_paths([valid]).trim(), output.text().trim())
+    assert_eq(hash_input_paths([]), "")
+  })
+}
+
+///|
+async test "cancelled path hashing unwinds and permits a fresh request" {
+  let dir = @fs.tmpdir(prefix="metonic-fingerprint-cancel")
+  defer @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+  let file = dir + "/input.txt"
+  @fs.write_file(file, "content")
+  let paths : Array[String] = []
+  for index = 0; index < 100000; index = index + 1 {
+    paths.push(file)
+  }
+  let mut cancelled = false
+  @async.with_timeout(15000, async fn() {
+    @async.with_timeout(100, async fn() { ignore(hash_input_paths(paths)) }) catch {
+      @async.TimeoutError => cancelled = true
+      error => raise error
+    }
+    assert_true(cancelled)
+    let (code, output, _) = @process.collect_output(
+      "git",
+      ["hash-object", "--no-filters", "--", file],
+      no_console_window=true,
+    )
+    assert_eq(code, 0)
+    assert_eq(hash_input_paths([file]).trim(), output.text().trim())
+  })
 }
 
 ///|
