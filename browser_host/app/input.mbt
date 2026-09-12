@@ -84,6 +84,9 @@ fn InputState::sync(self : InputState) -> Unit {
   if self.stopped {
     return
   }
+  if self.element is Query(value) {
+    @app.query_scroll(value.scroll_left().to_int())
+  }
   guard self.element.selection() is Some((start, end, backward)) else {
     notify_input(0)
     return
@@ -136,6 +139,7 @@ fn bind_input(state : InputState) -> Unit {
   listen(target, "input", on_input)
   listen(target, "select", on_input)
   listen(target, "selectionchange", on_input)
+  listen(target, "scroll", fn(_) { state.sync() })
   listen(target, "focus", fn(_) {
     if state.stopped {
       return

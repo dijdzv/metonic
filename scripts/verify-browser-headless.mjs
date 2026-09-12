@@ -463,8 +463,13 @@ try {
         if (!fixture || !/^http:\/\/127\.0\.0\.1:\d+$/.test(fixture)) throw new Error('Missing supervised HTTP fixture');
         const faultRoute = (route) => route.continue({ url: `${fixture}/rpc` });
         const errors = [], resources = [];
+        let lastRpcBody = null;
         page.on('pageerror', (error) => errors.push(error.message));
-        page.on('request', (request) => resources.push(new URL(request.url()).pathname));
+        page.on('request', (request) => {
+          const pathname = new URL(request.url()).pathname;
+          resources.push(pathname);
+          if (pathname === '/rpc') lastRpcBody = request.postData();
+        });
         const settle = () => page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
         try {
           return JSON.parse(await runRelease(async (command) => {
@@ -488,6 +493,7 @@ try {
               });
               case 'value': return page.locator(command.selector).inputValue();
               case 'rpc-count': return resources.filter((path) => path === '/rpc').length;
+              case 'rpc-body': return lastRpcBody;
               case 'input-event': await page.locator(command.selector).evaluate((input, event) => {
                 if (event.value !== undefined) input.value = event.value;
                 if (event.start !== undefined) input.setSelectionRange(event.start, event.end);

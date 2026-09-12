@@ -24,6 +24,7 @@ pub fn render(
   height : Int,
   selection? : (Int, Int) = (0, 0),
   caret? : Int? = None,
+  single_line_scroll? : Int? = None,
 ) -> Bytes {
   if width < 1 || width > 1024 || height < 1 || height > 96 {
     Bytes::makei(0, _ => b'\x00')
@@ -35,10 +36,17 @@ pub fn render(
     buffer = buffer
       .set_text(text, attrs, @cosmic.Shaping::Advanced)
       .set_size(Some(Float::from_int(width)), Some(Float::from_int(height)))
-      .set_wrap(@cosmic.Wrap::WordOrGlyph)
+      .set_wrap(
+        if single_line_scroll is Some(_) {
+          @cosmic.Wrap::None
+        } else {
+          @cosmic.Wrap::WordOrGlyph
+        },
+      )
       .layout_all_with_font_system(engine.system)
     engine.layout = Some(buffer)
     engine.text = text
+    let scroll_x = single_line_scroll.unwrap_or(0).max(0)
     let pixels : Array[Int] = Array::make(width * height, 255)
     let selected : Array[Bool] = Array::make(width * height, false)
     let (start, end) = selection
@@ -47,8 +55,8 @@ pub fn render(
       let last = selection_cursor(text, end)
       for run in buffer.layout_runs() {
         if run.highlight(first, last) is Some((left, span)) {
-          let x0 = left.floor().to_int().max(0)
-          let x1 = (left + span).ceil().to_int().min(width)
+          let x0 = (left.floor().to_int() - scroll_x).max(0)
+          let x1 = ((left + span).ceil().to_int() - scroll_x).min(width)
           let y0 = run.line_top.floor().to_int().max(0)
           let y1 = (run.line_top + run.line_height).ceil().to_int().min(height)
           for y in y0..<y1 {
@@ -69,6 +77,7 @@ pub fn render(
     ) => {
       let alpha = ink.a().to_int()
       if alpha > 0 {
+        let x = x - scroll_x
         let x0 = x.max(0)
         let y0 = y.max(0)
         let x1 = (x + w.reinterpret_as_int()).min(width)
@@ -88,6 +97,7 @@ pub fn render(
     engine.cache = next_cache
     if caret is Some(offset) {
       if caret_position(engine, offset) is Some((x, y)) {
+        let x = x - scroll_x
         if x >= 0 {
           let x = x.min(width - 1)
           for py in y.max(0)..<(y + 32).min(height) {
