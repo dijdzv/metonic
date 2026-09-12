@@ -108,6 +108,36 @@ async fn verify_navigation(host : BrowserHost) -> Unit {
 }
 
 ///|
+async fn verify_query_overflow(host : BrowserHost) -> Unit {
+  let selector = "#rpc-user"
+  let original = command(host, { "op": "value", "selector": selector })
+  ignore(command(host, { "op": "fill", "selector": selector, "value": "abc" }))
+  ignore(command(host, { "op": "press", "selector": selector, "key": "Home" }))
+  let short = navigation_pixels(host, true, "query-short")
+  let value = "abc WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW"
+  ignore(command(host, { "op": "fill", "selector": selector, "value": value }))
+  ignore(command(host, { "op": "press", "selector": selector, "key": "Home" }))
+  let home = navigation_pixels(host, true, "query-overflow-home")
+  require(home != short, "query suffix after space disappeared")
+  ignore(command(host, { "op": "press", "selector": selector, "key": "End" }))
+  let end = navigation_pixels(host, true, "query-overflow-end")
+  require(end != home, "query overflow did not scroll rendered text")
+  ignore(command(host, { "op": "press", "selector": selector, "key": "Home" }))
+  require(
+    navigation_pixels(host, true, "query-overflow-restored") == home,
+    "query scroll did not restore text",
+  )
+  require(
+    command(host, { "op": "value", "selector": selector }) ==
+    Json::string(value),
+    "query overflow changed value",
+  )
+  ignore(
+    command(host, { "op": "fill", "selector": selector, "value": original }),
+  )
+}
+
+///|
 async fn run_release(host : BrowserHost) -> String {
   ignore(command(host, { "op": "goto" }))
   ignore(
@@ -123,6 +153,7 @@ async fn run_release(host : BrowserHost) -> String {
   verify_query_composition(host)
   verify_query_pointer(host)
   verify_navigation(host)
+  verify_query_overflow(host)
   verify_composition_presentation(host)
   ignore(
     command(host, {

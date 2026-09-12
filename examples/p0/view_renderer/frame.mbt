@@ -10,6 +10,7 @@ fn button_layer(
   item : @application.Element,
   selection? : (Int, Int) = (0, 0),
   caret? : Int? = None,
+  single_line_scroll? : Int? = None,
 ) -> Layer {
   let button = item.bounds
   let label_width = (button.width - 16).max(1)
@@ -21,6 +22,7 @@ fn button_layer(
     32,
     selection~,
     caret~,
+    single_line_scroll~,
   )
   let pixels = Bytes::makei(button.width * button.height * 4, i => {
     let x = i / 4 % button.width
@@ -51,6 +53,7 @@ pub fn render(
   text : String,
   selection? : (Int, Int) = (0, 0),
   caret? : Int? = None,
+  query_scroll? : Int? = None,
 ) -> Array[Layer] {
   let request_layer = button_layer(engine, view.request)
   let query_layer = button_layer(
@@ -58,6 +61,7 @@ pub fn render(
     view.query,
     selection=view.query_selection,
     caret=view.query_caret,
+    single_line_scroll=query_scroll,
   )
   let query_label = Layer::{
     bounds: view.query_label.bounds,
