@@ -9,6 +9,27 @@ const moonrun = path.join(repo, '.tools', 'moonbit', 'bin', 'moonrun.exe');
 const fixture = path.join(repo, '_build', 'wasm', 'release', 'build', 'tools', 'session_fixture', 'session_fixture.wasm');
 const opts = (mode, extra = {}) => ({ executable: moonrun, args: [fixture, mode], readyTimeoutMs: 2000, requestTimeoutMs: 2000, closeTimeoutMs: 200, ...extra });
 
+test('invalid timer ranges reject before attempting to spawn', async () => {
+  for (const key of ['readyTimeoutMs', 'requestTimeoutMs', 'closeTimeoutMs']) {
+    for (const value of [2147483648, Number.MAX_VALUE, Infinity, NaN, 0, -1]) {
+      await assert.rejects(createMoonBitSession(opts('normal', {
+        executable: path.join(repo, 'missing-session-executable.exe'),
+        [key]: value,
+      })), /invalid MoonBit session launch options/);
+    }
+  }
+});
+
+test('maximum supported timers preserve request and graceful close', { timeout: 10000 }, async () => {
+  const session = await createMoonBitSession(opts('normal', {
+    readyTimeoutMs: 2147483647, requestTimeoutMs: 2147483647, closeTimeoutMs: 2147483647,
+  }));
+  try { assert.equal((await session.client.request('snapshot')).ok, true); }
+  finally { await session.close(); }
+  assert.equal(session.diagnostics().forced_kill, false);
+  assert.equal(session.diagnostics().exit_code, 0);
+});
+
 test('capture exclusion releases after image failure and permits ordinary requests', async () => {
   const session = await createMoonBitSession(opts('normal'));
   try {
