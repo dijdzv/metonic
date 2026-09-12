@@ -512,7 +512,8 @@ try {
                 await settle();
                 const canvas = page.locator('#canvas');
                 await canvas.evaluate((element) => { element.style.position = 'relative'; element.style.left = '0px'; element.style.top = '0px'; const rect = element.getBoundingClientRect(); element.style.left = `${Math.ceil(rect.x) - rect.x}px`; element.style.top = `${Math.ceil(rect.y) - rect.y}px`; });
-                const image = await canvas.screenshot();
+                // CSS corner antialiasing is not part of the canvas pixel contract.
+                const image = await canvas.screenshot({ style: '#canvas { border-radius: 0 !important; }' });
                 await fs.writeFile(path.join(outputDir, `release-${command.name}.png`), image);
                 return image.toString('base64');
               }
