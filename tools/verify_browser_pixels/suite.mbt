@@ -116,7 +116,12 @@ async fn run_suite(host : BrowserHost, metadata : String) -> String {
       )
       require(
         string_field(result, "result") == expected,
-        "Canceled or replaced RPC changed result",
+        "Canceled or replaced RPC changed result: target=" +
+        target +
+        " mode=" +
+        mode +
+        " observed=" +
+        result.stringify(),
       )
       require(
         int_field(result, "status") == status,
