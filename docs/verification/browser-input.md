@@ -9,6 +9,20 @@ JavaScript host owns scene WebGPU calls and frame scheduling; the
 [MoonBit HTTP host](browser-http.md) owns bounded fetch and cancellation.
 `metonic-input` requests a render after an input update.
 
+During composition, the DOM text and caret are authoritative for presentation;
+they do not commit the shared editor state. The host reconciles on `input` and
+on a frame after `compositionupdate`, because the latter can precede the DOM
+edit and existing-text composition may not emit another input event. Pending
+reconciliation is canceled on composition end and host stop.
+
+A matching shared preview retains its validated composition highlight. If the
+DOM differs, the host displays its full text and caret without a range highlight.
+Textarea/input selection does not reveal the actual composition range, so the
+host does not guess it from equal prefixes or repeated characters. This preserves
+text while leaving exact highlighting of such existing-text compositions as a
+limitation. The release pixel check compares both fields before, during and after
+that synthetic sequence; ordinary highlighted composition remains covered too.
+
 `scripts/prepare-browser-gpu.mbtx` prepares webapi commit
 `ecae5a4b07b011e46de343efe2ac1c450b7ed3a2` and verifies the archive SHA256 before
 extracting the generator and Apache-2.0 license. It regenerates bindings using

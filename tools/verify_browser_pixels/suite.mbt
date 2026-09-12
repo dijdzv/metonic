@@ -46,6 +46,13 @@ async fn run_suite(host : BrowserHost, metadata : String) -> String {
       int_field(committed, "start") == 3 && int_field(committed, "end") == 3,
       "composition selection mismatch",
     )
+    let existing = object_field(flow, "existing")
+    require(
+      string_field(existing, "text") == "あうえお" &&
+      string_field(existing, "display") == "あうえお" &&
+      int_field(existing, "composing") == 1,
+      "existing-text composition duplicated or committed preview " + target,
+    )
     require(
       string_field(object_field(flow, "reset"), "text") ==
       "日本語の描画を確認します ABC 123",

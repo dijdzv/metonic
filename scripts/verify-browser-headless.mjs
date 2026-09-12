@@ -549,6 +549,9 @@ try {
             input.dispatchEvent(new Event('select'));
             input.dispatchEvent(new CompositionEvent('compositionstart', { data: '' }));
             input.dispatchEvent(new CompositionEvent('compositionupdate', { data: '日本' }));
+            input.value = 'A日本B';
+            input.setSelectionRange(3, 3);
+            input.dispatchEvent(new InputEvent('input', { data: '日本', isComposing: true }));
             return window.metonicAsyncProbe.editor();
           });
           await page.evaluate(() => {
@@ -562,6 +565,15 @@ try {
           await page.setViewportSize({ width: 900, height: 700 });
           await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
           const committed = await page.evaluate(() => window.metonicAsyncProbe.editor());
+          await page.locator('#text-input').fill('あうえお');
+          await page.evaluate(() => {
+            const input = document.querySelector('#text-input');
+            input.setSelectionRange(1, 1);
+            input.dispatchEvent(new CompositionEvent('compositionstart', { data: '' }));
+            input.dispatchEvent(new CompositionEvent('compositionupdate', { data: 'あ' }));
+          });
+          await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+          const existing = await page.evaluate(() => window.metonicAsyncProbe.editor());
           await page.locator('#reset').click();
           const reset = await page.evaluate(() => window.metonicAsyncProbe.editor());
           await page.locator('#stop').click();
@@ -572,7 +584,7 @@ try {
             input.dispatchEvent(new CompositionEvent('compositionend', { data: 'late' }));
             return window.metonicAsyncProbe.editor();
           });
-          return { preview, committed, reset, stopped };
+          return { preview, committed, existing, reset, stopped };
         } catch (error) { await reportFailure(page); throw error }
         finally { await page.close(); }
       }
