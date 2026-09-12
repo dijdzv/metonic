@@ -137,7 +137,7 @@ extern "C" fn copy_name(
 ) -> Unit = "RtlMoveMemory"
 
 ///|
-fn owned_window(pid : Int) -> UInt64 raise {
+fn owned_window(pid : Int, hidden? : Bool = false) -> UInt64 raise {
   let owner = FixedArray::make(1, 0)
   let title = FixedArray::make(16, b'\x00')
   let mut selected = 0UL
@@ -148,7 +148,7 @@ fn owned_window(pid : Int) -> UInt64 raise {
       return selected
     }
     if window_pid(cursor, owner) != 0U &&
-      owner[0] == pid && visible(cursor) != 0 &&
+      owner[0] == pid && (hidden || visible(cursor) != 0) &&
       window_title_length(cursor) == 7 &&
       window_title(cursor, title, 8) == 7 && title == utf16z("Metonic") {
       guard selected == 0UL else {
@@ -322,12 +322,20 @@ async fn main {
     }
     defer uninitialize()
     let pid = @string.parse_int(@env.args()[1][:])
+    let hidden_close = @env.args().length() == 3 &&
+      @env.args()[2] == "close-hidden"
     let mut hwnd = 0UL
     while hwnd == 0UL {
-      hwnd = owned_window(pid)
+      hwnd = owned_window(pid, hidden=hidden_close)
       @async.sleep(20)
     }
-    if @env.args().length() == 3 && @env.args()[2] == "close-only" {
+    if hidden_close ||
+      (@env.args().length() == 3 && @env.args()[2] == "close-only") {
+      if hidden_close {
+        guard visible(hwnd) == 0 else {
+          fail("headless close verification found a visible window")
+        }
+      }
       guard post(hwnd, 0x0010U, 0UL, 0L) != 0 else {
         fail("owned window close request failed")
       }
