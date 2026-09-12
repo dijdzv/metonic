@@ -10,6 +10,7 @@ pub struct InputObservation {
 
 ///|
 priv struct Diagnostics {
+  changed : @async.CondVar
   mut input : InputObservation
   mut frames : Int
   mut rejected_updates : Int
@@ -59,6 +60,7 @@ fn App::raw_ime_dropped(self : App) -> Int64 {
 ///|
 fn Diagnostics::new() -> Diagnostics {
   {
+    changed: @async.CondVar::Cond(),
     frames: 0,
     rejected_updates: 0,
     ime_events: [],
@@ -126,6 +128,7 @@ fn Diagnostics::presented(self : Diagnostics) -> Unit {
 
 ///|
 fn Hooks::processed(_self : Hooks, event : Event, app : App) -> Unit {
+  app.diagnostics.changed.broadcast()
   let (kind, supplied, length) : (String, Int?, Int) = match event {
     CompositionStart => ("start", None, 0)
     CompositionUpdate(value, cursor) => ("update", cursor, value.length())

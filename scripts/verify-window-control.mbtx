@@ -89,10 +89,104 @@ async fn verify_case(fallback : Bool) -> Unit {
 async fn main {
   verify_case(false)
   verify_case(true)
+  verify_semantic_wait()
+  verify_wait_overload()
   verify_window_close(false)
   verify_window_close(true)
   verify_window_close(false, pending=true)
   verify_window_close(true, pending=true)
+}
+
+///|
+async fn verify_semantic_wait() -> Unit {
+  @async.with_timeout(20000, () => {
+    @async.with_task_group() <| group => {
+      let (input, writer) = @process.write_to_process()
+      defer writer.close()
+      let (reader, output) = @process.read_from_process()
+      defer reader.close()
+      let child = @process.spawn(
+        group,
+        ".work/native-host-build/native/debug/build/local/native_host/window_dev/window_dev.exe",
+        [],
+        stdin=input,
+        stdout=output,
+        extra_env={ "METONIC_DEV_HIDDEN": "1" },
+        no_console_window=true,
+      )
+      defer child.cancel()
+      writer.write(
+        "{\"id\":1,\"op\":\"wait_semantic\",\"semantic_revision\":0,\"timeout_ms\":100}\n",
+      )
+      assert_true(
+        @json.parse(reader.read_until("\n").unwrap())
+        is { "id": 1, "error": "", .. },
+      )
+      writer.write(
+        "{\"id\":2,\"op\":\"wait_semantic\",\"semantic_revision\":2147483647,\"timeout_ms\":20}\n",
+      )
+      assert_true(
+        @json.parse(reader.read_until("\n").unwrap())
+        is { "id": 2, "error": "timeout", .. },
+      )
+      writer.write("{\"id\":3,\"op\":\"snapshot\"}\n")
+      assert_true(
+        @json.parse(reader.read_until("\n").unwrap())
+        is { "id": 3, "error": "", .. },
+      )
+      writer.write(
+        "{\"id\":4,\"op\":\"wait_semantic\",\"semantic_revision\":2147483647,\"timeout_ms\":60000}\n",
+      )
+      @async.sleep(30)
+      writer.close()
+      assert_true(
+        @json.parse(reader.read_until("\n").unwrap())
+        is { "id": 4, "error": "disconnected", .. },
+      )
+      assert_eq(@async.with_timeout(2000, () => child.wait()), 0)
+      println("WINDOW_CONTROL_SEMANTIC_WAIT_OK")
+    }
+  })
+}
+
+///|
+async fn verify_wait_overload() -> Unit {
+  @async.with_timeout(10000, () => {
+    @async.with_task_group() <| group => {
+      let (input, writer) = @process.write_to_process()
+      defer writer.close()
+      let (reader, output) = @process.read_from_process()
+      defer reader.close()
+      let child = @process.spawn(
+        group,
+        ".work/native-host-build/native/debug/build/local/native_host/window_dev/window_dev.exe",
+        [],
+        stdin=input,
+        stdout=output,
+        extra_env={ "METONIC_DEV_HIDDEN": "1" },
+        no_console_window=true,
+      )
+      defer child.cancel()
+      writer.write("{\"id\":1,\"op\":\"snapshot\"}\n")
+      assert_true(
+        @json.parse(reader.read_until("\n").unwrap())
+        is { "id": 1, "error": "", .. },
+      )
+      writer.write(
+        "{\"id\":2,\"op\":\"wait_semantic\",\"semantic_revision\":2147483647,\"timeout_ms\":60000}\n",
+      )
+      @async.sleep(30)
+      let mut requests = ""
+      for id in 3..<100 {
+        requests += "{\"id\":" + id.to_string() + ",\"op\":\"snapshot\"}\n"
+      }
+      writer.write(requests)
+      // WhyNot: keep stdin open so EOF cannot substitute for overload cleanup.
+      assert_eq(@async.with_timeout(2000, () => child.wait()), 0)
+      assert_eq(reader.read_until("\n"), None)
+      println("WINDOW_CONTROL_WAIT_OVERLOAD_OK")
+    }
+  })
 }
 
 ///|

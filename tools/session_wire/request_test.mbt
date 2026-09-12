@@ -1,4 +1,29 @@
 ///|
+test "semantic wait transport deadline leaves response time without extending ordinary requests" {
+  assert_eq(
+    window_request_timeout(
+      "{\"op\":\"wait_semantic\",\"semantic_revision\":0,\"timeout_ms\":60000}",
+      5000,
+    ),
+    61000,
+  )
+  assert_eq(
+    window_request_timeout(
+      "{\"op\":\"wait_semantic\",\"semantic_revision\":0,\"timeout_ms\":20}", 5000,
+    ),
+    5000,
+  )
+  for
+    text in [
+      "{", "{}", "{\"op\":\"snapshot\",\"timeout_ms\":60000}", "{\"op\":\"wait_semantic\",\"semantic_revision\":-1,\"timeout_ms\":60000}",
+      "{\"op\":\"wait_semantic\",\"semantic_revision\":0,\"timeout_ms\":60001}",
+      "{\"op\":\"wait_semantic\",\"semantic_revision\":0,\"timeout_ms\":1.5}",
+    ] {
+    assert_eq(window_request_timeout(text, 5000), 5000)
+  }
+}
+
+///|
 test "request envelopes validate protocol shape and reserved identifiers" {
   for
     text in [

@@ -103,7 +103,7 @@ pub async fn Client::request(
   if self.closed || self.busy {
     fail("connection closed or busy")
   }
-  if timeout_ms < 1 || timeout_ms > 60000 {
+  if timeout_ms < 1 || timeout_ms > 61000 {
     fail("invalid timeout")
   }
   guard args is Json::Object(args) else {

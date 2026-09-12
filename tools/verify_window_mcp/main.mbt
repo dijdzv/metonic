@@ -61,6 +61,22 @@ pub fn verify_attachment(
 ) -> @js_async.Promise[String] {
   @js_async.Promise::from_async(async fn() {
     let before = invoke(client, { "name": "window_snapshot", "arguments": {} })
+    let reached = invoke(client, {
+      "name": "window_wait_semantic",
+      "arguments": { "semantic_revision": 0, "timeout_ms": 100 },
+    })
+    assert_eq(reached.text, before.text)
+    let expiration : Json = {
+      "name": "window_wait_semantic",
+      "arguments": { "semantic_revision": 2147483647, "timeout_ms": 20 },
+    }
+    let expired : Reply = @json.from_json(
+      @json.parse(call(client, expiration.stringify()).wait()),
+    )
+    assert_eq(expired.isError, Some(true))
+    assert_true(expired.content[0].text.contains("timeout"))
+    let retained = invoke(client, { "name": "window_snapshot", "arguments": {} })
+    assert_eq(retained.text, before.text)
     assert_eq(before.session_id, session)
     let inserted = invoke(client, {
       "name": "window_insert",

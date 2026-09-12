@@ -8,7 +8,27 @@ struct Request {
   selection_end : Int?
   expected_semantic_revision : Int?
   session_id : String?
+  semantic_revision : Int?
+  timeout_ms : Int?
 } derive(FromJson)
+
+///|
+struct ConnectionState {
+  mut ended : Bool
+  changed : @cond_var.Cond
+}
+
+///|
+suberror SessionQueueOverflow
+
+///|
+async fn ConnectionState::wait_end(self : ConnectionState) -> String {
+  defer self.changed.broadcast()
+  while !self.ended {
+    self.changed.wait()
+  }
+  "disconnected"
+}
 
 ///|
 async fn respond(
@@ -17,6 +37,7 @@ async fn respond(
   last_id : Ref[Int],
   output : &@io.Writer,
   identity : String?,
+  connection : ConnectionState,
 ) -> Unit {
   let request : Request = @json.from_json(@json.parse(@utf8.decode(bytes))) catch {
     _ => {
@@ -39,6 +60,15 @@ async fn respond(
     last_id.val = request.id
     match request.op {
       "snapshot" | "capabilities" => ()
+      "wait_semantic" =>
+        match (request.semantic_revision, request.timeout_ms) {
+          (Some(revision), Some(timeout)) =>
+            error = @async.any([
+              () => (handle.wait_semantic)(revision, timeout),
+              () => connection.wait_end(),
+            ])
+          _ => error = "invalid_wait"
+        }
       "capture" => {
         let captured = (handle.capture)()
         captured_state = Some(captured.state)
@@ -131,24 +161,45 @@ async fn session(
   output : &@io.Writer,
   identity : String?,
 ) -> Unit {
-  let lines = @lines.Lines::new(lf_only=true)
-  let last_id = Ref(0)
-  while input.read_some(max_len=1024) is Some(chunk) {
-    for line in lines.feed(chunk) {
+  let pending : @aqueue.Queue[@lines.InputLine] = @aqueue.Queue(
+    kind=@aqueue.Blocking(64),
+  )
+  let connection = ConnectionState::{ ended: false, changed: @cond_var.Cond(), }
+  defer pending.close(clear=true)
+  @async.with_task_group() <| group => {
+    group.spawn_bg() <| () => {
+      let lines = @lines.Lines::new(lf_only=true)
+      defer {
+        connection.ended = true
+        connection.changed.broadcast()
+        pending.close()
+      }
+      while input.read_some(max_len=1024) is Some(chunk) {
+        for line in lines.feed(chunk) {
+          // WhyNot: blocking admission would hide EOF behind a full request queue.
+          if !pending.try_put(line) {
+            raise SessionQueueOverflow
+          }
+        }
+      }
+      for line in lines.finish() {
+        if !pending.try_put(line) {
+          raise SessionQueueOverflow
+        }
+      }
+    }
+    let last_id = Ref(0)
+    while true {
+      let line = pending.get() catch {
+        @aqueue.QueueAlreadyClosed => break
+        error => raise error
+      }
       match line {
         @lines.InputLine::Line(bytes) =>
-          respond(handle, bytes, last_id, output, identity)
+          respond(handle, bytes, last_id, output, identity, connection)
         @lines.InputLine::TooLong =>
           output.write("{\"id\":null,\"error\":\"line_too_long\"}\n")
       }
-    }
-  }
-  for line in lines.finish() {
-    match line {
-      @lines.InputLine::Line(bytes) =>
-        respond(handle, bytes, last_id, output, identity)
-      @lines.InputLine::TooLong =>
-        output.write("{\"id\":null,\"error\":\"line_too_long\"}\n")
     }
   }
 }
@@ -157,7 +208,11 @@ async fn session(
 async fn control(handle : @ui.Handle) -> Unit {
   match @env.get_env_var("METONIC_DEV_PIPE") {
     None => {
-      session(handle, @stdio.stdin, @stdio.stdout, None)
+      session(handle, @stdio.stdin, @stdio.stdout, None) catch {
+        SessionQueueOverflow =>
+          @stdio.stderr.write("control request queue exceeded\n")
+        error => raise error
+      }
       (handle.apply)(@ui.Action::Close)
     }
     Some(name) => {

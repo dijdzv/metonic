@@ -1,5 +1,38 @@
 # Native CLI and MCP verification
 
+## Native semantic revision wait
+
+The development-only native `Handle.wait_semantic(revision, timeout_ms)` waits
+until the editor semantic revision reaches or exceeds the requested value.
+It returns an empty error on success, `timeout` at the deadline, `closed` for a
+closed window, or `invalid_wait` for a negative revision or a timeout outside
+1–60000 milliseconds. Task cancellation propagates as cancellation.
+
+The wait uses the async library's condition variable, signaled after normal UI
+event dispatch, rather than periodically polling the revision. Its cleanup
+also clears canceled condition waiters. The existing hidden capture scenario
+checks an already reached revision, invalid arguments, deadline expiration,
+completion after a queued edit, and cancellation before continuing GPU capture.
+The development wire operation `wait_semantic` accepts `semantic_revision` and
+`timeout_ms`. A separate bounded reader continues observing EOF during a wait;
+EOF cancels that wait with `disconnected`. Requests retain sequential execution,
+and more than 64 queued input records terminates the connection rather than
+blocking EOF observation behind admission. The control verifier checks timeout
+recovery and EOF during a 60-second wait, with process exit required within two
+seconds of EOF. MCP exposes `window_wait_semantic` with the same arguments.
+The CLI and MCP transport use the shared MoonBit deadline calculation: a valid
+wait gets at least its requested duration plus 1000 milliseconds for a response.
+Ordinary and malformed requests retain their normal transport timeout. Explicit
+outer client deadlines and cancellation may still end the operation sooner.
+The attachment verifier also checks a timed-out wait, sends a subsequent
+60-second wait and disconnects, then reconnects through CLI and MCP while
+preserving the independently started application's edited state. This checks
+connection cancellation without acquiring ownership of the app's lifetime.
+Its MCP checks also exercise successful and expired semantic waits followed by
+a state request on the same connection.
+This does not wait for GPU submission or presentation; those are separate
+completion conditions.
+
 ## Integrated window capture consistency
 
 The window capture response carries the snapshot taken immediately before its

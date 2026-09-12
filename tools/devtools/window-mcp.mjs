@@ -25,6 +25,7 @@ function factory() {
   const server = new McpServer({ name: 'metonic-window', version: '0.0.0' });
   const definitions = [
     ['snapshot', 'Read the integrated window state.', z.object({}).strict(), true],
+    ['wait_semantic', 'Wait for an editor semantic revision; this does not wait for display presentation.', z.object({ semantic_revision: z.number().int().min(0).max(2147483647), timeout_ms: z.number().int().min(1).max(60000) }).strict(), true],
     ['capture', 'Capture the integrated UI through its shared offscreen GPU pass.', z.object({}).strict(), true],
     ['insert', 'Insert text into the integrated window editor.', z.object({ text: z.string(), expected_semantic_revision: revision }).strict(), false],
     ['backspace', 'Delete the selection or preceding Unicode scalar.', z.object({ expected_semantic_revision: revision }).strict(), false],
