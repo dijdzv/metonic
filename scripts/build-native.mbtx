@@ -235,9 +235,11 @@ async fn main {
         )
       }
       let prepare_args = ["run", "scripts/prepare-native-deps.mbtx"]
-      // The lifecycle probe does not link the window module; selecting debug
-      // IME flags here would invalidate the production application's manifest.
-      if host_app != "release_probe" {
+      // These probes do not link the window module; selecting debug IME flags
+      // would invalidate the production application's manifest unnecessarily.
+      if ![
+          "release_probe", "accessibility_probe", "mailbox_probe", "sdk_mailbox_probe",
+        ].contains(host_app) {
         prepare_args.push("--")
         prepare_args.push("--ime-config")
         prepare_args.push(ime_config)
