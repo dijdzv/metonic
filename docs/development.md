@@ -676,10 +676,11 @@ requests and duplicate IDs do not prevent subsequent valid requests.
 
 `mise run native:window-control` verifies editing, stale-revision rejection,
 request correlation, malformed/oversized input recovery and EOF cleanup on
-default and fallback GPU adapters. It is part of the local pre-commit gate.
+default and fallback GPU adapters. It is part of the local pre-push integration gate.
 These hidden checks do not establish physical input or OS accessibility.
-The same task also opens a development window briefly on default and fallback
-GPUs and closes only its owned HWND while control stdin remains open. It checks
+The same task also creates a hidden development window on default and fallback
+GPUs, verifies that it is not visible, and closes only its owned HWND while control
+stdin remains open. It checks
 normal process exit, stdout EOF and rejection of a later pipe write. This verifies
 idle window-initiated shutdown. A second scenario reads the first byte of a
 capture response, stops draining stdout, submits a subsequent edit, then closes
@@ -817,6 +818,17 @@ not validate Japanese IME composition. A runtime-disabled listener does not prov
 that development tooling was excluded from a production binary.
 
 ## Work and release flow
+
+Git hooks prefer headless execution. Native window protocol and shutdown checks
+create hidden HWNDs to exercise the real message loop; the close verifier rejects
+a visible window in these checks. Headless GPU checks use offscreen images.
+
+The automatic `native:production-integration` gate retains visible windows where
+the subject is production startup, OS accessibility or SDK activation. These
+checks own and close their test processes without Computer Use or user input.
+Do not replace an automated acceptance check with a manual-only task merely to
+avoid displaying its window. Passing the hook still does not establish physical
+IME input or assistive-technology acceptance.
 
 - Use short-lived branches and small PRs. Squash merge after review and required checks.
 - Main requires a PR and resolved review conversations. Force pushes and deletion
