@@ -1,4 +1,24 @@
 ///|
+async fn attached_request(
+  client : @attach.Client,
+  op : String,
+  args : Json,
+) -> Json {
+  let envelope : Map[String, Json] = Map([])
+  if args is Json::Object(fields) {
+    for key, value in fields {
+      envelope[key] = value
+    }
+  }
+  envelope["op"] = Json::string(op)
+  let timeout = @wire.window_request_timeout(
+    Json::object(envelope).stringify(),
+    5000,
+  )
+  client.request(op, args, timeout_ms=timeout)
+}
+
+///|
 async fn attached_line(
   client : @attach.Client,
   bytes : Bytes,
@@ -20,7 +40,7 @@ async fn attached_line(
         args.set(key, value)
       }
     }
-    let response = client.request(op, Json::object(args))
+    let response = attached_request(client, op, Json::object(args))
     guard response is Json::Object(result) else {
       raise CLIError("invalid attachment bridge response")
     }
@@ -33,7 +53,7 @@ async fn attached_line(
     guard field(request, "op") is Some(Json::String(op)) else {
       raise CLIError("op must be a string")
     }
-    client.request(op, args_or_empty(request)).stringify() + "\n"
+    attached_request(client, op, args_or_empty(request)).stringify() + "\n"
   } catch {
     error if @async.is_cancellation_error(error) => raise error
     error => error_line(@debug.to_string(error))

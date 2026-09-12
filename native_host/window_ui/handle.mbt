@@ -47,6 +47,7 @@ pub struct Handle {
   edit : async (String?, Int?) -> String
   select : async (Int, Int, Int?) -> String
   capture : async () -> Captured
+  wait_semantic : async (Int, Int) -> String
 }
 
 ///|
@@ -61,6 +62,32 @@ pub struct Captured {
 ///|
 fn App::handle(self : App) -> Handle {
   {
+    wait_semantic: (revision, timeout_ms) => {
+      if revision < 0 || timeout_ms < 1 || timeout_ms > 60000 {
+        return "invalid_wait"
+      }
+      // WhyNot: a submitted-frame count cannot certify semantic or display completion.
+      // Broadcast also removes canceled waiters retained by Cond until its next signal.
+      defer self.diagnostics.changed.broadcast()
+      @async.with_timeout(timeout_ms, () => {
+        while !self.closed && @semantics.revision(self.model.editor) < revision {
+          self.diagnostics.changed.wait()
+          // WhyNot: Cond preserves a delivered signal during cancellation;
+          // a read-only wait must still honor cancellation before returning.
+          if @async.is_being_cancelled() {
+            @async.pause()
+          }
+        }
+        if self.closed {
+          "closed"
+        } else {
+          ""
+        }
+      }) catch {
+        @async.TimeoutError => "timeout"
+        error => raise error
+      }
+    },
     select: (start, end, expected) => {
       if self.closed {
         return "closed"

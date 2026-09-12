@@ -1,6 +1,28 @@
 ///|
 async fn capture_observation(handle : @ui.Handle) -> Unit {
   @async.with_timeout(10000, () => {
+    let revision = (handle.inspect)().semantic_revision
+    assert_eq((handle.wait_semantic)(revision, 100), "")
+    assert_eq((handle.wait_semantic)(-1, 100), "invalid_wait")
+    assert_eq((handle.wait_semantic)(revision, 0), "invalid_wait")
+    assert_eq((handle.wait_semantic)(revision + 1, 10), "timeout")
+    @async.with_task_group() <| group => {
+      let waiting = group.spawn(() => (handle.wait_semantic)(revision + 1, 1000))
+      @async.pause()
+      assert_eq((handle.edit)(Some("wait"), None), "")
+      assert_eq(waiting.wait(), "")
+      let canceled = group.spawn(() => (handle.wait_semantic)(2147483647, 1000))
+      @async.pause()
+      canceled.cancel()
+      let canceled_cleanly = try {
+        ignore(canceled.wait())
+        false
+      } catch {
+        error if @async.is_cancellation_error(error) => true
+        error => raise error
+      }
+      assert_true(canceled_cleanly)
+    }
     @async.with_task_group() <| group => {
       let before = (handle.inspect)()
       let pending = group.spawn(() => (handle.capture)())

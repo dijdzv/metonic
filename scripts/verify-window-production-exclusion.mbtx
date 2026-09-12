@@ -22,7 +22,7 @@ async fn main {
   for
     marker in [
       "App_3a_3ahandle", "capture__frame", "Captured", "InputObservation", "ime__events",
-      "ime__dropped", "mbw_ime_trace_get",
+      "ime__dropped", "mbw_ime_trace_get", "ConnectionState", "SessionQueueOverflow",
     ] {
     guard development.contains(marker) else {
       abort("development positive control missing: " + marker)

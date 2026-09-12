@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
-import { validate_response, validate_request, new_response_framer, clear_response_framer, append_response_text, response_framing_error, finish_response_framer } from '../../_build/js/release/build/tools/session_wire/session_wire.js';
+import { validate_response, validate_request, window_request_timeout, new_response_framer, clear_response_framer, append_response_text, response_framing_error, finish_response_framer } from '../../_build/js/release/build/tools/session_wire/session_wire.js';
 
 import { new_session_policy, session_admission_error, allocate_session_id, track_session_request, consume_session_response, close_session_policy, accept_attachment_identity } from '../../_build/js/release/build/tools/session_wire/session_wire.js';
 import { begin_session_capture, finish_session_capture } from '../../_build/js/release/build/tools/session_wire/session_wire.js';
@@ -145,11 +145,12 @@ export async function createMoonBitSession(options = {}) {
     catch (error) { return Promise.reject(new Error(`invalid native session request: ${error.message}`)); }
     const requestError = validate_request(payload, windowProtocol, id, op);
     if (requestError) return Promise.reject(new Error(requestError));
+    const transportTimeoutMs = windowProtocol ? window_request_timeout(payload, requestTimeoutMs) : requestTimeoutMs;
     payload += '\n';
     return new Promise((resolve, reject) => {
       const signal = options.signal;
       const cleanup = () => { clearTimeout(timer); signal?.removeEventListener('abort', onAbort); };
-      const timer = setTimeout(() => { cleanup(); pending.delete(id); fail(new Error('native session request timed out')); reject(new Error('native session request timed out')); }, requestTimeoutMs);
+      const timer = setTimeout(() => { cleanup(); pending.delete(id); fail(new Error('native session request timed out')); reject(new Error('native session request timed out')); }, transportTimeoutMs);
       const onAbort = () => { cleanup(); pending.delete(id); fail(abortError()); reject(abortError()); };
       pending.set(id, { resolve: value => { cleanup(); resolve(value); }, reject: error => { cleanup(); reject(error); } });
       track_session_request(policy, id);

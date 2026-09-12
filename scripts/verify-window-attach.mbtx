@@ -141,6 +141,22 @@ async fn main {
         )
         assert_eq(edited.error, "")
         assert_true(edited.text.contains("attach-proof"))
+        first.write(
+          "{\"id\":3,\"op\":\"wait_semantic\",\"semantic_revision\":2147483647,\"timeout_ms\":20,\"session_id\":\"" +
+          ready.session_id +
+          "\"}\n",
+        )
+        let timed_out : Reply = @json.from_json(
+          @json.parse(first.read_until("\n").unwrap()),
+        )
+        assert_eq(timed_out.error, "timeout")
+        assert_eq(timed_out.text, edited.text)
+        first.write(
+          "{\"id\":4,\"op\":\"wait_semantic\",\"semantic_revision\":2147483647,\"timeout_ms\":60000,\"session_id\":\"" +
+          ready.session_id +
+          "\"}\n",
+        )
+        @async.sleep(30)
         first.close()
         @async.sleep(50)
         assert_true(child.try_wait() is None)
