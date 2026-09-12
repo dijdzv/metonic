@@ -25,6 +25,7 @@ async fn main {
       mode != "accessibility-probe" &&
       mode != "mailbox-probe" &&
       mode != "sdk-mailbox-probe" &&
+      mode != "production-probes" &&
       mode != "window-dev" &&
       mode != "window-probe" &&
       mode != "async" &&
@@ -156,36 +157,41 @@ async fn main {
       mode == "accessibility-probe" ||
       mode == "mailbox-probe" ||
       mode == "sdk-mailbox-probe" ||
+      mode == "production-probes" ||
       mode == "window-dev" ||
       mode == "window-probe" {
-      let host_app = if mode == "async" {
-        "async_app"
-      } else if mode == "window-dev" {
-        "window_dev"
-      } else if mode == "window-probe" {
-        "window_probe"
-      } else if mode == "release-probe" {
-        "release_probe"
-      } else if mode == "accessibility-probe" {
-        "accessibility_probe"
-      } else if mode == "mailbox-probe" {
-        "mailbox_probe"
-      } else if mode == "sdk-mailbox-probe" {
-        "sdk_mailbox_probe"
-      } else {
-        "window_app"
+      let host_apps = match mode {
+        "async" => ["async_app"]
+        "window-dev" => ["window_dev"]
+        "window-probe" => ["window_probe"]
+        "release-probe" => ["release_probe"]
+        "accessibility-probe" => ["accessibility_probe"]
+        "mailbox-probe" => ["mailbox_probe"]
+        "sdk-mailbox-probe" => ["sdk_mailbox_probe"]
+        "production-probes" =>
+          [
+            "release_probe", "accessibility_probe", "mailbox_probe", "sdk_mailbox_probe",
+          ]
+        _ => ["window_app"]
+      }
+      let needs_accesskit = fn(host_app : String) {
+        [
+          "window_app", "window_dev", "accessibility_probe", "mailbox_probe", "sdk_mailbox_probe",
+          "window_probe",
+        ].contains(host_app)
       }
       let native_host_build_dir = @fs.realpath(".") + "/.work/native-host-build"
-      let build_args = [
-        "-C", "native_host", "build", host_app, "--target", "native", "--target-dir",
-        native_host_build_dir, "--deny-warn",
-      ]
-      if host_app == "window_app" ||
-        host_app == "window_dev" ||
-        host_app == "accessibility_probe" ||
-        host_app == "mailbox_probe" ||
-        host_app == "sdk_mailbox_probe" ||
-        host_app == "window_probe" {
+      let build_args = ["-C", "native_host", "build"]
+      for host_app in host_apps {
+        build_args.push(host_app)
+      }
+      for
+        arg in [
+          "--target", "native", "--target-dir", native_host_build_dir, "--deny-warn",
+        ] {
+        build_args.push(arg)
+      }
+      if host_apps.any(needs_accesskit) {
         guard @process.run(
             moon,
             ["run", "scripts/prepare-accesskit.mbtx"],
@@ -222,11 +228,7 @@ async fn main {
       } else {
         "debug"
       }
-      let ime_config = if host_app == "window_probe" {
-        "fixture"
-      } else {
-        profile
-      }
+      let ime_config = if mode == "window-probe" { "fixture" } else { profile }
       for variable in ["CL", "_CL_"] {
         assert_false(
           envmap.get(variable).unwrap_or("").contains("METONIC_IME_TRACE"),
@@ -237,9 +239,11 @@ async fn main {
       let prepare_args = ["run", "scripts/prepare-native-deps.mbtx"]
       // These probes do not link the window module; selecting debug IME flags
       // would invalidate the production application's manifest unnecessarily.
-      if ![
-          "release_probe", "accessibility_probe", "mailbox_probe", "sdk_mailbox_probe",
-        ].contains(host_app) {
+      if host_apps.any(fn(host_app) {
+          ![
+            "release_probe", "accessibility_probe", "mailbox_probe", "sdk_mailbox_probe",
+          ].contains(host_app)
+        }) {
         prepare_args.push("--")
         prepare_args.push("--ime-config")
         prepare_args.push(ime_config)
@@ -262,39 +266,36 @@ async fn main {
       if build_code != 0 {
         fail("MoonBit host " + mode + " build failed")
       }
-      let required_exe = native_host_build_dir +
-        "/native/" +
-        profile +
-        "/build/local/native_host/" +
-        host_app +
-        "/" +
-        host_app +
-        ".exe"
-      if !@fs.exists(required_exe) {
-        fail("native host " + mode + " build artifact missing")
-      }
-      if host_app == "window_app" ||
-        host_app == "window_dev" ||
-        host_app == "accessibility_probe" ||
-        host_app == "mailbox_probe" ||
-        host_app == "sdk_mailbox_probe" ||
-        host_app == "window_probe" {
-        let directory = native_host_build_dir +
+      for host_app in host_apps {
+        let required_exe = native_host_build_dir +
           "/native/" +
           profile +
           "/build/local/native_host/" +
-          host_app
-        @fs.write_file(
-          directory + "/accesskit.dll",
-          @fs.read_file(".work/accesskit-focus-build/release/accesskit.dll").binary(),
-        )
-        for license in ["MIT", "APACHE"] {
+          host_app +
+          "/" +
+          host_app +
+          ".exe"
+        if !@fs.exists(required_exe) {
+          fail("native host " + mode + " build artifact missing")
+        }
+        if needs_accesskit(host_app) {
+          let directory = native_host_build_dir +
+            "/native/" +
+            profile +
+            "/build/local/native_host/" +
+            host_app
           @fs.write_file(
-            directory + "/ACCESSKIT-LICENSE-" + license,
-            @fs.read_file(
-              ".work/accesskit-assets/accesskit-c-0.22.3/LICENSE-" + license,
-            ).binary(),
+            directory + "/accesskit.dll",
+            @fs.read_file(".work/accesskit-focus-build/release/accesskit.dll").binary(),
           )
+          for license in ["MIT", "APACHE"] {
+            @fs.write_file(
+              directory + "/ACCESSKIT-LICENSE-" + license,
+              @fs.read_file(
+                ".work/accesskit-assets/accesskit-c-0.22.3/LICENSE-" + license,
+              ).binary(),
+            )
+          }
         }
       }
       println("NATIVE_BUILD_OK mode=" + mode)
