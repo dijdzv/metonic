@@ -10,6 +10,12 @@ WasmGC retains `font_begin`/`font_put`/`font_commit`. Its GC array representatio
 is not the JavaScript TypedArray ABI. A measured binary-string conversion was
 slower, so it is not used for inbound font data.
 
+The word packing loop is implemented in `tools/browser_buffer` and compiled to
+the shared JS host module. It sends little-endian words, zero-pads the final
+partial word, and stops immediately on receiver rejection. Empty or larger-than-
+16-MiB input is rejected before callback delivery. Fetch, digest completion and
+disposal checks still precede the transfer; the JS bulk receiver is unchanged.
+
 ## Evidence and limits
 
 On 2026-09-09, an isolated Chromium 153.0.8010.12 comparison transferred the
@@ -23,6 +29,15 @@ Those measurements include host conversion and allocation but exclude font
 parsing, fetch and digest; the simplified word receiver omits application guards.
 They are not integrated startup-time claims. The real application still copies
 the fixed array into the parser's Bytes representation during commit.
+
+On 2026-09-13, the generated MoonBit loop and the handwritten loop were compared
+against the application's actual WasmGC `font_put` receiver. With three warmups,
+ten samples and alternating execution order, the 9,589,900-byte transfer medians
+were 28.5 ms and 28.0 ms respectively. Parsing each result produced identical
+475,648-byte raster layers. Timing excludes parsing and rendering, and does not
+claim a speed improvement or a stable performance bound. Separate fixtures check
+odd byte counts, all byte values and early rejection; package tests cover bounds
+and tail padding.
 
 Run `mise run browser:headless` for actual-font rendering, JS/WasmGC text output,
 font fetch failure, wrong digest, delayed stop and packaged UI regression checks.
