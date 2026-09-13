@@ -4,7 +4,9 @@ The text renderer transfers one complete RGBA layer per call. JS uses MoonBit's
 Uint8Array representation and immediately copies it with the browser's `slice()`.
 The returned source array is internal and must not be mutated by the host.
 WasmGC uses the pinned compiler's JS-string builtins: pairs of bytes travel as
-raw UTF-16 code units and are unpacked with `charCodeAt`. This is not text and
+raw UTF-16 code units and are unpacked by `tools/browser_buffer`, compiled to a
+JS host module. The MoonBit conversion returns a fresh `FixedArray[Byte]`, whose
+JS representation is Uint8Array. This is not text and
 must never pass through UTF-8 encoding or Unicode normalization. RGBA lengths
 are multiples of four. Unexpected types or lengths are rejected before upload.
 
@@ -12,6 +14,12 @@ No new dependency or C bridge is required. This is a target-specific compiler
 boundary, not an assumption that JavaScript can directly access WasmGC arrays.
 Invalid layer indices return an empty buffer; text disposal removes the layers.
 GPU upload and texture ownership retain their existing behavior.
+
+The conversion checks code-unit length before doubling it. Its package tests
+cover the integer boundary without allocating a huge buffer, all 65,536 binary
+code units, empty input and independent result arrays. The generated module is
+included in both development and production assets. This removes the handwritten
+pixel-unpacking loop; it does not provide direct access to WasmGC arrays.
 
 ## Reproduction and evidence
 
@@ -44,3 +52,11 @@ and blit copy as slower. Raw UTF-16 transfer was slower on JS, hence the separat
 JS boundary. The isolated probe preserved all 65,536 code units, including lone
 surrogates, and verified independent JS copies. See issue #214 for investigation
 details. The integrated oracle remains the ongoing check for actual layer bytes.
+
+The MoonBit conversion integration was checked on 2026-09-13 with Chromium
+153.0.8010.12. Both targets again compared 2,429,440 bytes without mismatch and
+passed the integrated suite, including production packaging. For the 245,760-byte
+layer, the measured bulk median was approximately 0.10 ms on JS and 0.60 ms on
+WasmGC. These measurements are not a performance guarantee. The original table
+above records the earlier implementation and must not be read as the timing of
+the MoonBit conversion.

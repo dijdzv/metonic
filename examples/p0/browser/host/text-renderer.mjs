@@ -1,3 +1,5 @@
+import { unpack } from './browser-buffer.mjs';
+
 const FONT_HASH = 'c2f3b4d463500a2ddcd3849cded1fceeb9fd6d1c32e6cbecd568453ba50fc68f';
 
 async function loadFont(app, disposed) {
@@ -44,12 +46,7 @@ export async function createTextRenderer({ app, device, format, disposed }) {
         if (transferred instanceof Uint8Array) {
           pixels = transferred.slice();
         } else if (typeof transferred === 'string') {
-          // This is a binary code-unit container; UTF-8 encoding would corrupt surrogate values.
-          pixels = new Uint8Array(transferred.length * 2);
-          for (let at = 0; at < transferred.length; at += 1) {
-            const word = transferred.charCodeAt(at);
-            pixels[at * 2] = word; pixels[at * 2 + 1] = word >>> 8;
-          }
+          pixels = unpack(transferred);
         } else {
           throw new Error('MoonBit returned an unsupported pixel buffer');
         }

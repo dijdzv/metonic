@@ -40,6 +40,16 @@ async fn main {
   if server_code != 0 {
     fail("browser server wasm build failed")
   }
+  assert_eq(
+    @process.run(
+      moon,
+      [
+        "build", "tools/browser_buffer", "--target", "js", "--release", "--deny-warn",
+      ],
+      no_console_window=true,
+    ),
+    0,
+  )
   let (js_code, js_out, js_err) = @process.collect_output(
     moon,
     [
@@ -85,6 +95,9 @@ async fn main {
     @fs.mkdir(dist, recursive=true)
   }
   let copies = [
+    (
+      "_build/js/release/build/tools/browser_buffer/browser_buffer.js", ".work/browser-dist/browser-buffer.mjs",
+    ),
     (
       ".work/websys-input/generated/runtime.mjs", ".work/browser-dist/websys-input.mjs",
     ),
