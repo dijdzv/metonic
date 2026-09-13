@@ -40,6 +40,24 @@ async fn capture_observation(handle : @ui.Handle) -> Unit {
       assert_eq(image.pixels.length(), image.width * image.height * 4)
     }
     let retained_id = (handle.retained_frame_id)()
+    @async.with_task_group() <| group => {
+      let canceled = group.spawn(() => (handle.capture)())
+      @async.pause()
+      canceled.cancel()
+      let canceled_cleanly = try {
+        ignore(canceled.wait())
+        false
+      } catch {
+        error if @async.is_cancellation_error(error) => true
+        error => raise error
+      }
+      assert_true(canceled_cleanly)
+    }
+    let recovered_capture = (handle.capture)()
+    assert_eq(
+      recovered_capture.pixels.length(),
+      recovered_capture.width * recovered_capture.height * 4,
+    )
     assert_true(retained_id > 0L)
     let original = (handle.capture_retained)(retained_id)
     (handle.apply)(@ui.Action::Activate)
