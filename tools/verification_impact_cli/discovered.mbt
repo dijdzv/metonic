@@ -122,7 +122,6 @@ async fn record_discovered_index(
   let temporary = @fs.tmpdir(prefix="metonic-record-inputs")
   defer @async.protect_from_cancel(() => @fs.rmdir(temporary, recursive=true))
   let before_file = temporary + "/before.json"
-  let after_file = temporary + "/after.json"
   let collect = async fn(output : String) {
     let code = @process.run(
       discover[0],
@@ -132,6 +131,8 @@ async fn record_discovered_index(
     )
     assert_eq(code, 0, msg="verification input discovery failed")
   }
+  let expected_tree : Ref[String?] = Ref(None)
+  let expected_base : Ref[String?] = Ref(None)
   record_verification(
     before_file,
     record,
@@ -146,8 +147,9 @@ async fn record_discovered_index(
       let base = comparison_head(directory)
       assert_eq(context.get("base_commit"), Some(base))
       let tree = context.get("tree").unwrap()
+      expected_tree.val = Some(tree)
+      expected_base.val = Some(base)
       require_index_tree(directory, tree)
-      let before = fingerprint(before_file)
       let code = @process.run(
         command[0],
         command[1:].to_owned(),
@@ -157,15 +159,12 @@ async fn record_discovered_index(
       assert_eq(code, 0, msg="commit lane failed")
       require_index_tree(directory, tree)
       assert_eq(comparison_head(directory), base)
-      collect(after_file)
-      assert_eq(
-        fingerprint(after_file),
-        before,
-        msg="discovered verification inputs changed",
-      )
-      require_index_tree(directory, tree)
-      assert_eq(comparison_head(directory), base)
     },
     prepare=() => collect(before_file),
+    refresh=() => collect(before_file),
+    validate=() => {
+      require_index_tree(directory, expected_tree.val.unwrap())
+      assert_eq(comparison_head(directory), expected_base.val.unwrap())
+    },
   )
 }

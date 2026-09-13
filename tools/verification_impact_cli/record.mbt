@@ -23,6 +23,8 @@ async fn record_verification(
   record : String,
   verify : async () -> Unit,
   prepare? : async () -> Unit = fn() {  },
+  refresh? : async () -> Unit = fn() {  },
+  validate? : async () -> Unit = fn() {  },
 ) -> Unit {
   let lock = record + ".lock"
   @fs.mkdir(lock)
@@ -31,8 +33,10 @@ async fn record_verification(
   prepare()
   let before = fingerprint(config)
   verify()
+  refresh()
   let after = fingerprint(config)
   assert_eq(before, after, msg="verification inputs changed during execution")
+  validate()
   let result : Json = { "success": true, "fingerprint": after }
   let temporary = lock + "/success.json"
   @fs.write_file(temporary, result.stringify())
