@@ -25,6 +25,29 @@ text while leaving exact highlighting of such existing-text compositions as a
 limitation. The release pixel check compares both fields before, during and after
 that synthetic sequence; ordinary highlighted composition remains covered too.
 
+The input host uses WebSys through `input_js.mbt` and `input_wasm.mbt`.
+The shared composition state machine remains in `input.mbt`. Both adapters keep
+the registered listener handle for removal, preserve UTF-16 selection endpoints,
+and cancel pending frame reconciliation on composition end and stop. Element and
+event downcasts are checked. Document/window acquisition remains a host boundary;
+it does not duplicate DOM operations or input state management.
+
+`scripts/prepare-websys-input.mbtx` verifies the SHA256 of WebSys revision
+`2ffc99595ca4eeaac316864e9318dc988494c4d3`. It combines the unchanged JS sources
+with the WasmGC surface generated from `browser_host/input.idl`, selecting files
+by target in one local module. The generator uses its own pinned compiler and
+Bun 1.3.14 through mise; Metonic checks the resulting package with its compiler.
+Unused-import warning 29 is disabled only in that generated package because its
+JS dependency is unused on WasmGC. The JS source imports async 0.21.3; this does
+not move Metonic's input scheduling to that library.
+
+Preparation verifies the archive on every invocation. A content fingerprint of
+the preparation script, IDL, toolchain manifest, generated sources/manifests,
+runtime and license permits reuse after successful generation and checks.
+Changed, missing or additional MoonBit sources invalidate it. Regeneration
+replaces the generated source set so removed upstream files cannot linger.
+
+Other browser operations still use the working webapi binding.
 `scripts/prepare-browser-gpu.mbtx` prepares webapi commit
 `ecae5a4b07b011e46de343efe2ac1c450b7ed3a2` and verifies the archive SHA256 before
 extracting the generator and Apache-2.0 license. It regenerates bindings using
@@ -35,8 +58,9 @@ dependency: those concern deprecated syntax and the DOM method named `extend`.
 Metonic code retains `--deny-warn`.
 
 Run `mise run browser:headless` for the integrated JS/WasmGC and packaged WasmGC
-checks. The release includes the matching `webapi.mjs` runtime and upstream
-license. Both loaders supply js-string builtins, imported string constants and
+checks. The release includes matching `webapi.mjs` and `websys-input.mjs`
+runtimes and their upstream licenses. Both loaders preserve webapi's cached
+compiler closure hook while supplying WebSys's namespace, js-string builtins, imported string constants and
 the required console import. Release packaging keeps its explicit asset list
 and development-content checks.
 

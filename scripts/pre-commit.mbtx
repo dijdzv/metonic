@@ -109,6 +109,7 @@ async fn main {
     run("git", ["diff", "--cached", "--check"])
     run(moon, ["run", "scripts/prepare-wgpu.mbtx"])
     run(moon, ["run", "scripts/prepare-browser-gpu.mbtx"])
+    run(moon, ["run", "scripts/prepare-websys-input.mbtx"])
     run(moon, ["fmt"])
     run(moon, ["run", "scripts/format-scripts.mbtx"])
     run(moon, ["-C", "experiments/wgpu_binding", "fmt"])

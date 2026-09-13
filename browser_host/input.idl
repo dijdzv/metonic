@@ -1,0 +1,52 @@
+// Input-only binding surface. Explicit capture/direction/init arguments narrow
+// the optional standard signatures; unrelated HTTP and GPU APIs are excluded.
+interface Window {
+  unsigned long requestAnimationFrame(FrameRequestCallback callback);
+  undefined cancelAnimationFrame(unsigned long handle);
+};
+callback FrameRequestCallback = undefined (double timestamp);
+interface EventTarget {
+  undefined addEventListener(DOMString type, EventListener callback, boolean capture);
+  undefined removeEventListener(DOMString type, EventListener callback, boolean capture);
+  boolean dispatchEvent(Event event);
+};
+callback EventListener = undefined (Event event);
+interface Document : EventTarget {
+  Element? getElementById(DOMString id);
+  readonly attribute Element? activeElement;
+};
+interface Node : EventTarget {
+  boolean isSameNode(Node? otherNode);
+};
+interface Element : Node {
+  attribute double scrollLeft;
+};
+interface HTMLElement : Element {};
+interface HTMLInputElement : HTMLElement {
+  attribute DOMString value;
+  readonly attribute unsigned long? selectionStart;
+  readonly attribute unsigned long? selectionEnd;
+  readonly attribute DOMString? selectionDirection;
+};
+interface HTMLTextAreaElement : HTMLElement {
+  attribute DOMString value;
+  readonly attribute unsigned long selectionStart;
+  readonly attribute unsigned long selectionEnd;
+  readonly attribute DOMString selectionDirection;
+};
+interface Event {
+  constructor(DOMString type, EventInit init);
+  readonly attribute DOMString type;
+};
+dictionary EventInit {
+  boolean bubbles = false;
+  boolean cancelable = false;
+  boolean composed = false;
+};
+interface UIEvent : Event {};
+interface InputEvent : UIEvent {
+  readonly attribute boolean isComposing;
+};
+interface CompositionEvent : UIEvent {
+  readonly attribute DOMString data;
+};
