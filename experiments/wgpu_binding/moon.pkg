@@ -5,6 +5,7 @@ import {
 } for "test"
 
 import {
+  "moonbitlang/core/int",
   "moonbitlang/async",
   "Milky2018/wgpu_mbt" @wgpu,
 }

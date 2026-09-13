@@ -1,11 +1,11 @@
 ///|
 /// A caller-owned ticket registry keeps pending native requests alive explicitly.
 pub(all) struct ReadbackTicket {
-  pub id : Int
-  pub poll : () -> UInt
-  pub read : () -> Bytes
-  pub cancel : () -> Unit
-  pub clear : () -> Unit
+  id : Int
+  poll : () -> UInt
+  read : () -> Bytes
+  cancel : () -> Unit
+  clear : () -> Unit
 }
 
 ///|
