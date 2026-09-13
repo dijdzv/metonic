@@ -84,3 +84,60 @@ async test "success records require successful execution and unchanged inputs" {
     assert_false(matching_record(dir + "/config.json", record))
   }
 }
+
+///|
+async test "rediscovered files and final checkout rejection prevent success publication" {
+  let base = ".work/verification-refresh-tests-"
+  let mut index = 0
+  while @fs.exists(base + index.to_string()) {
+    index += 1
+  }
+  let dir = base + index.to_string()
+  @fs.mkdir(dir, recursive=true)
+  @fs.write_file(dir + "/input", "original")
+  @fs.write_file(dir + "/added", "newly discovered")
+  let config : Map[String, Json] = {
+    "files": Json::array([dir + "/input"]),
+    "context": {
+      "target": "wasm",
+      "toolchain": "fixture",
+      "command": "fixture",
+      "policy": "fixture",
+    },
+  }
+  let config_file = dir + "/config.json"
+  let record = dir + "/result.json"
+  @fs.write_file(config_file, Json::object(config).stringify())
+  let rejected = try {
+    record_verification(config_file, record, () => (), refresh=() => {
+      config["files"] = Json::array([dir + "/input", dir + "/added"])
+      @fs.write_file(config_file, Json::object(config).stringify())
+    })
+    false
+  } catch {
+    _ => true
+  }
+  assert_true(rejected)
+  assert_eq(@fs.read_file(record).text(), "{\"success\":false}")
+  let rejected = try {
+    record_verification(config_file, record, () => (), validate=() => {
+      fail("checkout changed after discovery")
+    })
+    false
+  } catch {
+    _ => true
+  }
+  assert_true(rejected)
+  assert_eq(@fs.read_file(record).text(), "{\"success\":false}")
+  let rejected = try {
+    record_verification(config_file, record, () => (), refresh=() => {
+      fail("discovery failed")
+    })
+    false
+  } catch {
+    _ => true
+  }
+  assert_true(rejected)
+  assert_eq(@fs.read_file(record).text(), "{\"success\":false}")
+  assert_false(@fs.exists(record + ".lock"))
+}
