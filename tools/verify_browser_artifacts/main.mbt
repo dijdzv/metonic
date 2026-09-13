@@ -19,6 +19,14 @@ extern "js" fn api_activate(api : BrowserApi) -> Unit =
   #| (api) => api.activate()
 
 ///|
+extern "js" fn api_pointer(api : BrowserApi, x : Int, y : Int) -> Int =
+  #| (api, x, y) => api.scene_pointer(x, y)
+
+///|
+extern "js" fn api_key(api : BrowserApi, key : String) -> Int =
+  #| (api, key) => api.scene_key(key)
+
+///|
 extern "js" fn api_field(api : BrowserApi, index : Int) -> Int =
   #| (api, index) => api.field(index)
 
@@ -99,6 +107,23 @@ fn run(api : BrowserApi) -> Array[Array[Int]] raise VerifyFailure {
   let reset = snapshot(api)
   check_state(reset, [260, 144, 120, 72, 0, 0, 640, 360])
   history.push(reset)
+  if api_pointer(api, 380, 216) != 1 ||
+    api_key(api, "Enter") != 1 ||
+    api_key(api, "ArrowLeft") != 1 {
+    raise Failure("scene input rejected")
+  }
+  let moved = snapshot(api)
+  check_state(moved, [250, 144, 120, 72, 0, 3, 640, 360])
+  history.push(moved)
+  if api_key(api, "a") != -1 {
+    raise Failure("unsupported key accepted")
+  }
+  check_state(snapshot(api), moved)
+  ignore(api_move(api, 0, 0))
+  if api_key(api, "ArrowLeft") != 0 {
+    raise Failure("clamped key not recognized")
+  }
+  history.push(snapshot(api))
   history
 }
 
@@ -107,7 +132,10 @@ fn verify_checked(
   js : BrowserApi,
   wasm : BrowserApi,
 ) -> Unit raise VerifyFailure {
-  for name in ["init", "resize", "move_to", "activate", "field"] {
+  for
+    name in [
+      "init", "resize", "move_to", "activate", "field", "scene_pointer", "scene_key",
+    ] {
     if !api_has_function(js, name) || !api_has_function(wasm, name) {
       raise Failure("missing browser export: " + name)
     }
