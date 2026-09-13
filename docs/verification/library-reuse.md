@@ -67,6 +67,12 @@ WGSL shader text and HTML/CSS remain GPU/web formats, distinct from orchestratio
 scripts. The generated Visual Studio environment `.cmd` bridge invokes the vendor
 build environment; it is not a PowerShell setup dependency.
 
+Browser scene hit testing, arrow-step movement and Space/Enter activation are
+implemented in MoonBit. The JavaScript host forwards canvas-relative pointer
+coordinates and key names, preserves focus and prevents default behavior for
+recognized keys, including clamped movement. MoonBit tests cover hit edges and
+ignored keys; the artifact verifier compares generated JS/WasmGC input results.
+
 ## Initial results
 
 These are source-checkout results unless explicitly identified as published

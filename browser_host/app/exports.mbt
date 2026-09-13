@@ -204,6 +204,18 @@ pub fn move_to(x : Int, y : Int) -> Int {
 }
 
 ///|
+#export_name("scene_pointer")
+pub fn scene_pointer(x : Int, y : Int) -> Int {
+  @app.scene_pointer(x, y)
+}
+
+///|
+#export_name("scene_key")
+pub fn scene_key(key : String) -> Int {
+  @app.scene_key(key)
+}
+
+///|
 #export_name("editor_render")
 pub fn editor_render(viewport_width : Int) -> Int {
   @app.editor_render(viewport_width)

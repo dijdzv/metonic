@@ -8,6 +8,8 @@ extern "js" fn fixture(kind : Int) -> BrowserApi =
   #|     resize() { return kind === 2 ? 0 : 1; },
   #|     move_to() { return 0; },
   #|     activate() {},
+  #|     scene_pointer() { return 0; },
+  #|     scene_key() { return -1; },
   #|     field(index) { return values[index] ?? -1; },
   #|   };
   #|   if (kind === 0) delete api.move_to;

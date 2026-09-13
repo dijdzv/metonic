@@ -143,32 +143,12 @@ function onPointer(event) {
   const rect = canvas.getBoundingClientRect();
   const x = Math.trunc(event.clientX - rect.left);
   const y = Math.trunc(event.clientY - rect.top);
-  const hit = x >= field(0) && x <= field(0) + field(2)
-    && y >= field(1) && y <= field(1) + field(3);
-  if (hit) {
-    app.activate();
-    changed();
-  } else {
-    changed(app.move_to(x, y));
-  }
+  changed(app.scene_pointer(x, y));
 }
 function onKey(event) {
   if (disposed) return;
-  let result;
-  if (event.key === 'ArrowLeft') {
-    result = app.move_to(field(0) - 10, field(1));
-  } else if (event.key === 'ArrowRight') {
-    result = app.move_to(field(0) + 10, field(1));
-  } else if (event.key === 'ArrowUp') {
-    result = app.move_to(field(0), field(1) - 10);
-  } else if (event.key === 'ArrowDown') {
-    result = app.move_to(field(0), field(1) + 10);
-  } else if (event.key === ' ' || event.key === 'Enter') {
-    app.activate();
-    result = 1;
-  } else {
-    return;
-  }
+  const result = Number(app.scene_key(event.key));
+  if (result < 0) return;
   event.preventDefault();
   changed(result);
 }
