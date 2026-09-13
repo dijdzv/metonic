@@ -1,4 +1,4 @@
-import { unpack } from './browser-buffer.mjs';
+import { unpack, transfer_font_words } from './browser-buffer.mjs';
 
 const FONT_HASH = 'c2f3b4d463500a2ddcd3849cded1fceeb9fd6d1c32e6cbecd568453ba50fc68f';
 
@@ -14,11 +14,7 @@ async function loadFont(app, disposed) {
     return true;
   }
   if (app.font_begin(bytes.length) !== 1) throw new Error('MoonBit font_begin rejected font');
-  for (let index = 0; index < bytes.length; index += 4) {
-    let word = 0;
-    for (let shift = 0; shift < 4 && index + shift < bytes.length; shift += 1) word |= bytes[index + shift] << (shift * 8);
-    if (app.font_put(word) !== 1) throw new Error('MoonBit font_put rejected font');
-  }
+  if (!transfer_font_words(bytes, app.font_put)) throw new Error('MoonBit font_put rejected font');
   if (disposed()) return false;
   if (app.font_commit() !== 1) throw new Error('MoonBit font_commit rejected font');
   return true;
