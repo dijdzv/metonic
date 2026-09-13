@@ -11,6 +11,7 @@ async fn main {
     @fs.mkdir(dist, recursive=true)
   }
   let entries = [
+    (".work/browser-dist/browser-buffer.mjs", "browser-buffer.mjs"),
     (".work/browser-dist/websys-input.mjs", "websys-input.mjs"),
     (".work/browser-dist/LICENSE-websys", "LICENSE-websys"),
     (".work/browser-dist/webapi.mjs", "webapi.mjs"),
