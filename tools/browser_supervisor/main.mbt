@@ -71,10 +71,12 @@ async fn drain(
   reader : @process.ReadFromProcess,
   label : String,
   capture : @ref.Ref[Array[Byte]],
+  on_transport_failure? : (async () -> Unit)? = None,
 ) -> Int raise Error {
   defer reader.close()
   let prefix = capture.val
   let mut total = prefix.length()
+  let mut observed_transport = false
   while true {
     let chunk = reader.read_some(max_len=4096)
     match chunk {
@@ -87,6 +89,14 @@ async fn drain(
           }
         }
         capture.val = prefix
+        if !observed_transport &&
+          on_transport_failure is Some(observe) &&
+          @utf8.decode_lossy(Bytes::from_array(prefix)).contains(
+            "ERR_NO_BUFFER_SPACE",
+          ) {
+          observed_transport = true
+          @async.protect_from_cancel(observe)
+        }
         if total > 65536 {
           fail(label + " output overflow")
         }
@@ -112,6 +122,7 @@ async fn run_session(
   verifier_capture~ : @ref.Ref[Array[Byte]],
   verifier_err_capture~ : @ref.Ref[Array[Byte]],
   cleanup_capture? : @ref.Ref[String?] = @ref.new(None),
+  transport_capture? : @ref.Ref[Json] = @ref.new(Json::null()),
 ) -> Unit raise Error {
   if mode != "async" && mode != "headless" {
     fail("invalid mode")
@@ -228,7 +239,14 @@ async fn run_session(
       )
       ignore(
         group.spawn(() => {
-          drain(verifier_err_reader, "verifier stderr", verifier_err_capture)
+          drain(
+            verifier_err_reader,
+            "verifier stderr",
+            verifier_err_capture,
+            on_transport_failure=Some(() => {
+              transport_capture.val = collect_tcp_observation()
+            }),
+          )
         }),
       )
       let verifier_status = verifier.wait()
@@ -283,6 +301,7 @@ async fn main {
   let verifier_capture = @ref.new([])
   let verifier_err_capture = @ref.new([])
   let cleanup_capture : @ref.Ref[String?] = @ref.new(None)
+  let transport_capture = @ref.new(Json::null())
   run_session(
     mode,
     ".tools/moonbit/bin/moonrun.exe",
@@ -296,6 +315,7 @@ async fn main {
     verifier_capture~,
     verifier_err_capture~,
     cleanup_capture~,
+    transport_capture~,
   ) catch {
     error => {
       save_logs(
@@ -308,6 +328,7 @@ async fn main {
           "outcome": Json::string("failure"),
           "error": Json::string(error.to_string()),
           "cleanup_warning": warning_json(cleanup_capture),
+          "transport_observation": transport_capture.val,
         }).stringify(),
       )
       raise error
@@ -335,6 +356,7 @@ async fn main {
       Json::object({
         "outcome": Json::string("success"),
         "cleanup_warning": warning_json(cleanup_capture),
+        "transport_observation": transport_capture.val,
       }).stringify(),
     ),
   )
