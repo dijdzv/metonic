@@ -3,6 +3,44 @@ import test from 'node:test';
 import { chromium } from 'playwright';
 import { observedPage, observeFailure } from './browser-observation.mjs';
 
+test('outstanding requests remain bounded and disappear after completion', async () => {
+  const browser = await chromium.launch({ headless: true });
+  const page = await observedPage(browser);
+  const held = [];
+  let routed;
+  try {
+    await page.route('http://fixture.invalid/**', route => { held.push(route); routed(); });
+    for (let index = 0; index < 10; index += 1) {
+      const requested = new Promise(resolve => { routed = resolve; });
+      await page.evaluate(index => {
+        void fetch(`http://fixture.invalid/pending-${index}.wasm?secret=private-value`).catch(() => {});
+      }, index);
+      await requested;
+    }
+    const result = await observeFailure(page);
+    assert.equal(result.pendingCount, 10);
+    assert.equal(result.pending.length, 8);
+    assert.equal(result.pending[0].path, '/pending-0.wasm');
+    assert.equal(result.pending[7].path, '/pending-7.wasm');
+    assert(result.pending.every(request => request.method === 'GET' && request.elapsedMs >= 0));
+    assert(!JSON.stringify(result).includes('private-value'));
+    const failed = page.waitForEvent('requestfailed');
+    await held[0].abort('failed');
+    await failed;
+    const after = await observeFailure(page);
+    assert.equal(after.pendingCount, 9);
+    assert.equal(after.pending.length, 7);
+    assert.equal(after.pending[0].path, '/pending-1.wasm');
+    const completed = page.waitForEvent('requestfinished');
+    await held[1].fulfill({ status: 200, body: 'ok', headers: { 'Access-Control-Allow-Origin': '*' } });
+    await completed;
+    const success = await observeFailure(page);
+    assert.equal(success.pendingCount, 8);
+    assert.equal(success.pending.length, 6);
+    assert.equal(success.pending[0].path, '/pending-2.wasm');
+  } finally { await page.close(); await browser.close(); }
+});
+
 test('failed asset requests survive page closure without query contents', async () => {
   const browser = await chromium.launch({ headless: true });
   const page = await observedPage(browser);
