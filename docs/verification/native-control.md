@@ -179,6 +179,10 @@ display feedback. The enclosing response describes current application state;
 it is not a historical semantic snapshot of the retained image. Existing
 `capture` continues to use its shared offscreen pass.
 
+Both Handle capture operations await normal event-processing notifications rather
+than a periodic timer. Cancellation remains cancellation when a completion signal
+arrives concurrently; subsequent capture requests remain usable.
+
 An unmatched scope returns `stale_frame_scope`. Invalid, future and evicted IDs
 return `invalid_frame`, `frame_not_submitted` and `frame_evicted`, respectively.
 The surface must support COPY_SRC; otherwise retention is unavailable. Copies

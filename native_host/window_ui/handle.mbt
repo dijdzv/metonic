@@ -71,9 +71,14 @@ fn App::handle(self : App) -> Handle {
     capture_retained: id => {
       require(!self.closed, "window closed")
       let result : Ref[Result[@gpu.RetainedCapture, Error]?] = Ref(None)
+      defer self.diagnostics.changed.broadcast()
       self.events.put(Development(CaptureRetained(id, result)))
       while result.val is None && !self.closed {
-        @async.sleep(1)
+        self.diagnostics.changed.wait()
+        // A delivered notification must not turn cancellation into success.
+        if @async.is_being_cancelled() {
+          @async.pause()
+        }
       }
       match result.val {
         Some(Ok(value)) => value
@@ -121,9 +126,13 @@ fn App::handle(self : App) -> Handle {
     capture: () => {
       require(!self.closed, "window closed")
       let result : Ref[Result[Captured, Error]?] = Ref(None)
+      defer self.diagnostics.changed.broadcast()
       self.events.put(Development(Capture(result)))
       while result.val is None && !self.closed {
-        @async.sleep(1)
+        self.diagnostics.changed.wait()
+        if @async.is_being_cancelled() {
+          @async.pause()
+        }
       }
       match result.val {
         Some(Ok(value)) => value
