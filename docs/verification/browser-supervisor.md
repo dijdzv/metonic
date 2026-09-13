@@ -22,6 +22,21 @@ force options are documented in [Microsoft's taskkill reference](https://learn.m
 
 ## Reproduction
 
+When verifier stderr reports `ERR_NO_BUFFER_SPACE`, the supervisor makes one
+bounded `netstat -an -p tcp` observation. `result.json.transport_observation`
+records IPv4 TCP state counts and counts involving the loopback test server at
+port 4173. It retains no endpoint strings or raw command output. The helper has
+a one-second timeout, a 64-KiB limit per output stream and hard cancellation.
+Missing tools, nonzero exit, timeout or overflow produce `status: unavailable`
+without replacing the original verification failure. The value is null when
+no matching error was observed.
+
+The recorded phase is `after_verifier_report`, with monotonic start and elapsed
+milliseconds. Browser teardown may already be underway; these counts are not
+a measurement at the exact failed socket operation and cannot alone establish
+resource exhaustion. Collection is protected from parent cancellation so its
+bounded cleanup can finish before the failure result is saved.
+
 Run `mise run browser:supervisor-test` for process fixtures. The task builds the
 fixture artifact before running the supervisor package tests. Run
 `mise run browser:async` and `mise run browser:headless` for browser integration;

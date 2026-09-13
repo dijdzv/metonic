@@ -33,6 +33,7 @@ fn known_mode(mode : String) -> Bool {
   mode == "server-exit" ||
   mode == "verifier-ok" ||
   mode == "verifier-fail" ||
+  mode == "verifier-transport" ||
   mode == "verifier-overflow" ||
   mode == "verifier-hang" ||
   mode == "verifier-tree" ||
@@ -64,6 +65,12 @@ async fn main {
     write_stderr("FIXTURE_DIAGNOSTIC\n")
     runtime_exit(0)
   } else if mode == "verifier-fail" {
+    runtime_exit(7)
+  } else if mode == "verifier-transport" {
+    write_stderr("ERR_NO_BUF")
+    @async.sleep(20)
+    write_stderr("FER_SPACE\nERR_NO_BUFFER_SPACE\n")
+    @async.sleep(200)
     runtime_exit(7)
   } else if mode == "verifier-overflow" {
     for _ in 0..<18 {
