@@ -64,8 +64,9 @@ fn owned_window(pid : Int) -> UInt64 raise {
 
 ///|
 async fn verify_close(system_key : Bool) -> Unit raise Error {
-  @async.with_timeout(15000, async fn() {
-    @async.with_task_group() <| group => {
+  // The timeout must not kill the owned child before failure diagnostics run.
+  @async.with_task_group() <| group => {
+    @async.with_timeout(15000, async fn() {
       let executable = @fs.realpath(
         ".work/native-host-build/native/release/build/local/native_host/window_app/window_app.exe",
       )
@@ -122,6 +123,12 @@ async fn verify_close(system_key : Bool) -> Unit raise Error {
       }
       guard sent != 0 else { fail("production close request failed") }
       stage = "waiting-process-exit"
+      errdefer (if @env.get_env_var("METONIC_RELEASE_DUMP") == Some("1") &&
+        child.try_wait() is None {
+        @async.protect_from_cancel(() => capture_failure_dump(child.pid)) catch {
+          error => println("WINDOW_RELEASE_DUMP_FAILED " + error.to_string())
+        }
+      })
       guard child.wait() == 0 else {
         fail("production host failed during shutdown")
       }
@@ -137,8 +144,8 @@ async fn verify_close(system_key : Bool) -> Unit raise Error {
           "WINDOW_RELEASE_LIFECYCLE_OK owned_process_start_close"
         },
       )
-    }
-  })
+    })
+  }
 }
 
 ///|

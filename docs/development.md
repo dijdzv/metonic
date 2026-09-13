@@ -229,6 +229,15 @@ It is not evidence of a shutdown hang. This path was checked with ProcDump 12.01
 needed for the investigation. They may contain process memory and are not public
 test artifacts. ProcDump is not required by default and is not part of the app.
 
+`METONIC_RELEASE_DUMP=1` enables the same bounded diagnostic for the production
+lifecycle probe's process-exit failure. Its owned child remains alive during the
+capture attempt, then the owning task group cleans it up. The original
+15-second acceptance deadline and failure remain unchanged; diagnostic cleanup
+can add up to ten seconds afterward. Output stays in
+`.work/release-exit-<pid>-<time>.dmp` and the adjacent `.dmp.log`.
+This setting does not make the production window probe headless and does not
+establish the cause of a shutdown timeout.
+
 The production UIA verification supplies a unique `METONIC_DEV_PIPE` name to the
 ordinary release application. Before startup, periodically during UI operations,
 and after exit, opening that pipe must report absence; access-denied and other
