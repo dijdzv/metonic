@@ -1,0 +1,205 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/encoding/utf8",
+}
+
+///|
+async fn checked(command : String, args : Array[String]) -> String {
+  let (code, out, err) = @process.collect_output(
+    command,
+    args,
+    no_console_window=true,
+  )
+  assert_eq(code, 0, msg=command + ": " + @utf8.decode_lossy(err.binary()))
+  @utf8.decode_lossy(out.binary())
+}
+
+///|
+async fn fingerprint(root : String) -> String? {
+  let generated = root + "/generated"
+  let files = [
+    "scripts/prepare-websys-input.mbtx",
+    "browser_host/input.idl",
+    "toolchain.json",
+    root + "/LICENSE",
+    generated + "/moon.mod",
+    generated + "/moon.pkg",
+    generated + "/bindings.mbt",
+    generated + "/runtime.mjs",
+  ]
+  for path in files {
+    if !@fs.exists(path) {
+      return None
+    }
+  }
+  let names = @fs.readdir(generated)
+  names.sort()
+  for name in names {
+    if name.has_suffix(".mbt") {
+      files.push(generated + "/" + name)
+    }
+  }
+  let pieces : Array[String] = []
+  for path in files {
+    let contents = @fs.read_file(path).text()
+    pieces.push(path + "\n" + contents.length().to_string() + "\n" + contents)
+  }
+  let snapshot = root + "/fingerprint.tmp"
+  @fs.write_file(snapshot, pieces.join("\n"))
+  defer @fs.remove(snapshot)
+  let output = checked("certutil.exe", ["-hashfile", snapshot, "SHA256"])
+  for line in output.to_lower().split("\n") {
+    let value = line.trim().to_owned()
+    if value.length() == 64 &&
+      value.iter().all(c => (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+      return Some(value)
+    }
+  }
+  abort("missing preparation fingerprint")
+}
+
+///|
+async fn main {
+  let repo = @fs.realpath(".").replace_all(old="\\", new="/")
+  let moon = repo + "/.tools/moonbit/bin/moon.exe"
+  let root = repo + "/.work/websys-input"
+  if !@fs.exists(root) {
+    @fs.mkdir(root, recursive=true)
+  }
+  assert_eq(
+    @fs.realpath(root).replace_all(old="\\", new="/").to_lower(),
+    root.to_lower(),
+  )
+  @fs.mkdir(root + "/prepare.lock")
+  defer @fs.rmdir(root + "/prepare.lock")
+  let revision = "2ffc99595ca4eeaac316864e9318dc988494c4d3"
+  let archive = root + "/source.tar.gz"
+  if !@fs.exists(archive) {
+    ignore(
+      checked("curl.exe", [
+        "--fail",
+        "--location",
+        "--max-time",
+        "60",
+        "https://codeload.github.com/dijdzv/websys.mbt/tar.gz/" + revision,
+        "-o",
+        archive,
+      ]),
+    )
+  }
+  let digest = checked("certutil.exe", ["-hashfile", archive, "SHA256"])
+  assert_true(
+    digest
+    .to_lower()
+    .split("\n")
+    .any(line => {
+      line.trim().to_owned() ==
+      "28d687538ade55d2b1748d6cb4c4cd0fc4c7c48e79637c32d60431e9c455ee37"
+    }),
+    msg="WebSys archive digest mismatch",
+  )
+  let stamp = root + "/prepared.sha256"
+  if @fs.exists(stamp) {
+    let saved = @fs.read_file(stamp).text()
+    if fingerprint(root) == Some(saved) {
+      println("WEBSYS_INPUT_CACHED revision=" + revision)
+      return
+    }
+  }
+  let stage = root + "/stage"
+  assert_true(!@fs.exists(stage), msg="unexpected WebSys staging directory")
+  @fs.mkdir(stage)
+  defer {
+    assert_eq(
+      @fs.realpath(stage).replace_all(old="\\", new="/").to_lower(),
+      stage.to_lower(),
+    )
+    ignore(
+      checked("attrib.exe", [
+        "-R",
+        stage.replace_all(old="/", new="\\") + "\\*",
+        "/S",
+        "/D",
+      ]),
+    )
+    @fs.rmdir(stage, recursive=true)
+  }
+  ignore(checked("tar", ["-xf", archive, "-C", stage]))
+  let source = stage + "/websys.mbt-" + revision
+  ignore(
+    checked("mise", [
+      "exec", "bun@1.3.14", "--", "bun", "install", "--cwd", source, "--frozen-lockfile",
+      "--ignore-scripts",
+    ]),
+  )
+  ignore(checked("mise", ["-C", source, "run", "setup"]))
+  ignore(
+    checked("mise", [
+      "-C", source, "exec", "--", "moon", "-C", "generator", "update",
+    ]),
+  )
+  ignore(
+    checked("mise", [
+      "-C", source, "exec", "--", "moon", "-C", "generator", "build", "--target",
+      "js", "--release", "--deny-warn",
+    ]),
+  )
+  let output = root + "/generated"
+  if @fs.exists(output) {
+    assert_eq(
+      @fs.realpath(output).replace_all(old="\\", new="/").to_lower(),
+      output.to_lower(),
+    )
+    for name in @fs.readdir(output) {
+      if name.has_suffix(".mbt") {
+        @fs.remove(output + "/" + name)
+      }
+    }
+  }
+  ignore(
+    checked("mise", [
+      "exec",
+      "bun@1.3.14",
+      "--",
+      "bun",
+      source + "/generator/_build/js/release/build/webidl-bindgen.js",
+      "--wasm-gc-input",
+      repo + "/browser_host/input.idl",
+      "-o",
+      output,
+    ]),
+  )
+  @fs.write_file(
+    output + "/moon.mod",
+    "name = \"local/websys-input\"\nversion = \"0.0.0\"\nimport { \"moonbitlang/async@0.21.3\" }\n",
+  )
+  @fs.write_file(root + "/LICENSE", @fs.read_file(source + "/LICENSE").binary())
+  let targets : Array[String] = ["\"bindings.mbt\": [\"wasm-gc\"]"]
+  for name in @fs.readdir(source + "/src") {
+    if name.has_suffix(".mbt") {
+      let target = "js_" + name
+      @fs.write_file(
+        output + "/" + target,
+        @fs.read_file(source + "/src/" + name).binary(),
+      )
+      targets.push("\"" + target + "\": [\"js\"]")
+    }
+  }
+  @fs.write_file(
+    output + "/moon.pkg",
+    "// JS-only imports are unused when checking the WasmGC source.\nimport { \"moonbitlang/core/debug\", \"moonbitlang/async/js_async\" }\nwarnings = \"-29\"\nsupported_targets = \"+js+wasm-gc\"\noptions(targets: {" +
+    targets.join(",\n") +
+    "})\n",
+  )
+  ignore(checked(moon, ["-C", output, "update"]))
+  ignore(
+    checked(moon, ["-C", output, "check", "--target", "js", "--deny-warn"]),
+  )
+  ignore(
+    checked(moon, ["-C", output, "check", "--target", "wasm-gc", "--deny-warn"]),
+  )
+  @fs.write_file(stamp, fingerprint(root).unwrap())
+  println("WEBSYS_INPUT_READY revision=" + revision)
+}

@@ -1,57 +1,7 @@
 ///|
 priv enum InputElement {
-  Editor(@dom.HTMLTextAreaElement)
-  Query(@dom.HTMLInputElement)
-}
-
-///|
-fn InputElement::target(self : InputElement) -> &@dom.TEventTarget {
-  match self {
-    Editor(value) => (value : &@dom.TEventTarget)
-    Query(value) => (value : &@dom.TEventTarget)
-  }
-}
-
-///|
-fn InputElement::value(self : InputElement) -> String {
-  match self {
-    Editor(value) => value.value()
-    Query(value) => value.value()
-  }
-}
-
-///|
-fn InputElement::selection(self : InputElement) -> (Int, Int, Bool)? {
-  match self {
-    Editor(value) =>
-      Some(
-        (
-          value.selection_start().reinterpret_as_int(),
-          value.selection_end().reinterpret_as_int(),
-          value.selection_direction() == "backward",
-        ),
-      )
-    Query(value) => {
-      guard value.selection_start() is Some(start) else { return None }
-      guard value.selection_end() is Some(end) else { return None }
-      Some(
-        (
-          start.reinterpret_as_int(),
-          end.reinterpret_as_int(),
-          value.selection_direction() == Some("backward"),
-        ),
-      )
-    }
-  }
-}
-
-///|
-fn InputElement::active(self : InputElement) -> Bool {
-  guard @dom.document().active_element() is Some(active) else { return false }
-  match self {
-    Editor(value) => active.is_same_node(value)
-    Query(value) => active.is_same_node(value)
-  }
+  Editor(@input_dom.HTMLTextAreaElement)
+  Query(@input_dom.HTMLInputElement)
 }
 
 ///|
@@ -68,7 +18,9 @@ priv struct InputState {
 let inputs : Array[InputState] = []
 
 ///|
-let listeners : Array[(&@dom.TEventTarget, String, (@dom.Event) -> Unit)] = []
+let listeners : Array[
+  (@input_dom.EventTarget, String, @input_dom.EventListener),
+] = []
 
 ///|
 let input_error : Ref[Int] = Ref(0)
@@ -78,7 +30,7 @@ fn notify_input(result : Int) -> Unit {
   if result != 1 {
     input_error.val = 1
   }
-  ignore(@dom.document().dispatch_event(@dom.Event::new("metonic-input")))
+  input_notify()
 }
 
 ///|
@@ -87,7 +39,7 @@ fn InputState::sync(self : InputState) -> Unit {
     return
   }
   if self.element is Query(value) {
-    @app.query_scroll(value.scroll_left().to_int())
+    @app.query_scroll(input_scroll(value))
   }
   guard self.element.selection() is Some((start, end, backward)) else {
     notify_input(0)
@@ -116,24 +68,23 @@ fn InputState::sync(self : InputState) -> Unit {
 
 ///|
 fn listen(
-  target : &@dom.TEventTarget,
+  target : @input_dom.EventTarget,
   name : String,
-  callback : (@dom.Event) -> Unit,
+  callback : (@input_dom.Event) -> Unit,
 ) -> Unit {
-  target.add_event_listener(name, callback)
-  listeners.push((target, name, callback))
+  let listener = input_add_listener(target, name, callback)
+  listeners.push((target, name, listener))
 }
 
 ///|
 fn bind_input(state : InputState) -> Unit {
   let target = state.element.target()
-  let on_input = fn(event : @dom.Event) {
+  let on_input = fn(event : @input_dom.Event) {
     if state.stopped {
       return
     }
     if !state.composing {
-      let event : @dom.InputEvent? = event.try_into()
-      if event is Some(event) && event.is_composing() {
+      if input_event_composing(event) {
         return
       }
     }
@@ -169,13 +120,13 @@ fn bind_input(state : InputState) -> Unit {
     if state.stopped || !state.composing {
       return
     }
-    let event : @dom.CompositionEvent = event.unsafe_into()
-    state.preedit = event.data()
+    guard input_event_data(event) is Some(data) else { return }
+    state.preedit = data
     // Chromium updates DOM text after compositionupdate and its microtasks.
     // Existing-text composition may have no subsequent input event.
     if state.frame is None {
       state.frame = Some(
-        @dom.window().request_animation_frame(fn(_) {
+        input_request_frame(fn(_) {
           state.frame = None
           if state.composing && !state.stopped {
             state.sync()
@@ -190,7 +141,7 @@ fn bind_input(state : InputState) -> Unit {
     }
     state.composing = false
     if state.frame is Some(frame) {
-      @dom.window().cancel_animation_frame(frame)
+      input_cancel_frame(frame)
       state.frame = None
     }
     state.preedit = ""
@@ -226,13 +177,13 @@ pub fn inputs_stop() -> Unit {
     state.stopped = true
     state.composing = false
     if state.frame is Some(frame) {
-      @dom.window().cancel_animation_frame(frame)
+      input_cancel_frame(frame)
       state.frame = None
     }
   }
   for entry in listeners {
     let (target, name, callback) = entry
-    target.remove_event_listener(name, callback)
+    input_remove_listener(target, name, callback)
   }
   listeners.clear()
   inputs.clear()
@@ -245,12 +196,14 @@ pub fn inputs_stop() -> Unit {
 pub fn inputs_start() -> Unit {
   inputs_stop()
   input_error.val = 0
-  let editor : @dom.HTMLTextAreaElement = @dom.document()
-    .get_element_by_id("text-input")
-    .unsafe_into()
-  let query : @dom.HTMLInputElement = @dom.document()
-    .get_element_by_id("rpc-user")
-    .unsafe_into()
+  guard input_editor() is Some(editor) else {
+    input_error.val = 1
+    return
+  }
+  guard input_query() is Some(query) else {
+    input_error.val = 1
+    return
+  }
   inputs.push({
     element: Editor(editor),
     query: false,
@@ -270,7 +223,7 @@ pub fn inputs_start() -> Unit {
   for state in inputs {
     bind_input(state)
   }
-  listen(@dom.document(), "selectionchange", fn(_) {
+  listen(input_document_target(), "selectionchange", fn(_) {
     for state in inputs {
       if state.element.active() {
         state.sync()

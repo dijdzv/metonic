@@ -1,6 +1,7 @@
 import {
   "bikallem/webapi" @dom,
   "local/p0/examples/p0/browser" @app,
+  "local/websys-input" @input_dom,
 }
 
 pkgtype(kind: "foreign_library")
@@ -8,6 +9,7 @@ pkgtype(kind: "foreign_library")
 supported_targets = "+js+wasm-gc"
 
 options(
+  targets: { "input_js.mbt": [ "js" ], "input_wasm.mbt": [ "wasm-gc" ] },
   link: {
     "js": { "format": "esm" },
     "wasm-gc": {

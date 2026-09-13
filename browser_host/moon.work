@@ -2,4 +2,5 @@ members = [
   "app",
   "..",
   "../.work/browser-gpu/generated",
+  "../.work/websys-input/generated",
 ]

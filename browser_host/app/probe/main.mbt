@@ -1,8 +1,12 @@
 ///|
 fn main raise {
   let root = @dom.document().get_element_by_id("app")
-  let editor : @dom.HTMLTextAreaElement = @dom.document().create_element("textarea").unsafe_into()
-  let query : @dom.HTMLInputElement = @dom.document().create_element("input").unsafe_into()
+  let editor : @dom.HTMLTextAreaElement = @dom.document()
+    .create_element("textarea")
+    .unsafe_into()
+  let query : @dom.HTMLInputElement = @dom.document()
+    .create_element("input")
+    .unsafe_into()
   editor.set_id("text-input")
   query.set_id("rpc-user")
   editor.set_value("A😀日本")
@@ -20,7 +24,14 @@ fn main raise {
   assert_eq(@app.editor_field(2), 3)
   ignore(editor.dispatch_event(@dom.CompositionEvent::new("compositionstart")))
   assert_eq(@host.inputs_composing(), 1)
-  ignore(editor.dispatch_event(@dom.CompositionEvent::new("compositionupdate", event_init_dict=@dom.CompositionEventInit::new(data="にほん"))))
+  ignore(
+    editor.dispatch_event(
+      @dom.CompositionEvent::new(
+        "compositionupdate",
+        event_init_dict=@dom.CompositionEventInit::new(data="にほん"),
+      ),
+    ),
+  )
   editor.set_value("Aにほん日本")
   editor.set_selection_range(2U, 2U)
   ignore(editor.dispatch_event(@dom.Event::new("input")))
@@ -33,7 +44,14 @@ fn main raise {
   query.focus()
   ignore(query.dispatch_event(@dom.CompositionEvent::new("compositionstart")))
   assert_eq(@host.inputs_composing(), 1)
-  ignore(query.dispatch_event(@dom.CompositionEvent::new("compositionupdate", event_init_dict=@dom.CompositionEventInit::new(data="に"))))
+  ignore(
+    query.dispatch_event(
+      @dom.CompositionEvent::new(
+        "compositionupdate",
+        event_init_dict=@dom.CompositionEventInit::new(data="に"),
+      ),
+    ),
+  )
   query.set_value("2")
   query.set_selection_range(1U, 1U)
   ignore(query.dispatch_event(@dom.CompositionEvent::new("compositionend")))
@@ -52,5 +70,7 @@ fn main raise {
   assert_eq(@app.editor_field(0), 4)
   assert_eq(@host.inputs_error(), 0)
   @host.inputs_stop()
-  root.set_text_content("PASS production_input_owner both_fields composition selection stop restart")
+  root.set_text_content(
+    "PASS production_input_owner both_fields composition selection stop restart",
+  )
 }

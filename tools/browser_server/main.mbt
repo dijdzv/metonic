@@ -50,6 +50,10 @@ async fn main {
           "/style.css" => Some(("style.css", "text/css; charset=utf-8"))
           "/webapi.mjs" =>
             Some(("webapi.mjs", "text/javascript; charset=utf-8"))
+          "/websys-input.mjs" =>
+            Some(("websys-input.mjs", "text/javascript; charset=utf-8"))
+          "/LICENSE-websys" =>
+            Some(("LICENSE-websys", "text/plain; charset=utf-8"))
           "/LICENSE-webapi" =>
             Some(("LICENSE-webapi", "text/plain; charset=utf-8"))
           "/host.mjs" => Some(("host.mjs", "text/javascript; charset=utf-8"))
