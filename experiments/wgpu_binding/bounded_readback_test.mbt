@@ -70,16 +70,12 @@ async test "bounded readback timeout cleans up" {
   let cancelled : Ref[Bool] = { val: false, }
   let cleared : Ref[Bool] = { val: false, }
   let ticket = fake_ticket(3, [0U], b"pending!", cancelled, cleared, true)
-  let result = try? run_readback(
-    ticket,
-    registry,
-    timeout_ms=2,
-    cleanup_ms=2,
-    poll_limit=2,
-  )
-  match result {
-    Ok(_) => fail("timeout unexpectedly succeeded")
-    Err(error) => assert_true(error is ReadbackTimeout)
+  try
+    run_readback(ticket, registry, timeout_ms=2, cleanup_ms=2, poll_limit=2)
+  catch {
+    error => assert_true(error is ReadbackTimeout)
+  } noraise {
+    _ => fail("timeout unexpectedly succeeded")
   }
   assert_true(cancelled.val, msg="timeout did not cancel")
   assert_true(cleared.val, msg="timeout did not clear")
@@ -92,16 +88,12 @@ async test "bounded readback permanent pending remains registered" {
   let cancelled : Ref[Bool] = { val: false, }
   let cleared : Ref[Bool] = { val: false, }
   let ticket = fake_ticket(4, [0U], b"pending!", cancelled, cleared, false)
-  let result = try? run_readback(
-    ticket,
-    registry,
-    timeout_ms=2,
-    cleanup_ms=2,
-    poll_limit=1,
-  )
-  match result {
-    Ok(_) => fail("permanent pending unexpectedly succeeded")
-    Err(error) => assert_true(error is ReadbackTimeout)
+  try
+    run_readback(ticket, registry, timeout_ms=2, cleanup_ms=2, poll_limit=1)
+  catch {
+    error => assert_true(error is ReadbackTimeout)
+  } noraise {
+    _ => fail("permanent pending unexpectedly succeeded")
   }
   assert_true(cancelled.val, msg="pending ticket was not cancelled")
   assert_true(!cleared.val, msg="permanent pending ticket was cleared")
@@ -151,19 +143,16 @@ async test "bounded readback task cancel cleans up and rethrows cancellation" {
   }
   @async.with_task_group() <| group => {
     let task = group.spawn() <| () => {
-      let result = try? run_readback(
-        ticket,
-        registry,
-        timeout_ms=10000,
-        cleanup_ms=1000,
-      )
-      match result {
-        Ok(_) => fail("cancelled readback unexpectedly succeeded")
-        Err(error) =>
+      try
+        run_readback(ticket, registry, timeout_ms=10000, cleanup_ms=1000)
+      catch {
+        error =>
           assert_true(
             @async.is_cancellation_error(error),
             msg="readback did not rethrow cancellation",
           )
+      } noraise {
+        _ => fail("cancelled readback unexpectedly succeeded")
       }
     }
     while !polled.val {

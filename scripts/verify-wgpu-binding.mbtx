@@ -138,7 +138,9 @@ async fn main {
     }
     @process.run(
       moon,
-      ["-C", "experiments/wgpu_binding", "test", "--target", "native"],
+      [
+        "-C", "experiments/wgpu_binding", "test", "--target", "native", "--deny-warn",
+      ],
       extra_env=env_map,
       no_console_window=true,
     )

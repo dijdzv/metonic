@@ -4,10 +4,10 @@ fn assert_sync_error(
   expected : String,
   message : String,
 ) -> Unit raise Error {
-  let result : Result[Bytes, @wgpu.BufferSyncError] = try? action()
-  match result {
-    Ok(_) => fail(message + ": expected BufferSyncError")
-    Err(error) => assert_eq(error.message(), expected)
+  try action() catch {
+    error => assert_eq(error.message(), expected)
+  } noraise {
+    _ => fail(message + ": expected BufferSyncError")
   }
 }
 
