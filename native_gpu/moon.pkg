@@ -10,3 +10,10 @@ import {
 pkgtype(kind: "library")
 
 supported_targets = "native"
+
+options(
+  targets: {
+    "retained_debug.mbt": [ "debug" ],
+    "retained_release.mbt": [ "release" ],
+  },
+)

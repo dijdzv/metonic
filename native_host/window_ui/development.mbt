@@ -2,6 +2,7 @@
 priv enum DevelopmentRequest {
   Barrier(Ref[Bool])
   Capture(Ref[Result[Captured, Error]?])
+  CaptureRetained(Int64, Ref[Result[@gpu.RetainedCapture, Error]?])
   Edit(String?, Int?, Ref[String?])
   Select(Int, Int, Int?, Ref[String?])
 }
@@ -13,6 +14,12 @@ async fn App::dispatch_development(
 ) -> Unit {
   match request {
     Barrier(applied) => applied.val = true
+    CaptureRetained(id, result) =>
+      result.val = Some(
+        Ok(app.renderer.unwrap().capture_retained(id)) catch {
+          error => Err(error)
+        },
+      )
     Capture(result) =>
       result.val = Some(
         try {

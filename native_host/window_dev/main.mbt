@@ -10,6 +10,8 @@ struct Request {
   session_id : String?
   semantic_revision : Int?
   timeout_ms : Int?
+  frame_id : String?
+  frame_scope : String?
 } derive(FromJson)
 
 ///|
@@ -38,6 +40,7 @@ async fn respond(
   output : &@io.Writer,
   identity : String?,
   connection : ConnectionState,
+  frame_scope : String,
 ) -> Unit {
   let request : Request = @json.from_json(@json.parse(@utf8.decode(bytes))) catch {
     _ => {
@@ -86,6 +89,43 @@ async fn respond(
           "source": "shared_offscreen_pass",
         }
       }
+      "capture_retained" =>
+        if request.frame_scope != Some(frame_scope) {
+          error = "stale_frame_scope"
+        } else {
+          let frame_id = match request.frame_id {
+            Some(value) => @string.parse_int64(value) catch { _ => 0L }
+            None => 0L
+          }
+          try {
+            let captured = (handle.capture_retained)(frame_id)
+            let png = @image.encode_png(@image.ImageData::{
+              width: captured.width,
+              height: captured.height,
+              data: captured.pixels,
+            })
+            captured_image = {
+              "data": @base64.encode(png),
+              "mimeType": "image/png",
+              "width": captured.width,
+              "height": captured.height,
+              "frame_id": captured.id.to_string(),
+              "generation": captured.generation.to_string(),
+              "display_scale": captured.display_scale,
+              "frame_scope": frame_scope,
+              "source": "retained_surface_copy",
+              "display_completion_confirmed": false,
+            }
+          } catch {
+            @gpu.RetainedFrameError::InvalidFrame => error = "invalid_frame"
+            @gpu.RetainedFrameError::FrameNotSubmitted =>
+              error = "frame_not_submitted"
+            @gpu.RetainedFrameError::FrameEvicted => error = "frame_evicted"
+            @gpu.RetainedFrameError::RetentionUnavailable =>
+              error = "retention_unavailable"
+            cause => raise cause
+          }
+        }
       "insert" =>
         match request.text {
           Some(text) =>
@@ -131,6 +171,8 @@ async fn respond(
     "selection_anchor": state.selection_anchor,
     "caret": state.caret,
     "frames": state.frames,
+    "retained_frame_id": (handle.retained_frame_id)().to_string(),
+    "frame_scope": frame_scope,
     "host_input_events": state.input.to_json(),
     "task_status": state.task_status,
     "rpc_result": state.rpc_result,
@@ -160,6 +202,7 @@ async fn session(
   input : &@io.Reader,
   output : &@io.Writer,
   identity : String?,
+  frame_scope : String,
 ) -> Unit {
   let pending : @aqueue.Queue[@lines.InputLine] = @aqueue.Queue(
     kind=@aqueue.Blocking(64),
@@ -196,7 +239,9 @@ async fn session(
       }
       match line {
         @lines.InputLine::Line(bytes) =>
-          respond(handle, bytes, last_id, output, identity, connection)
+          respond(
+            handle, bytes, last_id, output, identity, connection, frame_scope,
+          )
         @lines.InputLine::TooLong =>
           output.write("{\"id\":null,\"error\":\"line_too_long\"}\n")
       }
@@ -206,9 +251,13 @@ async fn session(
 
 ///|
 async fn control(handle : @ui.Handle) -> Unit {
+  let reservation = @fs.tmpdir(prefix="metonic-session")
+  defer @async.protect_from_cancel(() => @fs.rmdir(reservation))
+  let parts = reservation.replace_all(old="\\", new="/").split("/").to_array()
+  let identity = parts[parts.length() - 1].to_owned()
   match @env.get_env_var("METONIC_DEV_PIPE") {
     None => {
-      session(handle, @stdio.stdin, @stdio.stdout, None) catch {
+      session(handle, @stdio.stdin, @stdio.stdout, None, identity) catch {
         SessionQueueOverflow =>
           @stdio.stderr.write("control request queue exceeded\n")
         error => raise error
@@ -218,13 +267,6 @@ async fn control(handle : @ui.Handle) -> Unit {
     Some(name) => {
       let pipe = @pipe.WindowsPipe::listen(name)
       defer pipe.close()
-      let reservation = @fs.tmpdir(prefix="metonic-session")
-      defer @async.protect_from_cancel(() => @fs.rmdir(reservation))
-      let parts = reservation
-        .replace_all(old="\\", new="/")
-        .split("/")
-        .to_array()
-      let identity = parts[parts.length() - 1].to_owned()
       let discovery_path = reservation + "/session.json"
       let discovery : Json = {
         "protocol_version": 1,
@@ -241,7 +283,7 @@ async fn control(handle : @ui.Handle) -> Unit {
       @stdio.stderr.write("METONIC_DEV_PIPE_READY " + pipe.path() + "\n")
       while true {
         pipe.accept()
-        session(handle, pipe, pipe, Some(identity)) catch {
+        session(handle, pipe, pipe, Some(identity), identity) catch {
           error if @async.is_cancellation_error(error) => raise error
           error =>
             @stdio.stderr.write(

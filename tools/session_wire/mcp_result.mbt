@@ -80,7 +80,11 @@ pub fn window_mcp_result(session : String, response : String) -> String {
       "mimeType": image.get("mimeType").unwrap_or(Json::null()),
     })
     let metadata : Map[String, Json] = Map([])
-    for key in ["width", "height", "frame", "source"] {
+    for
+      key in [
+        "width", "height", "frame", "source", "frame_id", "generation", "frame_scope",
+        "display_completion_confirmed", "display_scale",
+      ] {
       if image.get(key) is Some(value) {
         metadata[key] = value
       }

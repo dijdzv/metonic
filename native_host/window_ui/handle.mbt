@@ -1,6 +1,7 @@
 ///|
 pub(all) enum Action {
   Move(Int, Int)
+  Resize(Int, Int)
   Activate
   Insert(String)
   Backspace
@@ -47,6 +48,8 @@ pub struct Handle {
   edit : async (String?, Int?) -> String
   select : async (Int, Int, Int?) -> String
   capture : async () -> Captured
+  retained_frame_id : () -> Int64
+  capture_retained : async (Int64) -> @gpu.RetainedCapture
   wait_semantic : async (Int, Int) -> String
 }
 
@@ -62,6 +65,22 @@ pub struct Captured {
 ///|
 fn App::handle(self : App) -> Handle {
   {
+    retained_frame_id: () => {
+      self.renderer.map(renderer => renderer.retained_frame_id()).unwrap_or(0L)
+    },
+    capture_retained: id => {
+      require(!self.closed, "window closed")
+      let result : Ref[Result[@gpu.RetainedCapture, Error]?] = Ref(None)
+      self.events.put(Development(CaptureRetained(id, result)))
+      while result.val is None && !self.closed {
+        @async.sleep(1)
+      }
+      match result.val {
+        Some(Ok(value)) => value
+        Some(Err(error)) => raise error
+        None => raise WindowFailure::Failure("window closed")
+      }
+    },
     wait_semantic: (revision, timeout_ms) => {
       if revision < 0 || timeout_ms < 1 || timeout_ms > 60000 {
         return "invalid_wait"
@@ -173,6 +192,18 @@ fn App::snapshot(self : App) -> Snapshot {
 async fn App::apply_action(self : App, action : Action) -> Unit {
   require(!self.closed, "window closed")
   let event = match action {
+    Resize(width, height) => {
+      require(
+        width >= 1 && width <= 2048 && height >= 1 && height <= 2048,
+        "invalid resize dimensions",
+      )
+      ignore(
+        self.window
+        .unwrap()
+        .request_inner_size(@dpi.PhysicalSize(width, height).into_size()),
+      )
+      return
+    }
     Move(x, y) => Input(@scene.Action::Move(x, y))
     Activate => Input(@scene.Action::Activate)
     Insert(text) => Commit(text)
