@@ -1,3 +1,4 @@
+import * as inputDiagnostics from './input-diagnostics.mjs';
 const $ = (id) => document.getElementById(id);
 export const target = new URLSearchParams(location.search).get('target') || 'wasm-gc';
 export const ready = `Ready: ${target}`;
@@ -38,8 +39,14 @@ export function attach(session) {
     cancel: cancelTask,
     snapshot: () => ({ task: Array.from({ length: 6 }, (_, i) => Number(app.task_field(i))), pending: Number(app.scheduled_task_count()), rejected: session.rejectedCallbacks, disposed: session.disposed }),
   };
+  window.metonicInputTrace = {
+    start: () => inputDiagnostics.start(() => JSON.stringify(window.metonicAsyncProbe.editor())),
+    stop: () => inputDiagnostics.stop(),
+    snapshot: () => JSON.parse(inputDiagnostics.snapshot()),
+  };
 }
 export function detach() {
+  inputDiagnostics.stop();
   $('task-fail').removeEventListener('click', fail);
   $('task-fail').disabled = true;
 }

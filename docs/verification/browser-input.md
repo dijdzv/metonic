@@ -79,3 +79,22 @@ the check. These checks do
 not establish physical Japanese IME behavior, candidate placement or browser
 event ordering. Follow the [integrated demo](integrated-demo.md) for real-system
 acceptance; the native IME path remains separate.
+
+## Development input recording
+
+The development page exposes `window.metonicInputTrace`. Call `start()` before
+the reproduction, `stop()` afterward, and `snapshot()` to retrieve JSON-compatible
+data. Starting again resets the history. Recording is opt-in and retains the last
+256 events plus a total count; it records the test text verbatim in memory.
+
+The MoonBit diagnostics module records both fields' DOM value and selection,
+event order, composition data and keyboard/input-event details. Its shared-state
+callback currently records the main editor state, including during User ID events;
+do not interpret that callback as a User ID snapshot. Values are observed during
+event delivery, not a guarantee of the browser's state after its default action.
+These records supplement physical observations and do not simulate an actual IME.
+
+Stopping the application removes the listeners. The diagnostics JavaScript is a
+separate development asset; the production package omits it and its entry points,
+and the server does not serve it under `/release/`. The normal headless suite
+checks bounded history, stop/restart and composition records using a MoonBit probe.

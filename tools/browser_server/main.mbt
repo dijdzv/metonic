@@ -69,6 +69,8 @@ async fn main {
             Some(("text-renderer.mjs", "text/javascript; charset=utf-8"))
           "/app.mjs" if !release =>
             Some(("app.mjs", "text/javascript; charset=utf-8"))
+          "/input-diagnostics.mjs" if !release =>
+            Some(("input-diagnostics.mjs", "text/javascript; charset=utf-8"))
           "/app.wasm" => Some(("app.wasm", "application/wasm"))
           "/NotoSansJP.ttf" => Some(("NotoSansJP.ttf", "font/ttf"))
           "/OFL.txt" => Some(("OFL.txt", "text/plain; charset=utf-8"))
