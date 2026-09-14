@@ -614,6 +614,10 @@ async fn main {
       } else {
         ["normal"]
       }
+      if kind == "window" {
+        verify_display_disconnect(root, mode)
+        verify_display_reconnect(root, mode)
+      }
       for case_name in cases {
         run_probe(root, kind, mode, case_name) catch {
           error => {
@@ -624,4 +628,255 @@ async fn main {
       }
     }
   }
+}
+
+///|
+async fn verify_display_reconnect(root : String, mode : String) -> Unit {
+  let name = "metonic-display-reconnect-" +
+    mode +
+    "-" +
+    @async.now().to_string()
+  let path = "\\\\.\\pipe\\" + name
+  let log_path = root + "/.work/display-reconnect-" + mode + ".log"
+  defer @async.protect_from_cancel(() => {
+    cleanup_display_discovery(log_path, path)
+  })
+  @async.with_timeout(10000, () => {
+    @async.with_task_group() <| group => {
+      let log = @process.redirect_to_file(log_path)
+      defer log.close()
+      let child = @process.spawn(
+        group,
+        root +
+        "/.work/native-host-build/native/debug/build/local/native_host/window_probe/window_probe.exe",
+        [],
+        stdout=log,
+        stderr=log,
+        extra_env={
+          "METONIC_WINDOW_INIT_TEST": "display-disconnect",
+          "METONIC_DEV_HIDDEN": "1",
+          "METONIC_DEV_PIPE": name,
+          "METONIC_GPU_FALLBACK": if mode == "fallback" {
+            "1"
+          } else {
+            "0"
+          },
+        },
+        no_console_window=true,
+        cancel_handler=@process.hard_cancel(),
+      )
+      defer child.cancel()
+      let first = display_connect(path, child)
+      defer first.close()
+      first.write("{\"id\":1,\"op\":\"capabilities\"}\n")
+      guard @json.parse(first.read_until("\n").unwrap())
+        is { "error": "", "session_id": String(session), .. } else {
+        fail("display reconnect: missing session")
+      }
+      let edit : Json = {
+        "id": 2,
+        "op": "insert",
+        "text": "pending display",
+        "session_id": session,
+      }
+      first.write(edit.stringify() + "\n")
+      guard @json.parse(first.read_until("\n").unwrap())
+        is {
+          "error": "",
+          "frame_scope": String(scope),
+          "retained_frame_id": String(frame),
+          "text": String(text),
+          ..
+        } else {
+        fail("display reconnect: missing frame")
+      }
+      let short_wait : Json = {
+        "id": 3,
+        "op": "wait_display",
+        "session_id": session,
+        "frame_scope": scope,
+        "frame_id": frame,
+        "timeout_ms": 25,
+      }
+      first.write(short_wait.stringify() + "\n")
+      assert_true(
+        @json.parse(first.read_until("\n").unwrap())
+        is { "id": 3, "error": "timeout", .. },
+      )
+      let long_wait : Json = {
+        "id": 4,
+        "op": "wait_display",
+        "session_id": session,
+        "frame_scope": scope,
+        "frame_id": frame,
+        "timeout_ms": 60000,
+      }
+      first.write(long_wait.stringify() + "\n")
+      @async.sleep(50)
+      first.close()
+      @async.with_timeout(2000, () => {
+        let second = display_connect(path, child)
+        defer second.close()
+        let snapshot : Json = {
+          "id": 1,
+          "op": "snapshot",
+          "session_id": session,
+        }
+        second.write(snapshot.stringify() + "\n")
+        guard @json.parse(second.read_until("\n").unwrap())
+          is {
+            "id": 1,
+            "error": "",
+            "text": String(current),
+            "frame_scope": String(current_scope),
+            ..
+          } else {
+          fail("display reconnect: unexpected or late reply")
+        }
+        assert_eq(current, text)
+        assert_eq(current_scope, scope)
+        let edit : Json = {
+          "id": 2,
+          "op": "insert",
+          "text": " recovered",
+          "session_id": session,
+        }
+        second.write(edit.stringify() + "\n")
+        guard @json.parse(second.read_until("\n").unwrap())
+          is { "id": 2, "error": "", "text": String(edited), .. } else {
+          fail("display reconnect: edit failed")
+        }
+        assert_true(edited.contains(" recovered"))
+        assert_true(child.try_wait() is None)
+      })
+      println("WINDOW_DISPLAY_RECONNECT_OK mode=" + mode)
+    }
+  })
+}
+
+///|
+async fn cleanup_display_discovery(log_path : String, pipe : String) -> Unit {
+  if !@fs.exists(log_path) {
+    return
+  }
+  for line in @fs.read_file(log_path).text().split("\n") {
+    if line.strip_prefix("METONIC_DEV_SESSION ") is Some(value) {
+      let file = value.trim().to_owned().replace_all(old="\\", new="/")
+      guard file.strip_suffix("/session.json") is Some(parent) else {
+        fail("unexpected discovery path")
+      }
+      let directory = parent.to_owned()
+      let parts = directory.split("/").to_array()
+      let identity = parts[parts.length() - 1].to_owned()
+      guard identity.has_prefix("metonic-session.") else {
+        fail("unexpected discovery directory")
+      }
+      if @fs.exists(file) {
+        guard @json.parse(@fs.read_file(file).text())
+          is {
+            "pipe": String(actual_pipe),
+            "session_id": String(actual_identity),
+            ..
+          } else {
+          fail("invalid fixture discovery")
+        }
+        assert_eq(actual_pipe, pipe)
+        assert_eq(actual_identity, identity)
+        @fs.remove(file)
+      }
+      if @fs.exists(directory) {
+        @fs.rmdir(directory)
+      }
+      assert_false(@fs.exists(file))
+      println("WINDOW_DISPLAY_DISCOVERY_CLEANUP_OK")
+    }
+  }
+}
+
+///|
+async fn display_connect(path : String, child : @process.Process) -> @fs.File {
+  while true {
+    assert_true(child.try_wait() is None)
+    let file = @fs.open(path, mode=ReadWrite) catch {
+      _ => {
+        @async.sleep(10)
+        continue
+      }
+    }
+    return file
+  } nobreak {
+    abort("connect loop ended")
+  }
+}
+
+///|
+async fn verify_display_disconnect(root : String, mode : String) -> Unit {
+  @async.with_timeout(10000, () => {
+    @async.with_task_group() <| group => {
+      let (input, writer) = @process.write_to_process()
+      defer writer.close()
+      let (reader, output) = @process.read_from_process()
+      defer reader.close()
+      let child = @process.spawn(
+        group,
+        root +
+        "/.work/native-host-build/native/debug/build/local/native_host/window_probe/window_probe.exe",
+        [],
+        stdin=input,
+        stdout=output,
+        extra_env={
+          "METONIC_WINDOW_INIT_TEST": "display-disconnect",
+          "METONIC_DEV_HIDDEN": "1",
+          "METONIC_GPU_FALLBACK": if mode == "fallback" {
+            "1"
+          } else {
+            "0"
+          },
+        },
+        no_console_window=true,
+      )
+      defer child.cancel()
+      writer.write(
+        "{\"id\":1,\"op\":\"insert\",\"text\":\"pending display\"}\n",
+      )
+      guard @json.parse(reader.read_until("\n").unwrap())
+        is {
+          "error": "",
+          "frame_scope": String(scope),
+          "retained_frame_id": String(frame),
+          ..
+        } else {
+        fail("display disconnect: missing frame")
+      }
+      let first : Json = {
+        "id": 2,
+        "op": "wait_display",
+        "frame_scope": scope,
+        "frame_id": frame,
+        "timeout_ms": 25,
+      }
+      writer.write(first.stringify() + "\n")
+      assert_true(
+        @json.parse(reader.read_until("\n").unwrap())
+        is { "id": 2, "error": "timeout", .. },
+      )
+      let pending : Json = {
+        "id": 3,
+        "op": "wait_display",
+        "frame_scope": scope,
+        "frame_id": frame,
+        "timeout_ms": 60000,
+      }
+      writer.write(pending.stringify() + "\n")
+      @async.sleep(50)
+      writer.close()
+      assert_true(
+        @json.parse(reader.read_until("\n").unwrap())
+        is { "id": 3, "error": "disconnected", .. },
+      )
+      assert_eq(@async.with_timeout(2000, () => child.wait()), 0)
+      assert_eq(reader.read_until("\n"), None)
+      println("WINDOW_DISPLAY_DISCONNECT_OK mode=" + mode)
+    }
+  })
 }

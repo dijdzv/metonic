@@ -7,6 +7,7 @@ import {
   "local/p0/native_gpu" @gpu,
   "local/p0/examples/p0/semantics",
   "local/native_host/window_ui" @ui,
+  "local/native_host/window_control" @control,
 }
 
 pkgtype(kind: "executable")
