@@ -179,6 +179,7 @@ async fn QueryScenario::step(
       require(view.query_scroll == 0, "short replacement retained scroll")
       query_pixels(view)
       self.stage = 10
+      require((view.select_query)(0, 1) == "", "query cancel selection rejected")
       (view.inject)(@ui.Injected::CompositionStart)
       (view.inject)(
         @ui.Injected::CompositionUpdate(self.text, Some(self.text.length())),
@@ -201,6 +202,17 @@ async fn QueryScenario::step(
         "cancel did not restore query viewport",
       )
       query_pixels(view)
+      require(view.query.selection_start == 0 && view.query.selection_end == 1,
+        "query cancel lost original selection")
+      self.stage = 111
+      post(view.hwnd, 0x0100U, 0x0DUL, 0L)
+    }
+    111 if view.input.last_key == "enter" => {
+      require(!view.composing && view.query.value == "x",
+        "query Enter after cancel changed committed text")
+      require(view.query.selection_start == 0 && view.query.selection_end == 1,
+        "query Enter after cancel changed selection")
+      println("WINDOW_CANCEL_ENTER_QUERY_OK")
       self.stage = 12
       println("WINDOW_QUERY_SCROLL_OK")
       (view.inject)(@ui.Injected::Close)
