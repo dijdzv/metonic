@@ -1,0 +1,37 @@
+diff --git a/modules/window/windows/ime_complete.mbt b/modules/window/windows/ime_complete.mbt
+new file mode 100644
+--- /dev/null
++++ b/modules/window/windows/ime_complete.mbt
+@@ -0,0 +1,12 @@
++///|
++extern "C" fn native_request_ime_completion(hwnd : UInt64) -> Int =
++  "mbw_request_ime_completion"
++
++///|
++/// Requests that the IME commit its composition. A successful request does not
++/// mean the queued commit/end events have reached the application yet.
++pub fn Window::request_ime_completion(self : Window) -> Bool {
++  // Toggling the capability flag does not complete the OS composition.
++  native_request_ime_completion(self.hwnd) != 0
++}
++
+diff --git a/modules/window/windows/native_window.c b/modules/window/windows/native_window.c
+--- a/modules/window/windows/native_window.c
++++ b/modules/window/windows/native_window.c
+@@ -118,2 +118,16 @@
++int32_t mbw_request_ime_completion(uint64_t raw_hwnd) {
++  HWND hwnd = (HWND)(uintptr_t)raw_hwnd;
++  if (!mbw_window_state(hwnd) || !mbw_load_imm32()) return 0;
++  typedef BOOL(WINAPI *notify_ime_t)(HIMC, DWORD, DWORD, DWORD);
++  notify_ime_t notify =
++      (notify_ime_t)GetProcAddress(g_imm32, "ImmNotifyIME");
++  if (!notify) return 0;
++  HIMC context = g_imm_get_context(hwnd);
++  if (!context) return 0;
++  BOOL accepted = notify(context, NI_COMPOSITIONSTR, CPS_COMPLETE, 0);
++  g_imm_release_context(hwnd, context);
++  return accepted != FALSE;
++}
++
+ static char *mbw_wide_to_utf8_alloc(const wchar_t *wide, int32_t wide_len,
+                                     int32_t *out_len) {

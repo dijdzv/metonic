@@ -440,6 +440,14 @@ async fn prepare(args : Array[String]) -> Unit raise Error {
     args.push("patches/window-ime-trace.patch")
     ignore(run_checked("git", args, repo_root))
   }
+  for check_only in [true, false] {
+    let args = ["apply", "--directory=" + window_stage_relative]
+    if check_only {
+      args.push("--check")
+    }
+    args.push("patches/window-ime-complete.patch")
+    ignore(run_checked("git", args, repo_root))
+  }
   let system_key_suffix = "/modules/window/windows/native_window.c"
   let previous_system_keys = @fs.read_file(window_stage + system_key_suffix).text()
   for check_only in [true, false] {

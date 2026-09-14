@@ -26,6 +26,7 @@ priv enum Event {
   CompositionStart
   CompositionUpdate(String, Int?)
   CompositionCancel
+  CompositionEnd
   Backspace
   Delete
   StartUpdate
@@ -49,6 +50,7 @@ struct App {
   model : @application.Model
   diagnostics : Diagnostics
   mut composition : @semantics.Composition?
+  ime_pointer : @ime_focus.Transfer
   mut preedit : String
   mut preedit_cursor : Int
   mut control_pressed : Bool
@@ -167,7 +169,7 @@ pub impl @windows.ApplicationHandler for App with fn window_event(
     @core.WindowEvent::Ime(@core.Ime::Enabled) => self.queue(CompositionStart)
     @core.WindowEvent::Ime(@core.Ime::Preedit(value, range)) =>
       self.queue(CompositionUpdate(value, range.map(cursor => cursor.start())))
-    @core.WindowEvent::Ime(@core.Ime::Disabled) => self.queue(CompositionCancel)
+    @core.WindowEvent::Ime(@core.Ime::Disabled) => self.queue(CompositionEnd)
     @core.WindowEvent::Ime(@core.Ime::Commit(value)) =>
       if !(value.length() == 1 && value[0].to_int() < 32) {
         self.queue(Commit(value))
@@ -485,6 +487,7 @@ async fn run_loop(
     model: @application.create(1, 1),
     diagnostics: Diagnostics::new(),
     composition: None,
+    ime_pointer: @ime_focus.Transfer::new(),
     preedit: "",
     preedit_cursor: 0,
     control_pressed: false,
@@ -592,6 +595,16 @@ async fn run_loop(
             _ => event
           }
           match event {
+            ToggleFocus
+            | Navigate(_, _)
+            | SelectBoundary(_, _)
+            | Accessibility(_)
+            | Backspace
+            | Delete
+            | Input(_)
+            | Enter
+            | StartUpdate
+            | LoadUser(_) if app.ime_pointer.pending() => ()
             Enter => ()
             Development(request) => app.dispatch_development(request)
             Accessibility(_) if app.composition is Some(_) => ()
@@ -826,12 +839,25 @@ async fn run_loop(
               app.draw()
             }
             CompositionCancel => {
+              app.ime_pointer.cancel()
               if app.composition is Some(composition) {
                 composition.cancel()
               }
               app.composition = None
               app.preedit = ""
               app.draw()
+            }
+            CompositionEnd => {
+              if app.composition is Some(composition) {
+                composition.cancel()
+              }
+              app.composition = None
+              app.preedit = ""
+              let pointer = app.ime_pointer.finish()
+              app.draw()
+              if pointer is Some((x, y, extend_selection)) {
+                app.apply_pointer(x, y, extend_selection)
+              }
             }
             Commit(value) if app.composition is Some(composition) => {
               ignore(composition.commit(value))
@@ -873,93 +899,16 @@ async fn run_loop(
               )
               app.draw()
             }
-            TextPointer(_, _, _) if app.composition is Some(_) => ()
-            TextPointer(x, y, extend_selection) if app.model.view().query.bounds.contains(
-                x, y,
-              ) => {
-              ignore(@semantics.focus(app.model.editor, app.model.query_input))
-              let node = app.input_node()
-              let box = app.model.view().query.bounds
-              if app.query_raster is Some(engine) {
-                if @raster.hit(
-                    engine,
-                    (x - box.x - 8).max(0) + app.query_scroll,
-                    (y - box.y - 2).max(0),
-                  )
-                  is Some(offset) {
-                  let caret = offset.min(node.value.length())
-                  ignore(
-                    @semantics.set_selection_directed(
-                      app.model.editor,
-                      node.reference,
-                      if extend_selection {
-                        node.selection_anchor
-                      } else {
-                        caret
-                      },
-                      caret,
-                    ),
-                  )
+            TextPointer(x, y, extend_selection) if app.ime_pointer.pending() ||
+              app.composition is Some(_) =>
+              app.ime_pointer.request(x, y, extend_selection, () => {
+                match app.window {
+                  Some(window) => window.request_ime_completion()
+                  None => false
                 }
-              }
-              app.draw()
-            }
-            TextPointer(x, y, _) if app.model.view().start.bounds.contains(x, y) ||
-              app.model.view().cancel.bounds.contains(x, y) => {
-              let start = app.model.view().start.bounds.contains(x, y)
-              ignore(
-                @semantics.focus(
-                  app.model.editor,
-                  if start {
-                    app.model.start_button
-                  } else {
-                    app.model.cancel_button
-                  },
-                ),
-              )
-              app.queue(if start { StartUpdate } else { CancelUpdate })
-            }
-            TextPointer(x, y, _) if app.model.view().request.bounds.contains(
-                x, y,
-              ) &&
-              app.composition is None => {
-              ignore(app.model.focus_request())
-              app.queue(LoadUser(app.model.query()))
-              app.draw()
-            }
+              })
             TextPointer(x, y, extend_selection) =>
-              if x >= 8 && x < 8 + app.text_width && y >= 8 && y < 104 {
-                if app.raster is Some(engine) {
-                  if @raster.hit(engine, x - 8, y - 8) is Some(offset) {
-                    let node = @semantics.snapshot(app.model.editor)[1]
-                    ignore(@semantics.focus(app.model.editor, node.reference))
-                    let caret = offset.min(node.value.length())
-                    let anchor = if extend_selection {
-                      node.selection_anchor
-                    } else {
-                      caret
-                    }
-                    ignore(
-                      @semantics.set_selection_directed(
-                        app.model.editor,
-                        node.reference,
-                        anchor,
-                        caret,
-                      ),
-                    )
-                    app.draw()
-                  }
-                }
-              } else {
-                ignore(
-                  @semantics.focus(
-                    app.model.editor,
-                    @semantics.snapshot(app.model.editor)[0].reference,
-                  ),
-                )
-                ignore(@scene.dispatch(app.model.scene, Click(x, y)))
-                app.draw()
-              }
+              app.apply_pointer(x, y, extend_selection)
             Input(Activate) if app.model.request_focused() &&
               app.composition is None => app.queue(LoadUser(app.model.query()))
             Input(Activate) if app.model.control_focused() &&
@@ -1043,5 +992,98 @@ async fn run_loop(
       ignore(app.model.stop())
       app.error = Some(error)
     }
+  }
+}
+
+///|
+fn App::apply_pointer(
+  app : App,
+  x : Int,
+  y : Int,
+  extend_selection : Bool,
+) -> Unit raise {
+  match (x, y, extend_selection) {
+    (x, y, extend_selection) if app.model.view().query.bounds.contains(x, y) => {
+      ignore(@semantics.focus(app.model.editor, app.model.query_input))
+      let node = app.input_node()
+      let box = app.model.view().query.bounds
+      if app.query_raster is Some(engine) {
+        if @raster.hit(
+            engine,
+            (x - box.x - 8).max(0) + app.query_scroll,
+            (y - box.y - 2).max(0),
+          )
+          is Some(offset) {
+          let caret = offset.min(node.value.length())
+          ignore(
+            @semantics.set_selection_directed(
+              app.model.editor,
+              node.reference,
+              if extend_selection {
+                node.selection_anchor
+              } else {
+                caret
+              },
+              caret,
+            ),
+          )
+        }
+      }
+      app.draw()
+    }
+    (x, y, _) if app.model.view().start.bounds.contains(x, y) ||
+      app.model.view().cancel.bounds.contains(x, y) => {
+      let start = app.model.view().start.bounds.contains(x, y)
+      ignore(
+        @semantics.focus(
+          app.model.editor,
+          if start {
+            app.model.start_button
+          } else {
+            app.model.cancel_button
+          },
+        ),
+      )
+      app.queue(if start { StartUpdate } else { CancelUpdate })
+    }
+    (x, y, _) if app.model.view().request.bounds.contains(x, y) &&
+      app.composition is None => {
+      ignore(app.model.focus_request())
+      app.queue(LoadUser(app.model.query()))
+      app.draw()
+    }
+    (x, y, extend_selection) =>
+      if x >= 8 && x < 8 + app.text_width && y >= 8 && y < 104 {
+        if app.raster is Some(engine) {
+          if @raster.hit(engine, x - 8, y - 8) is Some(offset) {
+            let node = @semantics.snapshot(app.model.editor)[1]
+            ignore(@semantics.focus(app.model.editor, node.reference))
+            let caret = offset.min(node.value.length())
+            let anchor = if extend_selection {
+              node.selection_anchor
+            } else {
+              caret
+            }
+            ignore(
+              @semantics.set_selection_directed(
+                app.model.editor,
+                node.reference,
+                anchor,
+                caret,
+              ),
+            )
+            app.draw()
+          }
+        }
+      } else {
+        ignore(
+          @semantics.focus(
+            app.model.editor,
+            @semantics.snapshot(app.model.editor)[0].reference,
+          ),
+        )
+        ignore(@scene.dispatch(app.model.scene, Click(x, y)))
+        app.draw()
+      }
   }
 }
