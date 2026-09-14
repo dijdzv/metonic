@@ -135,10 +135,34 @@ async fn main {
         ".work/wgpu-display-feedback/source/target",
       )
       let library = @fs.realpath(target + "/debug")
+      let definition = library + "/metonic_display_feedback.def"
+      @fs.write_file(
+        definition, "LIBRARY wgpu_native.dll\nEXPORTS\n  metonicSurfaceReadDisplayFeedback\n",
+      )
+      // WhyNot: importing all wgpu exports collides with the binding's dynamic loader.
+      let vc_tools = envmap.get("VCToolsInstallDir").unwrap_or("")
+      if vc_tools == "" {
+        fail("Visual Studio library tool directory missing")
+      }
+      let librarian = @fs.realpath(vc_tools + "/bin/Hostx64/x64/lib.exe")
+      if @process.run(
+          librarian,
+          [
+            "/nologo",
+            "/machine:x64",
+            "/def:" + definition,
+            "/out:" + library + "/metonic_display_feedback.lib",
+          ],
+          extra_env=envmap,
+          no_console_window=true,
+        ) !=
+        0 {
+        fail("display feedback import library creation failed")
+      }
       envmap.set("LIB", library + ";" + envmap.get("LIB").unwrap_or(""))
       envmap.set(
         "LINK",
-        "wgpu_native.dll.lib " + envmap.get("LINK").unwrap_or(""),
+        "metonic_display_feedback.lib " + envmap.get("LINK").unwrap_or(""),
       )
       envmap.set("MBT_WGPU_LINK_MODE", "dynamic")
       Some(library)

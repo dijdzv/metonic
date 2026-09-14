@@ -1,0 +1,125 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/json",
+}
+
+///|
+async fn main {
+  let directory = @fs.realpath(
+    ".work/native-host-build/native/debug/build/local/native_host/window_display_dev",
+  )
+  for fallback in ["0", "1"] {
+    @async.with_timeout(20000, () => {
+      @async.with_task_group() <| group => {
+        let log_path = ".work/display-cli-" + fallback + ".log"
+        let log = @process.redirect_to_file(log_path)
+        defer log.close()
+        let child = @process.spawn(
+          group,
+          directory + "/window_display_dev.exe",
+          [],
+          stdout=log,
+          stderr=log,
+          extra_env={
+            "METONIC_DEV_PIPE": "metonic-display-cli-" +
+            @async.now().to_string(),
+            "METONIC_DEV_HIDDEN": "0",
+            "METONIC_GPU_FALLBACK": fallback,
+            "MBT_WGPU_LINK_MODE": "dynamic",
+            "MBT_WGPU_NATIVE_LIB": directory + "/wgpu_native.dll",
+            "MBT_WGPU_NATIVE_ALLOW_UNVERIFIED": "1",
+          },
+          no_console_window=true,
+        )
+        defer child.cancel()
+        let mut discovery = ""
+        while discovery == "" {
+          assert_true(child.try_wait() is None)
+          for line in @fs.read_file(log_path).text().split("\n") {
+            if line.strip_prefix("METONIC_DEV_SESSION ") is Some(path) {
+              discovery = path.trim().to_owned()
+            }
+          }
+          @async.sleep(20)
+        }
+        let (input, writer) = @process.write_to_process()
+        defer writer.close()
+        let (reader, output) = @process.read_from_process()
+        defer reader.close()
+        let cli = @process.spawn(
+          group,
+          ".tools/moonbit/bin/moonrun.exe",
+          [
+            "_build/wasm/release/build/tools/native_cli/native_cli.wasm", "--session",
+            discovery,
+          ],
+          stdin=input,
+          stdout=output,
+          no_console_window=true,
+        )
+        defer cli.cancel()
+        for text in ["cli", " display"] {
+          @async.sleep(50)
+          let request : Json = { "op": "insert", "args": { "text": text } }
+          writer.write(request.stringify() + "\n")
+          assert_true(
+            @json.parse(reader.read_until("\n").unwrap()) is { "error": "", .. },
+          )
+        }
+        writer.write("{\"op\":\"snapshot\"}\n")
+        guard @json.parse(reader.read_until("\n").unwrap())
+          is {
+            "error": "",
+            "frame_scope": String(scope),
+            "retained_frame_id": String(frame),
+            ..
+          } else {
+          fail("missing frame")
+        }
+        let wait : Json = {
+          "op": "wait_display",
+          "args": {
+            "frame_scope": scope,
+            "frame_id": frame,
+            "timeout_ms": 2000,
+          },
+        }
+        writer.write(wait.stringify() + "\n")
+        let result = @json.parse(reader.read_until("\n").unwrap())
+        assert_true(result is { "error": "", .. }, msg=result.stringify())
+        let capture : Json = {
+          "op": "capture_retained",
+          "args": { "frame_scope": scope, "frame_id": frame },
+        }
+        writer.write(capture.stringify() + "\n")
+        guard @json.parse(reader.read_until("\n").unwrap())
+          is { "error": "", "image": Object(image), .. } else {
+          fail("capture failed")
+        }
+        assert_eq(image.get("frame_id"), Some(Json::string(frame)))
+        assert_eq(
+          image.get("display_completion_confirmed"),
+          Some(Json::boolean(true)),
+        )
+        writer.close()
+        assert_eq(cli.wait(), 0)
+        assert_true(child.try_wait() is None)
+        assert_eq(
+          @process.run(
+            ".work/native-host-build/native/debug/build/local/native_host/accessibility_probe/accessibility_probe.exe",
+            [child.pid.to_string(), "close-only"],
+            no_console_window=true,
+          ),
+          0,
+        )
+        assert_eq(child.wait(), 0)
+        assert_false(@fs.exists(discovery))
+        println(
+          "WINDOW_DISPLAY_CLI_OK fallback=" + fallback + " frame=" + frame,
+        )
+      }
+    })
+  }
+}
