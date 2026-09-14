@@ -456,6 +456,32 @@ try {
     return true
   }
   const output = await runSuite(async (request) => {
+    if (request.op === 'input-lifetime') {
+      const page = await observedPage(browser);
+      const errors = [];
+      page.on('pageerror', error => errors.push(error.message));
+      const target = request.target;
+      const assets = new Map();
+      try {
+        for (const [url, file, contentType] of [
+          ['/app.js', 'browser_host/_build/js/release/build/local/browser_host/probe/probe.js', 'text/javascript'],
+          ['/app.wasm', 'browser_host/_build/wasm-gc/release/build/local/browser_host/probe/probe.wasm', 'application/wasm'],
+          ['/loader-common.mjs', 'examples/p0/browser/host/loader-common.mjs', 'text/javascript'],
+          ['/webapi.mjs', '.work/browser-dist/webapi.mjs', 'text/javascript'],
+          ['/websys-input.mjs', '.work/browser-dist/websys-input.mjs', 'text/javascript'],
+        ]) assets.set(url, { body: await fs.readFile(file), contentType });
+        const script = target === 'js' ? "import '/app.js';" : `import { wasmImports } from '/loader-common.mjs'; const {instance} = await WebAssembly.instantiateStreaming(fetch('/app.wasm'), wasmImports(), {builtins:['js-string'], importedStringConstants:'_'}); instance.exports._start();`;
+        await page.route('http://metonic-input.test/**', route => {
+          const pathname = new URL(route.request().url()).pathname;
+          if (pathname === '/') return route.fulfill({ contentType: 'text/html', body: `<meta charset="utf-8"><div id="app"></div><script type="module">${script}</script>` });
+          return route.fulfill(assets.get(pathname) ?? { status: 404, body: '' });
+        });
+        await page.goto('http://metonic-input.test/');
+        await page.waitForFunction(() => /^(PASS|FAIL)/.test(document.querySelector('#app').textContent), null, { timeout: 10000 });
+        return { text: await page.locator('#app').textContent(), errors: errors.length };
+      } catch (error) { await reportFailure(page); throw error; }
+      finally { await page.close(); }
+    }
     switch (request.op) {
       case 'release': {
         const page = await observedPage(browser, { viewport: { width: 1000, height: 800 }, deviceScaleFactor: 1 });

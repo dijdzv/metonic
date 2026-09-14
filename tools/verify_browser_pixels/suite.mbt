@@ -8,6 +8,14 @@ async fn run_suite(host : BrowserHost, metadata : String) -> String {
   )
   let results : Array[Json] = []
   for target in ["js", "wasm-gc"] {
+    let lifetime = command(host, {
+      "op": "input-lifetime",
+      "target": Json::string(target),
+    })
+    verify_input_lifetime(lifetime, target)
+    results.push(lifetime)
+  }
+  for target in ["js", "wasm-gc"] {
     let result = command(host, { "op": "scene", "target": Json::string(target) })
     require(string_field(result, "target") == target, "scene target mismatch")
     ignore(

@@ -74,6 +74,19 @@ async fn main {
   if wasm_code != 0 {
     fail("WasmGC build failed")
   }
+  for target in ["js", "wasm-gc"] {
+    assert_eq(
+      @process.run(
+        moon,
+        [
+          "-C", "browser_host", "build", "app/probe", "--target", target, "--release",
+          "--deny-warn",
+        ],
+        no_console_window=true,
+      ),
+      0,
+    )
+  }
   for
     host in [
       "host.mjs", "loader.mjs", "loader-common.mjs", "loader-release.mjs", "environment-dev.mjs",
