@@ -456,7 +456,7 @@ try {
     return true
   }
   const output = await runSuite(async (request) => {
-    if (request.op === 'input-lifetime') {
+    if (request.op === 'input-lifetime' || request.op === 'input-diagnostics') {
       const page = await observedPage(browser);
       const errors = [];
       page.on('pageerror', error => errors.push(error.message));
@@ -464,7 +464,7 @@ try {
       const assets = new Map();
       try {
         for (const [url, file, contentType] of [
-          ['/app.js', 'browser_host/_build/js/release/build/local/browser_host/probe/probe.js', 'text/javascript'],
+          ['/app.js', request.op === 'input-diagnostics' ? 'browser_host/_build/js/release/build/local/browser_host/diagnostics/probe/probe.js' : 'browser_host/_build/js/release/build/local/browser_host/probe/probe.js', 'text/javascript'],
           ['/app.wasm', 'browser_host/_build/wasm-gc/release/build/local/browser_host/probe/probe.wasm', 'application/wasm'],
           ['/loader-common.mjs', 'examples/p0/browser/host/loader-common.mjs', 'text/javascript'],
           ['/webapi.mjs', '.work/browser-dist/webapi.mjs', 'text/javascript'],

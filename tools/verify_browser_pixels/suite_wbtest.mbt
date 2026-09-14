@@ -1,6 +1,6 @@
 ///|
 extern "js" fn wrong_target_host() -> BrowserHost =
-  #| () => async (request) => request.op === 'input-lifetime'
+  #| () => async (request) => request.op === 'input-diagnostics' ? { text: 'PASS input_diagnostics capacity stop restart composition', errors: 0 } : request.op === 'input-lifetime'
   #|   ? { text: 'PASS production_input_owner both_fields composition selection stop restart pending_frames', errors: 0 }
   #|   : { target: 'wasm-gc', pageerrors: [] }
 
@@ -24,6 +24,7 @@ async test "suite rejects a result belonging to a different target" {
 extern "js" fn incomplete_dpr_host() -> BrowserHost =
   #| () => async (request) => {
   #|   switch (request.op) {
+  #|     case 'input-diagnostics': return { text: 'PASS input_diagnostics capacity stop restart composition', errors: 0 };
   #|     case 'input-lifetime': return { text: 'PASS production_input_owner both_fields composition selection stop restart pending_frames', errors: 0 };
   #|     case 'scene': return { target: request.target, pageerrors: [] };
   #|     case 'failures': return [];

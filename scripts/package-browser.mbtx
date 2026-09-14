@@ -40,7 +40,7 @@ async fn main {
       for
         forbidden in [
           "metonicAsyncProbe", "task-fail", "artifact-bytes", "environment-dev",
-          "?target=", "app.mjs",
+          "?target=", "app.mjs", "metonicInputTrace", "input-diagnostics",
         ] {
         assert_true(
           !data.text().contains(forbidden),

@@ -7,6 +7,14 @@ async fn run_suite(host : BrowserHost, metadata : String) -> String {
     "unknown GPU backend",
   )
   let results : Array[Json] = []
+  let diagnostics = command(host, { "op": "input-diagnostics", "target": "js" })
+  require(
+    string_field(diagnostics, "text") ==
+    "PASS input_diagnostics capacity stop restart composition" &&
+    int_field(diagnostics, "errors") == 0,
+    "input diagnostics failed",
+  )
+  results.push(diagnostics)
   for target in ["js", "wasm-gc"] {
     let lifetime = command(host, {
       "op": "input-lifetime",

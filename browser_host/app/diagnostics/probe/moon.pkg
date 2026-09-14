@@ -1,0 +1,6 @@
+import {
+  "local/browser_host/diagnostics" @trace,
+  "bikallem/webapi" @dom,
+}
+supported_targets = "js"
+pkgtype(kind: "executable")

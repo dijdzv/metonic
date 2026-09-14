@@ -104,10 +104,36 @@ async fn main {
     }
   }
   let dist = ".work/browser-dist"
+  assert_eq(
+    @process.run(
+      moon,
+      [
+        "-C", "browser_host", "build", "app/diagnostics/probe", "--target", "js",
+        "--release", "--deny-warn",
+      ],
+      no_console_window=true,
+    ),
+    0,
+  )
+  assert_eq(
+    @process.run(
+      moon,
+      [
+        "-C", "browser_host", "build", "app/diagnostics", "--target", "js", "--release",
+        "--deny-warn",
+      ],
+      no_console_window=true,
+    ),
+    0,
+  )
   if !@fs.exists(dist) {
     @fs.mkdir(dist, recursive=true)
   }
   let copies = [
+    (
+      "browser_host/_build/js/release/build/local/browser_host/diagnostics/diagnostics.js",
+      ".work/browser-dist/input-diagnostics.mjs",
+    ),
     (
       "_build/js/release/build/tools/browser_buffer/browser_buffer.js", ".work/browser-dist/browser-buffer.mjs",
     ),
