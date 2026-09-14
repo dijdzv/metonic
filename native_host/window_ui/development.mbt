@@ -44,7 +44,7 @@ async fn App::dispatch_development(
         },
       )
     Edit(text, expected, result) =>
-      if app.composition is Some(_) {
+      if app.composition is Some(_) || app.ime_pointer.pending() {
         result.val = Some("composition_active")
       } else if expected is Some(revision) &&
         revision != @semantics.revision(app.model.editor) {
@@ -62,7 +62,7 @@ async fn App::dispatch_development(
         result.val = Some(error)
       }
     Select(start, end, expected, result) =>
-      if app.composition is Some(_) {
+      if app.composition is Some(_) || app.ime_pointer.pending() {
         result.val = Some("composition_active")
       } else if expected is Some(revision) &&
         revision != @semantics.revision(app.model.editor) {
