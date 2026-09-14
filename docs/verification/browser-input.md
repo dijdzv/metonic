@@ -65,7 +65,11 @@ the required console import. Release packaging keeps its explicit asset list
 and development-content checks.
 
 The MoonBit `browser_host/app/probe` covers both input fields, synthetic
-composition, selection, stop and restart. The normal browser suite builds
+composition, selection, stop and restart. Cancellation cases supply either
+restored or empty DOM text at composition end in each field, then verify the
+shared view length and continued input; the editor also checks exact text and
+selection. These controlled events check synchronization, not which cancellation
+result an actual IME should produce. The normal browser suite builds
 and runs the probe on JS and WasmGC in separate intercepted pages, outside the
 packaged release assets. Its frame-lifetime checks queue reconciliation in each
 field and advance two animation frames after stop or restart; a live-host control

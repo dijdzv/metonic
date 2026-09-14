@@ -70,5 +70,6 @@ fn main raise {
   assert_eq(@app.editor_field(0), 4)
   assert_eq(@host.inputs_error(), 0)
   @host.inputs_stop()
+  check_canceled_replacement(editor, query)
   check_frame_lifetime(editor, query, 0)
 }
