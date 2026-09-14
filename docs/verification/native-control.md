@@ -173,9 +173,11 @@ The renderer keeps the latest two surface copies taken before Present. The
 returned PNG identifies its frame, configuration generation, physical pixel
 dimensions, scope and `display_scale`. The integrated window records the window
 API's scale at draw time; renderers without a window may leave it null. A later
-edit does not redraw that image. `source: retained_surface_copy`
-and `display_completion_confirmed: false` distinguish this path from actual
-display feedback. The enclosing response describes current application state;
+edit does not redraw that image. `source: retained_surface_copy` identifies the
+image source; `display_completion_confirmed` separately identifies whether the
+exact frame has been observed in presentation statistics. Ordinary development
+hosts have no statistics reader and return false. The opt-in display-feedback
+host can return true after exact-ID confirmation. The enclosing response describes current application state;
 it is not a historical semantic snapshot of the retained image. Existing
 `capture` continues to use its shared offscreen pass.
 
@@ -212,7 +214,36 @@ a newer configuration generation and remains pending without a confirming
 sample. These negative checks run on default and fallback adapters, together
 with waiter deadline, cancellation, idle-observation and owner-close checks.
 They do not establish real display completion; the opt-in
-`native:window-display` task provides separate positive wire/MCP evidence.
+`native:window-display` task provides separate positive wire/CLI/MCP evidence.
+
+## Display wait and capture contract
+
+Use the snapshot's `frame_scope` and decimal Int64 `retained_frame_id` together.
+The wire/attached CLI operation `wait_display` accepts them as `frame_scope` and
+`frame_id`, with `timeout_ms` from 1 through 60000. MCP exposes the same contract
+as `window_wait_display`; the UI Handle receives the ID within its own owner.
+CLI and MCP transport deadlines allow the requested wait plus a response margin.
+Success means exact-frame confirmation, not merely a newer submission. Capture
+that same ID with `capture_retained` or MCP `window_capture_retained`; another
+render may evict it before capture, which remains an explicit failure rather than
+substituting the latest image.
+
+The display-feedback host returns `display_unavailable` when statistics cannot
+identify the image, `stale_display_epoch` after epoch invalidation, and `timeout`
+when a pending frame does not become confirmed by the deadline. Invalid/future/
+evicted IDs and closed owners have distinct errors. A confirmed historical frame
+does not become unconfirmed solely because later statistics become disjoint.
+No periodic display-wait polling runs without active waiters; present and capture
+can still sample statistics. Active waits use separate 16-ms timers and serialize
+surface access through the UI event queue.
+
+Reproduce positive observations using the prerequisites and command in
+[development display feedback](../../patches/wgpu-native-display-feedback.md).
+This path is Windows DX12 and opt-in development only. Pixel dimensions and
+draw-time window scale describe the retained image; the enclosing current
+snapshot must not be used as its historical geometry. These checks do not prove
+cross-monitor DPI transitions, physical device-loss recovery, or an exact scanout
+timestamp. QPC in the statistics is a synchronization sample.
 
 The same hidden-window gate uses a probe-only entry point with nonconfirming
 statistics and the ordinary control protocol. A short wait must time out before
