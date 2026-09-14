@@ -183,6 +183,7 @@ fn Diagnostics::rejected(self : Diagnostics) -> Unit {
 
 ///|
 priv struct Hooks {
+  display_feedback : ((@wgpu.Surface) -> @gpu.DisplayObservation)?
   observer : (async (Observation) -> Unit)?
   completed : ((Observation) -> Unit raise Error)?
   lifecycle : ((Lifecycle, Observation) -> Bool raise Error)?
@@ -191,6 +192,7 @@ priv struct Hooks {
 
 ///|
 pub async fn run(
+  display_feedback? : ((@wgpu.Surface) -> @gpu.DisplayObservation)? = None,
   observer? : (async (Observation) -> Unit)? = None,
   completed? : ((Observation) -> Unit raise Error)? = None,
   lifecycle? : ((Lifecycle, Observation) -> Bool raise Error)? = None,
@@ -198,7 +200,11 @@ pub async fn run(
   hidden? : Bool = false,
   report? : (String) -> Unit = println,
 ) -> Unit {
-  run_loop({ observer, completed, lifecycle, controller, }, hidden, report)
+  run_loop(
+    { display_feedback, observer, completed, lifecycle, controller, },
+    hidden,
+    report,
+  )
 }
 
 ///|
@@ -217,6 +223,9 @@ fn Hooks::notify(
   phase : Lifecycle,
   app : App,
 ) -> Bool raise Error {
+  if phase is Ready && self.display_feedback is Some(reader) {
+    app.renderer.unwrap().set_display_feedback(reader)
+  }
   if phase is Ready && self.controller is Some(_) {
     ignore(app.renderer.unwrap().enable_frame_retention())
   }

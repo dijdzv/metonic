@@ -8,16 +8,18 @@ import { window_mcp_result } from '../../_build/js/release/build/tools/session_w
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const launchArgs = process.argv.slice(2);
-if (launchArgs.length && (launchArgs.length !== 2 || launchArgs[0] !== '--session')) {
-  throw new Error('usage: window-mcp.mjs [--session session.json]');
+const display = launchArgs.length === 1 && launchArgs[0] === '--display';
+if (!display && launchArgs.length && (launchArgs.length !== 2 || launchArgs[0] !== '--session')) {
+  throw new Error('usage: window-mcp.mjs [--session session.json | --display]');
 }
-const session = await createMoonBitSession(launchArgs.length ? {
+const session = await createMoonBitSession(launchArgs.length && !display ? {
   protocol: 'window-attach',
   executable: path.join(root, '.tools/moonbit/bin/moonrun.exe'),
   args: [path.join(root, '_build/wasm/release/build/tools/native_cli/native_cli.wasm'), '--session-wire', path.resolve(launchArgs[1])],
 } : {
   protocol: 'window',
-  executable: path.join(root, '.work/native-host-build/native/debug/build/local/native_host/window_dev/window_dev.exe'),
+  visibleWindow: display,
+  executable: path.join(root, `.work/native-host-build/native/debug/build/local/native_host/${display ? 'window_display_dev/window_display_dev' : 'window_dev/window_dev'}.exe`),
   args: [],
 });
 const revision = z.number().int().min(0).max(2147483647).optional();
@@ -25,6 +27,7 @@ function factory() {
   const server = new McpServer({ name: 'metonic-window', version: '0.0.0' });
   const definitions = [
     ['snapshot', 'Read the integrated window state.', z.object({}).strict(), true],
+    ['wait_display', 'Wait for display confirmation of a retained frame; unavailable statistics and stale or evicted frames fail explicitly.', z.object({ frame_scope: z.string().min(1), frame_id: z.string().regex(/^[1-9][0-9]{0,18}$/), timeout_ms: z.number().int().min(1).max(60000) }).strict(), true],
     ['wait_semantic', 'Wait for an editor semantic revision; this does not wait for display presentation.', z.object({ semantic_revision: z.number().int().min(0).max(2147483647), timeout_ms: z.number().int().min(1).max(60000) }).strict(), true],
     ['capture', 'Capture the integrated UI through its shared offscreen GPU pass.', z.object({}).strict(), true],
     ['capture_retained', 'Read a retained surface copy using frame_scope and retained_frame_id from a snapshot. This does not certify display completion.', z.object({ frame_scope: z.string().min(1), frame_id: z.string().regex(/^[1-9][0-9]{0,18}$/) }).strict(), true],

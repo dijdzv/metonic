@@ -1,0 +1,110 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/json",
+}
+
+///|
+async fn main {
+  let directory = @fs.realpath(
+    ".work/native-host-build/native/debug/build/local/native_host/window_display_dev",
+  )
+  for fallback in ["0", "1"] {
+    @async.with_timeout(20000, () => {
+      @async.with_task_group() <| group => {
+        let (input, writer) = @process.write_to_process()
+        defer writer.close()
+        let (reader, output) = @process.read_from_process()
+        defer reader.close()
+        let child = @process.spawn(
+          group,
+          directory + "/window_display_dev.exe",
+          [],
+          stdin=input,
+          stdout=output,
+          extra_env={
+            "METONIC_DEV_HIDDEN": "0",
+            "METONIC_GPU_FALLBACK": fallback,
+            "MBT_WGPU_LINK_MODE": "dynamic",
+            "MBT_WGPU_NATIVE_LIB": directory + "/wgpu_native.dll",
+            "MBT_WGPU_NATIVE_ALLOW_UNVERIFIED": "1",
+          },
+          no_console_window=true,
+        )
+        defer child.cancel()
+        writer.write("{\"id\":1,\"op\":\"snapshot\"}\n")
+        assert_true(
+          @json.parse(reader.read_until("\n").unwrap()) is { "error": "", .. },
+        )
+        @async.sleep(50)
+        writer.write("{\"id\":2,\"op\":\"insert\",\"text\":\"display\"}\n")
+        assert_true(
+          @json.parse(reader.read_until("\n").unwrap()) is { "error": "", .. },
+        )
+        @async.sleep(50)
+        writer.write(
+          "{\"id\":3,\"op\":\"insert\",\"text\":\" confirmation\"}\n",
+        )
+        let snapshot = @json.parse(reader.read_until("\n").unwrap())
+        guard snapshot
+          is {
+            "error": "",
+            "frame_scope": String(scope),
+            "retained_frame_id": String(frame),
+            ..
+          } else {
+          fail("missing frame identity")
+        }
+        let request : Json = {
+          "id": 4,
+          "op": "wait_display",
+          "frame_scope": scope,
+          "frame_id": frame,
+          "timeout_ms": 2000,
+        }
+        writer.write(request.stringify() + "\n")
+        let waited = @json.parse(reader.read_until("\n").unwrap())
+        assert_true(waited is { "error": "", .. }, msg=waited.stringify())
+        let capture : Json = {
+          "id": 5,
+          "op": "capture_retained",
+          "frame_scope": scope,
+          "frame_id": frame,
+        }
+        writer.write(capture.stringify() + "\n")
+        let captured = @json.parse(reader.read_until("\n").unwrap())
+        guard captured is { "error": "", "image": Object(image), .. } else {
+          fail("capture failed")
+        }
+        assert_eq(image.get("frame_id"), Some(Json::string(frame)))
+        assert_eq(
+          image.get("display_completion_confirmed"),
+          Some(Json::boolean(true)),
+        )
+        writer.close()
+        assert_eq(child.wait(), 0)
+        println("WINDOW_DISPLAY_WAIT_CAPTURE_OK fallback=" + fallback)
+      }
+    })
+    let (status, output, error) = @async.with_timeout(30000, () => {
+      @process.collect_output(
+        "node",
+        ["scripts/verify-window-mcp.mjs", "--display"],
+        extra_env={
+          "MBT_WGPU_NATIVE_LIB": directory + "/wgpu_native.dll",
+          "MBT_WGPU_NATIVE_ALLOW_UNVERIFIED": "1",
+          "METONIC_GPU_FALLBACK": fallback,
+        },
+        no_console_window=true,
+      )
+    })
+    @fs.write_file(
+      ".work/window-display-mcp-" + fallback + ".log",
+      output.text() + error.text(),
+    )
+    assert_eq(status, 0)
+    assert_true(output.text().contains("WINDOW_MCP_DISPLAY_OK"))
+    println("WINDOW_MCP_DISPLAY_OK fallback=" + fallback)
+  }
+}

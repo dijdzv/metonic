@@ -243,8 +243,9 @@ pub fn SurfaceRenderer::present(
   let command = encoder.finish()
   defer command.release()
   self.queue.submit_one(command)
+  let attempt = self.retention.begin_present(self.surface)
   self.surface.present_or_raise()
-  self.retention.publish(retained)
+  self.retention.publish(retained, attempt, self.surface)
 }
 
 ///|

@@ -1,0 +1,68 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index dde9a8c..52fcab3 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -42,6 +42,7 @@ version = "29.0.1"
+ crate-type = ["cdylib", "staticlib"]
+ 
+ [features]
++metonic-display-feedback = ["dx12"]
+ default = ["wgsl", "spirv", "glsl", "dx12", "metal", "vulkan", "gles"]
+ 
+ ## Enables the DX12 backend on Windows.
+diff --git a/src/lib.rs b/src/lib.rs
+index ba92673..39a3c87 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -338,6 +338,51 @@ pub struct WGPUSurfaceImpl {
+     // Shared bool between Texture & Surface to track surface_present calls
+     has_surface_presented: Arc<atomic::AtomicBool>,
+ }
++#[cfg(all(windows, feature = "metonic-display-feedback"))]
++#[repr(C)]
++#[derive(Default)]
++pub struct MetonicDisplayFeedback {
++    pub last_present_count: u32,
++    pub observed_present_count: u32,
++    pub sync_qpc_time: i64,
++    pub present_refresh_count: u32,
++    pub sync_refresh_count: u32,
++}
++
++// The caller serializes this call with present, reconfiguration and destruction.
++// Only scalar observations escape; no borrowed HAL/COM handle is exposed.
++#[cfg(all(windows, feature = "metonic-display-feedback"))]
++#[no_mangle]
++pub unsafe extern "C" fn metonicSurfaceReadDisplayFeedback(
++    surface: native::WGPUSurface,
++    output: *mut MetonicDisplayFeedback,
++) -> i32 {
++    let Some(output) = output.as_mut() else { return -1; };
++    *output = MetonicDisplayFeedback::default();
++    let Some(surface) = surface.as_ref() else { return -1; };
++    let Some(raw) = surface.context.surface_as_hal::<hal::api::Dx12>(surface.id) else {
++        return 1;
++    };
++    let Some(chain) = raw.swap_chain() else { return 1; };
++    let last = match chain.GetLastPresentCount() {
++        Ok(value) => value,
++        Err(error) => return error.code().0,
++    };
++    output.last_present_count = last;
++    let mut statistics = Default::default();
++    if let Err(error) = chain.GetFrameStatistics(&mut statistics) {
++        return error.code().0;
++    }
++    *output = MetonicDisplayFeedback {
++        last_present_count: last,
++        observed_present_count: statistics.PresentCount,
++        sync_qpc_time: statistics.SyncQPCTime,
++        present_refresh_count: statistics.PresentRefreshCount,
++        sync_refresh_count: statistics.SyncRefreshCount,
++    };
++    0
++}
++
+ impl Drop for WGPUSurfaceImpl {
+     fn drop(&mut self) {
+         if !thread::panicking() {

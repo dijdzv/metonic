@@ -531,6 +531,8 @@ async fn run_probe(
           "WINDOW_INIT_CLOSE_OK"
         } else if case_name == "capture" {
           "WINDOW_CAPTURE_OBSERVATION_OK"
+        } else if case_name == "display-wait" {
+          "WINDOW_DISPLAY_WAIT_LIFECYCLE_OK"
         } else if case_name == "delete" {
           "WINDOW_DELETE_OK"
         } else if case_name == "query" || case_name == "query-latin" {
@@ -604,7 +606,8 @@ async fn main {
     for mode in modes {
       let cases = if kind == "window" {
         [
-          "normal", "input", "close", "capture", "query", "query-latin", "delete",
+          "normal", "input", "close", "capture", "display-wait", "query", "query-latin",
+          "delete",
         ]
       } else if kind == "surface" {
         ["normal", "retained"]

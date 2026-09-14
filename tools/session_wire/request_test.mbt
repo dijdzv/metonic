@@ -24,6 +24,34 @@ test "semantic wait transport deadline leaves response time without extending or
 }
 
 ///|
+test "display wait preserves its deadline only for a valid scoped frame" {
+  for id in ["1", "9223372036854775807"] {
+    let request : Json = {
+      "op": "wait_display",
+      "frame_id": id,
+      "frame_scope": "app",
+      "timeout_ms": 60000,
+    }
+    assert_eq(window_request_timeout(request.stringify(), 5000), 61000)
+  }
+  for id in ["0", "-1", "9223372036854775808", "abc"] {
+    let request : Json = {
+      "op": "wait_display",
+      "frame_id": id,
+      "frame_scope": "app",
+      "timeout_ms": 60000,
+    }
+    assert_eq(window_request_timeout(request.stringify(), 5000), 5000)
+  }
+  let missing_scope : Json = {
+    "op": "wait_display",
+    "frame_id": "1",
+    "timeout_ms": 60000,
+  }
+  assert_eq(window_request_timeout(missing_scope.stringify(), 5000), 5000)
+}
+
+///|
 test "request envelopes validate protocol shape and reserved identifiers" {
   for
     text in [

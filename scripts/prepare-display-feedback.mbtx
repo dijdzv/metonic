@@ -1,0 +1,120 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/env",
+}
+
+///|
+async fn main {
+  @async.with_timeout(300000, () => {
+    let clang = @env.get_env_var("LIBCLANG_PATH").unwrap_or("")
+    if clang == "" || !@fs.exists(clang + "/libclang.dll") {
+      println("LIBCLANG_PATH must name a directory containing libclang.dll")
+      abort("missing libclang")
+    }
+    let root = ".work/wgpu-display-feedback"
+    let source = root + "/source"
+    let revision = "6aed50955d934ac36049ba8d002034841633ae02"
+    let patch = @fs.realpath("patches/wgpu-native-display-feedback.patch")
+    if !@fs.exists(root) {
+      @fs.mkdir(root, recursive=true)
+    }
+    if !@fs.exists(source) {
+      assert_eq(
+        @process.run(
+          "git",
+          [
+            "clone", "--no-checkout", "--filter=blob:none", "https://github.com/gfx-rs/wgpu-native.git",
+            source,
+          ],
+          no_console_window=true,
+        ),
+        0,
+      )
+      assert_eq(
+        @process.run(
+          "git",
+          ["-C", source, "checkout", "--detach", revision],
+          no_console_window=true,
+        ),
+        0,
+      )
+    }
+    let (head_status, head, _) = @process.collect_output(
+      "git",
+      ["-C", source, "rev-parse", "HEAD"],
+      no_console_window=true,
+    )
+    assert_eq(head_status, 0)
+    assert_eq(head.text().trim().to_owned(), revision)
+    let (diff_status, diff, _) = @process.collect_output(
+      "git",
+      ["-C", source, "diff", "HEAD", "--", "Cargo.toml", "src/lib.rs"],
+      no_console_window=true,
+    )
+    assert_eq(diff_status, 0)
+    if diff.text() == "" {
+      assert_eq(
+        @process.run(
+          "git",
+          ["-C", source, "apply", "--check", patch],
+          no_console_window=true,
+        ),
+        0,
+      )
+      assert_eq(
+        @process.run(
+          "git",
+          ["-C", source, "apply", patch],
+          no_console_window=true,
+        ),
+        0,
+      )
+    } else {
+      assert_eq(
+        diff.text().replace_all(old="\r\n", new="\n").trim().to_owned(),
+        @fs.read_file(patch)
+        .text()
+        .replace_all(old="\r\n", new="\n")
+        .trim()
+        .to_owned(),
+      )
+    }
+    assert_eq(
+      @process.run(
+        "git",
+        ["-C", source, "submodule", "update", "--init", "ffi/webgpu-headers"],
+        no_console_window=true,
+      ),
+      0,
+    )
+    let (status_code, changes, _) = @process.collect_output(
+      "git",
+      ["-C", source, "status", "--porcelain", "--untracked-files=normal"],
+      no_console_window=true,
+    )
+    assert_eq(status_code, 0)
+    assert_eq(
+      changes.text().replace_all(old="\r\n", new="\n").trim().to_owned(),
+      "M Cargo.toml\n M src/lib.rs",
+    )
+    assert_eq(
+      @process.run(
+        "cargo",
+        [
+          "build",
+          "--manifest-path",
+          source + "/Cargo.toml",
+          "--locked",
+          "--no-default-features",
+          "--features",
+          "metonic-display-feedback,wgsl",
+        ],
+        no_console_window=true,
+      ),
+      0,
+    )
+    println("DISPLAY_FEEDBACK_BUILD_OK revision=" + revision)
+  })
+}

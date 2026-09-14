@@ -11,3 +11,4 @@ patches/window-ime-trace.patch whitespace=-blank-at-eol
 patches/window-system-keys.patch whitespace=-blank-at-eol
 patches/webapi-http-boundary.patch whitespace=-blank-at-eol
 patches/webapi-webgpu-generator.patch whitespace=-blank-at-eol
+patches/wgpu-native-display-feedback.patch whitespace=-blank-at-eol
