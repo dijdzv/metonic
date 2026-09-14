@@ -3,12 +3,13 @@ async fn main {
   let mode = @env.get_env_var("METONIC_WINDOW_INIT_TEST").unwrap_or("normal")
   if mode == "display-wait" {
     let reads = Ref(0U)
+    let injected : Ref[@gpu.DisplayObservation?] = Ref(None)
     @ui.run(
       display_feedback=Some(_ => {
         reads.val += 1U
-        @gpu.DisplayObservation::Sample(reads.val, 0U, 0L, 0U, 0U)
+        injected.val.unwrap_or(@gpu.DisplayObservation::Sample(reads.val, 0U, 0L, 0U, 0U))
       }),
-      controller=Some(handle => display_wait_observation(handle, reads)),
+      controller=Some(handle => display_wait_observation(handle, reads, injected)),
       hidden=true,
     )
     return

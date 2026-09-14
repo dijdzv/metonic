@@ -204,7 +204,17 @@ its first byte, queues an edit and closes the owned hidden window. It requires
 exit within two seconds, an incomplete response followed by EOF, no later reply
 and rejection of subsequent input. This checks response backpressure shutdown;
 it does not prove that an already applied action was rolled back.
-These tests do not establish display-completion feedback, physical IME input,
+The `native:window` display-wait probe injects statistics into the real hidden
+window renderer. It checks that DISJOINT, a decreasing present counter, and
+resize invalidate an unconfirmed retained frame; neither waiting nor capture
+may report that old image as displayed. After resize, the new retained image has
+a newer configuration generation and remains pending without a confirming
+sample. These negative checks run on default and fallback adapters, together
+with waiter deadline, cancellation, idle-observation and owner-close checks.
+They do not establish real display completion; the opt-in
+`native:window-display` task provides separate positive wire/MCP evidence.
+
+These tests do not establish physical IME input,
 or cross-monitor DPI/scale acceptance.
 
 ## Boundaries
