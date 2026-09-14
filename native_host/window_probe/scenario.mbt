@@ -252,6 +252,27 @@ async fn Scenario::step(self : Scenario, view : @ui.Observation) -> Unit {
       (view.scene)(5) == self.scene_revision,
       "composition Enter activated scene",
     )
+    self.stage = 2531
+    require((view.set_text)("あいう") == "", "cancel text rejected")
+    require((view.select)(0, 3) == "", "cancel selection rejected")
+    (view.inject)(CompositionStart)
+    (view.inject)(CompositionUpdate("あ", Some(1)))
+  } else if self.stage == 2531 && view.composing {
+    require(view.editor.value == "あいう", "preedit mutated committed text")
+    self.stage = 2532
+    (view.inject)(CompositionCancel)
+  } else if self.stage == 2532 && !view.composing {
+    require(view.editor.value == "あいう", "cancel lost original text")
+    require(view.editor.selection_start == 0 && view.editor.selection_end == 3,
+      "cancel lost original selection")
+    self.stage = 2533
+    post(view.hwnd, 0x0100U, 0x0DUL, 0L)
+  } else if self.stage == 2533 && view.editor.value == "\n" {
+    require(view.editor.value.length() == 1, "Enter erased text instead of inserting LF")
+    require(view.editor.selection_start == 1 && view.editor.selection_end == 1,
+      "Enter after cancel did not collapse selection after LF")
+    require(!view.composing, "Enter restarted composition")
+    println("WINDOW_CANCEL_ENTER_TEXT_OK")
     require((view.set_text)("A😀 \n語") == "", "scene test text rejected")
     require((view.select)(5, 5) == "", "scene test caret rejected")
     self.stage = 26
