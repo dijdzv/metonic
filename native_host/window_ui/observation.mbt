@@ -4,6 +4,7 @@ pub(all) enum Injected {
   CompositionStart
   CompositionUpdate(String, Int?)
   CompositionCancel
+  NavigateVertical(Bool, Bool)
   AccessibilityValue(String)
   AccessibilitySelection(UInt64, UInt64, UInt64, UInt64)
   Updated(Int, Int)
@@ -146,6 +147,7 @@ fn App::observation(self : App) -> Observation {
           CompositionStart => CompositionStart
           CompositionUpdate(text, cursor) => CompositionUpdate(text, cursor)
           CompositionCancel => CompositionCancel
+          NavigateVertical(down, extend_selection) => NavigateVertical(down, extend_selection)
           AccessibilityValue(text) =>
             Accessibility(@accessibility.SetValue(2, text))
           AccessibilitySelection(

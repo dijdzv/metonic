@@ -1,3 +1,4 @@
 import {
   "Milky2018/moon_cosmic" @cosmic,
+  "local/p0/examples/p0/text_position",
 }

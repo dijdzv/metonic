@@ -67,10 +67,14 @@ This sample layout does not implement page scrolling or a general responsive lay
 Native left/right keys edit while text is focused; Tab cycles through text, the
 scene, Load user, Move after delay, Cancel and User ID. Clicking the scene returns its keyboard focus. Scene focus enables
 Up/down movement and Enter/Space activation. Those keys do not operate the scene
-while editing, composing or focusing Load user; Space inserts text while editing. Vertical editor
-navigation is not implemented. The browser requires canvas focus for scene keyboard
+while editing, composing or focusing Load user; Space inserts text while editing.
+Native Up/Down moves the Text caret between wrapped or explicit lines using the
+retained text layout. Repeated movement preserves the preferred horizontal
+position across shorter lines; Shift extends selection. User ID stays single-line,
+and composition retains ownership of navigation keys. The fixed editor viewport
+does not scroll to reveal an offscreen caret. The browser requires canvas focus for scene keyboard
 controls. Native uses a steady caret and scalar-boundary horizontal navigation;
-grapheme-aware and visual bidi navigation, vertical editing navigation and caret
+grapheme-aware and visual bidi navigation and caret
 blinking remain unfinished. This is not full editing parity.
 
 Closing native ends the launcher and its owned server. An unexpected server exit

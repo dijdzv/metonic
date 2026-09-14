@@ -15,6 +15,7 @@ async fn verify_text_layout() -> Unit {
   let engine = @raster.create(
     @fs.read_file(".work/text-assets/NotoSansJP.ttf").binary(),
   ).unwrap()
+  verify_vertical_layout(engine)
   for
     text in [
       "", "日本語 ABC 😀", "first\nsecond\nthird\nfourth", "a\n", "\n\n", "one\r\ntwo\r\n",
