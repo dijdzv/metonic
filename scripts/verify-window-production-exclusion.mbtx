@@ -23,12 +23,15 @@ async fn main {
     marker in [
       "App_3a_3ahandle", "capture__frame", "Captured", "InputObservation", "ime__events",
       "ime__dropped", "mbw_ime_trace_get", "ConnectionState", "SessionQueueOverflow",
-      "RetainedImage", "RetainedCapture", "capture__retained",
+      "RetainedImage", "RetainedCapture", "capture__retained", "poll__display__status",
+      "DisplayStatus",
     ] {
     guard development.contains(marker) else {
+      println("development positive control missing: " + marker)
       abort("development positive control missing: " + marker)
     }
     guard !production.contains(marker) else {
+      println("production retains development code: " + marker)
       abort("production retains development code: " + marker)
     }
   }
@@ -46,7 +49,8 @@ async fn main {
   }
   for
     marker in [
-      "Observation", "window_probe", "window_dev", "metonic_mailbox_probe_", "metonic_sdk_",
+      "Observation", "window_probe", "window_dev", "window_control", "window_display_dev",
+      "metonicSurfaceReadDisplayFeedback", "metonic_mailbox_probe_", "metonic_sdk_",
     ] {
     guard !production.contains(marker) else {
       abort("production retains development type or package: " + marker)
@@ -61,7 +65,7 @@ async fn main {
   for
     dependency in [
       "window_probe", "window_dev", "native_session", "native_control", "mailbox_probe",
-      "sdk_mailbox_probe", "named_pipe", "pipe_test_support",
+      "sdk_mailbox_probe", "named_pipe", "pipe_test_support", "window_control", "window_display_dev",
     ] {
     guard !link.contains(dependency) else {
       abort("production links development package: " + dependency)

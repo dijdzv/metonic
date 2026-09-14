@@ -5,6 +5,17 @@ struct FrameRetention {}
 priv struct PendingFrame {}
 
 ///|
+priv struct PresentationAttempt {}
+
+///|
+fn FrameRetention::begin_present(
+  _self : FrameRetention,
+  _surface : @wgpu.Surface,
+) -> PresentationAttempt {
+  PresentationAttempt::{ }
+}
+
+///|
 fn FrameRetention::new(
   _surface : @wgpu.Surface,
   _adapter : @wgpu.Adapter,
@@ -40,6 +51,8 @@ fn FrameRetention::copy(
 fn FrameRetention::publish(
   _self : FrameRetention,
   _frame : PendingFrame,
+  _attempt : PresentationAttempt,
+  _surface : @wgpu.Surface,
 ) -> Unit {
   ()
 }

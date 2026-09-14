@@ -1,0 +1,21 @@
+import {
+  "Milky2018/wgpu_mbt" @wgpu,
+  "local/native_host/window_ui" @ui,
+  "local/p0/native_gpu" @gpu,
+  "local/p0/tools/cli_lines" @lines,
+  "moonbitlang/async",
+  "moonbitlang/async/aqueue",
+  "moonbitlang/async/cond_var",
+  "moonbitlang/async/stdio",
+  "moonbitlang/async/io",
+  "moonbitlang/async/named_pipe" @pipe,
+  "moonbitlang/async/fs",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/json",
+  "moonbitlang/core/string",
+  "moonbitlang/core/env",
+  "moonbitlang/core/encoding/base64",
+  "mizchi/image",
+}
+
+supported_targets = "native"

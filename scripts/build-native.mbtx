@@ -27,6 +27,7 @@ async fn main {
       mode != "sdk-mailbox-probe" &&
       mode != "production-probes" &&
       mode != "window-dev" &&
+      mode != "window-display-dev" &&
       mode != "window-probe" &&
       mode != "async" &&
       mode != "surface" &&
@@ -38,6 +39,7 @@ async fn main {
     if mode == "window" ||
       mode == "window-release" ||
       mode == "window-dev" ||
+      mode == "window-display-dev" ||
       mode == "window-probe" {
       let asset_env : Map[String, String] = Map([])
       asset_env.set("METONIC_TEXT_ASSETS_ONLY", "1")
@@ -119,6 +121,30 @@ async fn main {
     envmap.set("VSLANG", "1033")
     envmap.set("MBT_WGPU_NATIVE_ROOT", @fs.realpath(".work/wgpu-assets"))
     envmap.set("MBT_WGPU_LINK_MODE", "static")
+    let display_library = if mode == "window-display-dev" {
+      if @process.run(
+          moon,
+          ["run", "scripts/prepare-display-feedback.mbtx"],
+          extra_env=envmap,
+          no_console_window=true,
+        ) !=
+        0 {
+        fail("display feedback preparation failed")
+      }
+      let target = @env.get_env_var("CARGO_TARGET_DIR").unwrap_or(
+        ".work/wgpu-display-feedback/source/target",
+      )
+      let library = @fs.realpath(target + "/debug")
+      envmap.set("LIB", library + ";" + envmap.get("LIB").unwrap_or(""))
+      envmap.set(
+        "LINK",
+        "wgpu_native.dll.lib " + envmap.get("LINK").unwrap_or(""),
+      )
+      envmap.set("MBT_WGPU_LINK_MODE", "dynamic")
+      Some(library)
+    } else {
+      None
+    }
     if mode == "host-gpu" {
       if @process.run(
           moon,
@@ -159,10 +185,12 @@ async fn main {
       mode == "sdk-mailbox-probe" ||
       mode == "production-probes" ||
       mode == "window-dev" ||
+      mode == "window-display-dev" ||
       mode == "window-probe" {
       let host_apps = match mode {
         "async" => ["async_app"]
         "window-dev" => ["window_dev"]
+        "window-display-dev" => ["window_display_dev"]
         "window-probe" => ["window_probe"]
         "release-probe" => ["release_probe"]
         "accessibility-probe" => ["accessibility_probe"]
@@ -176,8 +204,8 @@ async fn main {
       }
       let needs_accesskit = fn(host_app : String) {
         [
-          "window_app", "window_dev", "accessibility_probe", "mailbox_probe", "sdk_mailbox_probe",
-          "window_probe",
+          "window_app", "window_dev", "window_display_dev", "accessibility_probe",
+          "mailbox_probe", "sdk_mailbox_probe", "window_probe",
         ].contains(host_app)
       }
       let native_host_build_dir = @fs.realpath(".") + "/.work/native-host-build"
@@ -288,6 +316,12 @@ async fn main {
             directory + "/accesskit.dll",
             @fs.read_file(".work/accesskit-focus-build/release/accesskit.dll").binary(),
           )
+          if display_library is Some(library) {
+            @fs.write_file(
+              directory + "/wgpu_native.dll",
+              @fs.read_file(library + "/wgpu_native.dll").binary(),
+            )
+          }
           for license in ["MIT", "APACHE"] {
             @fs.write_file(
               directory + "/ACCESSKIT-LICENSE-" + license,

@@ -1,5 +1,8 @@
 ///|
 priv struct RetainedImage {
+  mut present_id : UInt?
+  mut statistics_epoch : Int64
+  mut display_confirmed : Bool
   texture : @wgpu.Texture
   width : UInt
   height : UInt
@@ -10,6 +13,9 @@ priv struct RetainedImage {
 
 ///|
 struct FrameRetention {
+  mut feedback : ((@wgpu.Surface) -> DisplayObservation)?
+  mut epoch : Int64
+  mut last_present : UInt?
   supported : Bool
   mut enabled : Bool
   mut generation : Int64
@@ -36,6 +42,9 @@ fn FrameRetention::new(
   adapter : @wgpu.Adapter,
 ) -> FrameRetention {
   {
+    feedback: None,
+    epoch: 1L,
+    last_present: None,
     supported: (
       surface.capabilities_usages_u64(adapter).to_u64() &
       @wgpu.TEXTURE_USAGE_COPY_SRC
@@ -73,6 +82,7 @@ pub fn SurfaceRenderer::retained_frame_id(self : SurfaceRenderer) -> Int64 {
 
 ///|
 fn FrameRetention::reconfigured(self : FrameRetention) -> Unit {
+  self.invalidate_display()
   if self.generation == 9223372036854775807L {
     self.close()
   } else {
@@ -109,6 +119,9 @@ fn FrameRetention::copy(
   encoder.copy_texture_to_texture_rgba8(texture, target, width, height)
   {
     image: Some({
+      present_id: None,
+      statistics_epoch: 0L,
+      display_confirmed: false,
       texture: target,
       width,
       height,
@@ -131,8 +144,18 @@ fn PendingFrame::close(self : PendingFrame) -> Unit {
 fn FrameRetention::publish(
   self : FrameRetention,
   pending : PendingFrame,
+  attempt : PresentationAttempt,
+  surface : @wgpu.Surface,
 ) -> Unit {
+  let presented = self.observe_display(surface)
   if pending.image is Some(image) {
+    if presented is Some(last) &&
+      attempt.before is Some(before) &&
+      attempt.epoch == self.epoch &&
+      last > before {
+      image.present_id = Some(last)
+      image.statistics_epoch = self.epoch
+    }
     pending.image = None
     self.sequence += 1L
     if self.images.length() == 2 {
@@ -145,6 +168,7 @@ fn FrameRetention::publish(
 
 ///|
 fn FrameRetention::close(self : FrameRetention) -> Unit {
+  self.feedback = None
   for pair in self.images {
     pair.1.texture.release()
   }
@@ -154,6 +178,7 @@ fn FrameRetention::close(self : FrameRetention) -> Unit {
 
 ///|
 pub struct RetainedCapture {
+  display_confirmed : Bool
   id : Int64
   generation : Int64
   width : Int
@@ -180,7 +205,7 @@ pub async fn SurfaceRenderer::capture_retained(
     raise RetentionUnavailable
   }
   if id <= 0L {
-    raise InvalidFrame
+    raise RetainedFrameError::InvalidFrame
   }
   if id > self.retention.sequence {
     raise FrameNotSubmitted
@@ -241,6 +266,7 @@ pub async fn SurfaceRenderer::capture_retained(
     source % (width * 4)]
   })
   {
+    display_confirmed: image.display_confirmed,
     id,
     generation: image.generation,
     width,

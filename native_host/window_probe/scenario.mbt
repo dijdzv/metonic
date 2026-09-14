@@ -200,17 +200,28 @@ async fn Scenario::step(self : Scenario, view : @ui.Observation) -> Unit {
     post(view.hwnd, 0x0100U, 0x0DUL, 0L)
   } else if self.stage == 252 && view.editor.value == "A\n\n語" {
     require(view.editor.selection_start == 2, "replacement caret differs")
-    require(view.editor.selection_end == 2, "replacement selection not collapsed")
+    require(
+      view.editor.selection_end == 2,
+      "replacement selection not collapsed",
+    )
     self.stage = 253
     require((view.set_text)("A😀 \n語") == "", "composition text rejected")
     require((view.select)(1, 4) == "", "composition selection rejected")
     post(view.hwnd, 0x010DU, 0UL, 0L)
     post(view.hwnd, 0x0100U, 0x0DUL, 0L)
     post(view.hwnd, 0x0102U, 120UL, 0L)
-  } else if self.stage == 253 && view.editor.value == "Ax\n語" && !view.composing {
+  } else if self.stage == 253 &&
+    view.editor.value == "Ax\n語" &&
+    !view.composing {
     require(view.editor.selection_start == 2, "composition Enter moved caret")
-    require(view.editor.selection_end == 2, "composition selection not collapsed")
-    require((view.scene)(5) == self.scene_revision, "composition Enter activated scene")
+    require(
+      view.editor.selection_end == 2,
+      "composition selection not collapsed",
+    )
+    require(
+      (view.scene)(5) == self.scene_revision,
+      "composition Enter activated scene",
+    )
     require((view.set_text)("A😀 \n語") == "", "scene test text rejected")
     require((view.select)(5, 5) == "", "scene test caret rejected")
     self.stage = 26

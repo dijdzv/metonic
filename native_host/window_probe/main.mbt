@@ -1,6 +1,18 @@
 ///|
 async fn main {
   let mode = @env.get_env_var("METONIC_WINDOW_INIT_TEST").unwrap_or("normal")
+  if mode == "display-wait" {
+    let reads = Ref(0U)
+    @ui.run(
+      display_feedback=Some(_ => {
+        reads.val += 1U
+        @gpu.DisplayObservation::Sample(reads.val, 0U, 0L, 0U, 0U)
+      }),
+      controller=Some(handle => display_wait_observation(handle, reads)),
+      hidden=true,
+    )
+    return
+  }
   if mode == "delete" {
     let scenario : DeleteScenario = { stage: 0, keys: 0, }
     @ui.run(

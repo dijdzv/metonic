@@ -1,23 +1,24 @@
 import { Client } from '@modelcontextprotocol/client';
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
-import { verify, verify_attachment, verify_cancel_result, verify_sdk_cancel } from '../_build/js/release/build/tools/verify_window_mcp/verify_window_mcp.js';
+import { verify, verify_display, verify_attachment, verify_cancel_result, verify_sdk_cancel } from '../_build/js/release/build/tools/verify_window_mcp/verify_window_mcp.js';
 import { createMoonBitSession } from '../tools/devtools/moonbit-session.mjs';
 import path from 'node:path';
 const attachment = process.argv.slice(2);
-if (attachment.length && (attachment.length !== 3 || attachment[0] !== '--session')) throw new Error('invalid verifier arguments');
+const display = attachment.length === 1 && attachment[0] === '--display';
+if (!display && attachment.length && (attachment.length !== 3 || attachment[0] !== '--session')) throw new Error('invalid verifier arguments');
 const transport = new StdioClientTransport({
   command: process.execPath,
   args: ['tools/devtools/window-mcp.mjs', ...attachment.slice(0, 2)],
   cwd: process.cwd(),
-  env: { ...process.env, METONIC_DEV_HIDDEN: '1', METONIC_WINDOW_TEST: '0' },
+  env: { ...process.env, METONIC_DEV_HIDDEN: display ? '0' : '1', METONIC_WINDOW_TEST: '0' },
   stderr: 'pipe',
 });
 const client = new Client({ name: 'metonic-window-verifier', version: '0.0.0' });
 const timer = setTimeout(() => { console.error('window MCP verification timed out'); void transport.close(); }, 25000);
 try {
   await client.connect(transport);
-  console.log(await (attachment.length ? verify_attachment(client, attachment[2]) : verify(client)));
-  if (attachment.length) {
+  console.log(await (display ? verify_display(client) : attachment.length ? verify_attachment(client, attachment[2]) : verify(client)));
+  if (attachment.length && !display) {
     const controller = new AbortController();
     const send = transport.send.bind(transport);
     let notified = false;
@@ -35,7 +36,7 @@ try {
   clearTimeout(timer);
   await client.close();
 }
-if (attachment.length) {
+if (attachment.length && !display) {
   const session = await createMoonBitSession({
     protocol: 'window-attach',
     executable: path.resolve('.tools/moonbit/bin/moonrun.exe'),

@@ -22,7 +22,8 @@ export async function createMoonBitSession(options = {}) {
   const closeTimeoutMs = options.closeTimeoutMs ?? 2000;
   if (!path.isAbsolute(executable) || !Array.isArray(args) || !args.every(arg => typeof arg === 'string') ||
       ![readyTimeoutMs, requestTimeoutMs, closeTimeoutMs].every(ms => Number.isFinite(ms) && ms > 0 && ms <= MAX_TIMEOUT_MS)) throw new Error('invalid MoonBit session launch options');
-  const child = spawn(executable, args, { cwd: repo, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+  if (options.visibleWindow !== undefined && typeof options.visibleWindow !== 'boolean') throw new Error('invalid window visibility');
+  const child = spawn(executable, args, { cwd: repo, windowsHide: options.visibleWindow !== true, stdio: ['pipe', 'pipe', 'pipe'] });
   const pending = new Map();
   const decoder = new TextDecoder('utf-8', { fatal: true });
   const responseFramer = new_response_framer();

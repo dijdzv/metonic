@@ -192,7 +192,10 @@ async fn invoke(client : Client, request : Json) -> State {
   let reply : Reply = @json.from_json(
     @json.parse(call(client, request.stringify()).wait()),
   )
-  assert_true(reply.isError != Some(true))
+  assert_true(
+    reply.isError != Some(true),
+    msg=request.stringify() + " => " + reply.content[0].text,
+  )
   @json.from_json(@json.parse(reply.content[0].text))
 }
 

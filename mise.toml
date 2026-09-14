@@ -99,6 +99,15 @@ run = "git config --local core.hooksPath .githooks"
 
 [tasks.fmt]
 run = '.\\.tools\\moonbit\\bin\\moon.exe fmt'
+
+[tasks."native:window-display"]
+description = "Build and verify visible native display feedback through wire and MCP"
+env = { METONIC_NATIVE_BUILD = "window-display-dev" }
+run = [
+  '.\\.tools\\moonbit\\bin\\moon.exe run scripts/build-native.mbtx',
+  '.\\.tools\\moonbit\\bin\\moon.exe build tools/verify_window_mcp tools/session_wire --target js --release --deny-warn',
+  '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-window-display.mbtx',
+]
 [tasks."browser:build"]
 run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/build-browser.mbtx'
 

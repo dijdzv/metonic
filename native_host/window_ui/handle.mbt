@@ -50,6 +50,7 @@ pub struct Handle {
   capture : async () -> Captured
   retained_frame_id : () -> Int64
   capture_retained : async (Int64) -> @gpu.RetainedCapture
+  wait_display : async (Int64, Int) -> String
   wait_semantic : async (Int, Int) -> String
 }
 
@@ -65,6 +66,41 @@ pub struct Captured {
 ///|
 fn App::handle(self : App) -> Handle {
   {
+    wait_display: (id, timeout_ms) => {
+      if id <= 0L || timeout_ms < 1 || timeout_ms > 60000 {
+        return "invalid_wait"
+      }
+      defer self.diagnostics.changed.broadcast()
+      @async.with_timeout(timeout_ms, () => {
+        while !self.closed {
+          let result : Ref[@gpu.DisplayStatus?] = Ref(None)
+          self.events.put(Development(DisplayStatus(id, result)))
+          while result.val is None && !self.closed {
+            self.diagnostics.changed.wait()
+            if @async.is_being_cancelled() {
+              @async.pause()
+            }
+          }
+          if self.closed {
+            return "closed"
+          }
+          match result.val.unwrap() {
+            @gpu.DisplayStatus::Confirmed => return ""
+            @gpu.DisplayStatus::Pending => @async.sleep(16)
+            @gpu.DisplayStatus::Unavailable => return "display_unavailable"
+            @gpu.DisplayStatus::Stale => return "stale_display_epoch"
+            @gpu.DisplayStatus::InvalidFrame => return "invalid_frame"
+            @gpu.DisplayStatus::NotSubmitted => return "frame_not_submitted"
+            @gpu.DisplayStatus::Evicted => return "frame_evicted"
+            @gpu.DisplayStatus::Closed => return "closed"
+          }
+        }
+        "closed"
+      }) catch {
+        @async.TimeoutError => "timeout"
+        error => raise error
+      }
+    },
     retained_frame_id: () => {
       self.renderer.map(renderer => renderer.retained_frame_id()).unwrap_or(0L)
     },
