@@ -91,6 +91,13 @@ async fn main {
       "patches/webapi-webgpu-generator.patch",
     ]),
   )
+  ignore(
+    checked("git", [
+      "apply",
+      "--directory=.work/browser-gpu/stage/webapi-" + revision,
+      "patches/webapi-font-integrity.patch",
+    ]),
+  )
   let config = @fs.read_file("scripts/webgpu-generator.json")
     .text()
     .replace_all(old="@IDL@", new=stage + "/package")

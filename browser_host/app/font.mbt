@@ -11,6 +11,36 @@ priv struct FontRequest {
 let pending_font : Ref[FontRequest?] = Ref(None)
 
 ///|
+fn FontRequest::verify(
+  self : FontRequest,
+  buffer : @dom.ArrayBuffer,
+) -> @dom.JsPromise[@dom.JsValue] {
+  @dom.window()
+  .crypto()
+  .subtle()
+  .digest("SHA-256", buffer)
+  .then(fn(digest) {
+    if !self.live {
+      return font_rejection("Font loading cancelled")
+    }
+    let bytes = @dom.Uint8Array::from_buffer(digest)
+    let expected = "c2f3b4d463500a2ddcd3849cded1fceeb9fd6d1c32e6cbecd568453ba50fc68f"
+    let hex = "0123456789abcdef"
+    if bytes.length() != 32U {
+      return font_rejection("NotoSansJP.ttf SHA-256 mismatch")
+    }
+    for i in 0..<32 {
+      let byte = bytes.get(i).unwrap().to_int()
+      if hex[byte >> 4] != expected[2 * i] ||
+        hex[byte & 15] != expected[2 * i + 1] {
+        return font_rejection("NotoSansJP.ttf SHA-256 mismatch")
+      }
+    }
+    @dom.TJsValue::to_js(buffer)
+  })
+}
+
+///|
 fn font_rejection(message : String) -> @dom.JsValue {
   let rejected : @dom.JsPromise[@dom.JsValue] = @dom.JsPromise::reject(
     @dom.TJsValue::to_js(message),
@@ -67,7 +97,7 @@ fn FontRequest::read(
             if !self.live {
               font_rejection("Font loading cancelled")
             } else {
-              @dom.TJsValue::to_js(buffer)
+              @dom.TJsValue::to_js(self.verify(buffer))
             }
           }),
         )

@@ -1,7 +1,7 @@
 # Browser font transfer
 
 The JS application receives a copied Uint8Array in one `font_receive` call after
-the host verifies the pinned SHA-256 and checks disposal. The MoonBit receiver
+the MoonBit request verifies the pinned SHA-256 and the host checks disposal. The MoonBit receiver
 clears prior pending input, rejects empty or larger-than-16-MiB input, and uses
 the same font parser/commit path as the word receiver. The host must pass an
 owned copy. The loader requires this export for the JS artifact.
@@ -51,10 +51,16 @@ Stopping the host aborts the request, cancels an active reader and releases its
 lock. The response is assembled through the browser Blob API; the bound limits
 retained payload bytes, not total browser memory or transient assembly copies.
 
-Web Crypto hashing remains a JavaScript browser boundary. The generated binding
-prototype requires upstream generator corrections tracked in #218 and is not an
-application dependency. Hash completion after disposal is ignored; this does not
-cancel Web Crypto computation itself.
+The MoonBit request calls browser Web Crypto through the generated binding and
+compares all 32 digest bytes with the pinned hash before returning the buffer.
+Its lifetime extends through digest completion: cancellation rejects the late
+result before font transfer or parser mutation. This does not cancel Web Crypto
+computation itself. The host retains byte transfer and its disposal guard.
+
+The dependency adds the Webref `webcrypto` and `webcrypto-modern-algos` inputs
+and the bounded [font integrity patch](../../patches/webapi-font-integrity.md).
+The digest byte view shares the returned ArrayBuffer; it does not copy or expose
+MoonBit GC arrays. The digest comparison and cancellation policy remain MoonBit.
 
 The headless suite exercises HTTP 503, wrong digest, a 16-MiB-plus-one-byte
 response, stop before headers, stop while a controlled ReadableStream waits for
