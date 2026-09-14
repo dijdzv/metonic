@@ -204,6 +204,36 @@ async fn Scenario::step(self : Scenario, view : @ui.Observation) -> Unit {
       view.editor.selection_end == 2,
       "replacement selection not collapsed",
     )
+    self.stage = 2521
+    post(view.hwnd, 0x0100U, 0x28UL, 0L)
+  } else if self.stage == 2521 && view.editor.selection_end == 3 {
+    require(view.editor.selection_start == 3, "Down did not collapse selection")
+    self.stage = 2522
+    post(view.hwnd, 0x0100U, 0x26UL, 0L)
+  } else if self.stage == 2522 && view.editor.selection_start == 2 {
+    require(view.editor.selection_end == 2, "Up did not collapse selection")
+    require(
+      @semantics.caret(view.editor) == 2,
+      "Up caret is not on empty line",
+    )
+    self.stage = 2523
+    post(view.hwnd, 0x0100U, 0x26UL, 0L)
+  } else if self.stage == 2523 && view.editor.selection_start == 0 {
+    require(view.editor.selection_end == 0, "Up did not collapse selection")
+    require(view.editor.value == "A\n\n語", "vertical movement changed text")
+    require(
+      (view.scene)(5) == self.scene_revision,
+      "vertical movement activated scene",
+    )
+    self.stage = 2524
+    (view.inject)(@ui.Injected::NavigateVertical(true, true))
+  } else if self.stage == 2524 && view.editor.selection_end == 2 {
+    require(view.editor.selection_start == 0, "vertical selection lost anchor")
+    require(@semantics.caret(view.editor) == 2, "vertical selection lost direction")
+    self.stage = 2525
+    (view.inject)(@ui.Injected::NavigateVertical(false, true))
+  } else if self.stage == 2525 && view.editor.selection_end == 0 {
+    require(view.editor.selection_start == 0, "reverse vertical selection did not collapse")
     self.stage = 253
     require((view.set_text)("A😀 \n語") == "", "composition text rejected")
     require((view.select)(1, 4) == "", "composition selection rejected")

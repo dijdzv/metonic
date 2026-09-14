@@ -38,6 +38,7 @@ priv enum Event {
   Accessibility(@accessibility.Request)
   SelectBoundary(Int, Bool)
   Navigate(Bool, Bool)
+  NavigateVertical(Bool, Bool)
   ToggleFocus
   TextPointer(Int, Int, Bool)
   Close
@@ -55,6 +56,7 @@ struct App {
   mut preedit_cursor : Int
   mut control_pressed : Bool
   mut shift_pressed : Bool
+  mut vertical_goal : (Int, Int, Int, Int?)?
   mut raster : @raster.Engine?
   mut query_raster : @raster.Engine?
   mut query_scroll : Int
@@ -195,9 +197,9 @@ pub impl @windows.ApplicationHandler for App with fn window_event(
           @core.Key::Named(@core.NamedKey::ArrowRight) =>
             self.queue(Navigate(true, self.shift_pressed))
           @core.Key::Named(@core.NamedKey::ArrowUp) =>
-            self.queue(Input(Move(0, -10)))
+            self.queue(NavigateVertical(false, self.shift_pressed))
           @core.Key::Named(@core.NamedKey::ArrowDown) =>
-            self.queue(Input(Move(0, 10)))
+            self.queue(NavigateVertical(true, self.shift_pressed))
           @core.Key::Named(@core.NamedKey::Enter) => self.queue(Enter)
           @core.Key::Character(" ") => self.queue(Input(Activate))
           _ => ()
@@ -492,6 +494,7 @@ async fn run_loop(
     preedit_cursor: 0,
     control_pressed: false,
     shift_pressed: false,
+    vertical_goal: None,
     raster: None,
     query_raster: None,
     query_scroll: 0,
@@ -583,6 +586,12 @@ async fn run_loop(
           }
         }
         while !app.closed && app.events.try_get() is Some(event) {
+          match event {
+            Navigate(_, _) | SelectBoundary(_, _) | TextPointer(_, _, _)
+            | ToggleFocus | Commit(_) | Backspace | Delete | CompositionStart =>
+              app.vertical_goal = None
+            _ => ()
+          }
           let event = match event {
             Enter if app.composition is None => {
               let node = app.input_node()
@@ -597,6 +606,7 @@ async fn run_loop(
           match event {
             ToggleFocus
             | Navigate(_, _)
+            | NavigateVertical(_, _)
             | SelectBoundary(_, _)
             | Accessibility(_)
             | Backspace
@@ -681,7 +691,7 @@ async fn run_loop(
                 _ => ()
               }
             }
-            SelectBoundary(_, _) | Navigate(_, _) | ToggleFocus if app.composition
+            SelectBoundary(_, _) | Navigate(_, _) | NavigateVertical(_, _) | ToggleFocus if app.composition
               is Some(_) => ()
             ToggleFocus => {
               let nodes = @semantics.snapshot(app.model.editor)
@@ -701,8 +711,10 @@ async fn run_loop(
               ignore(@semantics.focus(app.model.editor, target.reference))
               app.draw()
             }
-            Navigate(_, _) | SelectBoundary(_, _) if app.model.control_focused() =>
+            Navigate(_, _) | NavigateVertical(_, _) | SelectBoundary(_, _) if app.model.control_focused() =>
               ()
+            NavigateVertical(down, extend_selection) =>
+              app.navigate_vertical(down, extend_selection)
             Navigate(forward, extend_selection) => {
               let node = app.input_node()
               if node.focused {
@@ -932,7 +944,7 @@ async fn run_loop(
           if initializing && hooks.has_lifecycle() {
             match event {
               Close => may_present = hooks.notify(Closing, app)
-              Input(_) | Navigate(_, _) =>
+              Input(_) | Navigate(_, _) | NavigateVertical(_, _) =>
                 may_present = hooks.notify(InputHandled, app)
               _ => ()
             }
