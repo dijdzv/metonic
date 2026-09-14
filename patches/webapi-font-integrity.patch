@@ -1,0 +1,45 @@
+diff --git a/webapi-gen/base.mbt/js_promise.mbt b/webapi-gen/base.mbt/js_promise.mbt
+--- a/webapi-gen/base.mbt/js_promise.mbt
++++ b/webapi-gen/base.mbt/js_promise.mbt
+@@ -91,6 +91,12 @@
+ #cfg(target="js")
+ pub impl FromJsAny for Int with from_js_any(value : JsAny) -> Int = "%identity"
+
++///|
++pub impl FromJsAny for Byte with from_js_any(value : JsAny) -> Byte {
++  let number : Int = FromJsAny::from_js_any(value)
++  number.to_byte()
++}
++
+ ///|
+ #cfg(target="js")
+ pub impl FromJsAny for UInt with from_js_any(value : JsAny) -> UInt = "%identity"
+diff --git a/webapi-gen/base.mbt/typed_arrays.mbt b/webapi-gen/base.mbt/typed_arrays.mbt
+--- a/webapi-gen/base.mbt/typed_arrays.mbt
++++ b/webapi-gen/base.mbt/typed_arrays.mbt
+@@ -101,6 +101,14 @@
+ pub impl FromJsAny for Uint8Array with from_js_any(value : JsAny) -> Uint8Array = "%identity"
+
+ ///|
++#cfg(target="js")
++pub extern "js" fn Uint8Array::from_buffer(buffer : ArrayBuffer) -> Uint8Array = "(buffer) => new Uint8Array(buffer)"
++
++///|
++#cfg(target="wasm-gc")
++pub fn Uint8Array::from_buffer(buffer : ArrayBuffer) -> Uint8Array = "webapi_Uint8Array" "fromBuffer"
++
++///|
+ pub fn Uint8Array::length(self : Uint8Array) -> UInt {
+   uint8_array_length_ffi(self)
+ }
+diff --git a/webapi-gen/emit/emit_js_runtime.mbt b/webapi-gen/emit/emit_js_runtime.mbt
+--- a/webapi-gen/emit/emit_js_runtime.mbt
++++ b/webapi-gen/emit/emit_js_runtime.mbt
+@@ -97,6 +97,7 @@
+     #|  },
+     #|
+     #|  webapi_Uint8Array: {
++    #|    fromBuffer: (buffer) => new Uint8Array(buffer),
+     #|    length: (value) => value.length,
+     #|    get: (value, index) => value[index]
+     #|  },

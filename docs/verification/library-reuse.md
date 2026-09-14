@@ -15,7 +15,7 @@ remain comparison baselines until equivalent requirements pass.
 | `native_host/async_app`, `native_host/windows_loop` | Async jobs, cancellation, completion delivery and UI wakeup | Adopted `moonbitlang/async` structured tasks and external-loop API with the prepared window library; custom C workers replaced after [comparison](native-async.md); context-free C wake thunk retained |
 | `native_gpu`, `examples/p0/native_headless` | Persistent offscreen GPU resources, readback and capture | Adopted `Milky2018/wgpu_mbt@0.16.0`; headless C stub removed, stdio and file writing use MoonBit async |
 | `browser_host/app` | Scene/text GPU resources and frame submission, text-input listeners, HTTP, timers and bounded font download | Adopted generated `bikallem/webapi` bindings for JS/WasmGC; [input](browser-input.md), [HTTP](browser-http.md) and [text GPU](browser-text-gpu.md) records define the verified scope |
-| `examples/p0/browser/host/*.mjs` | Browser startup, adapter/device acquisition, canvas and semantic DOM coordination, animation-frame scheduling, module loading and buffer transfer | Remaining JavaScript adapter; GPU drawing and text-input ownership have moved to MoonBit. Web Crypto conversion follow-ups remain separate from this adoption |
+| `examples/p0/browser/host/*.mjs` | Browser startup, adapter/device acquisition, canvas and semantic DOM coordination, animation-frame scheduling, module loading and buffer transfer | Remaining JavaScript adapter; GPU drawing, text-input ownership and font hash validation have moved to MoonBit |
 | `tools/devtools/*.mjs`, `scripts/*` | CLI/MCP transport and development verification | MoonBit orchestration first; external SDK adapters scoped separately |
 | `examples/p0/text_position`, `semantics`, `task_scope` | Position validity, semantic actions and cancellation policy | Framework responsibilities; library presence does not replace these contracts |
 
@@ -53,7 +53,7 @@ that every line in the remaining adapters is irreducible.
 | `native_host/mailbox_probe/boundary.c`, `native_host/sdk_mailbox_probe/boundary.c` | Native-thread/SDK callback ownership and lifetime verification |
 | `experiments/async_waiter_handles/host.c` | Windows handle-count observation and a native callback for the async regression |
 | `experiments/wgpu_binding/window_bridge.c`, `tools/native_surface_probe/window.c`, `tools/native_surface_probe/bridge.c` | Diagnostic HWND/handle boundaries for binding and device-replacement comparisons; not the ordinary application's window implementation |
-| Seven `examples/p0/browser/host/*.mjs` files | Development/release loader and environment adapters, browser startup/presentation coordination, Web Crypto font validation and buffer transfer |
+| Seven `examples/p0/browser/host/*.mjs` files | Development/release loader and environment adapters, browser startup/presentation coordination and buffer transfer |
 | Five `scripts/*.mjs` files | Browser/Node API endpoints for artifact, headless, async and MCP verification; their MoonBit verifier packages own the corresponding protocol/pixel assertions |
 | Eight `tools/devtools/*.mjs` files | Node subprocess/stream and MCP SDK adapters, browser observation and their API-boundary tests; shared session framing/admission policy is imported from generated MoonBit |
 
@@ -61,7 +61,9 @@ The [surface-reuse investigation](https://github.com/dijdzv/metonic/issues/58)
 and [window upstream proposals](https://github.com/dijdzv/metonic/issues/88)
 own further diagnostic/native-boundary evaluation. Browser Web Crypto generator
 corrections are tracked in [#218](https://github.com/dijdzv/metonic/issues/218)
-and [#293](https://github.com/dijdzv/metonic/issues/293). A retained comparison
+and [#293](https://github.com/dijdzv/metonic/issues/293). The font loader adopts
+only the [bounded digest binding changes](../../patches/webapi-font-integrity.md);
+the remaining proposal changes are not application dependencies. A retained comparison
 fixture is not evidence that its implementation is required in the application.
 WGSL shader text and HTML/CSS remain GPU/web formats, distinct from orchestration
 scripts. The generated Visual Studio environment `.cmd` bridge invokes the vendor
@@ -121,7 +123,7 @@ Open Issues own current priority and acceptance criteria.
   further data-model reuse must preserve that OS adapter and semantic contract.
   Actual assistive-technology acceptance remains separate.
 - Browser: retain the adopted webapi path and its JS/WasmGC comparison. Further
-  reductions concern the remaining startup/presentation, Web Crypto and buffer
+  reductions concern the remaining startup/presentation and buffer
   adapters; `mizchi/js_browser` has not been selected as an additional runtime.
 - RPC: the integrated UI uses standard HTTP/JSON. Protobuf/gRPC remains an optional
   adapter evaluation, not a prerequisite for that path or the P0 application.

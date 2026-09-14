@@ -1,14 +1,8 @@
 import { unpack, transfer_font_words } from './browser-buffer.mjs';
 
-const FONT_HASH = 'c2f3b4d463500a2ddcd3849cded1fceeb9fd6d1c32e6cbecd568453ba50fc68f';
-
 async function loadFont(app, disposed) {
   const bytes = new Uint8Array(await app.font_fetch());
   if (disposed()) return false;
-  const digest = await crypto.subtle.digest('SHA-256', bytes);
-  if (disposed()) return false;
-  const hash = [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, '0')).join('');
-  if (hash !== FONT_HASH) throw new Error('NotoSansJP.ttf SHA-256 mismatch');
   if (typeof app.font_receive === 'function') {
     if (app.font_receive(bytes.slice()) !== 1) throw new Error('MoonBit font_receive rejected font');
     return true;
