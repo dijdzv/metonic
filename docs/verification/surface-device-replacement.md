@@ -76,11 +76,53 @@ during initialization. The normal pre-push runtime gate forces raw mode off so a
 diagnostic environment setting cannot substitute the smaller raw probe.
 
 The [native manifest](https://github.com/gfx-rs/wgpu-native/blob/v29.0.1.1/Cargo.toml)
-declares wgpu-core and wgpu-hal 29.0.1. In that version, the
-[DX12 surface implementation](https://github.com/gfx-rs/wgpu/blob/v29.0.1/wgpu-hal/src/dx12/mod.rs)
-reuses an existing swapchain through `ResizeBuffers` when configuring it again.
-That branch does not compare device identity. This is a candidate explanation,
-not a verified causal fix.
+declares semver ranges starting at wgpu-core and wgpu-hal 29.0.1; its lockfile
+resolves core/HAL/types to **29.0.3**. In the locked source, native unconfigure
+clears native metadata without unconfiguring core/HAL. Core reconfiguration waits
+on the configuring device and removes the old presentation record; DX12 then
+reuses an existing swapchain through `ResizeBuffers` without comparing device
+identity. Dropping the surface invokes HAL unconfigure instead.
+
+## Controlled dependency comparison and adoption decision
+
+On 2026-09-14, an isolated build of the unmodified native tag reproduced the same
+reuse failure on both adapters; fresh-surface controls passed. A separately built
+MoonBit probe used dynamic linking, and a missing-DLL control failed before
+configuration with `WgpuNativeUnavailable`. A DLL environment override alone is
+not a valid comparison with the ordinary statically linked product executable.
+
+A local core correction that waits on the old device and unconfigures its HAL
+surface before device replacement made both reuse conditions pass, while both
+fresh-surface controls remained successful. Repeated same-device configuration
+and replacement with the old queue still alive also passed on both adapters.
+The latter failed with the baseline. This supports the teardown explanation for
+the controlled healthy-device DX12 case, not other backends or physical GPU loss.
+
+An acquired-frame experiment exposed another limitation: the native configuration
+API terminates on validation errors. An experiment-only error-sink route showed
+that removing presentation before rejecting configuration also breaks subsequent
+frame release. Preserving that state allowed rejection, release and later drawing
+to complete. This instrumented result does not establish that the normal native
+API supports recovery from the validation error. The local patch is not adopted;
+its callback-delivery changes have not been independently exercised.
+
+[wgpu PR 10296](https://github.com/gfx-rs/wgpu/pull/10296), merged on 2026-09-11,
+provides the upstream solution: core `Surface::unconfigure`, shared teardown for
+configure and Drop, old-device waiting, and presentation locking across the
+transition. It also destroys acquired textures according to the WebGPU contract,
+instead of retaining the old rejection behavior. This is broader than the local
+diagnostic correction. The implementation was checked at
+[`8ef593b`](https://github.com/gfx-rs/wgpu/blob/8ef593b61d979c96691092cdf44a0f0d672978a6/wgpu-core/src/instance.rs).
+
+Keep the supported fresh-surface path. At the time of this comparison,
+[wgpu-native `85389b2`](https://github.com/gfx-rs/wgpu-native/blob/85389b2bb523a0106cbdc44a02b09ccefe393040/Cargo.toml)
+still uses the 29.x dependency ranges and its latest release is v29.0.1.1, so the
+upstream correction is not established as available through the pinned native
+dependency. Prefer a compatible upstream update over maintaining the local patch.
+Before adopting same-surface reuse, repeat the same/fresh and live-old-queue
+comparisons and validate acquired-texture invalidation against the updated
+contract. Issue 58 retains the local experiment identities and results; those
+experiments are not additional installed product checks.
 
 The ordinary window host now uses the MoonBit renderer and bounded event polling.
 The worker-completion probe also uses the shared MoonBit surface renderer; its
