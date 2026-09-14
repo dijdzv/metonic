@@ -65,7 +65,13 @@ the required console import. Release packaging keeps its explicit asset list
 and development-content checks.
 
 The MoonBit `browser_host/app/probe` covers both input fields, synthetic
-composition, selection, stop and restart. Synthetic input and pixel checks do
+composition, selection, stop and restart. The normal browser suite builds
+and runs the probe on JS and WasmGC in separate intercepted pages, outside the
+packaged release assets. Its frame-lifetime checks queue reconciliation in each
+field and advance two animation frames after stop or restart; a live-host control
+requires reconciliation to occur. Success is published only after asynchronous
+assertions finish. Missing completion, failure text and page exceptions reject
+the check. These checks do
 not establish physical Japanese IME behavior, candidate placement or browser
 event ordering. Follow the [integrated demo](integrated-demo.md) for real-system
 acceptance; the native IME path remains separate.

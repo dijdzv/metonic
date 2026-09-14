@@ -70,7 +70,5 @@ fn main raise {
   assert_eq(@app.editor_field(0), 4)
   assert_eq(@host.inputs_error(), 0)
   @host.inputs_stop()
-  root.set_text_content(
-    "PASS production_input_owner both_fields composition selection stop restart",
-  )
+  check_frame_lifetime(editor, query, 0)
 }
