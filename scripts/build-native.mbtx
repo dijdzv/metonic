@@ -398,6 +398,22 @@ async fn main {
       if !@fs.exists(required_exe) {
         fail("native build artifact missing")
       }
+      let debug_stub = "_build/native/debug/build/tools/native_surface_probe/bridge.obj"
+      if @fs.exists(debug_stub) {
+        @fs.remove(debug_stub)
+      }
+      assert_eq(
+        @process.run(
+          moon,
+          [
+            "build", "tools/native_surface_probe", "--target", "native", "--debug",
+            "--deny-warn",
+          ],
+          extra_env=envmap,
+          no_console_window=true,
+        ),
+        0,
+      )
     }
     if !@fs.exists(headless_exe) {
       fail("native headless artifact missing")

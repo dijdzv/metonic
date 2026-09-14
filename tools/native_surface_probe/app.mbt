@@ -98,7 +98,9 @@ async fn main {
     None => abort("renderer initialization failed")
   }
   stage("initial-present")
+  prepare_display_probe(active_renderer)
   active_renderer.present(640, 360, 260, 144, 120, 72, 0)
+  verify_pending_display(active_renderer)
   stage("invalid-inputs")
   expect_error(
     () => active_renderer.present(0, 360, 260, 144, 120, 72, 0),
@@ -135,6 +137,7 @@ async fn main {
   stage("close-first")
   active_renderer.close()
   active_renderer.close()
+  verify_closed_display(active_renderer)
   expect_error(
     () => active_renderer.present(317, 193, 10, 20, 120, 72, 1),
     "closed renderer accepted present",
@@ -165,13 +168,17 @@ async fn main {
     )
     renderer = Some(recovered)
     stage("recovered-present-" + generation.to_string())
+    prepare_display_probe(recovered)
     recovered.present(317, 193, 10, 20, 120, 72, 1)
+    verify_pending_display(recovered)
+    verify_closed_display(active_renderer)
     if owner.pending_count() != 0 {
       abort("recovery left pending initialization")
     }
     stage("close-recovered-" + generation.to_string())
     recovered.close()
     recovered.close()
+    verify_closed_display(recovered)
     expect_error(
       () => recovered.present(317, 193, 10, 20, 120, 72, 1),
       "closed renderer accepted present",
