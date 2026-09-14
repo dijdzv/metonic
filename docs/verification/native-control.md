@@ -214,6 +214,19 @@ with waiter deadline, cancellation, idle-observation and owner-close checks.
 They do not establish real display completion; the opt-in
 `native:window-display` task provides separate positive wire/MCP evidence.
 
+The same hidden-window gate uses a probe-only entry point with nonconfirming
+statistics and the ordinary control protocol. A short wait must time out before
+a long wait is interrupted. Closing stdin produces a final `disconnected`
+response, process exit and stdout EOF. Closing a named-pipe client instead leaves
+the application alive: a new connection must preserve the session's text and
+frame scope and accept another edit within two seconds. Replies from the old
+wait must not appear on that new connection.
+
+The reconnect case deliberately terminates its owned test process after proving
+continued operation; this is not normal-shutdown evidence. After process cleanup,
+the verifier removes only discovery metadata whose pipe and session identifiers
+match its own fixture. The stdin case separately verifies normal process exit.
+
 These tests do not establish physical IME input,
 or cross-monitor DPI/scale acceptance.
 
