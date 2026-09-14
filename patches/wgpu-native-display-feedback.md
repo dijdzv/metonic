@@ -23,10 +23,20 @@ over the ordinary release assets or selected by the application automatically.
 With the same prerequisites and the repository's Node dependencies installed,
 run `mise run native:window-display`. This builds `window_display_dev`, then
 verifies editing, `wait_display` and capture of that exact retained frame through
-the line protocol and the MCP SDK on default and fallback adapters. It opens
+the line protocol, attached CLI and the MCP SDK on default and fallback adapters. It opens
 dedicated windows; a functioning visible display is required for positive evidence.
 The script selects the same DLL path for both the GPU binding and the extension.
 Ordinary `window_dev` shares the control implementation but supplies no reader.
+
+The host build generates an import library containing only
+`metonicSurfaceReadDisplayFeedback`. Importing the full wgpu export library would
+collide with the MoonBit binding's dynamic-loader definitions. The GPU API still
+loads through that binding, with both paths selecting the same adjacent DLL.
+
+The CLI case starts an independently owned development window, attaches using
+its discovery file, edits text, waits for the exact retained frame and checks
+confirmed capture metadata. Closing the CLI leaves the app running. An owned
+window-close request then verifies normal exit and discovery removal.
 
 `wait_display` takes `frame_scope`, decimal Int64 `frame_id`, and `timeout_ms`
 (1–60000). It returns success only for exact-ID confirmation. Invalid, future,
