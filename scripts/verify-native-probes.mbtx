@@ -267,7 +267,9 @@ async fn run_probe(
     "/.work/native-host-build/native/debug/build/local/native_host/async_app/async_app.exe"
   } else if kind == "surface" {
     root +
-    "/_build/native/release/build/tools/native_surface_probe/native_surface_probe.exe"
+    "/_build/native/" +
+    (if case_name == "display-recreation" { "debug" } else { "release" }) +
+    "/build/tools/native_surface_probe/native_surface_probe.exe"
   } else {
     root +
     "/.work/native-host-build/native/debug/build/local/native_host/window_probe/window_probe.exe"
@@ -515,6 +517,12 @@ async fn run_probe(
     )
   }
   require(!stdout.contains("FAILED"), kind + " FAILED marker")
+  if kind == "surface" && case_name == "display-recreation" {
+    require(
+      exact_line_count(stdout, "SURFACE_RETAINED_GENERATION_CLOSED") == 5,
+      "all renderer generations and the previous owner must reject retained access",
+    )
+  }
   require(
     exact_line(
       stdout,
@@ -610,7 +618,7 @@ async fn main {
           "delete",
         ]
       } else if kind == "surface" {
-        ["normal", "retained"]
+        ["normal", "retained", "display-recreation"]
       } else {
         ["normal"]
       }

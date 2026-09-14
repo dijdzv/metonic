@@ -239,3 +239,18 @@ development composition still require paired artifact tests. Cancellation ends
 the session; it cannot prove that an already submitted action was never applied.
 The local pre-push runtime gate runs these checks. Automatic PR/push CI does not repeat
 the same verification; manual dispatch remains available for hosted diagnosis.
+## Retained display state across renderer recreation
+
+`mise run native:surface` also builds the development surface probe and runs
+`display-recreation` on default and fallback adapters. Three fresh surfaces and
+healthy renderer/device generations share the same HWND. Each generation starts
+with retained frame 1 and an unconfirmed capture under injected presentation
+statistics. Closing a generation rejects capture and returns closed display
+status; constructing another generation does not reopen the previous renderer.
+
+The injected counts establish lifecycle isolation, not physical presentation.
+The ordinary release probe remains separate and contains no retained-display
+checks. App-lifetime frame scopes are verified by the attachment tests; these
+renderer-local checks do not permit carrying numeric frame IDs between owners.
+This does not test recovery from physical device loss or reuse of one surface
+with a different device.

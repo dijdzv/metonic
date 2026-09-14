@@ -13,4 +13,8 @@ supported_targets = "native"
 
 options(
   "native-stub": [ "bridge.c" ],
+  targets: {
+    "display_debug.mbt": [ "debug" ],
+    "display_release.mbt": [ "release" ],
+  },
 )
