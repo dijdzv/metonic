@@ -294,6 +294,20 @@ async fn Scenario::step(self : Scenario, view : @ui.Observation) -> Unit {
     )
     require(!view.composing, "Enter restarted composition")
     println("WINDOW_CANCEL_ENTER_TEXT_OK")
+    self.stage = 2535
+    (view.inject)(CompositionStart)
+  } else if self.stage == 2535 && view.composing {
+    require((view.set_text)("new") == "", "stale composition setup failed")
+    self.stage = 2536
+    (view.inject)(CompositionUpdate("あ", Some(1)))
+  } else if self.stage == 2536 {
+    require(view.composing, "stale preedit lost its commit rejection guard")
+    require(view.editor.value == "new", "stale preedit changed new text")
+    self.stage = 2537
+    post(view.hwnd, 0x0102U, 0x78UL, 0L)
+  } else if self.stage == 2537 && !view.composing {
+    require(view.editor.value == "new", "stale commit changed new text")
+    println("WINDOW_STALE_PREEDIT_COMMIT_OK")
     require((view.set_text)("A😀 \n語") == "", "scene test text rejected")
     require((view.select)(5, 5) == "", "scene test caret rejected")
     self.stage = 26

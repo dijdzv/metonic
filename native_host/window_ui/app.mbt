@@ -851,7 +851,9 @@ async fn run_loop(
                 )
               }
               if value != "" && app.composition is Some(composition) {
-                app.composition = composition.remove_selected_text()
+                if composition.remove_selected_text() is Some(replacement) {
+                  app.composition = Some(replacement)
+                }
               }
               app.preedit = value
               app.preedit_cursor = cursor
