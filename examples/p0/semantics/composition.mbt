@@ -71,3 +71,15 @@ pub fn Composition::presentation(
 pub fn Composition::cancel(self : Composition) -> Unit {
   self.active = false
 }
+
+///|
+pub fn Composition::remove_selected_text(self : Composition) -> Composition? {
+  if !self.active || self.tree.closed || self.tree.revision != self.revision {
+    return None
+  }
+  if self.node.selection_start == self.node.selection_end {
+    return Some(self)
+  }
+  guard self.commit("") == "" else { return None }
+  begin_composition(self.tree, target=self.node.reference)
+}

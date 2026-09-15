@@ -587,9 +587,14 @@ async fn run_loop(
         }
         while !app.closed && app.events.try_get() is Some(event) {
           match event {
-            Navigate(_, _) | SelectBoundary(_, _) | TextPointer(_, _, _)
-            | ToggleFocus | Commit(_) | Backspace | Delete | CompositionStart =>
-              app.vertical_goal = None
+            Navigate(_, _)
+            | SelectBoundary(_, _)
+            | TextPointer(_, _, _)
+            | ToggleFocus
+            | Commit(_)
+            | Backspace
+            | Delete
+            | CompositionStart => app.vertical_goal = None
             _ => ()
           }
           let event = match event {
@@ -691,8 +696,10 @@ async fn run_loop(
                 _ => ()
               }
             }
-            SelectBoundary(_, _) | Navigate(_, _) | NavigateVertical(_, _) | ToggleFocus if app.composition
-              is Some(_) => ()
+            SelectBoundary(_, _)
+            | Navigate(_, _)
+            | NavigateVertical(_, _)
+            | ToggleFocus if app.composition is Some(_) => ()
             ToggleFocus => {
               let nodes = @semantics.snapshot(app.model.editor)
               let target = if nodes[1].focused {
@@ -842,6 +849,9 @@ async fn run_loop(
                   app.model.editor,
                   target=app.input_node().reference,
                 )
+              }
+              if value != "" && app.composition is Some(composition) {
+                app.composition = composition.remove_selected_text()
               }
               app.preedit = value
               app.preedit_cursor = cursor

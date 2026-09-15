@@ -212,10 +212,7 @@ async fn Scenario::step(self : Scenario, view : @ui.Observation) -> Unit {
     post(view.hwnd, 0x0100U, 0x26UL, 0L)
   } else if self.stage == 2522 && view.editor.selection_start == 2 {
     require(view.editor.selection_end == 2, "Up did not collapse selection")
-    require(
-      @semantics.caret(view.editor) == 2,
-      "Up caret is not on empty line",
-    )
+    require(@semantics.caret(view.editor) == 2, "Up caret is not on empty line")
     self.stage = 2523
     post(view.hwnd, 0x0100U, 0x26UL, 0L)
   } else if self.stage == 2523 && view.editor.selection_start == 0 {
@@ -229,11 +226,17 @@ async fn Scenario::step(self : Scenario, view : @ui.Observation) -> Unit {
     (view.inject)(@ui.Injected::NavigateVertical(true, true))
   } else if self.stage == 2524 && view.editor.selection_end == 2 {
     require(view.editor.selection_start == 0, "vertical selection lost anchor")
-    require(@semantics.caret(view.editor) == 2, "vertical selection lost direction")
+    require(
+      @semantics.caret(view.editor) == 2,
+      "vertical selection lost direction",
+    )
     self.stage = 2525
     (view.inject)(@ui.Injected::NavigateVertical(false, true))
   } else if self.stage == 2525 && view.editor.selection_end == 0 {
-    require(view.editor.selection_start == 0, "reverse vertical selection did not collapse")
+    require(
+      view.editor.selection_start == 0,
+      "reverse vertical selection did not collapse",
+    )
     self.stage = 253
     require((view.set_text)("A😀 \n語") == "", "composition text rejected")
     require((view.select)(1, 4) == "", "composition selection rejected")
@@ -256,21 +259,39 @@ async fn Scenario::step(self : Scenario, view : @ui.Observation) -> Unit {
     require((view.set_text)("あいう") == "", "cancel text rejected")
     require((view.select)(0, 3) == "", "cancel selection rejected")
     (view.inject)(CompositionStart)
-    (view.inject)(CompositionUpdate("あ", Some(1)))
+    (view.inject)(CompositionUpdate("", Some(0)))
   } else if self.stage == 2531 && view.composing {
-    require(view.editor.value == "あいう", "preedit mutated committed text")
+    require(
+      view.editor.value == "あいう",
+      "empty preedit removed selected text",
+    )
+    require(
+      view.editor.selection_start == 0 && view.editor.selection_end == 3,
+      "empty preedit collapsed selection",
+    )
+    self.stage = 2534
+    (view.inject)(CompositionUpdate("あ", Some(1)))
+  } else if self.stage == 2534 && view.composing {
+    require(view.editor.value == "", "preedit did not remove selected text")
     self.stage = 2532
     (view.inject)(CompositionCancel)
   } else if self.stage == 2532 && !view.composing {
-    require(view.editor.value == "あいう", "cancel lost original text")
-    require(view.editor.selection_start == 0 && view.editor.selection_end == 3,
-      "cancel lost original selection")
+    require(view.editor.value == "", "cancel restored deleted text")
+    require(
+      view.editor.selection_start == 0 && view.editor.selection_end == 0,
+      "cancel restored deleted selection",
+    )
     self.stage = 2533
     post(view.hwnd, 0x0100U, 0x0DUL, 0L)
   } else if self.stage == 2533 && view.editor.value == "\n" {
-    require(view.editor.value.length() == 1, "Enter erased text instead of inserting LF")
-    require(view.editor.selection_start == 1 && view.editor.selection_end == 1,
-      "Enter after cancel did not collapse selection after LF")
+    require(
+      view.editor.value.length() == 1,
+      "Enter erased text instead of inserting LF",
+    )
+    require(
+      view.editor.selection_start == 1 && view.editor.selection_end == 1,
+      "Enter after cancel did not collapse selection after LF",
+    )
     require(!view.composing, "Enter restarted composition")
     println("WINDOW_CANCEL_ENTER_TEXT_OK")
     require((view.set_text)("A😀 \n語") == "", "scene test text rejected")
@@ -362,12 +383,12 @@ async fn Scenario::step(self : Scenario, view : @ui.Observation) -> Unit {
     view.rendered_text == Some("にほんの描画を確認します ABC 123") {
     let node = view.editor
     require(
-      node.value == "日本語の描画を確認します ABC 123",
-      "preedit mutated committed text",
+      node.value == "の描画を確認します ABC 123",
+      "preedit did not remove selected prefix",
     )
     require(
-      node.selection_start == 0 && node.selection_end == 3,
-      "preedit changed selection",
+      node.selection_start == 0 && node.selection_end == 0,
+      "preedit did not collapse replaced selection",
     )
     require(view.preedit_cursor == 1, "composition cursor was lost")
     require(!view.ime_events.is_empty(), "composition trace missing")
@@ -445,7 +466,7 @@ async fn Scenario::step(self : Scenario, view : @ui.Observation) -> Unit {
   } else if self.stage == 32 {
     require(view.composing, "scene shortcut interrupted composition")
     require(
-      view.editor.value == "日本語の描画を確認します ABC 123",
+      view.editor.value == "の描画を確認します ABC 123",
       "accessibility mutation replaced composition",
     )
     require(
@@ -472,7 +493,7 @@ async fn Scenario::step(self : Scenario, view : @ui.Observation) -> Unit {
       "result-only notification without IMM text canceled composition",
     )
     require(
-      view.editor.value == "日本語の描画を確認します ABC 123",
+      view.editor.value == "の描画を確認します ABC 123",
       "result-only notification fabricated committed text",
     )
     self.stage = 38
@@ -487,21 +508,21 @@ async fn Scenario::step(self : Scenario, view : @ui.Observation) -> Unit {
     }) {
     require(view.composing, "cursor-only notification canceled composition")
     require(
-      view.editor.value == "日本語の描画を確認します ABC 123",
+      view.editor.value == "の描画を確認します ABC 123",
       "cursor-only notification mutated committed text",
     )
     require(
-      view.editor.selection_start == 0 && view.editor.selection_end == 3,
+      view.editor.selection_start == 0 && view.editor.selection_end == 0,
       "GCS notification changed committed selection",
     )
     self.stage = 31
     post(view.hwnd, 0x010FU, 0UL, 0L)
   } else if self.stage == 31 &&
-    view.rendered_text == Some("日本語の描画を確認します ABC 123") {
+    view.rendered_text == Some("の描画を確認します ABC 123") {
     require(!view.composing, "composition survived cancellation")
     require(
-      view.editor.selection_start == 0 && view.editor.selection_end == 3,
-      "cancellation changed the original selection",
+      view.editor.selection_start == 0 && view.editor.selection_end == 0,
+      "cancellation restored deleted selection",
     )
     require(
       !view.accessibility_runs.is_empty(),
@@ -523,7 +544,7 @@ async fn Scenario::step(self : Scenario, view : @ui.Observation) -> Unit {
   } else if self.stage == 35 &&
     view.rendered_text == Some("つぎの描画を確認します ABC 123") {
     require(
-      view.editor.value == "日本語の描画を確認します ABC 123",
+      view.editor.value == "の描画を確認します ABC 123",
       "restarted composition mutated committed text",
     )
     require(view.preedit_cursor == 1, "restarted composition lost cursor")
@@ -535,9 +556,9 @@ async fn Scenario::step(self : Scenario, view : @ui.Observation) -> Unit {
     post(view.hwnd, 0x010EU, 0UL, 0L)
   } else if self.stage == 36 &&
     !view.composing &&
-    view.rendered_text == Some("日本語の描画を確認します ABC 123") {
+    view.rendered_text == Some("の描画を確認します ABC 123") {
     require(
-      view.editor.selection_start == 0 && view.editor.selection_end == 3,
+      view.editor.selection_start == 0 && view.editor.selection_end == 0,
       "restarted composition cancellation changed selection",
     )
     require(
