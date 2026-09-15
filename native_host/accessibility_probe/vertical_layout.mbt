@@ -47,7 +47,8 @@ fn verify_vertical_layout(engine : @raster.Engine) -> Unit raise {
     (0, 64),
   )
   assert_true(
-    @raster.vertical_caret(engine, wrapped, line2, true, x2, after=after2) is None,
+    @raster.vertical_caret(engine, wrapped, line2, true, x2, after=after2)
+    is None,
   )
   let (back, back_after, _) = @raster.vertical_caret(
     engine,
@@ -75,4 +76,84 @@ fn verify_vertical_layout(engine : @raster.Engine) -> Unit raise {
   assert_true(@raster.vertical_position(engine, "", 0, true, None) is None)
   assert_true(@raster.vertical_position(engine, "", 0, false, None) is None)
   stage("vertical caret uses visual lines, sticky x and UTF-16 boundaries")
+  let four_lines = "あ\nい\nう\nえ"
+  let pixels = @raster.render(
+    engine,
+    four_lines,
+    300,
+    96,
+    caret=Some(7),
+    follow_caret=Some(7),
+  )
+  assert_eq(@raster.vertical_scroll(engine), 32)
+  assert_eq(@raster.caret_position(engine, 7).unwrap().1, 96)
+  assert_eq(
+    @raster.hit(engine, 0, 64 + @raster.vertical_scroll(engine)),
+    Some(6),
+  )
+  let expected = @raster.render(engine, "い\nう\nえ", 300, 96, caret=Some(5))
+  assert_eq(pixels, expected)
+  ignore(
+    @raster.render(
+      engine,
+      four_lines,
+      300,
+      96,
+      vertical_scroll=32,
+      follow_caret=Some(0),
+    ),
+  )
+  assert_eq(@raster.vertical_scroll(engine), 0)
+  ignore(@raster.render(engine, "あ", 300, 96, vertical_scroll=32))
+  assert_eq(@raster.vertical_scroll(engine), 0)
+  stage(
+    "multiline viewport follows the fourth line and returns after navigation or deletion",
+  )
+  let wrapped_selection = @raster.render(
+    engine,
+    "あいうえおかきく",
+    48,
+    96,
+    selection=(0, 8),
+    follow_caret=Some(8),
+  )
+  assert_eq(@raster.vertical_scroll(engine), 32)
+  let visible_selection = @raster.render(
+    engine,
+    "うえおかきく",
+    48,
+    96,
+    selection=(0, 6),
+  )
+  assert_eq(wrapped_selection, visible_selection)
+  ignore(
+    @raster.render(
+      engine,
+      "あいうえおかきく",
+      96,
+      96,
+      vertical_scroll=32,
+      follow_caret=Some(8),
+    ),
+  )
+  assert_eq(@raster.vertical_scroll(engine), 0)
+  ignore(@raster.render(engine, four_lines, 300, 64, follow_caret=Some(7)))
+  assert_eq(@raster.vertical_scroll(engine), 64)
+  let empty_last = "あ\nい\nう\n"
+  let empty_pixels = @raster.render(
+    engine,
+    empty_last,
+    300,
+    96,
+    caret=Some(empty_last.length()),
+    follow_caret=Some(empty_last.length()),
+  )
+  assert_eq(@raster.caret_position(engine, empty_last.length()), Some((0, 96)))
+  assert_eq(@raster.vertical_scroll(engine), 32)
+  for y in 64..<96 {
+    assert_eq(empty_pixels[y * 300 * 4], b'\x00')
+  }
+  stage(
+    "wrapped selection follows its active end and resize clamps the viewport",
+  )
 }
