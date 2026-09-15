@@ -22,9 +22,12 @@ The same test times out with the pre-correction dependency and passes with the
 correction. This is OS-message-path coverage, not physical IME acceptance or
 evidence about Space-conversion cursor placement.
 
-The shared editor stages preedit separately from committed text. Commit replaces
-the original selection once; cancellation leaves the text unchanged. A revision
-change invalidates the composition. CLI/MCP edits and selection changes are
+The shared editor stages preedit separately from committed text. On the first
+nonempty native preedit, the host removes the selected text and continues the
+composition at the collapsed insertion point. Commit inserts the result once;
+cancellation removes preedit but does not restore that deleted selection.
+Composition start without nonempty preedit does not delete the selection.
+A revision change invalidates the composition. CLI/MCP edits and selection changes are
 rejected with `composition_active` while the IME owns the edit.
 
 The pinned window library needs `patches/window-ime-position.patch`. It forwards
@@ -65,8 +68,13 @@ Use Microsoft Japanese IME or record the exact alternative IME and version.
 Record Windows version, display scaling and monitor for each run.
 
 1. Select the current text with Ctrl+A. Type `nihongo` in Hiragana input mode.
-   Confirm the preedit is visible without permanently deleting the original text.
-2. Press Escape until composition is canceled. Confirm the original text returns.
+   Confirm the original selection is replaced by visible preedit without duplicate
+   characters. Repeat with a partial selection to check that surrounding text stays.
+2. Press Escape until composition is canceled. Distinguish canceling conversion
+   from canceling composition: more than one Escape can be needed. After the
+   nonempty replacement preedit is canceled, the removed selection stays deleted;
+   full selection therefore leaves an empty field. Test insertion without a
+   selection separately: canceling that preedit preserves the preceding text.
 3. Compose again, convert with Space, and commit with Enter. Confirm one committed
    replacement, with no duplicate characters or control characters.
 4. Compose a longer phrase and move within the composition. Confirm the candidate
@@ -75,6 +83,11 @@ Record Windows version, display scaling and monitor for each run.
    available. Confirm candidate placement remains near the insertion position.
 6. Cancel, change focus during another composition, and close while composing.
    Record text loss, unexpected commits, duplicate input or a lingering window.
+
+Repeat selection replacement and cancellation in User ID. After cancellation,
+Enter in Text inserts a newline, whereas single-line User ID must not insert one.
+Do not confuse this subsequent Enter with Enter consumed to commit composition,
+or a blank-looking newline with an empty value.
 
 Record the tested commit, production build, Windows/IME version and display
 scale, then a pass/fail/not-run result for each step and the actual observed
