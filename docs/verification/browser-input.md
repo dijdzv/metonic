@@ -67,8 +67,9 @@ and development-content checks.
 The MoonBit `browser_host/app/probe` covers both input fields, synthetic
 composition, selection, stop and restart. Cancellation cases supply either
 restored or empty DOM text at composition end in each field, then verify the
-shared view length and continued input; the editor also checks exact text and
-selection. These controlled events check synchronization, not which cancellation
+exact shared text, selection and continued input for both fields, including
+same-length different text and supplementary characters. The User ID check also
+requires shared composition to end. These controlled events check synchronization, not which cancellation
 result an actual IME should produce. The normal browser suite builds
 and runs the probe on JS and WasmGC in separate intercepted pages, outside the
 packaged release assets. Its frame-lifetime checks queue reconciliation in each
