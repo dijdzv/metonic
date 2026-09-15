@@ -77,6 +77,14 @@ controls. Native uses a steady caret and scalar-boundary horizontal navigation;
 grapheme-aware and visual bidi navigation and caret
 blinking remain unfinished. This is not full editing parity.
 
+Native replacement composition removes the selected text when the first nonempty
+preedit arrives. Canceling discards the preedit without restoring the deleted
+selection. Enabling IME or receiving an empty preedit alone leaves the selection
+intact. This matches the replacement/cancel behavior observed in the browser's
+standard input and textarea. After cancellation, Enter inserts a newline in Text
+and leaves User ID unchanged. Native preedit still uses a blue background;
+composition presentation and actual IME acceptance remain tracked in Issue #371.
+
 Closing native ends the launcher and its owned server. An unexpected server exit
 fails the session and terminates its owned native child. Startup failure also
 cleans up the server. Each child is a direct leaf executable; this launcher does

@@ -68,11 +68,11 @@ fn DeleteScenario::step(
     }
     5 if view.input.key_presses > self.keys => {
       require(
-        view.composing && view.editor.value == "AB",
+        view.composing && view.editor.value == "B",
         "Delete altered active composition",
       )
       require(
-        view.editor.selection_start == 0 && view.editor.selection_end == 1,
+        view.editor.selection_start == 0 && view.editor.selection_end == 0,
         "Delete changed composing selection",
       )
       self.stage = 6
@@ -88,7 +88,7 @@ fn DeleteScenario::step(
       post(view.hwnd, 0x0100U, 0x2EUL, 0L)
     }
     8 if view.input.key_presses > self.keys => {
-      require(view.editor.value == "AB", "unfocused Delete changed text")
+      require(view.editor.value == "B", "unfocused Delete changed text")
       self.stage = 9
       println("WINDOW_DELETE_OK")
       (view.inject)(@ui.Injected::Close)
