@@ -90,8 +90,10 @@ data. Starting again resets the history. Recording is opt-in and retains the las
 
 The MoonBit diagnostics module records both fields' DOM value and selection,
 event order, composition data and keyboard/input-event details. Its shared-state
-callback currently records the main editor state, including during User ID events;
-do not interpret that callback as a User ID snapshot. Values are observed during
+callback receives the field identifier. The development adapter records the main
+editor state only for Text events and records `null` for User ID shared state,
+which is not currently exposed. The DOM values remain available for both fields.
+Values are observed during
 event delivery, not a guarantee of the browser's state after its default action.
 These records supplement physical observations and do not simulate an actual IME.
 
