@@ -4,6 +4,7 @@ pub struct Engine {
   mut cache : @cosmic.SwashCache
   mut layout : @cosmic.Buffer?
   mut text : String
+  mut scroll_y : Int
 }
 
 ///|
@@ -12,7 +13,13 @@ pub fn create(font : Bytes) -> Engine? {
   if system.fonts().length() == 0 {
     None
   } else {
-    Some({ system, cache: @cosmic.SwashCache::new(), layout: None, text: "", })
+    Some({
+      system,
+      cache: @cosmic.SwashCache::new(),
+      layout: None,
+      text: "",
+      scroll_y: 0,
+    })
   }
 }
 
@@ -26,6 +33,8 @@ pub fn render(
   caret? : Int? = None,
   caret_after? : Bool = false,
   single_line_scroll? : Int? = None,
+  vertical_scroll? : Int = 0,
+  follow_caret? : Int? = None,
 ) -> Bytes {
   if width < 1 || width > 1024 || height < 1 || height > 96 {
     Bytes::makei(0, _ => b'\x00')
@@ -36,7 +45,7 @@ pub fn render(
     )
     buffer = buffer
       .set_text(text, attrs, @cosmic.Shaping::Advanced)
-      .set_size(Some(Float::from_int(width)), Some(Float::from_int(height)))
+      .set_size(Some(Float::from_int(width)), None)
       .set_wrap(
         if single_line_scroll is Some(_) {
           @cosmic.Wrap::None
@@ -47,6 +56,17 @@ pub fn render(
       .layout_all_with_font_system(engine.system)
     engine.layout = Some(buffer)
     engine.text = text
+    let mut bottom = 0
+    for run in buffer.layout_runs() {
+      bottom = bottom.max((run.line_top + run.line_height).ceil().to_int())
+    }
+    let mut scroll_y = vertical_scroll.max(0).min((bottom - height).max(0))
+    if follow_caret is Some(offset) {
+      if caret_position(engine, offset, after=caret_after) is Some((_, y)) {
+        scroll_y = scroll_y.min(y).max(y + 32 - height).max(0)
+      }
+    }
+    engine.scroll_y = scroll_y
     let scroll_x = single_line_scroll.unwrap_or(0).max(0)
     let pixels : Array[Int] = Array::make(width * height, 255)
     let selected : Array[Bool] = Array::make(width * height, false)
@@ -58,8 +78,10 @@ pub fn render(
         if run.highlight(first, last) is Some((left, span)) {
           let x0 = (left.floor().to_int() - scroll_x).max(0)
           let x1 = ((left + span).ceil().to_int() - scroll_x).min(width)
-          let y0 = run.line_top.floor().to_int().max(0)
-          let y1 = (run.line_top + run.line_height).ceil().to_int().min(height)
+          let y0 = (run.line_top.floor().to_int() - scroll_y).max(0)
+          let y1 = ((run.line_top + run.line_height).ceil().to_int() - scroll_y).min(
+            height,
+          )
           for y in y0..<y1 {
             for x in x0..<x1 {
               selected[y * width + x] = true
@@ -79,6 +101,7 @@ pub fn render(
       let alpha = ink.a().to_int()
       if alpha > 0 {
         let x = x - scroll_x
+        let y = y - scroll_y
         let x0 = x.max(0)
         let y0 = y.max(0)
         let x1 = (x + w.reinterpret_as_int()).min(width)
@@ -99,6 +122,7 @@ pub fn render(
     if caret is Some(offset) {
       if caret_position(engine, offset, after=caret_after) is Some((x, y)) {
         let x = x - scroll_x
+        let y = y - scroll_y
         if x >= 0 {
           let x = x.min(width - 1)
           for py in y.max(0)..<(y + 32).min(height) {
@@ -124,6 +148,11 @@ pub fn render(
       }
     })
   }
+}
+
+///|
+pub fn vertical_scroll(engine : Engine) -> Int {
+  engine.scroll_y
 }
 
 ///|

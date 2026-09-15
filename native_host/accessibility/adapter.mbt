@@ -118,6 +118,7 @@ pub struct Bridge {
   mut composing : Bool
   mut rpc_result : String
   mut fragments : Array[TextFragment]
+  mut editor_scroll : Int
   mut next_text_id : UInt64
 }
 
@@ -215,7 +216,9 @@ fn tree(_data : UInt64) -> UInt64 {
         bounds(
           run,
           box.x.to_double(),
-          box.y.to_double() + fragment.layout.top.to_double(),
+          box.y.to_double() +
+          fragment.layout.top.to_double() -
+          bridge.editor_scroll.to_double(),
           fragment.layout.width.to_double(),
           fragment.layout.height.to_double(),
         )
@@ -300,6 +303,7 @@ pub fn open(
     composing: false,
     rpc_result: "",
     fragments: [],
+    editor_scroll: 0,
     next_text_id: 4294967296UL,
   }
   current.val = Some(bridge)
@@ -324,6 +328,7 @@ pub fn Bridge::update(
   rpc_result : String,
   layout : Array[@raster.TextRun]?,
   view : @application.View,
+  editor_scroll? : Int = 0,
 ) -> Unit {
   if self.adapter == 0UL {
     return
@@ -347,6 +352,7 @@ pub fn Bridge::update(
     self.fragments = fragments
   }
   self.view = view
+  self.editor_scroll = editor_scroll
   self.nodes = nodes
   self.width = width
   self.height = height

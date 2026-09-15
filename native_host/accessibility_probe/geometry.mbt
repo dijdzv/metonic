@@ -59,6 +59,15 @@ async fn verify_geometry(
     String::from_array(Array::make(80, '日')),
     79,
     80,
+  )
+  verify_character_geometry(
+    editor,
+    value_provider,
+    hwnd,
+    engine,
+    String::from_array(Array::make(80, '日')),
+    0,
+    1,
     visible=false,
   )
   stage(
@@ -123,12 +132,23 @@ async fn verify_character_geometry(
   assert_true(client_origin(hwnd, origin) != 0)
   let client = FixedArray::make(4, 0)
   assert_true(client_rect(hwnd, client) != 0)
-  ignore(@raster.render(engine, text, (client[2] - 16).max(1).min(640), 96))
+  ignore(
+    @raster.render(
+      engine,
+      text,
+      (client[2] - 16).max(1).min(640),
+      96,
+      follow_caret=Some(text.length()),
+    ),
+  )
   let (start, top) = @raster.caret_position(engine, start_offset).unwrap()
   let (end, _) = @raster.caret_position(engine, end_offset).unwrap()
   // The existing raster caret API truncates fractional advances to integers.
   assert_true((numbers[0] - (origin[0] + 8 + start).to_double()).abs() < 1.01)
-  assert_eq(numbers[1], (origin[1] + 8 + top).to_double())
+  assert_eq(
+    numbers[1],
+    (origin[1] + 8 + top - @raster.vertical_scroll(engine)).to_double(),
+  )
   assert_true(
     numbers[2] > 0 && (numbers[2] - (end - start).to_double()).abs() < 1.01,
   )

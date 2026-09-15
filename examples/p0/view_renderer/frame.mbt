@@ -55,6 +55,8 @@ pub fn render(
   caret? : Int? = None,
   caret_after? : Bool = false,
   query_scroll? : Int? = None,
+  editor_scroll? : Int = 0,
+  editor_active_caret? : Int? = None,
 ) -> Array[Layer] {
   let request_layer = button_layer(engine, view.request)
   let query_layer = button_layer(
@@ -93,6 +95,8 @@ pub fn render(
     selection~,
     caret~,
     caret_after~,
+    vertical_scroll=editor_scroll,
+    follow_caret=editor_active_caret,
   )
   let layers = [
     Layer::{ bounds: editor, pixels: editor_pixels, },
