@@ -8,6 +8,13 @@ let query_preview : Ref[String?] = Ref(None)
 let query_preedit_geometry : Ref[(Int, Int, Int)?] = Ref(None)
 
 ///|
+pub fn query_state() -> (String, Int, Int, Bool) {
+  let view = application.val.view()
+  let (start, end) = view.query_selection
+  (view.query.text, start, end, query_composition.val is Some(_))
+}
+
+///|
 #export_name("query_composition_end")
 pub fn query_composition_end() -> Unit {
   if query_composition.val is Some(value) {
