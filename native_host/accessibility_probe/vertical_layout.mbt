@@ -7,6 +7,9 @@ fn verify_vertical_layout(engine : @raster.Engine) -> Unit raise {
   let (last, next_x) = @raster.vertical_position(engine, text, middle, true, x).unwrap()
   assert_eq(last, 8)
   assert_eq(next_x, x)
+  assert_true(
+    @raster.vertical_position(engine, text, last, true, next_x) is None,
+  )
   let (back, _) = @raster.vertical_position(engine, text, last, false, x).unwrap()
   assert_eq(back, middle)
   assert_true(
@@ -43,6 +46,9 @@ fn verify_vertical_layout(engine : @raster.Engine) -> Unit raise {
     @raster.caret_position(engine, line2, after=after2).unwrap(),
     (0, 64),
   )
+  assert_true(
+    @raster.vertical_caret(engine, wrapped, line2, true, x2, after=after2) is None,
+  )
   let (back, back_after, _) = @raster.vertical_caret(
     engine,
     wrapped,
@@ -67,5 +73,6 @@ fn verify_vertical_layout(engine : @raster.Engine) -> Unit raise {
   )
   ignore(@raster.render(engine, "", 300, 96))
   assert_true(@raster.vertical_position(engine, "", 0, true, None) is None)
+  assert_true(@raster.vertical_position(engine, "", 0, false, None) is None)
   stage("vertical caret uses visual lines, sticky x and UTF-16 boundaries")
 }
