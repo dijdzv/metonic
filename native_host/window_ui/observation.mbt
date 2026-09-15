@@ -147,7 +147,8 @@ fn App::observation(self : App) -> Observation {
           CompositionStart => CompositionStart
           CompositionUpdate(text, cursor) => CompositionUpdate(text, cursor)
           CompositionCancel => CompositionCancel
-          NavigateVertical(down, extend_selection) => NavigateVertical(down, extend_selection)
+          NavigateVertical(down, extend_selection) =>
+            NavigateVertical(down, extend_selection)
           AccessibilityValue(text) =>
             Accessibility(@accessibility.SetValue(2, text))
           AccessibilitySelection(

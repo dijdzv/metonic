@@ -1,4 +1,5 @@
 members = [
+  "../.work/native-deps/sources/cosmic-wrap-affinity",
   ".",
   "..",
   "../experiments/window_gpu_async",

@@ -24,6 +24,7 @@ pub fn render(
   height : Int,
   selection? : (Int, Int) = (0, 0),
   caret? : Int? = None,
+  caret_after? : Bool = false,
   single_line_scroll? : Int? = None,
 ) -> Bytes {
   if width < 1 || width > 1024 || height < 1 || height > 96 {
@@ -96,7 +97,7 @@ pub fn render(
     })
     engine.cache = next_cache
     if caret is Some(offset) {
-      if caret_position(engine, offset) is Some((x, y)) {
+      if caret_position(engine, offset, after=caret_after) is Some((x, y)) {
         let x = x - scroll_x
         if x >= 0 {
           let x = x.min(width - 1)
@@ -126,12 +127,24 @@ pub fn render(
 }
 
 ///|
-fn selection_cursor(text : String, offset : Int) -> @cosmic.Cursor {
+fn selection_cursor(
+  text : String,
+  offset : Int,
+  after? : Bool = false,
+) -> @cosmic.Cursor {
   let mut remaining = offset
   let mut line_index = 0
   for line in text.split("\n") {
     if remaining <= line.length() {
-      return @cosmic.Cursor::new(line_index, remaining)
+      return @cosmic.Cursor::new_with_affinity(
+        line_index,
+        remaining,
+        if after {
+          After
+        } else {
+          Before
+        },
+      )
     }
     remaining -= line.length() + 1
     line_index += 1
@@ -141,6 +154,11 @@ fn selection_cursor(text : String, offset : Int) -> @cosmic.Cursor {
 
 ///|
 pub fn hit(engine : Engine, x : Int, y : Int) -> Int? {
+  hit_caret(engine, x, y).map(position => position.0)
+}
+
+///|
+pub fn hit_caret(engine : Engine, x : Int, y : Int) -> (Int, Bool)? {
   let buffer = match engine.layout {
     Some(value) => value
     None => return None
@@ -153,7 +171,7 @@ pub fn hit(engine : Engine, x : Int, y : Int) -> Int? {
   let mut index = 0
   for line in engine.text.split("\n") {
     if index == cursor.line {
-      return Some(offset + cursor.index)
+      return Some((offset + cursor.index, cursor.affinity.after()))
     }
     offset += line.length() + 1
     index += 1
@@ -162,7 +180,11 @@ pub fn hit(engine : Engine, x : Int, y : Int) -> Int? {
 }
 
 ///|
-pub fn caret_position(engine : Engine, offset : Int) -> (Int, Int)? {
+pub fn caret_position(
+  engine : Engine,
+  offset : Int,
+  after? : Bool = false,
+) -> (Int, Int)? {
   if offset < 0 || offset > engine.text.length() {
     return None
   }
@@ -170,7 +192,7 @@ pub fn caret_position(engine : Engine, offset : Int) -> (Int, Int)? {
     None => None
     Some(buffer) =>
       @cosmic.Editor::new(buffer)
-      .set_cursor(selection_cursor(engine.text, offset))
+      .set_cursor(selection_cursor(engine.text, offset, after~))
       .cursor_position()
   }
 }

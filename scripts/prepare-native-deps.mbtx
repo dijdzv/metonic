@@ -269,6 +269,9 @@ async fn prepare(args : Array[String]) -> Unit raise Error {
   let window_archive = cache +
     "/window-b33c9f0ac85002bca4a9cceccbbcd512d13b7ceb.zip"
   let async_archive = cache + "/async-0.21.2.zip"
+  let cosmic_revision = "b307f2599accac591199a7cd16ab6594067ba272"
+  let cosmic_archive = cache + "/cosmic-" + cosmic_revision + ".zip"
+  let cosmic_sha = "ea973f2192496fb665e8dd796e0dac0b009104331f549b4fdb698530c2b18f50"
   let window_sha = "41ff1dc110ff92f27938bc3f5b6dce3d72953dfa7fa9d1896b7f2d05d47b7135"
   let async_sha = "742ee3d84d33d4602953741fb49f310ae5c8814648079facaa4b595d986c1618"
 
@@ -296,6 +299,14 @@ async fn prepare(args : Array[String]) -> Unit raise Error {
 
   if !offline {
     download_archive(
+      cosmic_archive,
+      "https://github.com/moonbit-community/moon_cosmic/archive/" +
+      cosmic_revision +
+      ".zip",
+      cosmic_sha,
+      repo_root,
+    )
+    download_archive(
       window_archive, "https://github.com/wzzc-dev/window/archive/b33c9f0ac85002bca4a9cceccbbcd512d13b7ceb.zip",
       window_sha, repo_root,
     )
@@ -306,6 +317,7 @@ async fn prepare(args : Array[String]) -> Unit raise Error {
   }
   verify_archive(window_archive, window_sha, repo_root)
   verify_archive(async_archive, async_sha, repo_root)
+  verify_archive(cosmic_archive, cosmic_sha, repo_root)
 
   let staging = create_staging(root)
   let staging_real = @fs.realpath(staging)
@@ -320,6 +332,29 @@ async fn prepare(args : Array[String]) -> Unit raise Error {
     }
   })
   let window_parent = staging + "/window"
+  let cosmic_parent = staging + "/cosmic"
+  @fs.mkdir(cosmic_parent)
+  ignore(
+    run_checked(
+      "tar.exe",
+      ["-xf", cosmic_archive, "--exclude=*/README.md", "-C", cosmic_parent],
+      repo_root,
+    ),
+  )
+  let cosmic_stage = cosmic_parent + "/moon_cosmic-" + cosmic_revision
+  @fs.write_file(
+    cosmic_stage + "/README.md",
+    @fs.read_file(cosmic_stage + "/README.mbt.md").text(),
+  )
+  for check_only in [true, false] {
+    let args = ["apply", "--directory=" + cosmic_stage]
+    if check_only {
+      args.push("--check")
+    }
+    args.push("patches/cosmic-wrap-affinity.patch")
+    ignore(run_checked("git", args, repo_root))
+  }
+  let cosmic_existing = sources + "/cosmic-wrap-affinity"
   let async_stage = staging + "/async"
   @fs.mkdir(window_parent)
   @fs.mkdir(async_stage)
@@ -529,6 +564,7 @@ async fn prepare(args : Array[String]) -> Unit raise Error {
   // Compare every existing destination before publishing any absent source.
   compare_sources(window_stage, window_existing, repo_root)
   compare_sources(async_stage, async_existing, repo_root)
+  compare_sources(cosmic_stage, cosmic_existing, repo_root)
   if upgrade_worker {
     if !is_strictly_inside(
         @fs.realpath(async_existing + worker_suffix),
@@ -561,6 +597,9 @@ async fn prepare(args : Array[String]) -> Unit raise Error {
   }
   if !@fs.exists(async_existing) {
     @fs.rename(async_stage, async_existing, replace=false)
+  }
+  if !@fs.exists(cosmic_existing) {
+    @fs.rename(cosmic_stage, cosmic_existing, replace=false)
   }
   if args.length() == 3 {
     let requested = configurations.get(args[2]).unwrap()

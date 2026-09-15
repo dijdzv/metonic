@@ -57,6 +57,7 @@ struct App {
   mut control_pressed : Bool
   mut shift_pressed : Bool
   mut vertical_goal : (Int, Int, Int, Int?)?
+  mut caret_side : (Int, Int, Int, Bool)?
   mut raster : @raster.Engine?
   mut query_raster : @raster.Engine?
   mut query_scroll : Int
@@ -69,6 +70,7 @@ struct App {
   mut rendered_result : String
   mut rendered_selection : (Int, Int)
   mut rendered_caret : Int?
+  mut rendered_caret_after : Bool
   mut text_width : Int
   hidden : Bool
   report : (String) -> Unit
@@ -276,6 +278,7 @@ fn App::draw(self : App) -> Unit raise Error {
         self.model.view()
       }
       let width = view.editor.bounds.width
+      let caret_after = self.editor_caret_after(caret, width)
       let query_active_caret = if view.query.focused &&
         self.composition is Some(_) {
         self.input_node().selection_start + self.preedit_cursor
@@ -297,7 +300,8 @@ fn App::draw(self : App) -> Unit raise Error {
         ) ||
         self.text_width != width ||
         self.rendered_selection != selection ||
-        self.rendered_caret != visible_caret {
+        self.rendered_caret != visible_caret ||
+        self.rendered_caret_after != caret_after {
         let query_width = (view.query.bounds.width - 16).max(1)
         ignore(
           @raster.render(
@@ -331,6 +335,7 @@ fn App::draw(self : App) -> Unit raise Error {
           text,
           selection~,
           caret=visible_caret,
+          caret_after~,
           query_scroll=Some(self.query_scroll),
         )
         renderer.set_text_layers(
@@ -356,6 +361,7 @@ fn App::draw(self : App) -> Unit raise Error {
         self.rendered_result = self.model.result
         self.rendered_selection = selection
         self.rendered_caret = visible_caret
+        self.rendered_caret_after = caret_after
         self.text_width = width
       }
       let query_focused = view.query.focused
@@ -375,6 +381,7 @@ fn App::draw(self : App) -> Unit raise Error {
           self.raster.unwrap()
         },
         input_caret,
+        after=if query_focused { false } else { caret_after },
       )
       if position is Some((x, y)) {
         if self.window is Some(window) {
@@ -495,6 +502,7 @@ async fn run_loop(
     control_pressed: false,
     shift_pressed: false,
     vertical_goal: None,
+    caret_side: None,
     raster: None,
     query_raster: None,
     query_scroll: 0,
@@ -507,6 +515,7 @@ async fn run_loop(
     rendered_query: ("", false, (0, 0), None),
     rendered_selection: (-1, -1),
     rendered_caret: None,
+    rendered_caret_after: false,
     text_width: 0,
     hidden,
     report,
@@ -594,7 +603,10 @@ async fn run_loop(
             | Commit(_)
             | Backspace
             | Delete
-            | CompositionStart => app.vertical_goal = None
+            | CompositionStart => {
+              app.vertical_goal = None
+              app.caret_side = None
+            }
             _ => ()
           }
           let event = match event {
@@ -1079,7 +1091,7 @@ fn App::apply_pointer(
     (x, y, extend_selection) =>
       if x >= 8 && x < 8 + app.text_width && y >= 8 && y < 104 {
         if app.raster is Some(engine) {
-          if @raster.hit(engine, x - 8, y - 8) is Some(offset) {
+          if @raster.hit_caret(engine, x - 8, y - 8) is Some((offset, after)) {
             let node = @semantics.snapshot(app.model.editor)[1]
             ignore(@semantics.focus(app.model.editor, node.reference))
             let caret = offset.min(node.value.length())
@@ -1094,6 +1106,14 @@ fn App::apply_pointer(
                 node.reference,
                 anchor,
                 caret,
+              ),
+            )
+            app.caret_side = Some(
+              (
+                @semantics.revision(app.model.editor),
+                caret,
+                app.text_width,
+                after,
               ),
             )
             app.draw()

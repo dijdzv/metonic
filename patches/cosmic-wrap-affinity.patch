@@ -1,0 +1,181 @@
+diff --git a/moon.mod b/moon.mod
+index b710377..b0046c6 100644
+--- a/moon.mod
++++ b/moon.mod
+@@ -20,4 +20,4 @@ keywords = [ "text", "layout", "bidi", "shaping", "swash", "cosmic-text" ]
+
+ description = "MoonBit port of cosmic-text (text shaping, layout, and editor primitives) built on moon_swash."
+
+-source = "src"
++options(source: "src")
+diff --git a/src/buffer.mbt b/src/buffer.mbt
+index 666827c..5edca00 100644
+--- a/src/buffer.mbt
++++ b/src/buffer.mbt
+@@ -1362,13 +1362,16 @@ pub fn Buffer::cursor_motion(
+           }
+         }
+         if cursor.index >= min_start {
++          if cursor.index == min_start && min_start > 0 && cursor.affinity.before() {
++            continue
++          }
+           if cursor.index < max_end {
+             cur_run_idx = Some(i)
+             break
+           }
+           if cursor.index == max_end {
+-            // Prefer the next run if this is a wrap boundary.
+-            if i + 1 >= runs.length() || runs[i + 1].line_i != cursor.line {
++            // The offset alone cannot distinguish the two visual positions.
++            if cursor.affinity.before() || i + 1 >= runs.length() || runs[i + 1].line_i != cursor.line {
+               cur_run_idx = Some(i)
+               break
+             }
+@@ -1497,9 +1500,19 @@ pub fn Buffer::cursor_motion(
+     }
+     let run = runs[target]
+     let new_index = index_for_x(run, desired_x)
++    let mut affinity = cursor.affinity
++    if run.glyphs.length() > 0 {
++      let min_start = run.glyphs.fold(init=run.glyphs[0].start, (value, glyph) => value.min(glyph.start))
++      let max_end = run.glyphs.fold(init=run.glyphs[0].end, (value, glyph) => value.max(glyph.end))
++      if new_index == min_start {
++        affinity = After
++      } else if new_index == max_end {
++        affinity = Before
++      }
++    }
+     return Some(
+       (
+-        Cursor::new_with_affinity(run.line_i, new_index, cursor.affinity),
++        Cursor::new_with_affinity(run.line_i, new_index, affinity),
+         Some(int_from_float(desired_x)),
+       ),
+     )
+diff --git a/src/editor_action_test.mbt b/src/editor_action_test.mbt
+index b3ccb39..ce3cce7 100644
+--- a/src/editor_action_test.mbt
++++ b/src/editor_action_test.mbt
+@@ -268,7 +268,7 @@ test "Buffer.cursor_motion Home/End operate on visual line when wrapped" {
+       )
+     }
+   }
+-  match buffer.cursor_motion(Cursor::new(0, home_expected), None, End) {
++  match buffer.cursor_motion(Cursor::new_with_affinity(0, home_expected, After), None, End) {
+     None => abort("expected motion")
+     Some((c, _x)) => {
+       inspect(c.index == end_expected, content="true")
+diff --git a/src/editor_render.mbt b/src/editor_render.mbt
+index d24e2f0..cc7ab52 100644
+--- a/src/editor_render.mbt
++++ b/src/editor_render.mbt
+@@ -111,6 +111,12 @@ fn cursor_position_in_run(cursor : Cursor, run : LayoutRun) -> (Int, Int)? {
+   if cursor.index < min_start || cursor.index > max_end {
+     return None
+   }
++  if cursor.index == min_start && min_start > 0 && cursor.affinity.before() {
++    return None
++  }
++  if cursor.index == max_end && max_end < run.text.length() && cursor.affinity.after() {
++    return None
++  }
+   let x = x_for_index(run, cursor.index)
+   Some((int_from_float(x), int_from_float(run.line_top)))
+ }
+diff --git a/src/editor_render_test.mbt b/src/editor_render_test.mbt
+index 6e4d6b8..618cdef 100644
+--- a/src/editor_render_test.mbt
++++ b/src/editor_render_test.mbt
+@@ -18,6 +18,26 @@ pub struct TestRenderer {
+   glyph_pos : Array[(Int, Int)]
+ }
+
++///|
++test "wrapped cursor affinity selects one visual line" {
++  let buffer = Buffer::new(Metrics::new(12.0F, 12.0F))
++    .set_text("abcdef", AttrsList::new(Attrs::new()), Advanced)
++    .set_size(Some(24.0F), Some(48.0F))
++    .set_wrap(WordOrGlyph)
++    .layout_all()
++  let before = Editor::new(buffer).set_cursor(Cursor::new_with_affinity(0, 2, Before))
++  let after = Editor::new(buffer).set_cursor(Cursor::new_with_affinity(0, 2, After))
++  assert_eq(before.cursor_position(), Some((24, 0)))
++  assert_eq(after.cursor_position(), Some((0, 12)))
++  for editor in [before, after] {
++    let renderer = TestRenderer::{ rects: [], glyph_pos: [] }
++    editor.render(renderer, Color::rgb(0, 0, 0), Color::rgb(255, 0, 0), Color::rgb(0, 0, 255), Color::rgb(0, 255, 0))
++    assert_eq(renderer.rects.length(), 1)
++    let position = editor.cursor_position().unwrap()
++    assert_eq((renderer.rects[0].0, renderer.rects[0].1), position)
++  }
++}
++
+ ///|
+ pub impl Renderer for TestRenderer with fn rectangle(self, x, y, w, h, color) {
+   self.rects.push((x, y, w, h, color.value))
+@@ -28,6 +48,65 @@ pub impl Renderer for TestRenderer with fn glyph(self, physical_glyph, _color) {
+   self.glyph_pos.push((physical_glyph.x, physical_glyph.y))
+ }
+
++///|
++test "wrapped hit cursor stays on the clicked visual line" {
++  for text in ["abcdef", "ab cd ef", "אבגדהו", "abאבcd"] {
++    let buffer = Buffer::new(Metrics::new(12.0F, 12.0F))
++      .set_text(text, AttrsList::new(Attrs::new()), Advanced)
++      .set_size(Some(24.0F), Some(96.0F))
++      .set_wrap(WordOrGlyph)
++      .layout_all()
++    let runs = buffer.layout_runs().to_array()
++    assert_true(runs.length() > 1)
++    for run in runs {
++      for x in [1.0F, 23.0F] {
++        let cursor = buffer.hit(x, run.line_top + 6.0F).unwrap()
++        let editor = Editor::new(buffer).set_cursor(cursor)
++        assert_eq(editor.cursor_position().unwrap().1, run.line_top.to_double().to_int(), msg=text)
++        let renderer = TestRenderer::{ rects: [], glyph_pos: [] }
++        editor.render(renderer, Color::rgb(0, 0, 0), Color::rgb(255, 0, 0), Color::rgb(0, 0, 255), Color::rgb(0, 255, 0))
++        assert_eq(renderer.rects.length(), 1, msg=text)
++      }
++    }
++  }
++}
++
++///|
++test "vertical motion retains destination visual line at wrap boundary" {
++  let buffer = Buffer::new(Metrics::new(12.0F, 12.0F))
++    .set_text("abcdef", AttrsList::new(Attrs::new()), Advanced)
++    .set_size(Some(24.0F), Some(48.0F))
++    .set_wrap(WordOrGlyph)
++    .layout_all()
++  let (middle, x) = buffer.cursor_motion(Cursor::new(0, 0), None, Down).unwrap()
++  assert_eq(Editor::new(buffer).set_cursor(middle).cursor_position(), Some((0, 12)))
++  let (last, x2) = buffer.cursor_motion(middle, x, Down).unwrap()
++  assert_eq(Editor::new(buffer).set_cursor(last).cursor_position(), Some((0, 24)))
++  assert_eq(x, x2)
++  let (back, _) = buffer.cursor_motion(last, x2, Up).unwrap()
++  assert_eq(Editor::new(buffer).set_cursor(back).cursor_position(), Some((0, 12)))
++}
++
++///|
++test "vertical source run respects boundary affinity" {
++  let buffer = Buffer::new(Metrics::new(12.0F, 12.0F))
++    .set_text("abcdef", AttrsList::new(Attrs::new()), Advanced)
++    .set_size(Some(24.0F), Some(48.0F))
++    .set_wrap(WordOrGlyph)
++    .layout_all()
++  let before = Cursor::new_with_affinity(0, 2, Before)
++  let (before_end, _) = buffer.cursor_motion(before, None, End).unwrap()
++  assert_true(before_end == before)
++  assert_true(buffer.cursor_motion(before, None, Up) is None)
++  let (next, _) = buffer.cursor_motion(before, None, Down).unwrap()
++  assert_eq(Editor::new(buffer).set_cursor(next).cursor_position(), Some((24, 12)))
++  let after = Cursor::new_with_affinity(0, 2, After)
++  let (after_end, _) = buffer.cursor_motion(after, None, End).unwrap()
++  assert_true(after_end == Cursor::new_with_affinity(0, 4, Before))
++  let (previous, _) = buffer.cursor_motion(after, None, Up).unwrap()
++  assert_eq(Editor::new(buffer).set_cursor(previous).cursor_position(), Some((0, 0)))
++}
++
+ ///|
+ test "Editor.cursor_position + Editor.render (smoke)" {
+   let attrs = AttrsList::new(Attrs::new())
