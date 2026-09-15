@@ -1,0 +1,74 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/encoding/utf8",
+}
+
+///|
+let asset_dir = ".work/text-assets"
+
+///|
+let font_path : String = asset_dir + "/NotoSansJP.ttf"
+
+///|
+let license_path : String = asset_dir + "/OFL.txt"
+
+///|
+let font_url = "https://raw.githubusercontent.com/google/fonts/66a36c8c94b1a5d992ee4e7f392fccfe4945767c/ofl/notosansjp/NotoSansJP%5Bwght%5D.ttf"
+
+///|
+let license_url = "https://raw.githubusercontent.com/google/fonts/66a36c8c94b1a5d992ee4e7f392fccfe4945767c/ofl/notosansjp/OFL.txt"
+
+///|
+let expected_hash = "c2f3b4d463500a2ddcd3849cded1fceeb9fd6d1c32e6cbecd568453ba50fc68f"
+
+///|
+fn fail(message : String) -> Unit {
+  println("TEXT_LAYOUT_FAILED: " + message)
+  abort(message)
+}
+
+///|
+async fn fetch(path : String, url : String) -> Unit {
+  let (code, _, _) = @process.collect_output("curl.exe", [
+    "-fL", "--output", path, url,
+  ])
+  if code != 0 {
+    fail("asset download failed: " + path)
+  }
+}
+
+///|
+fn assert_true(condition : Bool, message : String) -> Unit {
+  if !condition {
+    fail(message)
+  }
+}
+
+///|
+async fn main {
+  if !@fs.exists(asset_dir) {
+    @fs.mkdir(asset_dir, recursive=true)
+  }
+  if !@fs.exists(font_path) {
+    fetch(font_path, font_url)
+  }
+  if !@fs.exists(license_path) {
+    fetch(license_path, license_url)
+  }
+  let (hash_code, hash_stdout, _) = @process.collect_output("certutil.exe", [
+    "-hashfile", font_path, "SHA256",
+  ])
+  if hash_code != 0 {
+    fail("font hash failed")
+  }
+  let hash_lines = @utf8.decode_lossy(hash_stdout.binary()).split("\n")
+  let hash_ok = hash_lines.any(line => {
+    line.trim().to_owned() == expected_hash ||
+    line.trim().to_owned() ==
+    "C2F3B4D463500A2DDCD3849CDED1FCEEB9FD6D1C32E6CBECD568453BA50FC68F"
+  })
+  assert_true(hash_ok, "NotoSansJP SHA256 mismatch")
+  println("TEXT_ASSETS_OK")
+}

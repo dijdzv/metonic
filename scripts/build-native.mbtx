@@ -41,12 +41,9 @@ async fn main {
       mode == "window-dev" ||
       mode == "window-display-dev" ||
       mode == "window-probe" {
-      let asset_env : Map[String, String] = Map([])
-      asset_env.set("METONIC_TEXT_ASSETS_ONLY", "1")
       if @process.run(
           moon,
-          ["run", "scripts/verify-text-layout.mbtx"],
-          extra_env=asset_env,
+          ["run", "scripts/prepare-text-assets.mbtx"],
           no_console_window=true,
         ) !=
         0 {
