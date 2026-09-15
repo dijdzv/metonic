@@ -53,6 +53,7 @@ pub fn render(
   text : String,
   selection? : (Int, Int) = (0, 0),
   caret? : Int? = None,
+  caret_after? : Bool = false,
   query_scroll? : Int? = None,
 ) -> Array[Layer] {
   let request_layer = button_layer(engine, view.request)
@@ -91,6 +92,7 @@ pub fn render(
     editor.height,
     selection~,
     caret~,
+    caret_after~,
   )
   let layers = [
     Layer::{ bounds: editor, pixels: editor_pixels, },
