@@ -4,7 +4,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { chromium } from 'playwright'
 import { observedPage, reportFailure } from '../tools/devtools/browser-observation.mjs'
-import { verify as verifyPixels, runScene, runFailures, runFontFailures, runText, runDpr, runSuite, runRelease, runEditorScroll } from '../_build/js/release/build/tools/verify_browser_pixels/verify_browser_pixels.js'
+import { verify as verifyPixels, runScene, runFailures, runFontFailures, runText, runDpr, runSuite, runRelease, runEditorScroll, runQueryObservation } from '../_build/js/release/build/tools/verify_browser_pixels/verify_browser_pixels.js'
 
 if (process.env.METONIC_BROWSER_SUPERVISED !== '1') throw new Error('Run mise run browser:async/headless')
 
@@ -29,6 +29,16 @@ async function text(page, selector) {
 async function editorScrollHost(page, command) {
   const settle = () => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   switch (command.op) {
+    case 'trace-start': await page.evaluate(() => window.metonicInputTrace.start()); return null;
+    case 'trace-stop': await page.evaluate(() => window.metonicInputTrace.stop()); return null;
+    case 'trace-sample': return page.evaluate(() => window.metonicInputTrace.sample());
+    case 'input-event':
+      await page.locator(command.selector).evaluate((input, event) => {
+        if (event.value !== undefined) input.value = event.value;
+        if (event.start !== undefined) input.setSelectionRange(event.start, event.end);
+        input.dispatchEvent(event.type.startsWith('composition') ? new CompositionEvent(event.type, { data: event.data ?? '' }) : new Event(event.type));
+      }, command);
+      await settle(); return null;
     case 'value': return page.locator(command.selector).inputValue();
     case 'fill': await page.locator(command.selector).fill(command.value); await settle(); return null;
     case 'press': await page.locator(command.selector).press(command.key); await settle(); return null;
@@ -558,7 +568,10 @@ try {
                   : new InputEvent(event.type, { data: event.data ?? '', isComposing: event.composing ?? false, bubbles: true }));
               }, command); await settle(); break;
               case 'disabled': return page.locator(command.selector).isDisabled();
-              case 'no-probe': return page.evaluate(() => !('metonicAsyncProbe' in window));
+              case 'no-probe': return page.evaluate(async () => {
+                const module = await WebAssembly.compile(await (await fetch('/release/app.wasm')).arrayBuffer(), { builtins: ['js-string'], importedStringConstants: '_' });
+                return !('metonicAsyncProbe' in window) && !WebAssembly.Module.exports(module).some(entry => entry.name === 'query_state_json');
+              });
               case 'width': return page.locator('#canvas').evaluate((element) => element.width);
               case 'viewport': await page.setViewportSize({ width: command.width, height: 800 }); await settle(); break;
               case 'canvas-height': await page.locator('#canvas').evaluate((element, height) => { element.style.height = height; window.dispatchEvent(new Event('resize')); }, command.height); await settle(); break;
@@ -599,6 +612,7 @@ try {
           await page.goto(`${baseUrl}/?target=${encodeURIComponent(request.target)}`);
           await waitStatus(page, `Ready: ${request.target}`);
           await runEditorScroll(command => editorScrollHost(page, command));
+          await runQueryObservation(command => editorScrollHost(page, command));
           await page.locator('#text-input').fill('A😀B');
           const preview = await page.evaluate(() => {
             const input = document.querySelector('#text-input');

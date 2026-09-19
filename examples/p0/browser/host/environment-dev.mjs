@@ -40,7 +40,7 @@ export function attach(session) {
     snapshot: () => ({ task: Array.from({ length: 6 }, (_, i) => Number(app.task_field(i))), pending: Number(app.scheduled_task_count()), rejected: session.rejectedCallbacks, disposed: session.disposed }),
   };
   window.metonicInputTrace = {
-    start: () => inputDiagnostics.start((field) => field === 'text-input' ? JSON.stringify(window.metonicAsyncProbe.editor()) : undefined),
+    start: () => inputDiagnostics.start((field) => field === 'text-input' ? JSON.stringify(window.metonicAsyncProbe.editor()) : app.query_state_json()),
     stop: () => inputDiagnostics.stop(),
     snapshot: () => JSON.parse(inputDiagnostics.snapshot()),
     sample: () => JSON.parse(inputDiagnostics.sample()),

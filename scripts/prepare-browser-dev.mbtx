@@ -1,0 +1,44 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+}
+
+///|
+async fn main {
+  let source = "browser_host/app"
+  let destination = ".work/browser-host-dev"
+  if !@fs.exists(destination) {
+    @fs.mkdir(destination, recursive=true)
+  }
+  let names : Array[String] = []
+  for name in @fs.readdir(source) {
+    if name.has_suffix(".mbt") || name == "moon.pkg" || name == "moon.mod" {
+      names.push(name)
+      let content = @fs.read_file(source + "/" + name).text()
+      @fs.write_file(
+        destination + "/" + name,
+        if name == "moon.mod" {
+          content.replace_all(
+            old="local/browser_host",
+            new="local/browser_host_dev",
+          )
+        } else {
+          content
+        },
+      )
+    }
+  }
+  names.push("observe.mbt")
+  @fs.write_file(
+    destination + "/observe.mbt",
+    @fs.read_file("browser_host/development/observe.mbt").binary(),
+  )
+  // A removed shared source must not silently remain in the development build.
+  for name in @fs.readdir(destination) {
+    assert_true(
+      names.contains(name),
+      msg="unexpected development source: " + name,
+    )
+  }
+  println("BROWSER_DEVELOPMENT_SOURCES_READY")
+}
