@@ -12,6 +12,54 @@ let listeners : Array[(@dom.EventTarget, String, @dom.EventListener)] = []
 let sequence : Ref[Int] = Ref(0)
 
 ///|
+let shared_reader : Ref[((String) -> String?)?] = Ref(None)
+
+///|
+#export_name("sample")
+pub fn sample() -> String {
+  let fields : Array[Json] = []
+  if shared_reader.val is Some(shared) {
+    for field in ["text-input", "rpc-user"] {
+      guard document().get_element_by_id(field) is Some(element) else {
+        continue
+      }
+      let state = if field == "text-input" {
+        @dom.HTMLTextAreaElement::from_js_value_opt(element.to_js_value()).map(input => {
+          (
+            input.get_value(),
+            Some(input.get_selection_start()),
+            Some(input.get_selection_end()),
+          )
+        })
+      } else {
+        @dom.HTMLInputElement::from_js_value_opt(element.to_js_value()).map(input => {
+          (
+            input.get_value(),
+            input.get_selection_start(),
+            input.get_selection_end(),
+          )
+        })
+      }
+      if state is Some((value, start, end)) {
+        fields.push({
+          "field": field.to_json(),
+          "value": value.to_json(),
+          "start": start.map(value => value.to_json()).unwrap_or(Json::null()),
+          "end": end.map(value => value.to_json()).unwrap_or(Json::null()),
+          "shared": shared(field)
+          .map(value => value.to_json())
+          .unwrap_or(Json::null()),
+        })
+      }
+    }
+  }
+  // Event rows precede some browser default actions; they are not current state.
+  (
+    { "after_sequence": sequence.val.to_json(), "fields": fields.to_json() } :
+    Json).stringify()
+}
+
+///|
 fn record(
   field : String,
   event : String,
@@ -45,6 +93,7 @@ pub fn stop() -> Unit {
     target.remove_event_listener(name, Some(listener))
   }
   listeners.clear()
+  shared_reader.val = None
 }
 
 ///|
@@ -59,6 +108,7 @@ pub fn start(shared : (String) -> String?) -> Unit {
   stop()
   rows.clear()
   sequence.val = 0
+  shared_reader.val = Some(shared)
   for field in ["text-input", "rpc-user"] {
     guard document().get_element_by_id(field) is Some(element) else { continue }
     let target = element.to_event_target()

@@ -112,6 +112,15 @@ Values are observed during
 event delivery, not a guarantee of the browser's state after its default action.
 These records supplement physical observations and do not simulate an actual IME.
 
+While recording, call `sample()` after an input action has finished to read the
+current DOM values/selections and available shared state separately from event
+history. `after_sequence` identifies the last recorded event at sampling time;
+sampling does not append events. It distinguishes empty text from LF without
+claiming that an earlier event row reflects a completed default action. It does
+not wait for pending frames or IME work. User ID shared state remains unavailable.
+After `stop()`, sampling returns an empty field list and no retained callback is
+invoked; take a sample before stopping when final state is needed.
+
 Stopping the application removes the listeners. The diagnostics JavaScript is a
 separate development asset; the production package omits it and its entry points,
 and the server does not serve it under `/release/`. The normal headless suite

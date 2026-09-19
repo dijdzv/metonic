@@ -43,6 +43,7 @@ export function attach(session) {
     start: () => inputDiagnostics.start((field) => field === 'text-input' ? JSON.stringify(window.metonicAsyncProbe.editor()) : undefined),
     stop: () => inputDiagnostics.stop(),
     snapshot: () => JSON.parse(inputDiagnostics.snapshot()),
+    sample: () => JSON.parse(inputDiagnostics.sample()),
   };
 }
 export function detach() {
