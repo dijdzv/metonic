@@ -157,19 +157,23 @@ async fn run_session(
           drain(server_err_reader, "server stderr", server_err_capture)
         }),
       )
-      let expected = b"http://127.0.0.1:4173/\n"
       let ready = @async.with_timeout(readiness_ms, async fn() {
-        server_reader.read_exactly(expected.length())
+        let bytes : Array[Byte] = []
+        while bytes.length() < 64 {
+          let byte = server_reader.read_exactly(1)[0]
+          bytes.push(byte)
+          if byte == b'\n' {
+            break
+          }
+        }
+        Bytes::from_array(bytes)
       })
       for byte in ready {
         if server_capture.val.length() < 65536 {
           server_capture.val.push(byte)
         }
       }
-      if ready != expected {
-        fail("invalid browser server readiness")
-      }
-      server_capture.val = expected.to_array()
+      let endpoint = ready_endpoint(@utf8.decode_lossy(ready))
       let expected_shutdown = @ref.new(false)
       ignore(
         group.spawn(() => {
@@ -189,7 +193,10 @@ async fn run_session(
       ignore(
         group.spawn(() => drain(server_reader, "server stdout", server_capture)),
       )
-      let verifier_env = Map([("METONIC_BROWSER_SUPERVISED", "1")])
+      let verifier_env = Map([
+        ("METONIC_BROWSER_SUPERVISED", "1"),
+        ("METONIC_BROWSER_BASE", endpoint),
+      ])
       let (fault_reader, fault_stdout) = @process.read_from_process()
       defer fault_reader.close()
       defer fault_stdout.close()
@@ -244,7 +251,9 @@ async fn run_session(
             "verifier stderr",
             verifier_err_capture,
             on_transport_failure=Some(() => {
-              transport_capture.val = collect_tcp_observation()
+              transport_capture.val = collect_tcp_observation(
+                endpoint=endpoint[7:].to_owned(),
+              )
             }),
           )
         }),
@@ -305,7 +314,9 @@ async fn main {
   run_session(
     mode,
     ".tools/moonbit/bin/moonrun.exe",
-    ["_build/wasm/release/build/tools/browser_server/browser_server.wasm"],
+    [
+      "_build/wasm/release/build/tools/browser_server/browser_server.wasm", "--ephemeral",
+    ],
     "node",
     [verifier],
     300000,

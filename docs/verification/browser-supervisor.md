@@ -8,8 +8,11 @@ adapter for either `async` or `headless` verification. The adapter retains direc
 Playwright operations and normal browser shutdown. Application targets remain
 JavaScript and WasmGC, each executed by Chromium.
 
-Server readiness must match `http://127.0.0.1:4173/` followed by a newline within
-10 seconds. A failed readiness check prevents verifier startup. The session has
+The owned server binds an OS-assigned loopback port with `--ephemeral`. Readiness
+must be `http://127.0.0.1:<port>/` followed by a newline within 10 seconds and 64
+bytes, with a nonzero port no greater than 65535. The supervisor passes the actual
+origin through `METONIC_BROWSER_BASE`; adapters never fall back to the demo port.
+A failed readiness check prevents verifier startup. The session has
 a 300-second deadline. Early server exit, nonzero verifier exit and excessive
 output are failures. Each of the four output streams retains a bounded prefix
 of at most 64 KiB rather than accumulating arbitrary process output.
@@ -24,8 +27,8 @@ force options are documented in [Microsoft's taskkill reference](https://learn.m
 
 When verifier stderr reports `ERR_NO_BUFFER_SPACE`, the supervisor makes one
 bounded `netstat -an -p tcp` observation. `result.json.transport_observation`
-records IPv4 TCP state counts and counts involving the loopback test server at
-port 4173. It retains no endpoint strings or raw command output. The helper has
+records IPv4 TCP state counts and counts involving the assigned loopback test
+server endpoint. It retains no endpoint strings or raw command output. The helper has
 a one-second timeout, a 64-KiB limit per output stream and hard cancellation.
 Missing tools, nonzero exit, timeout or overflow produce `status: unavailable`
 without replacing the original verification failure. The value is null when

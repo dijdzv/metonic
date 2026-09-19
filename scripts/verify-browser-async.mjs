@@ -23,7 +23,8 @@ try {
     activePage = page;
     const errors = [];
     page.on('pageerror', (error) => errors.push(String(error)));
-    await page.goto(`http://127.0.0.1:4173/?target=${target}`, { waitUntil: 'load' });
+    if (!/^http:\/\/127\.0\.0\.1:\d{1,5}$/.test(process.env.METONIC_BROWSER_BASE ?? '')) throw new Error('Missing supervised browser endpoint');
+    await page.goto(`${process.env.METONIC_BROWSER_BASE}/?target=${target}`, { waitUntil: 'load' });
     try {
       await page.waitForFunction(() => document.querySelector('#status')?.textContent?.includes('Ready:'), null, { polling: 25, timeout: 10_000 });
     } catch (error) {

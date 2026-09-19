@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/core/encoding/utf8",
   "moonbitlang/async@0.21.2",
   "moonbitlang/async@0.21.2/fs",
   "moonbitlang/async@0.21.2/process",
@@ -30,20 +31,28 @@ async fn verify_server() -> Unit raise Error {
       let proc = @process.spawn(
         group,
         moonrun,
-        [artifact],
+        [artifact, "--ephemeral"],
         stdout~,
         no_console_window=true,
         cancel_handler=@process.hard_cancel(),
       )
       defer proc.cancel()
-      let expected_ready = b"http://127.0.0.1:4173/\n"
       let ready = @async.with_timeout(10000, async fn() {
-        reader.read_exactly(expected_ready.length())
+        let bytes : Array[Byte] = []
+        while bytes.length() < 64 {
+          let byte = reader.read_exactly(1)[0]
+          bytes.push(byte)
+          if byte == b'\n' {
+            break
+          }
+        }
+        @utf8.decode(Bytes::from_array(bytes))
       })
-      if ready != expected_ready {
+      if !ready.has_prefix("http://127.0.0.1:") || !ready.has_suffix("/\n") {
         fail("invalid browser server readiness: " + ready.to_string())
       }
-      let base = "http://127.0.0.1:4173"
+      let address = @socket.Addr::parse(ready[7:ready.length() - 2].to_owned())
+      let base = "http://" + address.to_string()
       let headers : Map[@http.CaseInsensitiveString, String] = Map([])
       headers.set(
         @http.CaseInsensitiveString("Content-Type"),

@@ -1,2 +1,2 @@
 #!/bin/sh
-exec mise run --raw verify:push-recorded
+exec mise run --quiet --raw verify:push-recorded
