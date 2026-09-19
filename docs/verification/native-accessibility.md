@@ -120,8 +120,8 @@ supplementary characters, CRLF and wrapped text. It selects the interior of
 checks rejection of the obsolete range, and continues typing to obtain `AXYB`.
 Selection-only updates retain run IDs; changed text or width creates new IDs.
 Requests retain raw IDs until application so a later tree cannot reuse cached
-offsets from an earlier layout. Forced queue interleavings still need separate
-evidence.
+offsets from an earlier layout. The mailbox, real SDK callback and ordered
+application queue checks below provide separate, bounded shutdown evidence.
 
 Character positions and widths now come from retained shaped-run highlights,
 with explicit selectable-unit alignment. The production probe checks Japanese,
