@@ -7,6 +7,14 @@ launcher starts the server, waits up to ten seconds for readiness, then starts
 the native window with that same server origin. Port 4173 must be available.
 An existing server is not reused or terminated.
 
+The launcher copies the native executable, AccessKit DLL and its license files
+into a private `metonic-demo-runtime` temporary directory before starting it.
+It prints the runtime and source paths, retains the repository working directory
+and removes the copy after the owned session exits. This lets subsequent builds
+replace their output without overwriting a running Windows executable. Cleanup
+failures retain the path in diagnostics; unrelated files are never recursively
+removed. The browser server and browser artifacts are not snapshotted.
+
 Open `http://127.0.0.1:4173/release/` in a WebGPU-capable browser. The packaged
 WasmGC UI excludes the development control adapter. The separate comparison
 page at `/` retains JS and diagnostic controls. The launcher does not start or

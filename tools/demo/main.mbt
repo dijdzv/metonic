@@ -59,10 +59,15 @@ async fn run_session(
 
 ///|
 async fn main {
-  run_session(
-    ".tools/moonbit/bin/moonrun.exe",
-    ["_build/wasm/release/build/tools/browser_server/browser_server.wasm"],
-    ".work/native-host-build/native/release/build/local/native_host/window_app/window_app.exe",
-    [],
+  with_runtime(
+    ".work/native-host-build/native/release/build/local/native_host/window_app",
+    executable => {
+      run_session(
+        ".tools/moonbit/bin/moonrun.exe",
+        ["_build/wasm/release/build/tools/browser_server/browser_server.wasm"],
+        executable,
+        [],
+      )
+    },
   )
 }
