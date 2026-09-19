@@ -8,11 +8,10 @@ import { verify as verifyPixels, runScene, runFailures, runFontFailures, runText
 
 if (process.env.METONIC_BROWSER_SUPERVISED !== '1') throw new Error('Run mise run browser:async/headless')
 
-const host = '127.0.0.1'
-const port = 4173
 const backend = process.env.METONIC_GPU_BACKEND ?? 'default'
 assert(['default', 'swiftshader'].includes(backend), 'METONIC_GPU_BACKEND must be default or swiftshader')
-const baseUrl = `http://${host}:${port}`
+const baseUrl = process.env.METONIC_BROWSER_BASE
+assert(/^http:\/\/127\.0\.0\.1:\d{1,5}$/.test(baseUrl ?? ''), 'Missing supervised browser endpoint')
 const outputDir = path.resolve('.work/browser-headless', backend)
 let activePage
 let gpuSession

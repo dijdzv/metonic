@@ -13,14 +13,20 @@ async fn fail_response(
 
 ///|
 async fn main {
+  let args = @env.args()
+  let port = match args {
+    [_] => "4173"
+    [_, "--ephemeral"] => "0"
+    _ => abort("usage: browser_server [--ephemeral]")
+  }
   let endpoint = @wire.endpoint(@handlers.binding(), error => {
     match error {
       NotFound => "not_found"
     }
   })
-  let server = @http.Server(@socket.Addr::parse("127.0.0.1:4173"))
+  let server = @http.Server(@socket.Addr::parse("127.0.0.1:" + port))
   defer server.close()
-  println("http://127.0.0.1:4173/")
+  println("http://" + server.addr.to_string() + "/")
   server.run_forever(
     async fn(req, body, conn) {
       defer conn.close()

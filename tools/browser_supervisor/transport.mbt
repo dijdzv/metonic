@@ -1,5 +1,5 @@
 ///|
-fn tcp_counts(bytes : Bytes) -> Json {
+fn tcp_counts(bytes : Bytes, endpoint? : String = "127.0.0.1:4173") -> Json {
   let states : Map[String, Int] = Map([])
   let local_states : Map[String, Int] = Map([])
   for line in @utf8.decode_lossy(bytes).split("\n") {
@@ -20,7 +20,7 @@ fn tcp_counts(bytes : Bytes) -> Json {
       continue
     }
     states[state] = states.get(state).unwrap_or(0) + 1
-    if fields[1] == "127.0.0.1:4173" || fields[2] == "127.0.0.1:4173" {
+    if fields[1] == endpoint || fields[2] == endpoint {
       local_states[state] = local_states.get(state).unwrap_or(0) + 1
     }
   }
@@ -29,6 +29,7 @@ fn tcp_counts(bytes : Bytes) -> Json {
 
 ///|
 async fn collect_tcp_observation(
+  endpoint? : String = "127.0.0.1:4173",
   command? : String = "netstat.exe",
   arguments? : Array[String] = ["-an", "-p", "tcp"],
 ) -> Json {
@@ -66,7 +67,7 @@ async fn collect_tcp_observation(
         }
         ignore(reading.wait())
         ignore(reading_errors.wait())
-        tcp_counts(Bytes::from_array(bytes.val))
+        tcp_counts(Bytes::from_array(bytes.val), endpoint~)
       }
     })
     {

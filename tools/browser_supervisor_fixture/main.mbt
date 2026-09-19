@@ -28,6 +28,10 @@ async fn write_stderr(value : String) -> Unit {
 ///|
 fn known_mode(mode : String) -> Bool {
   mode == "server-ready" ||
+  mode == "dynamic-server-ready" ||
+  mode == "dynamic-server-bad" ||
+  mode == "dynamic-server-exit" ||
+  mode == "dynamic-verifier-ok" ||
   mode == "server-bad" ||
   mode == "server-silent" ||
   mode == "server-exit" ||
@@ -47,20 +51,37 @@ async fn main {
     abort("usage: browser_supervisor_fixture.wasm MODE")
   }
   guard known_mode(mode) else { abort("unknown fixture mode") }
+  let dynamic = mode.has_prefix("dynamic-")
+  let mode = if dynamic { mode[8:].to_owned() } else { mode }
+  let ready = if dynamic {
+    "http://127.0.0.1:49152/\n"
+  } else {
+    "http://127.0.0.1:4173/\n"
+  }
 
   if mode == "server-ready" {
-    write_stdout("http://127.0.0.1:4173/\n")
+    write_stdout(ready)
     @async.sleep(300000)
   } else if mode == "server-bad" {
-    write_stdout("http://127.0.0.1:4174/\n")
+    write_stdout(
+      if dynamic {
+        "http://127.0.0.1:0/\n"
+      } else {
+        "http://127.0.0.1:4174/\n"
+      },
+    )
     @async.sleep(300000)
   } else if mode == "server-silent" {
     @async.sleep(300000)
   } else if mode == "server-exit" {
-    write_stdout("http://127.0.0.1:4173/\n")
+    write_stdout(ready)
     @async.sleep(200)
     runtime_exit(7)
   } else if mode == "verifier-ok" {
+    guard !dynamic ||
+      @env.get_env_var("METONIC_BROWSER_BASE") == Some("http://127.0.0.1:49152") else {
+      abort("supervisor did not propagate its server endpoint")
+    }
     write_stdout("FIXTURE_OK\n")
     write_stderr("FIXTURE_DIAGNOSTIC\n")
     runtime_exit(0)

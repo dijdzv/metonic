@@ -31,6 +31,11 @@ fn fixture_wasm() -> String {
 
 ///|
 fn fixture_args(mode : String) -> Array[String] {
+  let mode = match mode {
+    "server-ready" | "server-bad" | "server-exit" | "verifier-ok" =>
+      "dynamic-" + mode
+    _ => mode
+  }
   [fixture_wasm(), mode]
 }
 
@@ -92,7 +97,7 @@ async test "fixture session captures ready server and verifier diagnostics" {
     verifier_capture=verifier,
     verifier_err_capture=verifier_err,
   )
-  assert_true(text(server) == "http://127.0.0.1:4173/\n")
+  assert_true(text(server) == "http://127.0.0.1:49152/\n")
   assert_true(text(verifier).contains("FIXTURE_OK"))
   assert_true(text(verifier_err).contains("FIXTURE_DIAGNOSTIC"))
 }

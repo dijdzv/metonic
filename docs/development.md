@@ -275,7 +275,10 @@ remain in their host adapters.
 `browser:build` also builds the MoonBit development HTTP server in
 `tools/browser_server` for the Wasm runtime. `browser:serve` and browser verifiers
 launch that artifact directly through the pinned `moonrun`. It binds loopback
-port 4173 and serves a fixed asset list with GET/HEAD and `no-store`.
+port 4173 by default and serves a fixed asset list with GET/HEAD and `no-store`.
+Verification passes `--ephemeral` to request an OS-assigned loopback port. The
+server reports the bound URL; the supervisor passes it to browser adapters through
+`METONIC_BROWSER_BASE`. Verification can run while the normal demo remains open.
 POST `/rpc` uses the same bounded `rpc/http_host` handler as the standalone
 RPC server. It exposes only the sample typed user lookup, not arbitrary handlers.
 `browser:package` stages the selected WasmGC UI and a fixed-list ZIP separately
