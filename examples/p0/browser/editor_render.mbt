@@ -209,12 +209,17 @@ pub fn view_field(element : Int, field : Int) -> Int {
 ///|
 #export_name("view_label_unit")
 pub fn view_label_unit(index : Int) -> Int {
-  let text = application.val.view().request.text
+  let text = view_request_label()
   if index < 0 || index >= text.length() {
     -1
   } else {
     text[index].to_int()
   }
+}
+
+///|
+pub fn view_request_label() -> String {
+  application.val.view().request.text
 }
 
 ///|

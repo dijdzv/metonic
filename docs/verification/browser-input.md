@@ -4,8 +4,11 @@ The packaged browser application links `browser_host/app` and the shared
 `examples/p0/browser` state once. MoonBit owns listeners for the main textarea
 and User ID input, including composition, selection, focus and disposal.
 Direct string calls share validation with the numeric control API. The remaining
-JavaScript adapter acquires the GPU adapter/device and coordinates canvas/DOM
-presentation and frame scheduling. MoonBit `scene_gpu.mbt` and `frame_gpu.mbt`
+JavaScript adapter acquires the GPU adapter/device and coordinates canvas
+presentation and frame scheduling. MoonBit `view_dom.mbt` places both input fields
+and the request/task buttons from the shared view, including CSS classes and the
+request label. It uses the existing webapi DOM binding; resize invokes the same
+placement path for development and packaged hosts. MoonBit `scene_gpu.mbt` and `frame_gpu.mbt`
 own scene drawing and frame encoding/submission through generated webapi; the
 [MoonBit text GPU renderer](browser-text-gpu.md) owns text GPU resources and draws. The
 [MoonBit HTTP host](browser-http.md) owns bounded fetch and cancellation.
