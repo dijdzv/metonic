@@ -1,7 +1,49 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { createServer } from 'node:http';
 import { chromium } from 'playwright';
 import { observedPage, observeFailure } from './browser-observation.mjs';
+
+test('failed requests retain response progress before and after headers without bodies', async () => {
+  const server = createServer((request, response) => {
+    if (request.url.startsWith('/before')) {
+      request.socket.destroy();
+    } else {
+      response.writeHead(200, { 'Content-Length': '1000', 'Access-Control-Allow-Origin': '*' });
+      response.write('private-body');
+      response.flushHeaders();
+      setTimeout(() => response.destroy(), 100);
+    }
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  let browser;
+  try {
+    browser = await chromium.launch({ headless: true });
+    const page = await observedPage(browser);
+    for (const phase of ['before', 'after']) {
+      const failed = page.waitForEvent('requestfailed');
+      await page.evaluate(async url => {
+        try { await (await fetch(url)).text(); } catch {}
+      }, `http://127.0.0.1:${server.address().port}/${phase}?token=private-query`);
+      await failed;
+    }
+    await page.close();
+    const result = await observeFailure(page);
+    assert.equal(result.requests.length, 2);
+    const [before, after] = result.requests;
+    assert.equal(before.path, '/before');
+    assert.equal(after.path, '/after');
+    assert.equal(before.timing.responseStart, -1);
+    assert(after.timing.responseStart >= 0);
+    assert.equal(Object.keys(after.timing).length, 8);
+    assert(!JSON.stringify(result).includes('private-query'));
+    assert(!JSON.stringify(result).includes('private-body'));
+  } finally {
+    await browser?.close();
+    server.closeAllConnections();
+    await new Promise(resolve => server.close(resolve));
+  }
+});
 
 test('outstanding requests remain bounded and disappear after completion', async () => {
   const browser = await chromium.launch({ headless: true });

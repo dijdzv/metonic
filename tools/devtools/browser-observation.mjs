@@ -1,5 +1,16 @@
 const failures = new WeakMap();
 
+function requestTiming(request) {
+  try {
+    const timing = request.timing();
+    // Missing phases (-1) also occur with reused connections; they are not a diagnosis.
+    return Object.fromEntries([
+      'domainLookupStart', 'domainLookupEnd', 'connectStart', 'connectEnd',
+      'secureConnectionStart', 'requestStart', 'responseStart', 'responseEnd',
+    ].map(key => [key, Number.isFinite(timing[key]) ? timing[key] : null]));
+  } catch { return null; }
+}
+
 export async function observedPage(browser, options) {
   const page = await browser.newPage(options);
   const errors = [];
@@ -26,7 +37,7 @@ export async function observedPage(browser, options) {
     // Queries and credentials are irrelevant to identifying the failed asset.
     let path = '(invalid URL)';
     try { path = new URL(request.url()).pathname.slice(0, 512); } catch {}
-    requests.push({ path, method: request.method(), error: String(request.failure()?.errorText ?? '').slice(0, 512) });
+    requests.push({ path, method: request.method(), error: String(request.failure()?.errorText ?? '').slice(0, 512), timing: requestTiming(request) });
     if (requests.length > 8) requests.shift();
   });
   page.on('pageerror', error => {

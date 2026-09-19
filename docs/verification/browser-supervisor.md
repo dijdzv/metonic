@@ -25,6 +25,17 @@ force options are documented in [Microsoft's taskkill reference](https://learn.m
 
 ## Reproduction
 
+The Playwright boundary retains the last eight failed asset requests, including
+eight numeric request-relative timing fields for DNS, connection, TLS, request
+and response progress. Query strings, headers and response bodies are omitted.
+Timing is captured at `requestfailed` and survives page closure; an unavailable
+timing query yields null without replacing the original failure. A value of -1
+means the browser did not report that phase, not necessarily that connection
+setup failed: reused connections can also omit connection timings. A reported
+response start distinguishes a response that began from one with no observed
+headers, but does not by itself identify the underlying socket error.
+Headless tests exercise disconnects both before headers and during the body.
+
 When verifier stderr reports `ERR_NO_BUFFER_SPACE`, the supervisor makes one
 bounded `netstat -an -p tcp` observation. `result.json.transport_observation`
 records IPv4 TCP state counts and counts involving the assigned loopback test
