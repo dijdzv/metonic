@@ -1,6 +1,6 @@
 # Library reuse evaluation
 
-Initial evaluation: 2026-09-06; current boundaries reconciled on 2026-09-13.
+Initial evaluation: 2026-09-06; current boundaries reconciled on 2026-09-20.
 This supplements dependency selection; it does not replace the
 architecture or authorize adoption of every candidate. Working implementations
 remain comparison baselines until equivalent requirements pass.
@@ -14,7 +14,8 @@ remain comparison baselines until equivalent requirements pass.
 | `tools/native_surface_probe/window.c` | Isolated device-replacement diagnostic HWND | Ordinary window migrated to `wzzc-dev/window/windows`; diagnostic retained for comparison |
 | `native_host/async_app`, `native_host/windows_loop` | Async jobs, cancellation, completion delivery and UI wakeup | Adopted `moonbitlang/async` structured tasks and external-loop API with the prepared window library; custom C workers replaced after [comparison](native-async.md); context-free C wake thunk retained |
 | `native_gpu`, `examples/p0/native_headless` | Persistent offscreen GPU resources, readback and capture | Adopted `Milky2018/wgpu_mbt@0.16.0`; headless C stub removed, stdio and file writing use MoonBit async |
-| `browser_host/app` | Scene/text GPU resources and frame submission, text-input listeners, HTTP, timers and bounded font download | Adopted generated `bikallem/webapi` bindings for JS/WasmGC; [input](browser-input.md), [HTTP](browser-http.md) and [text GPU](browser-text-gpu.md) records define the verified scope |
+| `browser_host/app/input*.mbt` | Text-input listeners, DOM values, selection, composition, focus and scroll observation | Adopted generated WebSys bindings for JS/WasmGC through the pinned `local/websys-input` module; [input](browser-input.md) records generation, lifetime tests and remaining actual-IME acceptance |
+| Other `browser_host/app` operations | Scene/text GPU resources and frame submission, control placement, HTTP, timers and bounded font download | Retain generated `bikallem/webapi` bindings for JS/WasmGC; [HTTP](browser-http.md) and [text GPU](browser-text-gpu.md) records define the verified scope. Input migration does not imply replacement of these APIs |
 | `examples/p0/browser/host/*.mjs` | Browser startup, adapter/device acquisition, canvas coordination, animation-frame scheduling, module loading and buffer transfer | Remaining JavaScript adapter; GPU drawing, text-input ownership, control placement and font hash validation have moved to MoonBit |
 | `tools/devtools/*.mjs`, `scripts/*` | CLI/MCP transport and development verification | MoonBit orchestration first; external SDK adapters scoped separately |
 | `examples/p0/text_position`, `semantics`, `task_scope` | Position validity, semantic actions and cancellation policy | Framework responsibilities; library presence does not replace these contracts |
@@ -40,7 +41,7 @@ moon_cosmic in the root module. Demonstration hosts remain under `examples/p0`.
 
 ## Remaining project-owned foreign-language files
 
-The tracked-source inventory on 2026-09-13 contains 10 C and 20 `.mjs` files,
+The tracked-source inventory on 2026-09-20 contains 10 C and 20 `.mjs` files,
 with no tracked PowerShell or Rust source. This excludes downloaded dependencies,
 generated bindings/build output, and ignored local experiments. It does not imply
 that every line in the remaining adapters is irreducible.
