@@ -35,6 +35,7 @@ pub struct Observation {
   accessibility_runs : Array[UInt64]
   rendered_text : String?
   preedit_cursor : Int
+  preedit_attributes : Bytes
   composing : Bool
   rejected_updates : Int
   resize : (Int, Int) -> Unit
@@ -106,6 +107,7 @@ fn App::observation(self : App) -> Observation {
     .unwrap_or([]),
     rendered_text: self.rendered_text,
     preedit_cursor: self.preedit_cursor,
+    preedit_attributes: self.preedit_attributes,
     composing: self.composition is Some(_),
     rejected_updates: self.diagnostics.rejected_updates,
     resize: (width, height) => {
@@ -145,7 +147,8 @@ fn App::observation(self : App) -> Observation {
         match action {
           Close => Close
           CompositionStart => CompositionStart
-          CompositionUpdate(text, cursor) => CompositionUpdate(text, cursor)
+          CompositionUpdate(text, cursor) =>
+            CompositionUpdate(text, cursor, b"")
           CompositionCancel => CompositionCancel
           NavigateVertical(down, extend_selection) =>
             NavigateVertical(down, extend_selection)

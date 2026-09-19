@@ -30,6 +30,7 @@ pub fn render(
   width : Int,
   height : Int,
   selection? : (Int, Int) = (0, 0),
+  selection_ranges? : Array[(Int, Int)],
   caret? : Int? = None,
   caret_after? : Bool = false,
   single_line_scroll? : Int? = None,
@@ -70,21 +71,22 @@ pub fn render(
     let scroll_x = single_line_scroll.unwrap_or(0).max(0)
     let pixels : Array[Int] = Array::make(width * height, 255)
     let selected : Array[Bool] = Array::make(width * height, false)
-    let (start, end) = selection
-    if start >= 0 && start < end && end <= text.length() {
-      let first = selection_cursor(text, start)
-      let last = selection_cursor(text, end)
-      for run in buffer.layout_runs() {
-        if run.highlight(first, last) is Some((left, span)) {
-          let x0 = (left.floor().to_int() - scroll_x).max(0)
-          let x1 = ((left + span).ceil().to_int() - scroll_x).min(width)
-          let y0 = (run.line_top.floor().to_int() - scroll_y).max(0)
-          let y1 = ((run.line_top + run.line_height).ceil().to_int() - scroll_y).min(
-            height,
-          )
-          for y in y0..<y1 {
-            for x in x0..<x1 {
-              selected[y * width + x] = true
+    for range in selection_ranges.unwrap_or([selection]) {
+      let (start, end) = range
+      if start >= 0 && start < end && end <= text.length() {
+        let first = selection_cursor(text, start)
+        let last = selection_cursor(text, end)
+        for run in buffer.layout_runs() {
+          if run.highlight(first, last) is Some((left, span)) {
+            let x0 = (left.floor().to_int() - scroll_x).max(0)
+            let x1 = ((left + span).ceil().to_int() - scroll_x).min(width)
+            let y0 = (run.line_top.floor().to_int() - scroll_y).max(0)
+            let y1 = ((run.line_top + run.line_height).ceil().to_int() -
+            scroll_y).min(height)
+            for y in y0..<y1 {
+              for x in x0..<x1 {
+                selected[y * width + x] = true
+              }
             }
           }
         }

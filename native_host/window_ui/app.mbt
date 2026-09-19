@@ -24,7 +24,7 @@ priv enum Event {
   Commit(String)
   Enter
   CompositionStart
-  CompositionUpdate(String, Int?)
+  CompositionUpdate(String, Int?, Bytes)
   CompositionCancel
   CompositionEnd
   Backspace
@@ -54,6 +54,8 @@ struct App {
   ime_pointer : @ime_focus.Transfer
   mut preedit : String
   mut preedit_cursor : Int
+  mut preedit_attributes : Bytes
+  mut rendered_preedit_attributes : Bytes
   mut control_pressed : Bool
   mut shift_pressed : Bool
   mut vertical_goal : (Int, Int, Int, Int?)?
@@ -174,7 +176,19 @@ pub impl @windows.ApplicationHandler for App with fn window_event(
     }
     @core.WindowEvent::Ime(@core.Ime::Enabled) => self.queue(CompositionStart)
     @core.WindowEvent::Ime(@core.Ime::Preedit(value, range)) =>
-      self.queue(CompositionUpdate(value, range.map(cursor => cursor.start())))
+      self.queue(
+        CompositionUpdate(value, range.map(cursor => cursor.start()), b""),
+      )
+    @core.WindowEvent::Ime(
+      @core.Ime::PreeditWithAttributes(value, range, attributes)
+    ) =>
+      self.queue(
+        CompositionUpdate(
+          value,
+          range.map(cursor => cursor.start()),
+          attributes,
+        ),
+      )
     @core.WindowEvent::Ime(@core.Ime::Disabled) => self.queue(CompositionEnd)
     @core.WindowEvent::Ime(@core.Ime::Commit(value)) =>
       if !(value.length() == 1 && value[0].to_int() < 32) {
@@ -244,7 +258,7 @@ fn App::draw(self : App) -> Unit raise Error {
       }
       let text = preview.unwrap_or(node.value)
       let selection = if preview is Some(_) {
-        (node.selection_start, node.selection_start + self.preedit.length())
+        (node.selection_start, node.selection_start)
       } else {
         (node.selection_start, node.selection_end)
       }
@@ -253,6 +267,15 @@ fn App::draw(self : App) -> Unit raise Error {
       } else {
         @semantics.caret(node)
       }
+      let targets = @ime_presentation.target_ranges(
+        self.preedit,
+        self.preedit_attributes,
+      ).map(range => {
+        (
+          range.0 + self.input_node().selection_start,
+          range.1 + self.input_node().selection_start,
+        )
+      })
       let visible_caret = if preview is Some(_) ||
         (node.focused && node.selection_start == node.selection_end) {
         Some(caret)
@@ -268,7 +291,7 @@ fn App::draw(self : App) -> Unit raise Error {
                   query_preview=preview,
                   query_preedit=(
                     self.input_node().selection_start,
-                    self.input_node().selection_start + self.preedit.length(),
+                    self.input_node().selection_start,
                     self.input_node().selection_start + self.preedit_cursor,
                   ),
                 )
@@ -287,7 +310,8 @@ fn App::draw(self : App) -> Unit raise Error {
       } else {
         @semantics.caret(@semantics.snapshot(self.model.editor)[5])
       }
-      if self.rendered_text != Some(text) ||
+      if self.rendered_preedit_attributes != self.preedit_attributes ||
+        self.rendered_text != Some(text) ||
         self.rendered_result != self.model.result ||
         self.rendered_request_focus != view.request.focused ||
         self.rendered_task_status != self.model.task_field(0) ||
@@ -337,6 +361,18 @@ fn App::draw(self : App) -> Unit raise Error {
           view,
           text,
           selection~,
+          selection_ranges?=if preview is Some(_) {
+            Some(targets)
+          } else {
+            None
+          },
+          query_selection_ranges?=if self.composition is Some(composition) &&
+            self.input_node().reference == self.model.query_input &&
+            composition.preview(self.preedit) is Some(_) {
+            Some(targets)
+          } else {
+            None
+          },
           caret=visible_caret,
           caret_after~,
           query_scroll=Some(self.query_scroll),
@@ -353,6 +389,7 @@ fn App::draw(self : App) -> Unit raise Error {
             pixels: layer.pixels,
           }),
         )
+        self.rendered_preedit_attributes = self.preedit_attributes
         self.rendered_request_focus = view.request.focused
         self.rendered_task_status = self.model.task_field(0)
         self.rendered_viewport_height = @scene.field(self.model.scene, 7)
@@ -512,6 +549,8 @@ async fn run_loop(
     ime_pointer: @ime_focus.Transfer::new(),
     preedit: "",
     preedit_cursor: 0,
+    preedit_attributes: b"",
+    rendered_preedit_attributes: b"",
     control_pressed: false,
     shift_pressed: false,
     vertical_goal: None,
@@ -868,9 +907,10 @@ async fn run_loop(
                 )
                 app.preedit = ""
                 app.preedit_cursor = 0
+                app.preedit_attributes = b""
                 app.draw()
               }
-            CompositionUpdate(value, cursor) => {
+            CompositionUpdate(value, cursor, attributes) => {
               if app.composition is None {
                 app.composition = @semantics.begin_composition(
                   app.model.editor,
@@ -883,6 +923,7 @@ async fn run_loop(
                 }
               }
               app.preedit = value
+              app.preedit_attributes = attributes
               app.preedit_cursor = cursor
                 .unwrap_or(value.length())
                 .max(0)
@@ -896,6 +937,7 @@ async fn run_loop(
               }
               app.composition = None
               app.preedit = ""
+              app.preedit_attributes = b""
               app.draw()
             }
             CompositionEnd => {
@@ -904,6 +946,7 @@ async fn run_loop(
               }
               app.composition = None
               app.preedit = ""
+              app.preedit_attributes = b""
               let pointer = app.ime_pointer.finish()
               app.draw()
               if pointer is Some((x, y, extend_selection)) {
@@ -914,6 +957,7 @@ async fn run_loop(
               ignore(composition.commit(value))
               app.composition = None
               app.preedit = ""
+              app.preedit_attributes = b""
               app.draw()
             }
             // Space also arrives as text after scene activation; it must not

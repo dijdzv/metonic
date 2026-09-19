@@ -9,6 +9,7 @@ fn button_layer(
   engine : @raster.Engine,
   item : @application.Element,
   selection? : (Int, Int) = (0, 0),
+  selection_ranges? : Array[(Int, Int)],
   caret? : Int? = None,
   single_line_scroll? : Int? = None,
 ) -> Layer {
@@ -21,6 +22,7 @@ fn button_layer(
     label_width,
     32,
     selection~,
+    selection_ranges?,
     caret~,
     single_line_scroll~,
   )
@@ -52,6 +54,8 @@ pub fn render(
   view : @application.View,
   text : String,
   selection? : (Int, Int) = (0, 0),
+  selection_ranges? : Array[(Int, Int)],
+  query_selection_ranges? : Array[(Int, Int)],
   caret? : Int? = None,
   caret_after? : Bool = false,
   query_scroll? : Int? = None,
@@ -63,6 +67,7 @@ pub fn render(
     engine,
     view.query,
     selection=view.query_selection,
+    selection_ranges?=query_selection_ranges,
     caret=view.query_caret,
     single_line_scroll=query_scroll,
   )
@@ -93,6 +98,7 @@ pub fn render(
     editor.width,
     editor.height,
     selection~,
+    selection_ranges?,
     caret~,
     caret_after~,
     vertical_scroll=editor_scroll,
