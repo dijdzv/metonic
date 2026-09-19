@@ -64,6 +64,11 @@ fn input_scroll(value : @input_dom.HTMLInputElement) -> Int {
 }
 
 ///|
+fn editor_scroll(value : @input_dom.HTMLTextAreaElement) -> Int {
+  value.to_element().get_scroll_top().to_int()
+}
+
+///|
 fn input_document_target() -> @input_dom.EventTarget {
   input_document().to_event_target()
 }
