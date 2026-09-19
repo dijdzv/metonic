@@ -1,7 +1,8 @@
 # Native IME diagnostics
 
 The development window snapshot exposes two bounded histories. They help diagnose
-conversion behavior without changing the editor's cursor policy. Neither history
+conversion behavior while preserving the supplied cursor separately from its
+attribute-dependent display position. Neither history
 adds entered strings; the ordinary snapshot still contains editor text and preedit.
 
 | Field | Meaning |
