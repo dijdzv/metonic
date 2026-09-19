@@ -63,7 +63,9 @@ Both hosts keep User ID on one line and scroll horizontally to its active caret
 or selection end. Spaces remain part of the value sent to the HTTP adapter.
 Native and browser HTTP results use a dedicated row below the GPU editor, so multiline editor
 contents do not push the result out of its viewport. The editor itself remains
-a fixed-height viewport without scrolling.
+a fixed-height viewport. Native follows the active caret or composition vertically.
+This does not establish browser/native scrolling parity. See
+[text positions](text-positions.md) for the editing coordinate contract.
 Both hosts render the delayed-update controls and task status through the shared
 GPU view. The demo delay is one second. Cancel applies to the active delayed update
 or HTTP request; completion and cancellation preserve editor contents.
