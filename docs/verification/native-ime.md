@@ -42,9 +42,17 @@ alongside the text and cursor before queuing the application event. MoonBit
 interprets the UTF-16 attribute array and paints only target-converted or
 target-not-converted ranges. Ordinary preedit is not painted as a selection.
 Missing or mismatched attributes produce no target highlight; target boundaries
-inside surrogate pairs are rejected. The composition cursor remains independent,
-including a valid zero or interior position. This does not establish that every
-IME must display its caret at the end during conversion.
+inside surrogate pairs are rejected. The supplied composition cursor remains
+independent, including a valid zero or interior position. For display, a cursor
+adjacent to an `ATTR_INPUT` code unit keeps that position; otherwise valid
+conversion metadata places it at the preedit end. Missing, mismatched, unknown
+or surrogate-splitting attributes retain the supplied valid position. Invalid
+UTF-16 cursor positions fall back to the end. Both fields use this display
+position for rendering, scrolling and the requested IME anchor.
+
+The native probe checks converted-caret placement and attribute-only restoration
+in both fields, retaining the raw cursor. These controlled updates do not replace
+actual Windows IME Space/Tab and multi-clause acceptance.
 
 The additional C code is limited to IMM access and owned event-data copying;
 range interpretation and rendering stay in MoonBit. The inspected upstream

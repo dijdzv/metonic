@@ -216,6 +216,43 @@ async fn QueryScenario::step(
         "query target highlight remained",
       )
       require(view.preedit_cursor == 0, "query zero cursor was forced to end")
+      self.stage = 103
+      (view.inject)(
+        @ui.Injected::CompositionAttributes(
+          "日本語",
+          Some(0),
+          b"\x01\x01\x02",
+        ),
+      )
+    }
+    103 if view.preedit_attributes == b"\x01\x01\x02" => {
+      require(
+        view.preedit_cursor == 0,
+        "query conversion rewrote the IME cursor",
+      )
+      require(
+        view.rendered_query_caret == Some(3),
+        "query conversion caret is not at the end",
+      )
+      require(
+        view.query_caret_position is Some((x, 0)) &&
+        view.ime_position == Some((232 + x - view.query_scroll, 106)),
+        "converted query candidate anchor differs from display caret",
+      )
+      self.stage = 104
+      (view.inject)(
+        @ui.Injected::CompositionAttributes(
+          "日本語",
+          Some(0),
+          b"\x00\x00\x00",
+        ),
+      )
+    }
+    104 if view.preedit_attributes == b"\x00\x00\x00" => {
+      require(
+        view.rendered_query_caret == Some(0),
+        "query input cursor did not return after attribute-only update",
+      )
       self.stage = 11
       (view.inject)(@ui.Injected::CompositionCancel)
     }

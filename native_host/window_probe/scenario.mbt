@@ -506,6 +506,28 @@ async fn Scenario::step(self : Scenario, view : @ui.Observation) -> Unit {
       "cleared attributes retained highlight",
     )
     require(view.preedit_cursor == 0, "valid zero cursor was forced to the end")
+    self.stage = 3021
+    (view.inject)(
+      @ui.Injected::CompositionAttributes("日本語", Some(0), b"\x01\x01\x02"),
+    )
+  } else if self.stage == 3021 && view.preedit_attributes == b"\x01\x01\x02" {
+    require(
+      view.preedit_cursor == 0,
+      "editor conversion rewrote the IME cursor",
+    )
+    require(
+      view.rendered_editor_caret == Some(view.editor.selection_start + 3),
+      "editor conversion caret is not at the end",
+    )
+    self.stage = 3022
+    (view.inject)(
+      @ui.Injected::CompositionAttributes("日本語", Some(0), b"\x00\x00\x00"),
+    )
+  } else if self.stage == 3022 && view.preedit_attributes == b"\x00\x00\x00" {
+    require(
+      view.rendered_editor_caret == Some(view.editor.selection_start),
+      "editor input cursor did not return after attribute-only update",
+    )
     self.boundary_events = view.ime_dropped +
       view.ime_events.length().to_int64()
     for mode in [3, 4, 5, 2] {

@@ -180,6 +180,15 @@ fn Hooks::processed(_self : Hooks, event : Event, app : App) -> Unit {
       Some(value) => value.to_json()
       None => Json::null()
     },
+    "display_cursor": if app.composition is Some(_) {
+      @ime_presentation.display_cursor(
+        app.preedit,
+        app.preedit_cursor,
+        app.preedit_attributes,
+      ).to_json()
+    } else {
+      Json::null()
+    },
     "selection_start": node.selection_start,
     "selection_end": node.selection_end,
     "composing": app.composition is Some(_),
