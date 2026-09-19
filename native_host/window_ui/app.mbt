@@ -39,7 +39,7 @@ priv enum Event {
   SelectBoundary(Int, Bool)
   Navigate(Bool, Bool)
   NavigateVertical(Bool, Bool)
-  ToggleFocus
+  ToggleFocus(Bool)
   TextPointer(Int, Int, Bool)
   Close
 }
@@ -203,7 +203,8 @@ pub impl @windows.ApplicationHandler for App with fn window_event(
             self.queue(SelectBoundary(1, self.shift_pressed))
           @core.Key::Named(@core.NamedKey::End) =>
             self.queue(SelectBoundary(2, self.shift_pressed))
-          @core.Key::Named(@core.NamedKey::Tab) => self.queue(ToggleFocus)
+          @core.Key::Named(@core.NamedKey::Tab) =>
+            self.queue(ToggleFocus(self.shift_pressed))
           @core.Key::Named(@core.NamedKey::F5) => self.queue(StartUpdate)
           @core.Key::Named(@core.NamedKey::F7) =>
             self.queue(LoadUser(self.model.query()))
@@ -653,7 +654,7 @@ async fn run_loop(
             Navigate(_, _)
             | SelectBoundary(_, _)
             | TextPointer(_, _, _)
-            | ToggleFocus
+            | ToggleFocus(_)
             | Commit(_)
             | Backspace
             | Delete
@@ -675,7 +676,7 @@ async fn run_loop(
             _ => event
           }
           match event {
-            ToggleFocus
+            ToggleFocus(_)
             | Navigate(_, _)
             | NavigateVertical(_, _)
             | SelectBoundary(_, _)
@@ -765,23 +766,9 @@ async fn run_loop(
             SelectBoundary(_, _)
             | Navigate(_, _)
             | NavigateVertical(_, _)
-            | ToggleFocus if app.composition is Some(_) => ()
-            ToggleFocus => {
-              let nodes = @semantics.snapshot(app.model.editor)
-              let target = if nodes[1].focused {
-                nodes[0]
-              } else if nodes[0].focused {
-                nodes[2]
-              } else if nodes[2].focused {
-                nodes[3]
-              } else if nodes[3].focused {
-                nodes[4]
-              } else if nodes[4].focused {
-                nodes[5]
-              } else {
-                nodes[1]
-              }
-              ignore(@semantics.focus(app.model.editor, target.reference))
+            | ToggleFocus(_) if app.composition is Some(_) => ()
+            ToggleFocus(reverse) => {
+              move_focus(app.model, reverse)
               app.draw()
             }
             Navigate(_, _) | NavigateVertical(_, _) | SelectBoundary(_, _) if app.model.control_focused() =>
