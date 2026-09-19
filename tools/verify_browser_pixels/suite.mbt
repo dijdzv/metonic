@@ -12,7 +12,7 @@ async fn run_suite(host : BrowserHost, metadata : String) -> String {
     string_field(diagnostics, "text") ==
     "PASS input_diagnostics capacity stop restart composition" &&
     int_field(diagnostics, "errors") == 0,
-    "input diagnostics failed",
+    "input diagnostics failed: " + diagnostics.stringify(),
   )
   results.push(diagnostics)
   for target in ["js", "wasm-gc"] {
