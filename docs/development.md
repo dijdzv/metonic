@@ -831,6 +831,15 @@ that development tooling was excluded from a production binary.
 
 ## Work and release flow
 
+The installed pre-commit and pre-push hooks show one final success result, or the
+failed check and its diagnostic output. Full combined output remains under
+`.work/hook-logs/<lane>-<run>/output.log`; each result prints its log path. Failure
+display is limited to the final 80 lines and 12,000 characters of the selected
+check, read from at most the final 64 KiB of the log. Truncation is explicit.
+Failures outside a check retain a bounded infrastructure diagnostic. Exit codes,
+push-ref stdin, verification selection and input recording are unchanged.
+Direct low-level verification commands retain verbose output for diagnosis.
+
 Git hooks prefer headless execution. Native window protocol and shutdown checks
 create hidden HWNDs to exercise the real message loop; the close verifier rejects
 a visible window in these checks. Headless GPU checks use offscreen images.

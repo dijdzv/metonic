@@ -87,11 +87,11 @@ run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/pre-commit.mbtx -- --push'
 
 [tasks."verify:commit-recorded"]
 description = "Record staged commit verification with before/after input discovery"
-run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/record-commit-verification.mbtx'
+run = '.\\.tools\\moonbit\\bin\\moon.exe run --quiet tools/hook_output --target wasm -- commit'
 
 [tasks."verify:push-recorded"]
 description = "Verify supplied push refs using freshly discovered commit records"
-run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-push-recorded.mbtx'
+run = '.\\.tools\\moonbit\\bin\\moon.exe run --quiet tools/hook_output --target wasm -- push'
 
 [tasks."hooks:install"]
 description = "Install the paired mise-driven pre-commit and pre-push hooks"
