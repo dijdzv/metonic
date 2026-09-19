@@ -16,7 +16,7 @@ delivery of a real conversion result. The test then posts the no-GCS message,
 checking cancellation and restored text geometry.
 It then posts a new `WM_IME_STARTCOMPOSITION`, supplies a synthetic preedit,
 and verifies its display and cursor without changing committed text. Posting
-`WM_IME_ENDCOMPOSITION` restores the original selection and text geometry,
+`WM_IME_ENDCOMPOSITION` removes preedit and restores committed-text geometry,
 after which ordinary Japanese/supplementary-character editing continues.
 The same test times out with the pre-correction dependency and passes with the
 correction. This is OS-message-path coverage, not physical IME acceptance or
@@ -37,6 +37,21 @@ ImmSetCompositionWindow. Preparation applies the patch to pristine sources; do
 not edit `.work/native-deps/sources`. The upstream-compatible working copy has
 not been submitted upstream.
 
+`patches/window-ime-attributes.patch` captures the Windows composition attributes
+alongside the text and cursor before queuing the application event. MoonBit
+interprets the UTF-16 attribute array and paints only target-converted or
+target-not-converted ranges. Ordinary preedit is not painted as a selection.
+Missing or mismatched attributes produce no target highlight; target boundaries
+inside surrogate pairs are rejected. The composition cursor remains independent,
+including a valid zero or interior position. This does not establish that every
+IME must display its caret at the end during conversion.
+
+The additional C code is limited to IMM access and owned event-data copying;
+range interpretation and rendering stay in MoonBit. The inspected upstream
+window implementation lacks this attribute boundary, so a dependency update alone
+does not replace the patch. Upstream proposal status and current investigation
+belong to Issue #205.
+
 ## Automated evidence
 
 - Shared semantic tests cover preedit isolation, one-time commit, cancellation,
@@ -48,6 +63,12 @@ not been submitted upstream.
   identifiers. This verifies invalidation rather than reusing stale geometry.
 - These tests do not drive a Japanese IME. Builds and cached candidate coordinates
   do not prove that an OS candidate window appears at the requested position.
+- The native window probe passes controlled text/cursor/attribute packets through
+  the C-to-MoonBit event boundary for both fields. Captured pixels must gain and
+  lose target highlighting without changing the supplied cursor. Truncated and
+  inconsistent packets must not reach the application; incomplete attribute arrays
+  must not create a highlight. Cancellation clears the retained attributes. The
+  fixture is excluded from ordinary development and production builds.
 
 ## Real input procedure
 

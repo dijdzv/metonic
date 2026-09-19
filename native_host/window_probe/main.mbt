@@ -3,10 +3,12 @@ async fn main {
   let mode = @env.get_env_var("METONIC_WINDOW_INIT_TEST").unwrap_or("normal")
   if mode == "display-disconnect" {
     let reads = Ref(0U)
-    @control.run(display_feedback=Some(_ => {
-      reads.val += 1U
-      @gpu.DisplayObservation::Sample(reads.val, 0U, 0L, 0U, 0U)
-    }))
+    @control.run(
+      display_feedback=Some(_ => {
+        reads.val += 1U
+        @gpu.DisplayObservation::Sample(reads.val, 0U, 0L, 0U, 0U)
+      }),
+    )
     return
   }
   if mode == "display-wait" {
@@ -15,9 +17,13 @@ async fn main {
     @ui.run(
       display_feedback=Some(_ => {
         reads.val += 1U
-        injected.val.unwrap_or(@gpu.DisplayObservation::Sample(reads.val, 0U, 0L, 0U, 0U))
+        injected.val.unwrap_or(
+          @gpu.DisplayObservation::Sample(reads.val, 0U, 0L, 0U, 0U),
+        )
       }),
-      controller=Some(handle => display_wait_observation(handle, reads, injected)),
+      controller=Some(handle => {
+        display_wait_observation(handle, reads, injected)
+      }),
       hidden=true,
     )
     return
@@ -66,6 +72,7 @@ async fn main {
     canceled_id: 0,
     scene_revision: 0,
     precomposition_run: 0UL,
+    boundary_events: 0L,
   }
   @ui.run(
     observer=Some(view => scenario.step(view)),

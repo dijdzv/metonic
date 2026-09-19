@@ -6,7 +6,7 @@ adds entered strings; the ordinary snapshot still contains editor text and preed
 
 | Field | Meaning |
 | --- | --- |
-| `ime_events` | Latest 128 processed composition events: sequence, tick, field, UTF-16 length, supplied/applied cursor and selection |
+| `ime_events` | Latest 128 processed composition events: sequence, tick, field, UTF-16 length, supplied/applied cursor, selection and target metadata |
 | `ime_dropped` | Number of older processed events discarded |
 | `raw_ime_events` | Latest 128 Windows IME messages: sequence, tick, message, flags, cursor query status and signed result |
 | `raw_ime_dropped` | Number of older Windows messages discarded |
@@ -22,6 +22,12 @@ not cursor zero. Negative API returns are preserved before the window library
 maps the position to an optional cursor. The processed history separately shows
 the application's fallback/clamping. A valid zero must not be replaced with the
 preedit end merely because the displayed caret is unexpected.
+
+Processed records include `attribute_count`, `target_count`, and `first_target`
+(a half-open UTF-16 range, or null). These are bounded metadata rather than a copy
+of the attribute buffer. They distinguish an ordinary preedit cursor from the
+first active conversion target; they do not describe all clauses when multiple
+targets exist. Start, commit and cancellation clear the corresponding attributes.
 
 ## Build boundary
 

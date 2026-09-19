@@ -196,10 +196,34 @@ async fn QueryScenario::step(
         view.ime_position == Some((232 + x - view.query_scroll, 106)),
         "preedit IME position differs from scrolled caret",
       )
+      self.stage = 101
+      require(
+        attributes_probe(view.hwnd, 0) == 1,
+        "query attribute fixture failed",
+      )
+    }
+    101 if view.preedit_attributes == b"\x00\x01\x01" => {
+      let pixels = (view.capture)()
+      require(query_has_highlight(view, pixels), "query target was not painted")
+      require(view.preedit_cursor == 1, "query target changed cursor")
+      self.stage = 102
+      require(attributes_probe(view.hwnd, 1) == 1, "query clear fixture failed")
+    }
+    102 if view.preedit_attributes == b"\x00\x00\x00" => {
+      let pixels = (view.capture)()
+      require(
+        !query_has_highlight(view, pixels),
+        "query target highlight remained",
+      )
+      require(view.preedit_cursor == 0, "query zero cursor was forced to end")
       self.stage = 11
       (view.inject)(@ui.Injected::CompositionCancel)
     }
     11 if !view.composing => {
+      require(
+        view.preedit_attributes == b"",
+        "cancel retained query attributes",
+      )
       require(
         view.query.value == "" && view.query_scroll == 0,
         "cancel did not restore query viewport",
@@ -228,4 +252,18 @@ async fn QueryScenario::step(
     }
     _ => ()
   }
+}
+
+///|
+fn query_has_highlight(view : @ui.Observation, pixels : Bytes) -> Bool {
+  let width = (view.scene)(6)
+  for y in 106..<134 {
+    for x in 232..<(width - 16).min(632) {
+      let i = (y * width + x) * 4
+      if pixels[i].to_int() + 5 < pixels[i + 2].to_int() {
+        return true
+      }
+    }
+  }
+  false
 }

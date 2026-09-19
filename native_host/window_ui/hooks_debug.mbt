@@ -131,7 +131,7 @@ fn Hooks::processed(_self : Hooks, event : Event, app : App) -> Unit {
   app.diagnostics.changed.broadcast()
   let (kind, supplied, length) : (String, Int?, Int) = match event {
     CompositionStart => ("start", None, 0)
-    CompositionUpdate(value, cursor) => ("update", cursor, value.length())
+    CompositionUpdate(value, cursor, _) => ("update", cursor, value.length())
     CompositionCancel => ("cancel", None, 0)
     Commit(value) => ("commit", None, value.length())
     _ => return
@@ -152,6 +152,10 @@ fn Hooks::processed(_self : Hooks, event : Event, app : App) -> Unit {
   } else {
     None
   }
+  let targets = @ime_presentation.target_ranges(
+    app.preedit,
+    app.preedit_attributes,
+  )
   diagnostics.ime_events.push({
     "sequence": diagnostics.ime_sequence,
     "tick_ms": native_tick_count(),
@@ -162,6 +166,12 @@ fn Hooks::processed(_self : Hooks, event : Event, app : App) -> Unit {
       "editor"
     },
     "utf16_length": length,
+    "attribute_count": app.preedit_attributes.length(),
+    "target_count": targets.length(),
+    "first_target": match targets.get(0) {
+      Some((start, end)) => Json::array([start.to_json(), end.to_json()])
+      None => Json::null()
+    },
     "supplied_cursor": match supplied {
       Some(value) => value.to_json()
       None => Json::null()

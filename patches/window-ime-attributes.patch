@@ -1,0 +1,155 @@
+diff --git a/modules/window/windows/native_window.c b/modules/window/windows/native_window.c
+index 72d3c26..31195b4 100644
+--- a/modules/window/windows/native_window.c
++++ b/modules/window/windows/native_window.c
+@@ -292,6 +292,73 @@ static char *mbw_copy_ime_string_utf8(HWND hwnd, DWORD kind, int32_t *out_len, i
+   return utf8;
+ }
+ 
++static int32_t mbw_queue_preedit_packet(MBWWindowState *state,
++                                       const char *text, int32_t text_len,
++                                       int32_t cursor,
++                                       const unsigned char *attributes,
++                                       int32_t attribute_len) {
++  if (text_len < 0 || attribute_len < 0 || attribute_len > INT32_MAX - 12 ||
++      text_len > INT32_MAX - 12 - attribute_len) return 0;
++  int32_t size = 12 + text_len + attribute_len;
++  unsigned char *packet = (unsigned char *)malloc((size_t)size);
++  if (!packet) return 0;
++  int32_t header[3] = {text_len, cursor, attribute_len};
++  memcpy(packet, header, 12);
++  if (text_len > 0) memcpy(packet + 12, text, (size_t)text_len);
++  if (attribute_len > 0) memcpy(packet + 12 + text_len, attributes, (size_t)attribute_len);
++  g_input_event_trampoline(g_input_event_closure, state->raw_id, 39,
++                          (uint64_t)(uintptr_t)packet, size);
++  return 1;
++}
++
++static void mbw_queue_preedit_attributes(HWND hwnd, MBWWindowState *state,
++                                         char *text, int32_t text_len,
++                                         int32_t cursor) {
++  unsigned char *attributes = NULL;
++  int32_t attribute_len = 0;
++  HIMC context = g_imm_get_context(hwnd);
++  if (context) {
++    LONG length = g_imm_get_composition_string(context, GCS_COMPATTR, NULL, 0);
++    if (length > 0 && length <= INT32_MAX - 12 - text_len) {
++      attributes = (unsigned char *)malloc((size_t)length);
++      if (attributes) {
++        LONG copied = g_imm_get_composition_string(context, GCS_COMPATTR, attributes, (DWORD)length);
++        if (copied > 0 && copied <= length) attribute_len = copied;
++      }
++    }
++    g_imm_release_context(hwnd, context);
++  }
++  mbw_queue_preedit_packet(state, text, text_len, cursor, attributes, attribute_len);
++  free(attributes);
++  free(text);
++}
++
++#ifdef METONIC_IME_TRACE_TEST
++int32_t mbw_ime_attributes_probe(uint64_t raw_hwnd, int32_t mode) {
++  MBWWindowState *state = mbw_window_state((HWND)(uintptr_t)raw_hwnd);
++  if (!state || !g_input_event_trampoline || !g_input_event_closure) return 0;
++  if (mode >= 3 && mode <= 5) {
++    int32_t *packet = (int32_t *)malloc(12);
++    if (!packet) return 0;
++    packet[0] = mode == 3 ? -1 : 0;
++    packet[1] = 0;
++    packet[2] = mode == 4 ? 1 : 0;
++    g_input_event_trampoline(g_input_event_closure, state->raw_id, 39,
++                            (uint64_t)(uintptr_t)packet, mode == 5 ? 8 : 12);
++    return 1;
++  }
++  const unsigned char selected[3] = {0, 1, 1};
++  const unsigned char cleared[3] = {0, 0, 0};
++  int32_t len = 0;
++  char *text = mbw_wide_to_utf8_alloc(L"\x306b\x307b\x3093", 3, &len);
++  if (!text) return 0;
++  int32_t result = mbw_queue_preedit_packet(state, text, len, mode == 0 ? 1 : 0,
++      mode == 0 ? selected : cleared, mode == 2 ? 1 : 3);
++  free(text);
++  return result;
++}
++#endif
++
+ static void mbw_queue_ime_text(HWND hwnd, MBWWindowState *state, int32_t kind,
+                                DWORD composition_kind) {
+   if (!g_input_event_trampoline || !g_input_event_closure) {
+@@ -308,8 +375,8 @@ static void mbw_queue_ime_text(HWND hwnd, MBWWindowState *state, int32_t kind,
+   }
+   uint64_t payload = (uint32_t)text_len;
+   if (composition_kind == GCS_COMPSTR) {
+-    kind = 38;
+-    payload |= (uint64_t)((uint32_t)cursor + 1u) << 32;
++    mbw_queue_preedit_attributes(hwnd, state, text, text_len, cursor);
++    return;
+   }
+   g_input_event_trampoline(g_input_event_closure, state->raw_id, kind,
+                            (uint64_t)(uintptr_t)text, (int64_t)payload);
+@@ -578,7 +645,7 @@ static LRESULT CALLBACK mbw_wnd_proc(HWND hwnd, UINT msg, WPARAM wparam,
+       if ((lparam & GCS_RESULTSTR) != 0) {
+         mbw_queue_ime_text(hwnd, state, 37, GCS_RESULTSTR);
+       }
+-      if ((lparam & (GCS_COMPSTR | GCS_CURSORPOS)) != 0) {
++      if ((lparam & (GCS_COMPSTR | GCS_CURSORPOS | GCS_COMPATTR | GCS_COMPCLAUSE)) != 0) {
+         mbw_queue_ime_text(hwnd, state, 36, GCS_COMPSTR);
+       }
+       return 0;
+diff --git a/modules/window/windows/event.mbt b/modules/window/windows/event.mbt
+index d913639..9c8465d 100644
+--- a/modules/window/windows/event.mbt
++++ b/modules/window/windows/event.mbt
+@@ -1,3 +1,24 @@
++///|
++fn ime_packet_int(bytes : Bytes, offset : Int) -> Int {
++  bytes[offset].to_int() | (bytes[offset + 1].to_int() << 8) |
++  (bytes[offset + 2].to_int() << 16) | (bytes[offset + 3].to_int() << 24)
++}
++
++///|
++fn ime_attribute_packet(bytes : Bytes) -> @core.Ime? {
++  if bytes.length() < 12 { return None }
++  let size = ime_packet_int(bytes, 0)
++  let cursor = ime_packet_int(bytes, 4)
++  let count = ime_packet_int(bytes, 8)
++  if size < 0 || count < 0 || size > bytes.length() - 12 ||
++    count != bytes.length() - 12 - size { return None }
++  let text = @utf8.decode_lossy(bytes[12:12 + size], ignore_bom=false)
++  let range = if cursor >= 0 && cursor <= text.length() {
++    Some(@core.ImeCursorRange(cursor, cursor))
++  } else { None }
++  Some(@core.Ime::PreeditWithAttributes(text, range, bytes[12 + size:].to_owned()))
++}
++
+ ///|
+ fn dispatch_native_window_event(
+   kind : Int,
+@@ -209,6 +230,15 @@ fn dispatch_native_input_event(
+   wparam : UInt64,
+   lparam : Int64,
+ ) -> Unit {
++  if kind == 39 {
++    let packet = native_consume_utf8_text(wparam, lparam.to_int())
++    if raw_id > 0 && app_state_window_handle(raw_id) is Some(_) {
++      if ime_attribute_packet(packet) is Some(event) {
++        app_state_queue_window_event(raw_id, Ime(event))
++      }
++    }
++    return
++  }
+   if raw_id <= 0 || app_state_window_handle(raw_id) is None {
+     return
+   }
+diff --git a/modules/window/core/event.mbt b/modules/window/core/event.mbt
+index a75d34d..b89a821 100644
+--- a/modules/window/core/event.mbt
++++ b/modules/window/core/event.mbt
+@@ -512,6 +512,7 @@ pub fn ImeCursorRange::end(self : ImeCursorRange) -> Int {
+ pub(all) enum Ime {
+   Enabled
+   Preedit(String, ImeCursorRange?)
++  PreeditWithAttributes(String, ImeCursorRange?, Bytes)
+   Commit(String)
+   DeleteSurrounding(Int, Int)
+   Disabled

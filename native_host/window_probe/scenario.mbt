@@ -7,6 +7,7 @@ struct Scenario {
   mut canceled_id : Int
   mut scene_revision : Int
   mut precomposition_run : UInt64
+  mut boundary_events : Int64
 }
 
 ///|
@@ -19,6 +20,9 @@ extern "C" fn post_message(
 
 ///|
 extern "C" fn trace_probe_cursor(hwnd : UInt64, cursor : Int) -> Int = "mbw_ime_trace_probe_cursor"
+
+///|
+extern "C" fn attributes_probe(hwnd : UInt64, mode : Int) -> Int = "mbw_ime_attributes_probe"
 
 ///|
 fn require(ok : Bool, message : String) -> Unit raise Error {
@@ -473,6 +477,55 @@ async fn Scenario::step(self : Scenario, view : @ui.Observation) -> Unit {
       view.accessibility_runs.is_empty(),
       "preedit retained stale committed geometry",
     )
+    let pixels = (view.capture)()
+    require(
+      !editor_has_highlight(view, pixels),
+      "ordinary preedit was highlighted",
+    )
+    self.stage = 301
+    require(
+      attributes_probe(view.hwnd, 0) == 1,
+      "attribute boundary fixture failed",
+    )
+  } else if self.stage == 301 && view.preedit_attributes == b"\x00\x01\x01" {
+    let pixels = (view.capture)()
+    require(
+      editor_has_highlight(view, pixels),
+      "attribute-only update was not painted",
+    )
+    require(view.preedit_cursor == 1, "target highlighting moved the cursor")
+    self.stage = 302
+    require(
+      attributes_probe(view.hwnd, 1) == 1,
+      "clear attribute fixture failed",
+    )
+  } else if self.stage == 302 && view.preedit_attributes == b"\x00\x00\x00" {
+    let pixels = (view.capture)()
+    require(
+      !editor_has_highlight(view, pixels),
+      "cleared attributes retained highlight",
+    )
+    require(view.preedit_cursor == 0, "valid zero cursor was forced to the end")
+    self.boundary_events = view.ime_dropped +
+      view.ime_events.length().to_int64()
+    for mode in [3, 4, 5, 2] {
+      require(
+        attributes_probe(view.hwnd, mode) == 1,
+        "malformed attribute fixture failed",
+      )
+    }
+    self.stage = 303
+  } else if self.stage == 303 && view.preedit_attributes.length() == 1 {
+    require(
+      view.ime_dropped + view.ime_events.length().to_int64() ==
+      self.boundary_events + 1L,
+      "malformed packet reached the application",
+    )
+    let pixels = (view.capture)()
+    require(
+      !editor_has_highlight(view, pixels),
+      "incomplete attribute array was painted",
+    )
     self.stage = 32
     (view.inject)(AccessibilityValue("must not replace composition"))
     post(view.hwnd, 0x0100U, 0x0DUL, 0L)
@@ -663,6 +716,20 @@ async fn Scenario::step(self : Scenario, view : @ui.Observation) -> Unit {
     (view.inject)(AccessibilityValue("after close"))
     (view.inject)(Updated((view.task)(1), 0))
   }
+}
+
+///|
+fn editor_has_highlight(view : @ui.Observation, pixels : Bytes) -> Bool {
+  let width = (view.scene)(6)
+  for y in 8..<104 {
+    for x in 8..<100 {
+      let i = (y * width + x) * 4
+      if pixels[i].to_int() + 5 < pixels[i + 2].to_int() {
+        return true
+      }
+    }
+  }
+  false
 }
 
 ///|

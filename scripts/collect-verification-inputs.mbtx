@@ -37,7 +37,7 @@ async fn main {
     path in [
       ".tools/moonbit/bin", ".tools/moonbit/lib", ".tools/moonbit/include", ".tools/moonbit/cache/deps/v1/sources",
       ".mooncakes", "native_host/.mooncakes", "browser_host/.mooncakes", ".work/browser-gpu/generated",
-      ".work/websys-input/generated", ".work/wgpu-assets", ".work/text-assets", ".work/native-deps/sources/window-ime-observed",
+      ".work/websys-input/generated", ".work/wgpu-assets", ".work/text-assets", ".work/native-deps/sources/window-ime-presentation",
       ".work/native-deps/sources/async-local-control", ".work/native-deps/sources/cosmic-wrap-affinity",
       ".work/accesskit-assets/accesskit-c-0.22.3/include", ".work/accesskit-assets/accesskit-c-0.22.3/lib/windows/x86_64/msvc/shared",
     ] {
