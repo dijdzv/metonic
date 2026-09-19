@@ -26,6 +26,11 @@ async fn main {
     msg="usage: collect-verification-inputs output.json [base-commit]",
   )
   let root = @fs.realpath(".")
+  ignore(
+    checked(@fs.realpath(".tools/moonbit/bin/moon.exe"), [
+      "run", "scripts/prepare-browser-dev.mbtx",
+    ]),
+  )
   let files : Array[String] = []
   for path in checked("git", ["ls-files", "--cached", "-z"]).split("\u0000") {
     if !path.is_empty() {
@@ -36,10 +41,11 @@ async fn main {
   for
     path in [
       ".tools/moonbit/bin", ".tools/moonbit/lib", ".tools/moonbit/include", ".tools/moonbit/cache/deps/v1/sources",
-      ".mooncakes", "native_host/.mooncakes", "browser_host/.mooncakes", ".work/browser-gpu/generated",
-      ".work/websys-input/generated", ".work/wgpu-assets", ".work/text-assets", ".work/native-deps/sources/window-ime-presentation",
-      ".work/native-deps/sources/async-local-control", ".work/native-deps/sources/cosmic-wrap-affinity",
-      ".work/accesskit-assets/accesskit-c-0.22.3/include", ".work/accesskit-assets/accesskit-c-0.22.3/lib/windows/x86_64/msvc/shared",
+      ".mooncakes", "native_host/.mooncakes", "browser_host/.mooncakes", ".work/browser-host-dev",
+      ".work/browser-gpu/generated", ".work/websys-input/generated", ".work/wgpu-assets",
+      ".work/text-assets", ".work/native-deps/sources/window-ime-presentation", ".work/native-deps/sources/async-local-control",
+      ".work/native-deps/sources/cosmic-wrap-affinity", ".work/accesskit-assets/accesskit-c-0.22.3/include",
+      ".work/accesskit-assets/accesskit-c-0.22.3/lib/windows/x86_64/msvc/shared",
     ] {
     trees.push(@fs.realpath(path))
   }

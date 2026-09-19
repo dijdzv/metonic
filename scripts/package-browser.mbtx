@@ -23,7 +23,10 @@ async fn main {
     ("examples/p0/browser/host/loader-common.mjs", "loader-common.mjs"),
     ("examples/p0/browser/host/environment-release.mjs", "environment.mjs"),
     ("examples/p0/browser/host/text-renderer.mjs", "text-renderer.mjs"),
-    (".work/browser-dist/app.wasm", "app.wasm"),
+    (
+      "browser_host/_build/wasm-gc/release/build/local/browser_host/browser_host.wasm",
+      "app.wasm",
+    ),
     (".work/browser-dist/NotoSansJP.ttf", "NotoSansJP.ttf"),
     (".work/browser-dist/OFL.txt", "OFL.txt"),
     ("LICENSE-MIT", "LICENSE-MIT"),

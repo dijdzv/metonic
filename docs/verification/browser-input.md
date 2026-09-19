@@ -105,9 +105,11 @@ data. Starting again resets the history. Recording is opt-in and retains the las
 
 The MoonBit diagnostics module records both fields' DOM value and selection,
 event order, composition data and keyboard/input-event details. Its shared-state
-callback receives the field identifier. The development adapter records the main
-editor state only for Text events and records `null` for User ID shared state,
-which is not currently exposed. The DOM values remain available for both fields.
+callback receives the field identifier. The development adapter records Text's
+editor state or User ID's own shared text, UTF-16 selection and composition flag.
+Both readers use the running development artifact's application instance; the
+separate recorder does not instantiate another editor. DOM values remain available
+for both fields.
 Values are observed during
 event delivery, not a guarantee of the browser's state after its default action.
 These records supplement physical observations and do not simulate an actual IME.
@@ -117,7 +119,7 @@ current DOM values/selections and available shared state separately from event
 history. `after_sequence` identifies the last recorded event at sampling time;
 sampling does not append events. It distinguishes empty text from LF without
 claiming that an earlier event row reflects a completed default action. It does
-not wait for pending frames or IME work. User ID shared state remains unavailable.
+not wait for pending frames or IME work.
 After `stop()`, sampling returns an empty field list and no retained callback is
 invoked; take a sample before stopping when final state is needed.
 
@@ -125,3 +127,12 @@ Stopping the application removes the listeners. The diagnostics JavaScript is a
 separate development asset; the production package omits it and its entry points,
 and the server does not serve it under `/release/`. The normal headless suite
 checks bounded history, stop/restart and composition records using a MoonBit probe.
+
+`prepare-browser-dev.mbtx` generates a development module from the shared host
+sources plus `browser_host/development/observe.mbt`. It shares the existing browser
+workspace and pinned dependencies. Explicit forwarding wrappers would duplicate
+the host's foreign API; the generated module instead keeps one source of editing
+and host logic. It is regenerated before building and verification fingerprinting.
+The production package takes the original host artifact directly, not the development
+Wasm from `browser-dist`. Packaged verification inspects the production Wasm export
+table; development input checks provide the positive control for `query_state_json`.
