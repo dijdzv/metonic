@@ -35,6 +35,7 @@ async fn run(cmd : String, args : Array[String]) -> Unit {
   if code != 0 {
     fail("command failed (" + code.to_string() + "): " + cmd)
   }
+  println("HOOK_CHECK_OK: " + args.join(" "))
 }
 
 ///|
