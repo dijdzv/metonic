@@ -123,7 +123,7 @@ function resize(force = false) {
   context.configure({ device, format, alphaMode: 'opaque' });
   app.resize(cssW, cssH);
   textRenderer?.rasterText(cssW);
-  placeView();
+  app.view_place();
   environment.dimensions(cssW, cssH, backingW, backingH);
   dirty = true;
   schedule();
@@ -168,17 +168,6 @@ function onReset() {
   schedule();
 }
 
-function placeView() {
-  for (const [element, target] of [[0, textInput], [1, $('rpc-load')], [3, $('task-start')], [4, $('task-cancel')], [6, $('rpc-user')]]) {
-    if (element === 6) target.classList.add('gpu-input');
-    else if (element !== 0) target.classList.add('gpu-button');
-    target.style.left = (canvas.offsetLeft + Number(app.view_field(element, 0))) + 'px';
-    target.style.top = (canvas.offsetTop + Number(app.view_field(element, 1))) + 'px';
-    target.style.width = Number(app.view_field(element, 2)) + 'px';
-    target.style.height = Number(app.view_field(element, 3)) + 'px';
-  }
-  $('rpc-load').textContent = String.fromCharCode(...Array.from({ length: Number(app.view_field(1, 4)) }, (_, i) => Number(app.view_label_unit(i))));
-}
 function onRequestFocus() { if (!disposed && app) { app.view_focus(1); renderEditor(); } }
 function onStartFocus() { if (!disposed && app) { app.view_focus(3); renderEditor(); } }
 function onCancelFocus() { if (!disposed && app) { app.view_focus(4); renderEditor(); } }

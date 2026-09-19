@@ -18,7 +18,7 @@ export function wasmImports() {
 }
 
 export function validateExports(exports, target) {
-  for (const name of ['scene_gpu_init', 'scene_gpu_record', 'scene_gpu_dispose']) {
+  for (const name of ['scene_gpu_init', 'scene_gpu_record', 'scene_gpu_dispose', 'view_place']) {
     if (typeof exports[name] !== 'function') throw new Error(`${target} artifact is missing required export: ${name}`);
   }
   if (target === 'js' && typeof exports.font_receive !== 'function') {
