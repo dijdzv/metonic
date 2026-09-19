@@ -831,8 +831,11 @@ that development tooling was excluded from a production binary.
 
 ## Work and release flow
 
-The installed pre-commit and pre-push hooks show one final success result, or the
-failed check and its diagnostic output. Full combined output remains under
+The installed pre-commit and pre-push hooks show a start notice, a short completion
+line for each orchestration check (with a running count), and the final success
+result or failed check diagnostic. Completion lines report finished checks, not
+individual test cases or a percentage of the total. Output is streamed without
+polling log files; detailed child output remains under
 `.work/hook-logs/<lane>-<run>/output.log`; each result prints its log path. Failure
 display is limited to the final 80 lines and 12,000 characters of the selected
 check, read from at most the final 64 KiB of the log. Truncation is explicit.

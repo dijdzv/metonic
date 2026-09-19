@@ -42,16 +42,32 @@ async fn run_logged(
   arguments : Array[String],
   path : String,
 ) -> Int {
-  let output = @process.redirect_to_file(path)
+  let log = @fs.open(path, mode=WriteOnly, create_mode=CreateOrTruncate)
+  defer log.close()
+  let (reader, output) = @process.read_from_process()
+  defer reader.close()
   defer output.close()
-  @process.run(
-    command,
-    arguments,
-    stdin=@stdio.stdin,
-    stdout=output,
-    stderr=output,
-    no_console_window=true,
-  )
+  @async.with_task_group(async fn(group) {
+    let process = @process.spawn(
+      group,
+      command,
+      arguments,
+      stdin=@stdio.stdin,
+      stdout=output,
+      stderr=output,
+      no_console_window=true,
+      no_wait=false,
+    )
+    output.close()
+    let progress = Progress::new()
+    while reader.read_some(max_len=8192) is Some(bytes) {
+      @io.Writer::write(log, bytes)
+      for message in progress.feed(bytes) {
+        println(message)
+      }
+    }
+    process.wait()
+  })
 }
 
 ///|
@@ -69,6 +85,7 @@ async fn main {
     let directory = log_directory(lane)
     let path = directory + "/output.log"
     log = Some(path)
+    println("pre-" + lane + " started; discovering verification inputs.")
     let script = if lane == "commit" {
       "scripts/record-commit-verification.mbtx"
     } else {
