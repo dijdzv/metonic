@@ -15,7 +15,9 @@ async fn verify_composition_presentation(host : BrowserHost) -> Unit {
     let selector = if query { "#rpc-user" } else { "#text-input" }
     let prefix = if query { "query-preedit-" } else { "editor-preedit-" }
     let original = command(host, { "op": "value", "selector": selector })
-    ignore(command(host, { "op": "fill", "selector": selector, "value": "AB" }))
+    ignore(
+      command(host, { "op": "fill", "selector": selector, "value": "A😀B" }),
+    )
     ignore(
       command(host, {
         "op": "input-event",
@@ -26,6 +28,20 @@ async fn verify_composition_presentation(host : BrowserHost) -> Unit {
       }),
     )
     let initial = navigation_pixels(host, query, prefix + "initial")
+    ignore(
+      command(host, {
+        "op": "input-event",
+        "selector": selector,
+        "type": "select",
+        "start": 1,
+        "end": 3,
+      }),
+    )
+    require(
+      highlighted_pixels(navigation_pixels(host, query, prefix + "selected")) >
+      100,
+      "committed selection has no visible highlight " + selector,
+    )
     ignore(
       command(host, {
         "op": "input-event",
@@ -54,8 +70,8 @@ async fn verify_composition_presentation(host : BrowserHost) -> Unit {
     )
     let end = navigation_pixels(host, query, prefix + "end")
     require(
-      highlighted_pixels(end) > 100,
-      "preedit range has no visible highlight " + selector,
+      highlighted_pixels(end) == 0,
+      "ordinary preedit retains selection highlight " + selector,
     )
     ignore(
       command(host, {
@@ -70,8 +86,8 @@ async fn verify_composition_presentation(host : BrowserHost) -> Unit {
     let moved = navigation_pixels(host, query, prefix + "moved")
     require(moved != end, "preedit cursor did not change pixels " + selector)
     require(
-      highlighted_pixels(moved) > 100,
-      "cursor movement lost preedit highlight " + selector,
+      highlighted_pixels(moved) == 0,
+      "preedit cursor movement restores selection highlight " + selector,
     )
     ignore(
       command(host, {
@@ -92,7 +108,7 @@ async fn verify_composition_presentation(host : BrowserHost) -> Unit {
         "op": "input-event",
         "selector": selector,
         "type": "compositionend",
-        "value": "AB",
+        "value": "A😀B",
         "start": 1,
         "end": 1,
       }),
