@@ -37,8 +37,9 @@ the adapter advertises read-only and the UI handler rejects queued external
 mutations. Value calls return before the application applies the queued request;
 clients must observe resulting state rather than treating a successful return as
 an application completion barrier. Shared-editor Text/selection patterns and
-their automated coverage are described below. Actual assistive-technology use
-and real IME remain unverified, so this is not complete accessibility acceptance.
+their automated coverage are described below. The bounded Narrator acceptance
+below covers editor integration with an actual assistive client. General IME
+candidate placement and composition-aware observer discrepancies remain open.
 
 `prepare-accesskit.mbtx` pins the official archive and verifies SHA256
 `b652e380fb78efe6721ad892f15b2224f38f661c3fb20436ef4c5b3ce0fe8177` before extracting
@@ -186,5 +187,37 @@ UIA properties and posted messages do not prove presented GPU pixels, real keybo
 pointer delivery, Japanese IME behavior, or screen-reader usability. The dedicated
 probes above establish their stated overflow, close and recreation schedules;
 ordinary UIA close alone does not establish those properties. Complex-cluster
-geometry, composition-aware focus and assistive-technology testing
-remain required. See [ADR 023](../adr/023-development-automation.md) for selection.
+geometry and composition-aware observer discrepancies remain open. The separate
+Narrator observations below supply actual-client evidence for the stated cases,
+not for every assistive technology. See
+[ADR 023](../adr/023-development-automation.md) for selection.
+
+## Narrator editor acceptance
+
+On 2026-09-19, the ordinary production application at main
+`ffbeaa976fe3e689577bc420817219683e7462d6` was exercised with Windows Narrator.
+The executable SHA256 was
+`5A09CE37BBA7F8CD0BDBBACB1410EEE42D76674DEE147F4691B7CE3726C177C6`;
+its source tree matched the normally verified PR #395 head. The full bounded
+record and the earlier User ID cancellation case are in
+[the completed editor acceptance task](https://github.com/dijdzv/metonic/issues/129).
+
+Keyboard selection/replacement and continued editing changed User ID to `bc`
+and Text to `xy` independently. Narrator Speech Recap identified User ID, its
+edit role and value. In Text, Japanese preedit cancellation left the selected
+content deleted; a subsequent composition committed exactly one `あ` without
+an extra newline. Recap identified the empty and committed Text values. The
+earlier production run separately covered User ID cancellation/re-identification.
+
+Shift+Tab moved from Text to User ID; Tab returned to Text and traversed Toggle,
+Load user, Move after delay, Cancel and User ID. Narrator's visible focus rectangle
+and Speech Recap matched the target names and roles. Closing Metonic with Narrator
+active completed ordinary process cleanup and returned Narrator to its home.
+
+These are actual assistive-client speech-history and focus observations, not
+audible-pronunciation evaluation, exhaustive concurrency coverage or acceptance
+for every screen reader. The generic observation client's focus field sometimes
+still reported Text while Narrator and actual input targeted another control;
+[that discrepancy](https://github.com/dijdzv/metonic/issues/227) remains separate.
+Space/Tab IME target behavior, multi-clause conversion and candidate placement
+remain under [native IME acceptance](https://github.com/dijdzv/metonic/issues/94).
