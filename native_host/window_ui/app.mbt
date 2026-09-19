@@ -244,6 +244,11 @@ pub impl @windows.ApplicationHandler for App with fn window_event(
 
 ///|
 fn App::draw(self : App) -> Unit raise Error {
+  let display_cursor = @ime_presentation.display_cursor(
+    self.preedit,
+    self.preedit_cursor,
+    self.preedit_attributes,
+  )
   let button = @semantics.snapshot(self.model.editor)[0]
   if (button.value == "on") != (@scene.field(self.model.scene, 4) == 1) {
     ignore(@semantics.activate(self.model.editor, button.reference))
@@ -264,7 +269,7 @@ fn App::draw(self : App) -> Unit raise Error {
         (node.selection_start, node.selection_end)
       }
       let caret = if preview is Some(_) {
-        node.selection_start + self.preedit_cursor
+        node.selection_start + display_cursor
       } else {
         @semantics.caret(node)
       }
@@ -293,7 +298,7 @@ fn App::draw(self : App) -> Unit raise Error {
                   query_preedit=(
                     self.input_node().selection_start,
                     self.input_node().selection_start,
-                    self.input_node().selection_start + self.preedit_cursor,
+                    self.input_node().selection_start + display_cursor,
                   ),
                 )
               None => self.model.view()
@@ -307,7 +312,7 @@ fn App::draw(self : App) -> Unit raise Error {
       let caret_after = self.editor_caret_after(caret, width)
       let query_active_caret = if view.query.focused &&
         self.composition is Some(_) {
-        self.input_node().selection_start + self.preedit_cursor
+        self.input_node().selection_start + display_cursor
       } else {
         @semantics.caret(@semantics.snapshot(self.model.editor)[5])
       }
@@ -412,7 +417,7 @@ fn App::draw(self : App) -> Unit raise Error {
       let query_focused = view.query.focused
       let input_caret = if query_focused {
         if self.composition is Some(_) {
-          self.input_node().selection_start + self.preedit_cursor
+          self.input_node().selection_start + display_cursor
         } else {
           @semantics.caret(self.input_node())
         }

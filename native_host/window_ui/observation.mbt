@@ -3,6 +3,7 @@ pub(all) enum Injected {
   Close
   CompositionStart
   CompositionUpdate(String, Int?)
+  CompositionAttributes(String, Int?, Bytes)
   CompositionCancel
   NavigateVertical(Bool, Bool)
   AccessibilityValue(String)
@@ -35,6 +36,8 @@ pub struct Observation {
   accessibility_runs : Array[UInt64]
   rendered_text : String?
   preedit_cursor : Int
+  rendered_editor_caret : Int?
+  rendered_query_caret : Int?
   preedit_attributes : Bytes
   composing : Bool
   rejected_updates : Int
@@ -88,7 +91,12 @@ fn App::observation(self : App) -> Observation {
         engine,
         if self.composition is Some(_) &&
           self.input_node().reference == self.model.query_input {
-          self.input_node().selection_start + self.preedit_cursor
+          self.input_node().selection_start +
+          @ime_presentation.display_cursor(
+            self.preedit,
+            self.preedit_cursor,
+            self.preedit_attributes,
+          )
         } else {
           @semantics.caret(@semantics.snapshot(self.model.editor)[5])
         },
@@ -107,6 +115,8 @@ fn App::observation(self : App) -> Observation {
     .unwrap_or([]),
     rendered_text: self.rendered_text,
     preedit_cursor: self.preedit_cursor,
+    rendered_editor_caret: self.rendered_active_caret,
+    rendered_query_caret: self.rendered_query.3,
     preedit_attributes: self.preedit_attributes,
     composing: self.composition is Some(_),
     rejected_updates: self.diagnostics.rejected_updates,
@@ -149,6 +159,8 @@ fn App::observation(self : App) -> Observation {
           CompositionStart => CompositionStart
           CompositionUpdate(text, cursor) =>
             CompositionUpdate(text, cursor, b"")
+          CompositionAttributes(text, cursor, attributes) =>
+            CompositionUpdate(text, cursor, attributes)
           CompositionCancel => CompositionCancel
           NavigateVertical(down, extend_selection) =>
             NavigateVertical(down, extend_selection)

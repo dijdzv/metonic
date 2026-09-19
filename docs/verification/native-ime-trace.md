@@ -20,8 +20,11 @@ fresh when a new instance is created. They are not persisted on shutdown.
 Only interpret `cursor_result` when `cursor_queried` is true. A false status is
 not cursor zero. Negative API returns are preserved before the window library
 maps the position to an optional cursor. The processed history separately shows
-the application's fallback/clamping. A valid zero must not be replaced with the
-preedit end merely because the displayed caret is unexpected.
+the application's fallback/clamping. `display_cursor` separately records the
+attribute-dependent presentation position (or null outside composition). A valid
+zero remains in `applied_cursor`; the display policy retains it next to
+unconverted input and uses the preedit end within converted text. Unusable
+attributes preserve valid input positions instead of inferring conversion.
 
 Processed records include `attribute_count`, `target_count`, and `first_target`
 (a half-open UTF-16 range, or null). These are bounded metadata rather than a copy
