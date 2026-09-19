@@ -14,6 +14,14 @@ own scene drawing and frame encoding/submission through generated webapi; the
 [MoonBit HTTP host](browser-http.md) owns bounded fetch and cancellation.
 `metonic-input` requests a render after an input update.
 
+The DOM remains authoritative for viewport offsets as well: the input host sends
+User ID's horizontal offset and the main textarea's vertical offset through
+generated WebSys bindings. Offset changes invalidate the retained GPU text frame;
+the shared rasterizer applies the same displacement to text, selection and caret.
+Headless checks exercise the packaged application and both development targets
+with multiline scrolling, pixel displacement, selection and keyboard navigation.
+These checks do not establish actual IME candidate-window placement.
+
 During composition, the DOM text and caret are authoritative for presentation;
 they do not commit the shared editor state. The host reconciles on `input` and
 on a frame after `compositionupdate`, because the latter can precede the DOM

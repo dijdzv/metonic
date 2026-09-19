@@ -20,6 +20,7 @@ interface Node : EventTarget {
 };
 interface Element : Node {
   attribute double scrollLeft;
+  attribute double scrollTop;
 };
 interface HTMLElement : Element {};
 interface HTMLInputElement : HTMLElement {

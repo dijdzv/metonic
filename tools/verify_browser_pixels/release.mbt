@@ -138,6 +138,83 @@ async fn verify_query_overflow(host : BrowserHost) -> Unit {
 }
 
 ///|
+async fn verify_editor_scroll(host : BrowserHost) -> Unit {
+  let selector = "#text-input"
+  let original = command(host, { "op": "value", "selector": selector })
+  let value = "A\nBB\nCCC\nDDDD\nEEEEE\nFFFFFF\nGGGGGGG\nHHHHHHHH"
+  ignore(command(host, { "op": "fill", "selector": selector, "value": value }))
+  ignore(command(host, { "op": "editor-scroll", "y": 0 }))
+  let top = navigation_pixels(host, false, "editor-scroll-top")
+  require(
+    command(host, { "op": "editor-scroll", "y": 32 }) == Json::number(32),
+    "multiline DOM did not scroll",
+  )
+  let down = navigation_pixels(host, false, "editor-scroll-down")
+  require(down != top, "multiline DOM scroll did not move GPU text")
+  for y in 4..<60 {
+    for x in 4..<636 {
+      for channel in 0..<4 {
+        require(
+          down[(y * 640 + x) * 4 + channel] ==
+          top[((y + 32) * 640 + x) * 4 + channel],
+          "GPU text displacement differs from DOM scroll offset",
+        )
+      }
+    }
+  }
+  ignore(command(host, { "op": "editor-scroll", "y": 0 }))
+  require(
+    navigation_pixels(host, false, "editor-scroll-restored") == top,
+    "multiline GPU text did not return to scroll origin",
+  )
+  require(
+    command(host, { "op": "value", "selector": selector }) ==
+    Json::string(value),
+    "scroll changed editor value",
+  )
+  ignore(
+    command(host, { "op": "press", "selector": selector, "key": "Control+Home" }),
+  )
+  let home = navigation_pixels(host, false, "editor-scroll-home")
+  ignore(
+    command(host, { "op": "press", "selector": selector, "key": "Control+End" }),
+  )
+  require(
+    command(host, { "op": "editor-scroll" }) != Json::number(0),
+    "end caret did not scroll DOM",
+  )
+  require(
+    navigation_pixels(host, false, "editor-scroll-end") != home,
+    "end caret did not scroll GPU",
+  )
+  ignore(
+    command(host, { "op": "press", "selector": selector, "key": "Control+Home" }),
+  )
+  require(
+    navigation_pixels(host, false, "editor-scroll-home-restored") == home,
+    "home caret did not restore GPU viewport",
+  )
+  ignore(command(host, { "op": "editor-select" }))
+  ignore(command(host, { "op": "editor-scroll", "y": 0 }))
+  let selected = navigation_pixels(host, false, "editor-scroll-selection-top")
+  require(selected != home, "multiline selection has no visible highlight")
+  ignore(command(host, { "op": "editor-scroll", "y": 32 }))
+  require(
+    navigation_pixels(host, false, "editor-scroll-selection-down") != selected,
+    "selected multiline GPU text did not scroll",
+  )
+  ignore(command(host, { "op": "editor-scroll", "y": 0 }))
+  require(
+    navigation_pixels(host, false, "editor-scroll-selection-restored") ==
+    selected,
+    "selected multiline GPU text did not restore",
+  )
+  ignore(
+    command(host, { "op": "fill", "selector": selector, "value": original }),
+  )
+}
+
+///|
 async fn run_release(host : BrowserHost) -> String {
   ignore(command(host, { "op": "goto" }))
   ignore(
@@ -154,6 +231,7 @@ async fn run_release(host : BrowserHost) -> String {
   verify_query_pointer(host)
   verify_navigation(host)
   verify_query_overflow(host)
+  verify_editor_scroll(host)
   verify_composition_presentation(host)
   ignore(
     command(host, {
@@ -510,4 +588,10 @@ async fn verify_task_layout(
 #export_name("runRelease")
 pub fn run_release_export(host : BrowserHost) -> @js_async.Promise[String] {
   @js_async.Promise::from_async(async fn() { run_release(host) })
+}
+
+///|
+#export_name("runEditorScroll")
+pub fn run_editor_scroll_export(host : BrowserHost) -> @js_async.Promise[Unit] {
+  @js_async.Promise::from_async(async fn() { verify_editor_scroll(host) })
 }

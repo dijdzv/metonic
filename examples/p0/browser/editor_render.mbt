@@ -27,6 +27,18 @@ let view_layers : Ref[Array[@view_renderer.Layer]] = Ref([])
 let query_scroll_x : Ref[Int] = Ref(0)
 
 ///|
+let editor_scroll_y : Ref[Int] = Ref(0)
+
+///|
+pub fn editor_scroll(value : Int) -> Unit {
+  let value = value.max(0)
+  if editor_scroll_y.val != value {
+    editor_scroll_y.val = value
+    rendered_editor.val = None
+  }
+}
+
+///|
 pub fn query_scroll(value : Int) -> Unit {
   let value = value.max(0)
   if query_scroll_x.val != value {
@@ -92,6 +104,7 @@ pub fn editor_render(viewport_width : Int) -> Int {
     selection=(start, end),
     caret~,
     query_scroll=Some(query_scroll_x.val),
+    editor_scroll=editor_scroll_y.val,
   )
   view_layers.val = layers
   let editor = layers[0].pixels

@@ -40,6 +40,8 @@ fn InputState::sync(self : InputState) -> Unit {
   }
   if self.element is Query(value) {
     @app.query_scroll(input_scroll(value))
+  } else if self.element is Editor(value) {
+    @app.editor_scroll(editor_scroll(value))
   }
   guard self.element.selection() is Some((start, end, backward)) else {
     notify_input(0)

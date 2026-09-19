@@ -4,7 +4,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { chromium } from 'playwright'
 import { observedPage, reportFailure } from '../tools/devtools/browser-observation.mjs'
-import { verify as verifyPixels, runScene, runFailures, runFontFailures, runText, runDpr, runSuite, runRelease } from '../_build/js/release/build/tools/verify_browser_pixels/verify_browser_pixels.js'
+import { verify as verifyPixels, runScene, runFailures, runFontFailures, runText, runDpr, runSuite, runRelease, runEditorScroll } from '../_build/js/release/build/tools/verify_browser_pixels/verify_browser_pixels.js'
 
 if (process.env.METONIC_BROWSER_SUPERVISED !== '1') throw new Error('Run mise run browser:async/headless')
 
@@ -24,6 +24,35 @@ async function pixelVerify(request) {
 
 async function text(page, selector) {
   return (await page.locator(selector).textContent())?.trim() ?? ''
+}
+
+async function editorScrollHost(page, command) {
+  const settle = () => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  switch (command.op) {
+    case 'value': return page.locator(command.selector).inputValue();
+    case 'fill': await page.locator(command.selector).fill(command.value); await settle(); return null;
+    case 'press': await page.locator(command.selector).press(command.key); await settle(); return null;
+    case 'editor-select':
+      await page.locator('#text-input').evaluate(input => { input.setSelectionRange(0, input.value.length); input.dispatchEvent(new Event('select')); });
+      await settle();
+      return null;
+    case 'editor-scroll': {
+      const value = await page.locator('#text-input').evaluate((input, y) => {
+        if (typeof y === 'number') {
+          input.scrollTop = y;
+          input.dispatchEvent(new Event('scroll'));
+        }
+        return input.scrollTop;
+      }, command.y);
+      await settle();
+      return value;
+    }
+    case 'image': {
+      await settle();
+      return (await page.locator('#canvas').screenshot({ style: '#canvas { border-radius: 0 !important; }' })).toString('base64');
+    }
+    default: throw new Error(`Unknown editor scroll operation: ${command.op}`);
+  }
 }
 
 async function diagnostic(page) {
@@ -517,6 +546,8 @@ try {
                 });
               });
               case 'value': return page.locator(command.selector).inputValue();
+              case 'editor-scroll': return editorScrollHost(page, command);
+              case 'editor-select': return editorScrollHost(page, command);
               case 'rpc-count': return resources.filter((path) => path === '/rpc').length;
               case 'rpc-body': return lastRpcBody;
               case 'input-event': await page.locator(command.selector).evaluate((input, event) => {
@@ -567,6 +598,7 @@ try {
         try {
           await page.goto(`${baseUrl}/?target=${encodeURIComponent(request.target)}`);
           await waitStatus(page, `Ready: ${request.target}`);
+          await runEditorScroll(command => editorScrollHost(page, command));
           await page.locator('#text-input').fill('A😀B');
           const preview = await page.evaluate(() => {
             const input = document.querySelector('#text-input');
