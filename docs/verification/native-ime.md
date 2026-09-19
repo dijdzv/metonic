@@ -106,8 +106,13 @@ Record Windows version, display scaling and monitor for each run.
    selection separately: canceling that preedit preserves the preceding text.
 3. Compose again, convert with Space, and commit with Enter. Confirm one committed
    replacement, with no duplicate characters or control characters.
-4. Compose a longer phrase and move within the composition. Confirm the candidate
-   position follows the composition cursor rather than always using its end.
+4. Compose a longer phrase and move within its unconverted reading. Confirm the
+   visible caret and requested candidate position follow that interior position.
+   Convert with Space and switch clauses: target highlighting follows the active
+   conversion range, while the display caret uses the preedit end when neither
+   adjacent code unit is unconverted input. Return to the reading and confirm
+   interior movement still works. Do not require the raw IMM cursor and the
+   attribute-dependent display cursor to be identical.
 5. Resize during composition, then move to a monitor with different scaling if
    available. Confirm candidate placement remains near the insertion position.
 6. Cancel, change focus during another composition, and close while composing.
