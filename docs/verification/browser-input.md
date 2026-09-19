@@ -28,13 +28,17 @@ on a frame after `compositionupdate`, because the latter can precede the DOM
 edit and existing-text composition may not emit another input event. Pending
 reconciliation is canceled on composition end and host stop.
 
-A matching shared preview retains its validated composition highlight. If the
-DOM differs, the host displays its full text and caret without a range highlight.
-Textarea/input selection does not reveal the actual composition range, so the
-host does not guess it from equal prefixes or repeated characters. This preserves
-text while leaving exact highlighting of such existing-text compositions as a
-limitation. The release pixel check compares both fields before, during and after
-that synthetic sequence; ordinary highlighted composition remains covered too.
+Preedit text and its caret are rendered without the committed-selection
+background. The validated composition range remains available for cursor
+validation; it is not an IME conversion-target range. Textarea/input events do
+not expose the conversion-target attributes, so the GPU host does not invent a
+target highlight over the whole preedit. Exact conversion-target styling remains
+unavailable through this interface. If the DOM differs from the shared preview,
+its full text and caret win without guessing a range from equal prefixes or
+repeated characters. Pixel checks cover both fields: ordinary selection remains
+highlighted, replacement preedit loses that background, cursor movement changes
+pixels, and cancellation follows the supplied DOM value. These controlled events
+do not establish actual OS IME acceptance.
 
 The input host uses WebSys through `input_js.mbt` and `input_wasm.mbt`.
 The shared composition state machine remains in `input.mbt`. Both adapters keep

@@ -62,14 +62,20 @@ pub fn editor_render(viewport_width : Int) -> Int {
     ),
   )
   let view = match (query_preview.val, query_preedit_geometry.val) {
-    (Some(text), Some(geometry)) =>
-      application.val.view(query_preview=text, query_preedit=geometry)
+    (Some(text), Some((_, _, cursor))) =>
+      application.val.view(
+        query_preview=text,
+        query_preedit=(cursor, cursor, cursor),
+      )
     _ => application.val.view()
   }
   let text = editor_display()
-  let (start, end, cursor) = editor_preedit_geometry.val.unwrap_or(
-    (editor_field(1), editor_field(2), editor_field(2)),
-  )
+  // DOM composition ranges do not expose IME conversion-target attributes.
+  // Painting the entire preedit as selected invents a selection after replacement.
+  let (start, end, cursor) = match editor_preedit_geometry.val {
+    Some((_, _, cursor)) => (cursor, cursor, cursor)
+    None => (editor_field(1), editor_field(2), editor_field(2))
+  }
   let caret = if view.editor.focused &&
     (editor_preedit_geometry.val is Some(_) || start == end) {
     Some(cursor)
