@@ -2,9 +2,10 @@
 
 Date: 2026-09-06.
 
-Status: **accepted direction; implementation and acceptance are partial**.
-AccessKit is adopted for initial production nodes/actions; full P0-H acceptance
-remains open.
+Status: **accepted; initial P0 implementation and bounded acceptance complete**.
+AccessKit provides production accessibility independently of CLI/MCP. Current
+acceptance and limits are recorded in [P0 verification](../verification/p0.md);
+the initial comparisons below retain their original scope.
 
 ## Context
 
