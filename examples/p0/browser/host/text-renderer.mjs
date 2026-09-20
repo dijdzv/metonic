@@ -1,4 +1,5 @@
-import { unpack, transfer_font_words } from './browser-buffer.mjs';
+import { createLayerRenderer } from './layer-renderer.mjs';
+import { transfer_font_words } from './browser-buffer.mjs';
 
 async function loadFont(app, disposed) {
   const bytes = new Uint8Array(await app.font_fetch());
@@ -18,47 +19,17 @@ export async function createTextRenderer({ app, device, format, disposed }) {
   const loaded = await loadFont(app, disposed);
   if (!loaded || disposed()) return null;
   if (app.text_gpu_init(device, format) !== 1) throw new Error('MoonBit GPU initialization rejected format');
-  let layers = [];
-  let uploaded = 0;
-  let renders = 0;
-  function rasterText(cssWidth) {
-    const result = app.editor_render(Math.trunc(cssWidth));
-    if (result === 2) return;
-    if (result !== 1) throw new Error('MoonBit editor_render rejected input');
-    const next = [];
-    app.text_gpu_abort();
-    try {
-      for (let index = 0; index < app.view_layer_count(); index += 1) {
-        const x = app.view_layer_field(index, 0), y = app.view_layer_field(index, 1);
-        const width = app.view_layer_field(index, 2), height = app.view_layer_field(index, 3);
-        const transferred = app.view_layer_bytes(index);
-        let pixels;
-        if (transferred instanceof Uint8Array) {
-          pixels = transferred.slice();
-        } else if (typeof transferred === 'string') {
-          pixels = unpack(transferred);
-        } else {
-          throw new Error('MoonBit returned an unsupported pixel buffer');
-        }
-        if (pixels.byteLength !== width * height * 4) throw new Error('MoonBit pixel buffer size mismatch');
-        if (app.text_gpu_add(index, pixels) !== 1) throw new Error('MoonBit GPU layer rejected upload');
-        const layer = { x, y, width, height };
-        next.push(layer);
-        uploaded += pixels.byteLength;
-      }
-      if (app.text_gpu_commit() !== 1) throw new Error('MoonBit GPU batch rejected commit');
-    } catch (error) { app.text_gpu_abort(); throw error; }
-    layers = next;
-    renders += 1;
-  }
-  return {
-    rasterText,
-    record(cssW, cssH) {
-      for (const [index, layer] of layers.entries()) {
-        if (app.gpu_frame_text(index, new Float32Array([cssW, cssH, layer.x, layer.y, layer.width, layer.height, 0, 0])) !== 1) throw new Error('MoonBit GPU layer rejected draw');
-      }
-    },
-    stats: () => ({ width: app.text_width(), renders, uploaded }),
-    dispose() { app.text_gpu_dispose(); layers = []; app.text_dispose(); },
-  };
+  const renderer = createLayerRenderer({
+    raster: width => app.editor_render(width),
+    width: () => app.text_width(),
+    layerCount: () => app.view_layer_count(),
+    layerField: (index, field) => app.view_layer_field(index, field),
+    layerBytes: index => app.view_layer_bytes(index),
+    beginUpload: () => app.text_gpu_abort(),
+    upload: (index, pixels) => app.text_gpu_add(index, pixels),
+    commitUpload: () => app.text_gpu_commit(),
+    record: (index, uniform) => app.gpu_frame_text(index, uniform),
+    dispose: () => { app.text_gpu_dispose(); app.text_dispose(); },
+  });
+  return { rasterText: renderer.refresh, record: renderer.record, stats: renderer.stats, dispose: renderer.dispose };
 }

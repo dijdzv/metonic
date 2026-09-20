@@ -81,8 +81,8 @@ async fn main {
       @process.run(
         moon,
         [
-          "-C", "browser_host", "build", "app/probe", "--target", target, "--release",
-          "--deny-warn",
+          "-C", "browser_host", "build", "app/probe", "app/notes", "app/gpu_probe",
+          "--target", target, "--release", "--deny-warn",
         ],
         no_console_window=true,
       ),
@@ -106,6 +106,16 @@ async fn main {
     }
   }
   let dist = ".work/browser-dist"
+  for name in ["surface.mjs", "wasm-imports.mjs", "layer-renderer.mjs"] {
+    assert_eq(
+      @process.run(
+        "node",
+        ["--check", "browser_host/runtime/" + name],
+        no_console_window=true,
+      ),
+      0,
+    )
+  }
   assert_eq(
     @process.run(
       moon,
@@ -149,6 +159,21 @@ async fn main {
     ("examples/p0/browser/host/index.html", ".work/browser-dist/index.html"),
     ("examples/p0/browser/host/style.css", ".work/browser-dist/style.css"),
     ("examples/p0/browser/host/host.mjs", ".work/browser-dist/host.mjs"),
+    ("browser_host/runtime/surface.mjs", ".work/browser-dist/surface.mjs"),
+    (
+      "browser_host/_build/js/release/build/local/browser_host/gpu_probe/gpu_probe.js",
+      ".work/browser-dist/gpu-probe.mjs",
+    ),
+    (
+      "browser_host/_build/wasm-gc/release/build/local/browser_host/gpu_probe/gpu_probe.wasm",
+      ".work/browser-dist/gpu-probe.wasm",
+    ),
+    (
+      "browser_host/runtime/layer-renderer.mjs", ".work/browser-dist/layer-renderer.mjs",
+    ),
+    (
+      "browser_host/runtime/wasm-imports.mjs", ".work/browser-dist/wasm-imports.mjs",
+    ),
     ("examples/p0/browser/host/loader.mjs", ".work/browser-dist/loader.mjs"),
     (
       "examples/p0/browser/host/loader-common.mjs", ".work/browser-dist/loader-common.mjs",
@@ -209,4 +234,12 @@ async fn main {
     let (source, destination) = entry
     @fs.write_file(destination, @fs.read_file(source).binary())
   }
+  assert_eq(
+    @process.run(
+      moon,
+      ["run", "scripts/package-browser-notes.mbtx"],
+      no_console_window=true,
+    ),
+    0,
+  )
 }

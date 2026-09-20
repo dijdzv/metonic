@@ -14,7 +14,6 @@ priv struct TextGpu {
 }
 
 ///|
-let text_gpu : Ref[TextGpu?] = Ref(None)
 
 ///|
 fn release_text_layers(layers : Array[TextGpuLayer]) -> Unit {
@@ -28,19 +27,22 @@ fn release_text_layers(layers : Array[TextGpuLayer]) -> Unit {
 }
 
 ///|
-#export_name("text_gpu_dispose")
-pub fn text_gpu_dispose() -> Unit {
-  if text_gpu.val is Some(gpu) {
-    text_gpu.val = None
+pub fn Session::text_gpu_dispose(self : Session) -> Unit {
+  self.gpu_frame_abort()
+  if self.text_gpu.val is Some(gpu) {
+    self.text_gpu.val = None
     release_text_layers(gpu.pending)
     release_text_layers(gpu.layers)
   }
 }
 
 ///|
-#export_name("text_gpu_init")
-pub fn text_gpu_init(device : @input_dom.GPUDevice, format : String) -> Int {
-  text_gpu_dispose()
+pub fn Session::text_gpu_init(
+  self : Session,
+  device : @input_dom.GPUDevice,
+  format : String,
+) -> Int {
+  self.text_gpu_dispose()
   guard @input_dom.GPUTextureFormat::from_string(format) is Some(format) else {
     return 0
   }
@@ -58,27 +60,33 @@ pub fn text_gpu_init(device : @input_dom.GPUDevice, format : String) -> Int {
   let pipeline = device.create_render_pipeline(
     gpu_pipeline_descriptor(shader, format),
   )
-  text_gpu.val = Some({ device, pipeline, layers: [], pending: [], })
+  self.text_gpu.val = Some({ device, pipeline, layers: [], pending: [], })
   1
 }
 
 ///|
-#export_name("text_gpu_abort")
-pub fn text_gpu_abort() -> Unit {
-  if text_gpu.val is Some(gpu) {
+pub fn Session::text_gpu_abort(self : Session) -> Unit {
+  if self.text_gpu.val is Some(gpu) {
     release_text_layers(gpu.pending)
   }
 }
 
 ///|
-#export_name("text_gpu_add")
-pub fn text_gpu_add(index : Int, pixels : @input_dom.ArrayBufferView) -> Int {
-  guard text_gpu.val is Some(gpu) else { return 0 }
-  guard index == gpu.pending.length() && index < @app.view_layer_count() else {
+pub fn Session::text_gpu_add(
+  self : Session,
+  index : Int,
+  width : Int,
+  height : Int,
+  pixels : @input_dom.ArrayBufferView,
+) -> Int {
+  guard self.text_gpu.val is Some(gpu) else { return 0 }
+  guard index == gpu.pending.length() &&
+    width > 0 &&
+    width <= 1024 &&
+    height > 0 &&
+    height <= 96 else {
     return 0
   }
-  let width = @app.view_layer_field(index, 2)
-  let height = @app.view_layer_field(index, 3)
   let texture = gpu_texture(gpu.device, width, height)
   // A later host API call can throw; the JS boundary then aborts this pending batch.
   let layer = TextGpuLayer::{ texture, uniform: None, group: None, }
@@ -93,10 +101,9 @@ pub fn text_gpu_add(index : Int, pixels : @input_dom.ArrayBufferView) -> Int {
 }
 
 ///|
-#export_name("text_gpu_commit")
-pub fn text_gpu_commit() -> Int {
-  guard text_gpu.val is Some(gpu) else { return 0 }
-  guard gpu.pending.length() == @app.view_layer_count() else { return 0 }
+pub fn Session::text_gpu_commit(self : Session, expected_count : Int) -> Int {
+  guard self.text_gpu.val is Some(gpu) else { return 0 }
+  guard gpu.pending.length() == expected_count else { return 0 }
   release_text_layers(gpu.layers)
   gpu.layers = gpu.pending
   gpu.pending = []
@@ -104,13 +111,13 @@ pub fn text_gpu_commit() -> Int {
 }
 
 ///|
-#export_name("text_gpu_record")
-pub fn text_gpu_record(
+pub fn Session::text_gpu_record(
+  self : Session,
   pass : @input_dom.GPURenderPassEncoder,
   index : Int,
   data : @input_dom.ArrayBufferView,
 ) -> Int {
-  guard text_gpu.val is Some(gpu) else { return 0 }
+  guard self.text_gpu.val is Some(gpu) else { return 0 }
   guard index >= 0 && index < gpu.layers.length() else { return 0 }
   let layer = gpu.layers[index]
   guard layer.uniform is Some(uniform) && layer.group is Some(group) else {

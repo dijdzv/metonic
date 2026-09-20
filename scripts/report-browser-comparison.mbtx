@@ -70,7 +70,8 @@ async fn main {
   for
     path in [
       "index.html", "style.css", "host.mjs", "loader.mjs", "loader-common.mjs", "environment.mjs",
-      "text-renderer.mjs", "NotoSansJP.ttf", "OFL.txt",
+      "text-renderer.mjs", "NotoSansJP.ttf", "OFL.txt", "surface.mjs", "wasm-imports.mjs",
+      "layer-renderer.mjs",
     ] {
     shared_bytes += @fs.read_file(".work/browser-dist/" + path)
       .binary()

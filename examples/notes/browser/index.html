@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Metonic Notes</title>
+<style>
+body { background: #051426; color: #d9e5f5; font: 16px system-ui; margin: 24px; }
+.view { position: relative; width: min(480px, 100%); }
+canvas { display: block; width: 100%; height: 240px; }
+.gpu-input, .gpu-button { position: absolute; box-sizing: border-box; margin: 0; border: 0; padding: 0; background: transparent; color: transparent; caret-color: transparent; font: 24px/32px sans-serif; }
+.gpu-input { resize: none; overflow: auto; outline: none; }
+.gpu-input::selection { color: transparent; background: transparent; }
+.gpu-button { cursor: pointer; outline: none; }
+</style>
+<h1>Notes</h1>
+<p>A small application using the shared Metonic host.</p>
+<div class="view">
+  <canvas id="canvas" aria-hidden="true"></canvas>
+  <textarea id="note" class="gpu-input" aria-label="Note" maxlength="1024" disabled></textarea>
+  <button id="clear" class="gpu-button" disabled>Clear note</button>
+</div>
+<p id="status" role="status">Loading…</p>
+<button id="stop">Stop</button>
+<script type="module" src="./notes-host.mjs"></script>
+</html>

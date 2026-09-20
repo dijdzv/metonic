@@ -1,6 +1,5 @@
 ///|
-#external
-pub type FontPromise
+pub type FontPromise = @js_async.Promise[@input_dom.ArrayBuffer]
 
 ///|
 #external
@@ -38,10 +37,11 @@ fn font_export(
 
 ///|
 async fn font_response(
+  url : String,
   controller : @input_dom.AbortController,
 ) -> @input_dom.Response raise Error {
-  input_window()
-  .fetch("./NotoSansJP.ttf", {
+  @input_binding.window()
+  .fetch(url, {
     method_: None,
     headers: None,
     body: Undefined,
@@ -55,5 +55,9 @@ async fn font_response(
 async fn font_digest(
   buffer : @input_dom.ArrayBuffer,
 ) -> @input_dom.ArrayBuffer raise Error {
-  input_window().crypto().subtle().digest("SHA-256", Case1(buffer)).wait()
+  @input_binding.window()
+  .crypto()
+  .subtle()
+  .digest("SHA-256", Case1(buffer))
+  .wait()
 }

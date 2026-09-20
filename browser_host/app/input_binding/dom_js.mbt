@@ -7,25 +7,25 @@ extern "js" fn input_window() -> @input_dom.Window =
   #| () => window
 
 ///|
-fn InputElement::target(self : InputElement) -> @input_dom.EventTarget {
+fn Element::target(self : Element) -> @input_dom.EventTarget {
   match self {
-    Editor(v) => v.to_event_target()
-    Query(v) => v.to_event_target()
+    Multiline(v) => v.to_event_target()
+    SingleLine(v) => v.to_event_target()
   }
 }
 
 ///|
-fn InputElement::value(self : InputElement) -> String {
+pub fn Element::value(self : Element) -> String {
   match self {
-    Editor(v) => v.get_value()
-    Query(v) => v.get_value()
+    Multiline(v) => v.get_value()
+    SingleLine(v) => v.get_value()
   }
 }
 
 ///|
-fn InputElement::selection(self : InputElement) -> (Int, Int, Bool)? {
+fn Element::selection(self : Element) -> (Int, Int, Bool)? {
   match self {
-    Editor(v) =>
+    Multiline(v) =>
       Some(
         (
           v.get_selection_start(),
@@ -33,7 +33,7 @@ fn InputElement::selection(self : InputElement) -> (Int, Int, Bool)? {
           v.get_selection_direction() == "backward",
         ),
       )
-    Query(v) => {
+    SingleLine(v) => {
       guard v.get_selection_start() is Some(start) else { return None }
       guard v.get_selection_end() is Some(end) else { return None }
       Some((start, end, v.get_selection_direction() == Some("backward")))
@@ -42,7 +42,7 @@ fn InputElement::selection(self : InputElement) -> (Int, Int, Bool)? {
 }
 
 ///|
-fn InputElement::active(self : InputElement) -> Bool {
+fn Element::active(self : Element) -> Bool {
   guard input_document().get_active_element() is Some(active) else {
     return false
   }
@@ -51,8 +51,8 @@ fn InputElement::active(self : InputElement) -> Bool {
   .is_same_node(
     Some(
       match self {
-        Editor(v) => v.to_node()
-        Query(v) => v.to_node()
+        Multiline(v) => v.to_node()
+        SingleLine(v) => v.to_node()
       },
     ),
   )
@@ -74,27 +74,14 @@ fn input_document_target() -> @input_dom.EventTarget {
 }
 
 ///|
-fn input_notify() -> Unit {
-  ignore(
-    input_document_target().dispatch_event(
-      @input_dom.Event::new("metonic-input"),
-    ),
-  )
-}
-
-///|
-fn input_editor() -> @input_dom.HTMLTextAreaElement? {
-  guard input_document().get_element_by_id("text-input") is Some(v) else {
-    return None
-  }
+pub fn textarea(id : String) -> @input_dom.HTMLTextAreaElement? {
+  guard input_document().get_element_by_id(id) is Some(v) else { return None }
   @input_dom.HTMLTextAreaElement::from_js_value_opt(v.to_js_value())
 }
 
 ///|
-fn input_query() -> @input_dom.HTMLInputElement? {
-  guard input_document().get_element_by_id("rpc-user") is Some(v) else {
-    return None
-  }
+pub fn input(id : String) -> @input_dom.HTMLInputElement? {
+  guard input_document().get_element_by_id(id) is Some(v) else { return None }
   @input_dom.HTMLInputElement::from_js_value_opt(v.to_js_value())
 }
 
@@ -143,4 +130,14 @@ fn input_request_frame(callback : (Double) -> Unit) -> UInt {
 ///|
 fn input_cancel_frame(frame : UInt) -> Unit {
   input_window().cancel_animation_frame(frame.reinterpret_as_int())
+}
+
+///|
+pub fn document() -> @input_dom.Document {
+  input_document()
+}
+
+///|
+pub fn document_target() -> @input_dom.EventTarget {
+  input_document_target()
 }

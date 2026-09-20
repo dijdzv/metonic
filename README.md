@@ -37,6 +37,9 @@ The browser defaults to WasmGC; JS remains available for comparison. The
 [backend selection record](docs/verification/browser-target.md) explains the
 measured tradeoff and the separate browser package.
 
+The [Notes example](docs/notes-example.md) uses the shared editing and rendering
+host without the P0 user-lookup flow. It has native, JS and WasmGC entry points.
+
 On Windows x64, install [mise](https://mise.jdx.dev/) 2026.9.4 or newer,
 Git for Windows, GitHub CLI (`gh`), and
 Visual Studio C++ x64 build tools with the Windows SDK. Native builds also require

@@ -1,5 +1,5 @@
 ///|
-priv struct BrowserClock {
+pub struct BrowserClock {
   wake : @cond_var.Cond
   mut timer : Int?
   mut reset : Bool
@@ -7,15 +7,15 @@ priv struct BrowserClock {
 }
 
 ///|
-priv suberror ClockReset
+pub suberror ClockReset
 
 ///|
-impl @clock.Clock for BrowserClock with fn now(_) {
+pub impl @clock.Clock for BrowserClock with fn now(_) {
   @async.now()
 }
 
 ///|
-impl @clock.Clock for BrowserClock with fn sleep(self, milliseconds) {
+pub impl @clock.Clock for BrowserClock with fn sleep(self, milliseconds) {
   @clock.validate_delay(milliseconds)
   self.timer = Some(
     host_set_timeout(
@@ -40,11 +40,16 @@ impl @clock.Clock for BrowserClock with fn sleep(self, milliseconds) {
 }
 
 ///|
-fn BrowserClock::cancel(self : BrowserClock) -> Unit {
+pub fn BrowserClock::cancel(self : BrowserClock) -> Unit {
   self.reset = true
   if self.timer is Some(timer) {
     host_clear_timeout(timer)
     self.timer = None
   }
   @async.run_async_main(() => self.wake.signal())
+}
+
+///|
+pub fn create() -> BrowserClock {
+  { wake: @cond_var.Cond(), timer: None, reset: false, ready: false, }
 }

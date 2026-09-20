@@ -1,0 +1,13 @@
+import {
+  "local/p0/effects/clock",
+  "local/browser_host/input_binding",
+  "local/websys-input" @input_dom,
+  "moonbitlang/async/cond_var",
+  "moonbitlang/async",
+}
+
+supported_targets = "+js+wasm-gc"
+
+options(
+  targets: { "timer_js.mbt": [ "js" ], "timer_wasm.mbt": [ "wasm-gc" ] },
+)

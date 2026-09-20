@@ -18,9 +18,11 @@ async fn main {
       @fs.write_file(
         destination + "/" + name,
         if name == "moon.mod" {
-          content.replace_all(
-            old="local/browser_host",
-            new="local/browser_host_dev",
+          content
+          .replace_all(old="local/browser_host", new="local/browser_host_dev")
+          .replace_all(
+            old="import {",
+            new="import {\n  \"local/browser_host@0.0.0\",",
           )
         } else {
           content
@@ -33,12 +35,19 @@ async fn main {
     destination + "/observe.mbt",
     @fs.read_file("browser_host/development/observe.mbt").binary(),
   )
-  // A removed shared source must not silently remain in the development build.
+  // This directory owns generated source copies; stale .mbt files must not keep
+  // removed implementations alive after an upgrade. Reject other unknown files.
+  let resolved = @fs.realpath(destination).replace_all(old="\\", new="/")
   for name in @fs.readdir(destination) {
-    assert_true(
-      names.contains(name),
-      msg="unexpected development source: " + name,
-    )
+    if !names.contains(name) {
+      assert_true(
+        name.has_suffix(".mbt"),
+        msg="unexpected development file: " + name,
+      )
+      let path = resolved + "/" + name
+      assert_eq(@fs.realpath(path).replace_all(old="\\", new="/"), path)
+      @fs.remove(path)
+    }
   }
   println("BROWSER_DEVELOPMENT_SOURCES_READY")
 }

@@ -1,0 +1,13 @@
+import {
+  "local/browser_host/http_transport",
+  "local/browser_host/input_binding",
+  "local/websys-input" @input_dom,
+  "moonbitlang/async/js_async",
+  "moonbitlang/async",
+}
+
+supported_targets = "+js+wasm-gc"
+
+options(
+  targets: { "font_js.mbt": [ "js" ], "font_wasm.mbt": [ "wasm-gc" ] },
+)

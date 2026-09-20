@@ -1,12 +1,15 @@
 import {
+  "local/browser_host/dom_view",
+  "local/browser_host/font_loader",
+  "local/browser_host/clock_driver",
+  "local/browser_host/http_transport",
+  "local/browser_host/gpu_renderer",
+  "local/browser_host/input_binding",
   "local/p0/effects/clock",
-  "local/p0/effects/http",
   "local/p0/examples/p0/user_load",
   "local/metonic_async/http" @timed,
-  "moonbitlang/async/cond_var",
   "local/p0/examples/p0/browser" @app,
   "local/websys-input" @input_dom,
-  "moonbitlang/async/js_async",
   "moonbitlang/async",
 }
 
@@ -16,16 +19,10 @@ supported_targets = "+js+wasm-gc"
 
 options(
   targets: {
-    "input_js.mbt": [ "js" ],
-    "input_wasm.mbt": [ "wasm-gc" ],
-    "gpu_js.mbt": [ "js" ],
-    "gpu_wasm.mbt": [ "wasm-gc" ],
     "http_js.mbt": [ "js" ],
     "http_wasm.mbt": [ "wasm-gc" ],
     "host_js.mbt": [ "js" ],
     "host_wasm.mbt": [ "wasm-gc" ],
-    "font_js.mbt": [ "js" ],
-    "font_wasm.mbt": [ "wasm-gc" ],
   },
   link: {
     "js": { "format": "esm" },

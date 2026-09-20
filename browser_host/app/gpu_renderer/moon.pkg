@@ -1,0 +1,10 @@
+import {
+  "local/websys-input" @input_dom,
+  "moonbitlang/async/js_async",
+}
+
+supported_targets = "+js+wasm-gc"
+
+options(
+  targets: { "gpu_js.mbt": [ "js" ], "gpu_wasm.mbt": [ "wasm-gc" ] },
+)

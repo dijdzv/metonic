@@ -1,0 +1,27 @@
+import {
+  "local/p0/examples/notes/application" @note_model,
+  "local/p0/core/semantics",
+  "local/p0/core/view_renderer" @renderer,
+  "local/p0/core/text_position",
+  "local/p0/text_raster" @raster,
+  "local/browser_host/input_binding",
+  "local/browser_host/dom_view",
+  "local/browser_host/font_loader",
+  "local/browser_host/gpu_renderer",
+  "local/websys-input" @dom,
+}
+
+pkgtype(kind: "foreign_library")
+
+supported_targets = "+js+wasm-gc"
+
+options(
+  targets: { "dom_js.mbt": [ "js" ], "dom_wasm.mbt": [ "wasm-gc" ] },
+  link: {
+    "js": { "format": "esm" },
+    "wasm-gc": {
+      "imported-string-constants": "_",
+      "use-js-builtin-string": true,
+    },
+  },
+)
