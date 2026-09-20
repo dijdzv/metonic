@@ -78,14 +78,15 @@ fn App::observation(self : App) -> Observation {
     editor: @semantics.snapshot(self.model.editor)[1],
     query: @semantics.snapshot(self.model.editor)[5],
     rpc_result: self.model.result,
-    query_scroll: self.query_scroll,
+    query_scroll: self.input_layouts.scroll_x(self.model.query_input),
     capture_srgb: self.renderer
     .map(renderer => {
       renderer.format.to_u32() == @wgpu.TEXTURE_FORMAT_BGRA8_UNORM_SRGB ||
       renderer.format.to_u32() == @wgpu.TEXTURE_FORMAT_RGBA8_UNORM_SRGB
     })
     .unwrap_or(false),
-    query_caret_position: self.query_raster
+    query_caret_position: self.input_layouts
+    .engine(self.model.query_input)
     .map(engine => {
       @raster.caret_position(
         engine,

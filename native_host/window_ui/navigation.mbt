@@ -1,13 +1,11 @@
 ///|
 fn App::editor_caret_after(app : App, caret : Int, width : Int) -> Bool {
-  match app.caret_side {
-    Some((revision, offset, old_width, after)) if revision ==
-      @semantics.revision(app.model.editor) &&
-      offset == caret &&
-      old_width == width &&
-      app.composition is None => after
-    _ => false
-  }
+  app.input_navigation.after(
+    app.model.editor_input,
+    caret,
+    width,
+    app.composition is Some(_),
+  )
 }
 
 ///|
@@ -24,18 +22,16 @@ fn App::navigate_vertical(
     app.draw()
     return
   }
-  if node.reference == app.model.query_input {
+  if app.input_layouts.single_line(node.reference) != Some(false) {
     return
   }
-  guard app.raster is Some(engine) else { return }
+  guard app.input_layouts.engine(node.reference) is Some(engine) else { return }
   let caret = @semantics.caret(node)
-  let revision = @semantics.revision(app.model.editor)
-  let preferred = match app.vertical_goal {
-    Some((old_revision, old_caret, width, x)) if old_revision == revision &&
-      old_caret == caret &&
-      width == app.text_width => x
-    _ => None
-  }
+  let preferred = app.input_navigation.preferred_x(
+    node.reference,
+    caret,
+    app.text_width,
+  )
   guard @raster.vertical_caret(
       engine,
       node.value,
@@ -61,11 +57,14 @@ fn App::navigate_vertical(
     "",
     "vertical caret selection rejected",
   )
-  app.vertical_goal = Some(
-    (@semantics.revision(app.model.editor), target, app.text_width, x),
-  )
-  app.caret_side = Some(
-    (@semantics.revision(app.model.editor), target, app.text_width, after),
+  ignore(
+    app.input_navigation.remember(
+      node.reference,
+      target,
+      app.text_width,
+      after,
+      x,
+    ),
   )
   app.draw()
 }

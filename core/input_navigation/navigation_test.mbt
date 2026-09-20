@@ -1,0 +1,42 @@
+///|
+test "input navigation is isolated by reference and invalidated by layout or edits" {
+  let tree = @semantics.empty(3, 7)
+  let title = @semantics.add_input(tree, "Title", "abcd").unwrap()
+  let notes = @semantics.add_input(tree, "Notes", "abcd").unwrap()
+  let state = create(tree)
+  assert_true(state.remember(title, 2, 80, true, Some(24)))
+  assert_true(state.remember(notes, 2, 80, false, Some(12)))
+  assert_eq(state.preferred_x(title, 2, 80), Some(24))
+  assert_eq(state.preferred_x(notes, 2, 80), Some(12))
+  assert_true(state.after(title, 2, 80, false))
+  assert_false(state.after(notes, 2, 80, false))
+  assert_false(state.after(title, 2, 80, true))
+  assert_eq(state.preferred_x(title, 1, 80), None)
+  assert_eq(state.preferred_x(title, 2, 100), None)
+  assert_eq(@semantics.set_text(tree, title, "changed"), "")
+  assert_eq(state.preferred_x(title, 2, 80), None)
+  assert_true(state.remember(title, 2, 80, true, Some(24)))
+  state.reset()
+  assert_false(state.after(title, 2, 80, false))
+}
+
+///|
+test "retired inputs and other trees never inherit navigation state" {
+  let tree = @semantics.empty(3, 7)
+  let old = @semantics.add_input(tree, "Title", "abcd").unwrap()
+  let button = @semantics.add_button(tree, "Save").unwrap()
+  let state = create(tree)
+  assert_false(state.remember(button, 0, 80, false, None))
+  assert_true(state.remember(old, 2, 80, true, Some(24)))
+  assert_eq(@semantics.remove(tree, old), "")
+  let fresh = @semantics.restore_input(tree, old.id, "Notes", "abcd").unwrap()
+  assert_false(state.remember(old, 2, 80, true, None))
+  assert_false(state.after(fresh, 2, 80, false))
+  let other = @semantics.empty(3, 8)
+  let foreign = @semantics.add_input(other, "Title", "abcd").unwrap()
+  assert_false(state.remember(foreign, 2, 80, true, None))
+  assert_true(state.remember(fresh, 2, 80, true, Some(24)))
+  assert_true(@semantics.dispose(tree))
+  assert_false(state.after(fresh, 2, 80, false))
+  assert_false(state.remember(fresh, 2, 80, true, None))
+}

@@ -1,0 +1,12 @@
+import {
+  "local/p0/core/semantics",
+  "local/p0/text_raster" @raster,
+}
+
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/core/env",
+} for "test"
+
+supported_targets = "native"
