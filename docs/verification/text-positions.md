@@ -2,7 +2,7 @@
 
 ## Implemented contract
 
-`examples/p0/text_position` converts between UTF-16 code-unit offsets, UTF-8 byte
+`core/text_position` converts between UTF-16 code-unit offsets, UTF-8 byte
 offsets and Unicode scalar indices. Every public function states both units in
 its name. Offsets describe prefix boundaries, including zero and the end.
 

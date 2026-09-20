@@ -2,7 +2,8 @@
 
 ## Status
 
-Proposed; integration acceptance is tracked in [Issue 429](https://github.com/dijdzv/metonic/issues/429).
+Accepted for the bounded user-loading operation; implementation and integration
+evidence is recorded in [Issue 429](https://github.com/dijdzv/metonic/issues/429).
 
 ## Boundary
 

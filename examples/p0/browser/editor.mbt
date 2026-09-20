@@ -22,7 +22,14 @@ pub fn editor_composition_end() -> Unit {
 #export_name("editor_composition_start")
 pub fn editor_composition_start() -> Int {
   editor_composition_end()
-  editor_composition.val = @semantics.begin_composition(application.val.editor)
+  let nodes = @semantics.snapshot(application.val.editor)
+  if nodes.length() < 2 {
+    return 0
+  }
+  editor_composition.val = @semantics.begin_composition(
+    application.val.editor,
+    target=nodes[1].reference,
+  )
   if editor_composition.val is Some(_) {
     1
   } else {

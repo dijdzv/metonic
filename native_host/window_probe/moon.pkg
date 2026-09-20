@@ -5,7 +5,7 @@ import {
   "moonbitlang/async/fs",
   "local/p0/text_raster" @raster,
   "local/p0/native_gpu" @gpu,
-  "local/p0/examples/p0/semantics",
+  "local/p0/core/semantics",
   "local/native_host/window_ui" @ui,
   "local/native_host/window_control" @control,
 }

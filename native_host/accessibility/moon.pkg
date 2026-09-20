@@ -1,8 +1,8 @@
 import {
   "local/p0/examples/p0/application",
-  "local/p0/examples/p0/semantics",
+  "local/p0/core/semantics",
   "moonbitlang/core/encoding/utf8",
-  "local/p0/examples/p0/text_position" @position,
+  "local/p0/core/text_position" @position,
   "local/p0/text_raster" @raster,
 }
 

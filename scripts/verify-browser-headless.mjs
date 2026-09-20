@@ -660,6 +660,30 @@ try {
       }
       case 'rpc': {
         const page = await observedPage(browser);
+        const started = performance.now();
+        const timeline = [];
+        const mark = (event, details = {}) => {
+          if (timeline.length < 32) timeline.push({ event, ms: Math.round(performance.now() - started), ...details });
+        };
+        const rpcRequests = new Map();
+        page.on('request', req => {
+          if (new URL(req.url()).pathname !== '/rpc') return;
+          const id = rpcRequests.size + 1;
+          rpcRequests.set(req, id);
+          mark('request', { id });
+        });
+        page.on('response', response => {
+          const id = rpcRequests.get(response.request());
+          if (id) mark('response', { id, status: response.status() });
+        });
+        page.on('requestfinished', req => {
+          const id = rpcRequests.get(req);
+          if (id) mark('finished', { id });
+        });
+        page.on('requestfailed', req => {
+          const id = rpcRequests.get(req);
+          if (id) mark('failed', { id, error: req.failure()?.errorText });
+        });
         let release;
         try {
           await page.goto(`${baseUrl}/?target=${encodeURIComponent(request.target)}`);
@@ -669,17 +693,28 @@ try {
             await page.locator('#rpc-user').fill('1');
             await page.locator('#rpc-load').click();
             await page.waitForFunction(() => JSON.parse(document.querySelector('#task-state').textContent)[0] === 2);
+            mark('prior-success');
           }
           let seen;
           if (request.mode) {
             let notify;
             seen = new Promise(resolve => { notify = resolve; });
             const held = new Promise(resolve => { release = resolve; });
+            let intercepted = false;
+            // Expiring interception while aborting the held fetch can stall its
+            // replacement in this integrated scenario (#321). Keep routing active.
             await page.route('**/rpc', async route => {
+              if (intercepted) {
+                mark('continued');
+                await route.continue();
+                return;
+              }
+              intercepted = true;
+              mark('held');
               notify();
               await held;
               await route.abort();
-            }, { times: 1 });
+            });
           }
           await page.locator('#rpc-user').fill(request.user);
           await page.locator('#rpc-load').click();
@@ -693,7 +728,9 @@ try {
               if (status !== 1) throw new Error(`RPC pending precondition expired: status=${status}, result=${document.querySelector('#rpc-result').textContent}`);
               document.querySelector(mode === 'cancel' ? '#task-cancel' : '#rpc-load').click();
             }, request.mode);
+            mark('action', { mode: request.mode });
             release();
+            mark('released');
           }
           // A previous result remains visible while its replacement is still working.
           if (request.mode !== 'cancel') await page.waitForFunction(() => {
@@ -705,12 +742,20 @@ try {
             await page.setViewportSize({ width: 740, height: 800 });
             await page.locator('#text-input').fill(request.after_text);
           }
-          return await page.evaluate(() => ({
+          const result = await page.evaluate(() => ({
             text: document.querySelector('#text-input').value,
             result: document.querySelector('#rpc-result').textContent,
             status: JSON.parse(document.querySelector('#task-state').textContent)[0],
           }));
-        } catch (error) { await reportFailure(page); throw error }
+          if (request.mode && result.result.includes('RPC: timeout')) {
+            console.error('RPC_TIMELINE ' + JSON.stringify({ target: request.target, mode: request.mode, priorSuccess: !!request.prior_success, timeline, result }));
+            await reportFailure(page);
+          }
+          return result;
+        } catch (error) {
+          console.error('RPC_TIMELINE ' + JSON.stringify({ target: request.target, mode: request.mode, timeline }));
+          await reportFailure(page); throw error;
+        }
         finally { release?.(); await page.close(); }
       }
       case 'rpc-stream-cleanup': {

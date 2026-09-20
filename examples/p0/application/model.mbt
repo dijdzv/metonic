@@ -14,7 +14,7 @@ pub struct Model {
 
 ///|
 pub fn create(session : Int, window : Int) -> Model {
-  let editor = @semantics.create(session, window)
+  let editor = @sample.create(session, window)
   let request_button = @semantics.add_button(editor, "Load user").unwrap()
   let start_button = @semantics.add_button(editor, "Move after delay").unwrap()
   let cancel_button = @semantics.add_button(editor, "Cancel").unwrap()

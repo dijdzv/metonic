@@ -108,6 +108,16 @@ same thread. Callbacks do not hold locks across reentrant UI work.
 
 ## 4. Scene, layout, and rendering
 
+The reusable editing state lives in `core/semantics`, alongside `core/text_position`
+and `core/task_scope`. A semantic tree starts empty or from explicit initial nodes;
+registration order does not assign special behavior. Composition requires an
+explicit target. Restoring a removed input slot issues a new generation, so old
+references and in-flight compositions cannot address its replacement.
+`examples/p0/semantics` supplies the sample's initial controls, toggle policy and
+legacy default-input operations. It delegates editing to the core rather than
+implementing a second editor. Windows IMM attribute interpretation belongs to
+`platform/windows/ime_presentation`, not the platform-independent editor.
+
 Track style/paint, layout, text-shaping, and semantic invalidation separately.
 A color change must not require reshaping text. Layout invalidation propagates
 to ancestors only when their measurements depend on the changed child.

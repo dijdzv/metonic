@@ -1,6 +1,6 @@
 import {
   "local/p0/examples/p0/scene",
-  "local/p0/examples/p0/task_scope",
+  "local/p0/core/task_scope",
   "local/p0/native_gpu" @gpu,
   "local/native_host/windows_loop" @loop,
   "Milky2018/wgpu_mbt" @wgpu,
