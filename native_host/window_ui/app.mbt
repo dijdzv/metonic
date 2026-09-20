@@ -58,12 +58,8 @@ struct App {
   mut rendered_preedit_attributes : Bytes
   mut control_pressed : Bool
   mut shift_pressed : Bool
-  mut vertical_goal : (Int, Int, Int, Int?)?
-  mut caret_side : (Int, Int, Int, Bool)?
-  mut raster : @raster.Engine?
-  mut query_raster : @raster.Engine?
-  mut query_scroll : Int
-  mut editor_scroll : Int
+  input_navigation : @input_navigation.State
+  input_layouts : @input_layout.Registry
   mut rendered_text : String?
   mut rendered_request_focus : Bool
   mut rendered_task_status : Int
@@ -336,34 +332,21 @@ fn App::draw(self : App) -> Unit raise Error {
         self.rendered_active_caret != Some(caret) ||
         self.rendered_caret_after != caret_after {
         let query_width = (view.query.bounds.width - 16).max(1)
-        ignore(
-          @raster.render(
-            self.query_raster.unwrap(),
+        require(
+          self.input_layouts.prepare_single_line(
+            self.model.query_input,
             view.query.text,
             query_width,
-            32,
-            single_line_scroll=Some(0),
+            if view.query.focused {
+              Some(query_active_caret)
+            } else {
+              None
+            },
           ),
+          "single-line input layout unavailable",
         )
-        let query_engine = self.query_raster.unwrap()
-        if @raster.caret_position(query_engine, view.query.text.length())
-          is Some((end_x, _)) {
-          self.query_scroll = self.query_scroll.min(
-            (end_x - query_width + 1).max(0),
-          )
-        }
-        if view.query.focused {
-          if @raster.caret_position(query_engine, query_active_caret)
-            is Some((x, _)) {
-            if x < self.query_scroll {
-              self.query_scroll = x.max(0)
-            } else if x >= self.query_scroll + query_width {
-              self.query_scroll = (x - query_width + 1).max(0)
-            }
-          }
-        }
         let layers = @view_renderer.render(
-          self.raster.unwrap(),
+          self.input_layouts.engine(self.model.editor_input).unwrap(),
           view,
           text,
           selection~,
@@ -381,11 +364,14 @@ fn App::draw(self : App) -> Unit raise Error {
           },
           caret=visible_caret,
           caret_after~,
-          query_scroll=Some(self.query_scroll),
-          editor_scroll=self.editor_scroll,
+          query_scroll=Some(self.input_layouts.scroll_x(self.model.query_input)),
+          editor_scroll=self.input_layouts.scroll_y(self.model.editor_input),
           editor_active_caret=Some(caret),
         )
-        self.editor_scroll = @raster.vertical_scroll(self.raster.unwrap())
+        require(
+          self.input_layouts.sync_vertical_scroll(self.model.editor_input),
+          "multiline input layout unavailable",
+        )
         renderer.set_text_layers(
           layers.map(layer => @gpu.TextLayer::{
             x: layer.bounds.x,
@@ -426,9 +412,9 @@ fn App::draw(self : App) -> Unit raise Error {
       }
       let position = @raster.caret_position(
         if query_focused {
-          self.query_raster.unwrap()
+          self.input_layouts.engine(self.model.query_input).unwrap()
         } else {
-          self.raster.unwrap()
+          self.input_layouts.engine(self.model.editor_input).unwrap()
         },
         input_caret,
         after=if query_focused { false } else { caret_after },
@@ -439,7 +425,9 @@ fn App::draw(self : App) -> Unit raise Error {
             @dpi.PhysicalPosition(
               x +
               (if query_focused {
-                view.query.bounds.x + 8 - self.query_scroll
+                view.query.bounds.x +
+                8 -
+                self.input_layouts.scroll_x(self.model.query_input)
               } else {
                 8
               }),
@@ -447,7 +435,7 @@ fn App::draw(self : App) -> Unit raise Error {
               (if query_focused {
                 view.query.bounds.y + 2
               } else {
-                8 - self.editor_scroll
+                8 - self.input_layouts.scroll_y(self.model.editor_input)
               }),
             ).into_position(),
             @dpi.PhysicalSize(1, 32).into_size(),
@@ -476,9 +464,11 @@ fn App::draw(self : App) -> Unit raise Error {
         @p0_accessibility.presentation(
           self.model,
           composing=self.composition is Some(_),
-          editor_scroll=self.editor_scroll,
+          editor_scroll=self.input_layouts.scroll_y(self.model.editor_input),
         ),
-        self.raster.bind(engine => @raster.text_runs(engine, nodes[1].value)),
+        self.input_layouts
+        .engine(self.model.editor_input)
+        .bind(engine => @raster.text_runs(engine, nodes[1].value)),
       ),
       "invalid accessibility presentation",
     )
@@ -500,6 +490,8 @@ fn App::finish(self : App) -> Unit raise Error {
     bridge.close()
   }
   self.accessibility = None
+  self.input_layouts.clear()
+  self.input_navigation.reset()
   require(
     self.owner.pending_count() == 0,
     "GPU initialization still owns window",
@@ -546,10 +538,11 @@ async fn run_loop(
   report : (String) -> Unit,
 ) -> Unit {
   let event_loop = @windows.EventLoop::new()
+  let model = @application.create(1, 1)
   let app : App = {
     event_loop,
     events: @aqueue.Queue::Queue(kind=@aqueue.Blocking(64)),
-    model: @application.create(1, 1),
+    model,
     diagnostics: Diagnostics::new(),
     composition: None,
     ime_pointer: @ime_focus.Transfer::new(),
@@ -559,12 +552,8 @@ async fn run_loop(
     rendered_preedit_attributes: b"",
     control_pressed: false,
     shift_pressed: false,
-    vertical_goal: None,
-    caret_side: None,
-    raster: None,
-    query_raster: None,
-    query_scroll: 0,
-    editor_scroll: 0,
+    input_navigation: @input_navigation.create(model.editor),
+    input_layouts: @input_layout.create(model.editor),
     rendered_text: None,
     rendered_result: "",
     rendered_request_focus: false,
@@ -605,10 +594,14 @@ async fn run_loop(
         ".work/text-assets/NotoSansJP.ttf",
       ),
     ).binary()
-    app.raster = @raster.create(font)
-    app.query_raster = @raster.create(font)
-    require(app.raster is Some(_), "font could not be loaded")
-    require(app.query_raster is Some(_), "query font could not be loaded")
+    require(
+      app.input_layouts.register(model.editor_input, font, false),
+      "font could not be loaded",
+    )
+    require(
+      app.input_layouts.register(model.query_input, font, true),
+      "query font could not be loaded",
+    )
     require(
       @semantics.set_text(
         app.model.editor,
@@ -663,10 +656,7 @@ async fn run_loop(
             | Commit(_)
             | Backspace
             | Delete
-            | CompositionStart => {
-              app.vertical_goal = None
-              app.caret_side = None
-            }
+            | CompositionStart => app.input_navigation.reset()
             _ => ()
           }
           let event = match event {
@@ -1094,10 +1084,11 @@ fn App::apply_pointer(
       ignore(@semantics.focus(app.model.editor, app.model.query_input))
       let node = app.input_node()
       let box = app.model.view().query.bounds
-      if app.query_raster is Some(engine) {
+      if app.input_layouts.engine(app.model.query_input) is Some(engine) {
         if @raster.hit(
             engine,
-            (x - box.x - 8).max(0) + app.query_scroll,
+            (x - box.x - 8).max(0) +
+            app.input_layouts.scroll_x(app.model.query_input),
             (y - box.y - 2).max(0),
           )
           is Some(offset) {
@@ -1141,8 +1132,12 @@ fn App::apply_pointer(
     }
     (x, y, extend_selection) =>
       if x >= 8 && x < 8 + app.text_width && y >= 8 && y < 104 {
-        if app.raster is Some(engine) {
-          if @raster.hit_caret(engine, x - 8, y - 8 + app.editor_scroll)
+        if app.input_layouts.engine(app.model.editor_input) is Some(engine) {
+          if @raster.hit_caret(
+              engine,
+              x - 8,
+              y - 8 + app.input_layouts.scroll_y(app.model.editor_input),
+            )
             is Some((offset, after)) {
             let node = @semantics.snapshot(app.model.editor)[1]
             ignore(@semantics.focus(app.model.editor, node.reference))
@@ -1160,12 +1155,13 @@ fn App::apply_pointer(
                 caret,
               ),
             )
-            app.caret_side = Some(
-              (
-                @semantics.revision(app.model.editor),
+            ignore(
+              app.input_navigation.remember(
+                node.reference,
                 caret,
                 app.text_width,
                 after,
+                None,
               ),
             )
             app.draw()

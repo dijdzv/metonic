@@ -1,4 +1,6 @@
 import {
+  "local/p0/core/input_navigation",
+  "local/native_host/input_layout",
   "local/p0/effects/clock",
   "local/p0/platform/windows/ime_presentation",
   "local/native_host/ime_focus",

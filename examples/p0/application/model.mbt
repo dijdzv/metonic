@@ -2,6 +2,7 @@
 pub struct Model {
   scene : @scene.State
   editor : @semantics.Tree
+  editor_input : @semantics.NodeRef
   request_button : @semantics.NodeRef
   start_button : @semantics.NodeRef
   cancel_button : @semantics.NodeRef
@@ -22,6 +23,7 @@ pub fn create(session : Int, window : Int) -> Model {
   {
     scene: @scene.create(),
     editor,
+    editor_input: @semantics.snapshot(editor)[1].reference,
     request_button,
     start_button,
     cancel_button,
