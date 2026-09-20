@@ -2,7 +2,7 @@
 pub(all) enum Surface {
   Text
   Control
-}
+} derive(Eq)
 
 ///|
 pub struct Item {
@@ -15,7 +15,7 @@ pub struct Item {
   single_line_scroll : Int?
   vertical_scroll : Int
   follow_caret : Int?
-}
+} derive(Eq)
 
 ///|
 pub fn item(

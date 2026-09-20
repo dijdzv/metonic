@@ -1,0 +1,37 @@
+import {
+  "local/p0/core/input_navigation",
+  "local/native_host/input_layout",
+  "local/native_host/view_presentation",
+  "local/native_host/application" @host_application,
+  "local/p0/core/application_task" @task,
+  "local/metonic_async/application_task" @task_runner,
+  "local/p0/platform/windows/ime_presentation",
+  "local/native_host/ime_focus",
+  "local/p0/core/semantics",
+  "local/p0/text_raster" @raster,
+  "local/p0/native_gpu" @gpu,
+  "local/native_host/windows_loop" @loop,
+  "local/native_host/accessibility",
+  "Milky2018/wgpu_mbt" @wgpu,
+  "Milky2018/wgpu_mbt/c",
+  "moonbitlang/async",
+  "moonbitlang/async/aqueue",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/external_loop_integration" @external,
+  "moonbitlang/core/env",
+  "wzzc-dev/window/core",
+  "wzzc-dev/window/dpi",
+  "wzzc-dev/window/windows",
+}
+
+supported_targets = "native"
+
+options(
+  targets: {
+    "handle.mbt": [ "debug" ],
+    "observation.mbt": [ "debug" ],
+    "development.mbt": [ "debug" ],
+    "hooks_debug.mbt": [ "debug" ],
+    "hooks_release.mbt": [ "release" ],
+  },
+)

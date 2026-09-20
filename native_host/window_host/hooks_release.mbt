@@ -36,8 +36,12 @@ fn Hooks::processed(_self : Hooks, _event : Event, _app : App) -> Unit {
 type DevelopmentRequest = Unit
 
 ///|
-pub async fn run() -> Unit {
-  run_loop(Hooks::{ }, false, println)
+pub async fn run(
+  application : @host_application.Application,
+  hidden? : Bool = false,
+  report? : (String) -> Unit = println,
+) -> Unit {
+  run_loop(application, Hooks::{ }, hidden, report)
 }
 
 ///|

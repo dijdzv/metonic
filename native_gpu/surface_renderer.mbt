@@ -176,26 +176,71 @@ pub fn SurfaceRenderer::present(
   active : Int,
   display_scale? : Double? = None,
 ) -> Unit raise Error {
+  self.present_frame(
+    width,
+    height,
+    rectangle=Some({ x, y, width: rw, height: rh, active, }),
+    display_scale~,
+  )
+}
+
+///|
+pub(all) struct SurfaceRectangle {
+  x : Int
+  y : Int
+  width : Int
+  height : Int
+  active : Int
+} derive(Eq, Debug)
+
+///|
+fn surface_rectangle_words(
+  width : Int,
+  height : Int,
+  rectangle : SurfaceRectangle?,
+) -> Array[UInt] raise Error {
+  if width < 1 || width > 2048 || height < 1 || height > 2048 {
+    raise SurfaceRendererInvalidDimensions
+  }
+  guard rectangle is Some(rect) else { return [0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U] }
+  if rect.x < 0 ||
+    rect.y < 0 ||
+    rect.width < 1 ||
+    rect.height < 1 ||
+    rect.x >= width ||
+    rect.y >= height ||
+    rect.width > width - rect.x ||
+    rect.height > height - rect.y ||
+    (rect.active != 0 && rect.active != 1) {
+    raise SurfaceRendererInvalidRectangle
+  }
+  [
+    rect.x.reinterpret_as_uint(),
+    rect.y.reinterpret_as_uint(),
+    rect.width.reinterpret_as_uint(),
+    rect.height.reinterpret_as_uint(),
+    rect.active.reinterpret_as_uint(),
+    0U,
+    0U,
+    0U,
+  ]
+}
+
+///|
+pub fn SurfaceRenderer::present_frame(
+  self : SurfaceRenderer,
+  width : Int,
+  height : Int,
+  rectangle? : SurfaceRectangle? = None,
+  display_scale? : Double? = None,
+) -> Unit raise Error {
   if self.closed {
     raise SurfaceRendererClosed
   }
   if self.poisoned {
     raise SurfaceRendererInvalidConfiguration
   }
-  if width < 1 || width > 2048 || height < 1 || height > 2048 {
-    raise SurfaceRendererInvalidDimensions
-  }
-  if x < 0 ||
-    y < 0 ||
-    rw < 1 ||
-    rh < 1 ||
-    x >= width ||
-    y >= height ||
-    rw > width - x ||
-    rh > height - y ||
-    (active != 0 && active != 1) {
-    raise SurfaceRendererInvalidRectangle
-  }
+  let rectangle_words = surface_rectangle_words(width, height, rectangle)
   let width_u = width.reinterpret_as_uint()
   let height_u = height.reinterpret_as_uint()
   if width_u != self.width || height_u != self.height {
@@ -215,16 +260,7 @@ pub fn SurfaceRenderer::present(
   self.queue.write_buffer(
     self.uniform,
     0UL,
-    renderer_uniform_bytes([
-      x.reinterpret_as_uint(),
-      y.reinterpret_as_uint(),
-      rw.reinterpret_as_uint(),
-      rh.reinterpret_as_uint(),
-      active.reinterpret_as_uint(),
-      0U,
-      0U,
-      0U,
-    ]),
+    renderer_uniform_bytes(rectangle_words),
   )
   let encoder = self.device.create_command_encoder()
   defer encoder.release()

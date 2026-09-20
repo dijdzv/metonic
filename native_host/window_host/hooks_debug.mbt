@@ -160,7 +160,7 @@ fn Hooks::processed(_self : Hooks, event : Event, app : App) -> Unit {
     "sequence": diagnostics.ime_sequence,
     "tick_ms": native_tick_count(),
     "kind": kind,
-    "field": if node.reference == app.model.query_input {
+    "field": if node.reference != app.host.default_input {
       "query"
     } else {
       "editor"
@@ -211,6 +211,7 @@ priv struct Hooks {
 
 ///|
 pub async fn run(
+  application : @host_application.Application,
   display_feedback? : ((@wgpu.Surface) -> @gpu.DisplayObservation)? = None,
   observer? : (async (Observation) -> Unit)? = None,
   completed? : ((Observation) -> Unit raise Error)? = None,
@@ -220,6 +221,7 @@ pub async fn run(
   report? : (String) -> Unit = println,
 ) -> Unit {
   run_loop(
+    application,
     { display_feedback, observer, completed, lifecycle, controller, },
     hidden,
     report,

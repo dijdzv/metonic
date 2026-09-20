@@ -4,6 +4,8 @@ pub struct Engine {
   mut cache : @cosmic.SwashCache
   mut layout : @cosmic.Buffer?
   mut text : String
+  mut width : Int
+  mut single_line : Bool
   mut scroll_y : Int
 }
 
@@ -18,6 +20,8 @@ pub fn create(font : Bytes) -> Engine? {
       cache: @cosmic.SwashCache::new(),
       layout: None,
       text: "",
+      width: 0,
+      single_line: false,
       scroll_y: 0,
     })
   }
@@ -57,6 +61,8 @@ pub fn render(
       .layout_all_with_font_system(engine.system)
     engine.layout = Some(buffer)
     engine.text = text
+    engine.width = width
+    engine.single_line = single_line_scroll is Some(_)
     let mut bottom = 0
     for run in buffer.layout_runs() {
       bottom = bottom.max((run.line_top + run.line_height).ceil().to_int())
@@ -155,6 +161,19 @@ pub fn render(
 ///|
 pub fn vertical_scroll(engine : Engine) -> Int {
   engine.scroll_y
+}
+
+///|
+pub fn matches_layout(
+  engine : Engine,
+  text : String,
+  width : Int,
+  single_line : Bool,
+) -> Bool {
+  engine.layout is Some(_) &&
+  engine.text == text &&
+  engine.width == width &&
+  engine.single_line == single_line
 }
 
 ///|

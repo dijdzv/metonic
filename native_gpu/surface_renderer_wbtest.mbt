@@ -2,6 +2,29 @@
 suberror SurfaceRendererTestFailure derive(Debug)
 
 ///|
+test "text-only surface frames need no rectangle and preserve viewport validation" {
+  assert_eq(surface_rectangle_words(640, 360, None), [
+    0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U,
+  ])
+  assert_eq(
+    surface_rectangle_words(
+      640,
+      360,
+      Some({ x: 10, y: 20, width: 30, height: 40, active: 1, }),
+    ),
+    [10U, 20U, 30U, 40U, 1U, 0U, 0U, 0U],
+  )
+  let invalid = try {
+    ignore(surface_rectangle_words(0, 360, None))
+    false
+  } catch {
+    SurfaceRendererError::SurfaceRendererInvalidDimensions => true
+    other => raise other
+  }
+  assert_true(invalid)
+}
+
+///|
 fn fake_acquisition(
   statuses : Array[UInt],
   releases : Array[Int],

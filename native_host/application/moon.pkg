@@ -1,0 +1,11 @@
+import {
+  "local/p0/core/semantics",
+  "local/p0/core/application_task" @task,
+  "local/p0/core/view_renderer" @renderer,
+  "local/p0/native_gpu" @gpu,
+  "local/native_host/accessibility",
+  "local/native_host/view_presentation",
+  "wzzc-dev/window/core",
+}
+
+supported_targets = "native"

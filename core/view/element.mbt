@@ -20,4 +20,4 @@ pub(all) struct Element {
   text : String
   reference : @semantics.NodeRef?
   focused : Bool
-}
+} derive(Eq)

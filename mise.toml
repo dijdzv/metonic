@@ -273,6 +273,21 @@ run = '.\\.tools\\moonbit\\bin\\moon.exe test tools/native_control --target wasm
 run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/build-native.mbtx'
 env = { METONIC_NATIVE_BUILD = "window" }
 
+[tasks."native:notes-build"]
+run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/build-native.mbtx'
+env = { METONIC_NATIVE_BUILD = "notes-release" }
+
+[tasks."native:notes-probe-build"]
+run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/build-native.mbtx'
+env = { METONIC_NATIVE_BUILD = "notes-probe" }
+
+[tasks."native:notes-test"]
+depends = ["native:notes-probe-build"]
+run = [
+  '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-host-boundaries.mbtx',
+  '.\\.work\\native-host-build\\native\\debug\\build\\local\\native_host\\notes_probe\\notes_probe.exe',
+]
+
 [tasks."native:window-release-build"]
 run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/build-native.mbtx'
 env = { METONIC_NATIVE_BUILD = "window-release" }

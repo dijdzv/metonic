@@ -15,6 +15,37 @@ pub fn render(
   editor_scroll? : Int = 0,
   editor_active_caret? : Int? = None,
 ) -> Array[Layer] {
+  @renderer.render(
+    engine,
+    items(
+      view,
+      text,
+      selection~,
+      selection_ranges?,
+      query_selection_ranges?,
+      caret~,
+      caret_after~,
+      query_scroll~,
+      editor_scroll~,
+      editor_active_caret~,
+    ),
+    retain_layout=0,
+  ).unwrap()
+}
+
+///|
+pub fn items(
+  view : @application.View,
+  text : String,
+  selection? : (Int, Int) = (0, 0),
+  selection_ranges? : Array[(Int, Int)],
+  query_selection_ranges? : Array[(Int, Int)],
+  caret? : Int? = None,
+  caret_after? : Bool = false,
+  query_scroll? : Int? = None,
+  editor_scroll? : Int = 0,
+  editor_active_caret? : Int? = None,
+) -> Array[@renderer.Item] {
   let items = [
     @renderer.item(
       { ..view.editor, text, },
@@ -44,5 +75,5 @@ pub fn render(
       single_line_scroll=query_scroll,
     ),
   )
-  @renderer.render(engine, items, retain_layout=0).unwrap()
+  items
 }

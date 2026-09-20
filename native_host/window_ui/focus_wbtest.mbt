@@ -1,4 +1,9 @@
 ///|
+fn move_focus(host : @host_application.Application, reverse : Bool) -> Unit {
+  @host_application.move_focus(host.editor, (host.focus_order)(), reverse)
+}
+
+///|
 fn focused_name(model : @application.Model) -> String {
   for node in @semantics.snapshot(model.editor) {
     if node.focused {
@@ -15,14 +20,14 @@ test "Tab and Shift Tab traverse the complete demo in opposite directions" {
     name in [
       "Text", "Toggle", "Load user", "Move after delay", "Cancel", "User ID", "Text",
     ] {
-    move_focus(model, false)
+    move_focus(@p0_application.create(model), false)
     assert_eq(focused_name(model), name)
   }
   for
     name in [
       "User ID", "Cancel", "Move after delay", "Load user", "Toggle", "Text",
     ] {
-    move_focus(model, true)
+    move_focus(@p0_application.create(model), true)
     assert_eq(focused_name(model), name)
   }
 }
@@ -35,10 +40,10 @@ test "reverse entry and round trip preserve text and selection" {
     "",
   )
   assert_eq(@semantics.set_selection(model.editor, model.query_input, 1, 3), "")
-  move_focus(model, true)
+  move_focus(@p0_application.create(model), true)
   assert_eq(focused_name(model), "User ID")
-  move_focus(model, true)
-  move_focus(model, false)
+  move_focus(@p0_application.create(model), true)
+  move_focus(@p0_application.create(model), false)
   assert_eq(focused_name(model), "User ID")
   let query = @semantics.snapshot(model.editor)[5]
   assert_eq(query.value, "あいう")
