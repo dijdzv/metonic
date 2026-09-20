@@ -7,6 +7,11 @@ pub struct TextRun {
   width : Float
   rtl : Bool
   cells : Array[TextCell]?
+} derive(Eq)
+
+///|
+pub fn TextRun::copy(self : TextRun) -> TextRun {
+  { ..self, cells: self.cells.map(cells => cells.copy()), }
 }
 
 ///|

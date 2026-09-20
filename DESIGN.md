@@ -195,6 +195,9 @@ accessibility and development inspection, without requiring identical wire forma
 
 P0 adopts the official AccessKit C adapter for Windows, with MoonBit owning the
 semantic model and action handling. Browser semantics use DOM adapters.
+The native bridge accepts [application-defined presentation](docs/native-accessibility-presentation.md)
+for bounds, toggle state, status elements and retained-text ownership. P0 supplies
+that mapping through its adapter; the bridge does not recognize sample control IDs.
 The [production accessibility record](docs/verification/native-accessibility.md)
 documents implemented Value/Text selection and request actions, the C ownership
 boundary, and remaining geometry and real assistive-technology acceptance.

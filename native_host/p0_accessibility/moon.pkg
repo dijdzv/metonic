@@ -1,0 +1,8 @@
+import {
+  "local/native_host/accessibility",
+  "local/p0/examples/p0/application",
+  "local/p0/examples/p0/scene",
+  "local/p0/core/semantics",
+}
+
+supported_targets = "native"

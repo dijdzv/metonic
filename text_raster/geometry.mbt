@@ -4,7 +4,7 @@ pub struct TextCell {
   end : Int
   x : Float
   width : Float
-}
+} derive(Eq)
 
 ///|
 fn text_cells(
