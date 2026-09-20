@@ -1,7 +1,9 @@
 import {
   "local/p0/core/input_navigation",
   "local/native_host/input_layout",
-  "local/p0/effects/clock",
+  "local/p0/core/application_task" @task,
+  "local/metonic_async/application_task" @task_runner,
+  "local/native_host/p0_tasks",
   "local/p0/platform/windows/ime_presentation",
   "local/native_host/ime_focus",
   "local/p0/examples/p0/view_renderer",
@@ -12,7 +14,6 @@ import {
   "local/p0/text_raster" @raster,
   "local/p0/native_gpu" @gpu,
   "local/native_host/windows_loop" @loop,
-  "local/native_host/rpc_client",
   "local/native_host/accessibility",
   "local/native_host/p0_accessibility",
   "Milky2018/wgpu_mbt" @wgpu,

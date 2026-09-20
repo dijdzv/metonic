@@ -178,7 +178,8 @@ fn App::observation(self : App) -> Observation {
                 anchor_node, anchor_index, focus_node, focus_index,
               ),
             )
-          Updated(id, value) => Updated(id, value)
+          Updated(id, value) =>
+            ApplicationResult(@p0_tasks.movement_result(self.model, id, value))
         },
       )
     },
