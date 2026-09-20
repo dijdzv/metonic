@@ -3,9 +3,12 @@ import {
   "Milky2018/wgpu_mbt/c",
   "moonbitlang/async",
   "moonbitlang/core/int",
-  "moonbitlang/core/env",
   "moonbitlang/core/ref",
 }
+
+import {
+  "moonbitlang/core/env",
+} for "wbtest"
 
 pkgtype(kind: "library")
 

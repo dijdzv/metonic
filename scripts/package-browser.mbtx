@@ -14,6 +14,7 @@ async fn main {
     (".work/browser-dist/browser-buffer.mjs", "browser-buffer.mjs"),
     (".work/browser-dist/websys-input.mjs", "websys-input.mjs"),
     (".work/browser-dist/LICENSE-websys", "LICENSE-websys"),
+    (".work/browser-dist/LICENSE-async", "LICENSE-async"),
     (".work/browser-dist/webapi.mjs", "webapi.mjs"),
     (".work/browser-dist/LICENSE-webapi", "LICENSE-webapi"),
     ("examples/p0/browser/host/release.html", "index.html"),

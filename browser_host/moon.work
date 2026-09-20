@@ -4,4 +4,5 @@ members = [
   "..",
   "../.work/browser-gpu/generated",
   "../.work/websys-input/generated",
+  "../.work/websys-input/async-dependency",
 ]

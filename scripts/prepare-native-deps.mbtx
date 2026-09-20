@@ -569,10 +569,71 @@ async fn prepare(args : Array[String]) -> Unit raise Error {
   // Compare the complete source tree with only an exact owned configuration
   // admitted; ignoring the manifest would hide unrelated dependency edits.
   @fs.write_file(window_stage + manifest_suffix, current)
+  let import_upgrades : Array[(String, String, String)] = []
+  for
+    spec in [
+      (
+        async_stage, async_existing, "/src/fs/moon.pkg", "  \"moonbitlang/core/deque\",\n  \"moonbitlang/core/sorted_set\",\n",
+        "",
+      ),
+      (
+        async_stage, async_existing, "/src/socket/moon.pkg", "  \"moonbitlang/core/encoding/utf8\",\n",
+        "",
+      ),
+      (
+        async_stage, async_existing, "/src/process/moon.pkg", "  \"moonbitlang/core/encoding/utf8\",\n",
+        "\nimport { \"moonbitlang/core/encoding/utf8\" } for \"test\"\n",
+      ),
+      (
+        async_stage, async_existing, "/src/internal/event_loop/moon.pkg", "  \"moonbitlang/core/encoding/utf8\",\n",
+        "",
+      ),
+      (
+        cosmic_stage, cosmic_existing, "/src/font_fallback/moon.pkg", "  \"moonbitlang/core/string\",\n",
+        "",
+      ),
+      (
+        cosmic_stage, cosmic_existing, "/src/unicode_linebreak/moon.pkg", "  \"moonbitlang/core/debug\",\n",
+        "\nimport { \"moonbitlang/core/debug\" } for \"test\"\n",
+      ),
+    ] {
+    let (staged_root, existing_root, suffix, obsolete, test_import) = spec
+    let staged_path = staged_root + suffix
+    let existing_path = existing_root + suffix
+    let original = @fs.read_file(staged_path).text()
+    assert_true(
+      original.contains(obsolete),
+      msg="unexpected upstream import manifest",
+    )
+    let without_obsolete = original.replace(old=obsolete, new="")
+    let corrected = if test_import != "" &&
+      without_obsolete.contains("} for \"test\"") {
+      without_obsolete.replace(
+        old="} for \"test\"",
+        new=obsolete + "} for \"test\"",
+      )
+    } else {
+      without_obsolete + test_import
+    }
+    if @fs.exists(existing_path) &&
+      @fs.read_file(existing_path).text() == original {
+      import_upgrades.push((staged_path, existing_path, corrected))
+    } else {
+      @fs.write_file(staged_path, corrected)
+    }
+  }
   // Compare every existing destination before publishing any absent source.
   compare_sources(window_stage, window_existing, repo_root)
   compare_sources(async_stage, async_existing, repo_root)
   compare_sources(cosmic_stage, cosmic_existing, repo_root)
+  for upgrade in import_upgrades {
+    let (staged_path, existing_path, corrected) = upgrade
+    assert_true(is_strictly_inside(@fs.realpath(existing_path), root_real))
+    @fs.write_file(staged_path, corrected)
+    let replacement = staged_path + ".upgrade"
+    @fs.write_file(replacement, corrected)
+    @fs.rename(replacement, existing_path, replace=true)
+  }
   if upgrade_worker {
     if !is_strictly_inside(
         @fs.realpath(async_existing + worker_suffix),

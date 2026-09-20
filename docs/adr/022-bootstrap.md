@@ -20,7 +20,7 @@ Pin MoonBit archives and their hashes in `toolchain.json`; install them into
 `.tools/moonbit`. The bootstrap builds the matching standard library and preserves
 a previous local installation when replacing it.
 
-The current baseline is MoonBit 0.10.11 from the non-dev distribution. Version
+The current baseline is MoonBit 0.10.12 from the non-dev distribution. Version
 updates must recheck official distribution metadata, update the pin, and rerun
 verification. Do not use a floating latest download in CI.
 

@@ -1,8 +1,8 @@
 ///|
 priv struct GpuFrame {
-  device : @dom.GPUDevice
-  encoder : @dom.GPUCommandEncoder
-  pass : @dom.GPURenderPassEncoder
+  device : @input_dom.GPUDevice
+  encoder : @input_dom.GPUCommandEncoder
+  pass : @input_dom.GPURenderPassEncoder
 }
 
 ///|
@@ -17,29 +17,19 @@ pub fn gpu_frame_abort() -> Unit {
 
 ///|
 #export_name("gpu_frame_begin")
-pub fn gpu_frame_begin(context : @dom.GPUCanvasContext) -> Int {
+pub fn gpu_frame_begin(context : @input_dom.GPUCanvasContext) -> Int {
   guard gpu_frame.val is None else { return 0 }
   guard scene_gpu.val is Some(gpu) && gpu.live else { return 0 }
   guard gpu.pipeline is Some(_) else { return 0 }
   let encoder = gpu.device.create_command_encoder()
-  let view = context.get_current_texture().create_view()
-  let pass = encoder.begin_render_pass(
-    @dom.GPURenderPassDescriptor::new([
-      @dom.GPURenderPassColorAttachment::new(
-        view,
-        @dom.GPULoadOp::Clear,
-        @dom.GPUStoreOp::Store,
-        clear_value=@dom.GPUColorDict::new(0.02, 0.08, 0.15, 1.0),
-      ),
-    ]),
-  )
+  let pass = gpu_begin_pass(context, encoder)
   gpu_frame.val = Some({ device: gpu.device, encoder, pass, })
   1
 }
 
 ///|
 #export_name("gpu_frame_scene")
-pub fn gpu_frame_scene(data : @dom.AllowSharedBufferSource) -> Int {
+pub fn gpu_frame_scene(data : @input_dom.ArrayBufferView) -> Int {
   guard gpu_frame.val is Some(frame) else { return 0 }
   let result = scene_gpu_record(frame.pass, data)
   if result == 0 {
@@ -50,7 +40,7 @@ pub fn gpu_frame_scene(data : @dom.AllowSharedBufferSource) -> Int {
 
 ///|
 #export_name("gpu_frame_text")
-pub fn gpu_frame_text(index : Int, data : @dom.AllowSharedBufferSource) -> Int {
+pub fn gpu_frame_text(index : Int, data : @input_dom.ArrayBufferView) -> Int {
   guard gpu_frame.val is Some(frame) else { return 0 }
   let result = text_gpu_record(frame.pass, index, data)
   if result == 0 {
@@ -65,6 +55,6 @@ pub fn gpu_frame_submit() -> Int {
   guard gpu_frame.val is Some(frame) else { return 0 }
   gpu_frame.val = None
   frame.pass.end()
-  frame.device.queue().submit([frame.encoder.finish()])
+  gpu_submit(frame.device, frame.encoder.finish())
   1
 }

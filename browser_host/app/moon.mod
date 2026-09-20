@@ -10,4 +10,5 @@ import {
   "local/p0@0.0.0",
   "bikallem/webapi@0.5.0",
   "local/websys-input@0.0.0",
+  "moonbitlang/async@0.22.1",
 }
