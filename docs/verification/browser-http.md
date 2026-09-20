@@ -44,8 +44,8 @@ checked when updating the candidate.
 
 The JS timer adapter only converts the compiled callback to WebSys's opaque
 Function type. Fetch, stream operations, timer registration and DOM notification
-all use generated APIs. Font fetching and other unmigrated operations still retain
-webapi until their separate migration is complete.
+all use generated APIs. Font fetching, task timers and control placement also use
+WebSys; the browser workspace no longer imports bikallem/webapi.
 
 ## Verification
 

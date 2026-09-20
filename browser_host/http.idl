@@ -18,7 +18,12 @@ dictionary RequestInit {
   HeadersInit headers;
   BodyInit? body;
   AbortSignal? signal;
+  RequestCache cache;
 };
+enum RequestCache { "default", "no-store", "reload", "no-cache", "force-cache", "only-if-cached" };
+partial interface Window { readonly attribute Crypto crypto; };
+interface Crypto { readonly attribute SubtleCrypto subtle; };
+interface SubtleCrypto { Promise<ArrayBuffer> digest(DOMString algorithm, BufferSource data); };
 interface Response {
   readonly attribute unsigned short status;
   readonly attribute Headers headers;

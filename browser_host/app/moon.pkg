@@ -1,5 +1,4 @@
 import {
-  "bikallem/webapi" @dom,
   "local/p0/examples/p0/browser" @app,
   "local/websys-input" @input_dom,
   "moonbitlang/async/js_async",
@@ -18,6 +17,10 @@ options(
     "gpu_wasm.mbt": [ "wasm-gc" ],
     "http_js.mbt": [ "js" ],
     "http_wasm.mbt": [ "wasm-gc" ],
+    "host_js.mbt": [ "js" ],
+    "host_wasm.mbt": [ "wasm-gc" ],
+    "font_js.mbt": [ "js" ],
+    "font_wasm.mbt": [ "wasm-gc" ],
   },
   link: {
     "js": { "format": "esm" },

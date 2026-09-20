@@ -32,20 +32,13 @@ acquisition and finish exceptions, and disposal, alongside real GPU frame checks
 
 ## Dependency preparation
 
-`mise run browser:build` runs `scripts/prepare-browser-gpu.mbtx`. It verifies the
-webapi archive at `ecae5a4b07b011e46de343efe2ac1c450b7ed3a2` with SHA256 and
-`@webref/idl` 3.73.1 with SHA512 before extraction. The script applies
-`patches/webapi-webgpu-generator.patch` and the specification selection in
-`scripts/webgpu-generator.json`. Generated files remain under
-`.work/browser-gpu/generated`; releases include the matching runtime and license.
-
-The local generator correction retains type attributes, resolves numeric aliases,
-converts the exercised UInt64/attribute ABI, and selects a GPUCanvasContext
-fallback only when the interface is absent. It also preserves Metonic's existing
-nullable HTTP body, Uint8Array access and callback identity corrections. The
-patch is an upstream correction candidate, not an upstream release or a claim
-of complete WebIDL support. Signed integer/bigint distinctions, nullable numeric
-aliases and all method/promise conversions are not comprehensively verified.
+`mise run browser:build` runs `scripts/prepare-websys-input.mbtx`. The pinned
+archive is verified with SHA256, and `browser_host/gpu.idl` defines the exercised
+WasmGC renderer surface. Generated sources stay in `.work/websys-input/generated`;
+releases include the matching runtime and licenses. JS uses the upstream WebSys
+sources from the same revision. See [dependency selection](dependencies.md) and
+[generation and packaging](browser-input.md) for the exact source and toolchain.
+This verifies the exercised renderer paths, not complete WebIDL support.
 
 Generated dependency warnings 20, 35, 53 and 83 are suppressed for the pinned
 upstream syntax/API; application packages continue to build with `--deny-warn`.

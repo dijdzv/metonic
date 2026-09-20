@@ -16,7 +16,7 @@ Direct string calls share validation with the numeric control API. The remaining
 JavaScript adapter acquires the GPU adapter/device and coordinates canvas
 presentation and frame scheduling. MoonBit `view_dom.mbt` places both input fields
 and the request/task buttons from the shared view, including CSS classes and the
-request label. It uses the existing webapi DOM binding; resize invokes the same
+request label. It uses the generated WebSys DOM binding; resize invokes the same
 placement path for development and packaged hosts. MoonBit `scene_gpu.mbt` and `frame_gpu.mbt`
 own scene drawing and frame encoding/submission through generated WebSys; the
 [MoonBit text GPU renderer](browser-text-gpu.md) owns text GPU resources and draws. The
@@ -57,7 +57,7 @@ event downcasts are checked. Document/window acquisition remains a host boundary
 it does not duplicate DOM operations or input state management.
 
 `scripts/prepare-websys-input.mbtx` verifies the SHA256 of WebSys revision
-`e3e8ba5f401546b6c71f671bb5a632742107011c`. It combines the upstream JS sources
+`9249b44b6920c10d1c30a58fd122f64588514da1`. It combines the upstream JS sources
 with the WasmGC surface generated from `browser_host/input.idl` and
 `browser_host/gpu.idl` and `browser_host/http.idl`, selecting files
 by target in one local module. The generator uses its own pinned compiler and
@@ -78,20 +78,13 @@ runtime and license permits reuse after successful generation and checks.
 Changed, missing or additional MoonBit sources invalidate it. Regeneration
 replaces the generated source set so removed upstream files cannot linger.
 
-Other browser operations still use the working webapi binding.
-`scripts/prepare-browser-gpu.mbtx` prepares webapi commit
-`ecae5a4b07b011e46de343efe2ac1c450b7ed3a2` and verifies the archive SHA256 before
-extracting the generator and Apache-2.0 license. It regenerates bindings using
-the fixed Web IDL archive and reviewed generator patch. The callback-identity correction preserves the
-same Wasm closure wrapper across listener registration/removal using weak keys.
-Compiler warnings 20, 35 and 83 are disabled only in the pinned generated
-dependency: those concern deprecated syntax and the DOM method named `extend`.
-Metonic code retains `--deny-warn`.
+The same WebSys source supplies the renderer, HTTP, font, timer and control-placement
+bindings. The browser workspace no longer needs a second WebIDL generator or
+runtime. Metonic code and the generated dependency retain `--deny-warn`.
 
 Run `mise run browser:headless` for the integrated JS/WasmGC and packaged WasmGC
-checks. The release includes matching `webapi.mjs` and `websys-input.mjs`
-runtimes and their upstream licenses. Both loaders preserve webapi's cached
-compiler closure hook while supplying WebSys's namespace, js-string builtins, imported string constants and
+checks. The release includes `websys-input.mjs` and the WebSys/async licenses.
+Both loaders supply WebSys's namespace, js-string builtins, imported string constants and
 the required console import. Release packaging keeps its explicit asset list
 and development-content checks.
 

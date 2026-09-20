@@ -30,14 +30,6 @@ async fn main {
     ),
     0,
   )
-  assert_eq(
-    @process.run(
-      moon,
-      ["run", "scripts/prepare-browser-gpu.mbtx"],
-      no_console_window=true,
-    ),
-    0,
-  )
   let server_code = @process.run(
     moon,
     [
@@ -154,8 +146,6 @@ async fn main {
     (
       ".work/websys-input/async-dependency/LICENSE", ".work/browser-dist/LICENSE-async",
     ),
-    (".work/browser-gpu/generated/webapi.mjs", ".work/browser-dist/webapi.mjs"),
-    (".work/browser-gpu/LICENSE-webapi", ".work/browser-dist/LICENSE-webapi"),
     ("examples/p0/browser/host/index.html", ".work/browser-dist/index.html"),
     ("examples/p0/browser/host/style.css", ".work/browser-dist/style.css"),
     ("examples/p0/browser/host/host.mjs", ".work/browser-dist/host.mjs"),

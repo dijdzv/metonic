@@ -27,6 +27,16 @@ interface Element : Node {
   attribute double scrollTop;
 };
 interface HTMLElement : Element { undefined focus(); };
+partial interface HTMLElement {
+  readonly attribute long offsetLeft;
+  readonly attribute long offsetTop;
+  readonly attribute CSSStyleDeclaration style;
+};
+partial interface Element { readonly attribute DOMTokenList classList; };
+interface DOMTokenList { undefined add(DOMString token); };
+interface CSSStyleDeclaration {
+  undefined setProperty(DOMString property, DOMString value, DOMString priority);
+};
 interface HTMLInputElement : HTMLElement {
   undefined setSelectionRange(unsigned long start, unsigned long end, DOMString direction);
   attribute DOMString value;

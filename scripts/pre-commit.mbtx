@@ -109,7 +109,6 @@ async fn main {
     expect_clean(["diff", "--quiet"], "unstaged changes detected")
     run("git", ["diff", "--cached", "--check"])
     run(moon, ["run", "scripts/prepare-wgpu.mbtx"])
-    run(moon, ["run", "scripts/prepare-browser-gpu.mbtx"])
     run(moon, ["run", "scripts/prepare-websys-input.mbtx"])
     run(moon, ["run", "scripts/prepare-browser-dev.mbtx"])
     run(moon, ["fmt"])
