@@ -1,7 +1,7 @@
 {
   "version": 1,
   "critical_packages": {
-    "examples/p0/task_scope": ["js", "wasm-gc", "native"],
+    "core/task_scope": ["js", "wasm-gc", "native"],
     "examples/p0/application": ["js", "wasm-gc", "native"],
     "tools/session_wire": ["js", "wasm", "native"]
   },

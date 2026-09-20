@@ -101,7 +101,7 @@ confirming no bootstrap process is running. PowerShell is not a setup dependency
 ## Selective root-module verification
 
 For a focused local check inside the mise environment, run the pinned Moon with
-`run scripts/verify.mbtx -- --tests-only examples/p0/task_scope examples/p0/application tools/session_wire`.
+`run scripts/verify.mbtx -- --tests-only core/task_scope examples/p0/application tools/session_wire`.
 This runs the specified root-module packages on JS and WasmGC. Setting
 `METONIC_VERIFY_NATIVE=1` selects native with the existing MSVC environment setup.
 Empty selections, missing package manifests and packages belonging to nested

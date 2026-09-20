@@ -18,7 +18,8 @@ remain comparison baselines until equivalent requirements pass.
 | Other `browser_host/app` operations | Scene/text GPU resources and frame submission, control placement, HTTP, timers and bounded font download | Generated WebSys bindings for JS/WasmGC; [HTTP](browser-http.md), [font transfer](browser-font-transfer.md) and [text GPU](browser-text-gpu.md) records describe the boundaries |
 | `examples/p0/browser/host/*.mjs` | Browser startup, adapter/device acquisition, canvas coordination, animation-frame scheduling, module loading and buffer transfer | Remaining JavaScript adapter; GPU drawing, text-input ownership, control placement and font hash validation have moved to MoonBit |
 | `tools/devtools/*.mjs`, `scripts/*` | CLI/MCP transport and development verification | MoonBit orchestration first; external SDK adapters scoped separately |
-| `examples/p0/text_position`, `semantics`, `task_scope` | Position validity, semantic actions and cancellation policy | Framework responsibilities; library presence does not replace these contracts |
+| `core/text_position`, `core/task_scope`, `core/semantics` | Position validity, task lifetime and semantic actions | Framework packages without sample dependencies; P0 initialization and legacy actions remain in its semantic adapter |
+| `platform/windows/ime_presentation` | Interpretation of Windows IMM composition attributes | Pure Windows presentation policy; separate from platform-independent text offsets |
 
 `examples/p0` contains bounded architecture probes, not a supported public API.
 Shared prototype packages currently live there so each experiment can reuse the

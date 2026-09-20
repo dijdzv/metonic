@@ -251,7 +251,7 @@ fn App::draw(self : App) -> Unit raise Error {
   )
   let button = @semantics.snapshot(self.model.editor)[0]
   if (button.value == "on") != (@scene.field(self.model.scene, 4) == 1) {
-    ignore(@semantics.activate(self.model.editor, button.reference))
+    ignore(@sample.activate(self.model.editor, button.reference))
   }
   match self.renderer {
     Some(renderer) => {

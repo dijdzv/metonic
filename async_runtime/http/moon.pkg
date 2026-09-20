@@ -8,5 +8,5 @@ import {
   "local/metonic_async/clock" @virtual,
   "moonbitlang/async/cond_var",
   "local/p0/examples/p0/user_load",
-  "local/p0/examples/p0/task_scope",
+  "local/p0/core/task_scope",
 } for "test"

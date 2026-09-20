@@ -5,5 +5,5 @@ import {
 
 import {
   "moonbitlang/async",
-  "local/p0/examples/p0/task_scope",
+  "local/p0/core/task_scope",
 } for "test"
