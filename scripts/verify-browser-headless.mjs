@@ -505,7 +505,6 @@ try {
           ['/app.js', request.op === 'input-diagnostics' ? 'browser_host/_build/js/release/build/local/browser_host/diagnostics/probe/probe.js' : 'browser_host/_build/js/release/build/local/browser_host/probe/probe.js', 'text/javascript'],
           ['/app.wasm', 'browser_host/_build/wasm-gc/release/build/local/browser_host/probe/probe.wasm', 'application/wasm'],
           ['/loader-common.mjs', 'examples/p0/browser/host/loader-common.mjs', 'text/javascript'],
-          ['/webapi.mjs', '.work/browser-dist/webapi.mjs', 'text/javascript'],
           ['/websys-input.mjs', '.work/browser-dist/websys-input.mjs', 'text/javascript'],
         ]) assets.set(url, { body: await fs.readFile(file), contentType });
         const script = target === 'js' ? "import '/app.js';" : `import { wasmImports } from '/loader-common.mjs'; const {instance} = await WebAssembly.instantiateStreaming(fetch('/app.wasm'), wasmImports(), {builtins:['js-string'], importedStringConstants:'_'}); instance.exports._start();`;

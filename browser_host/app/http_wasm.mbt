@@ -9,6 +9,7 @@ async fn http_fetch(
     headers: Some(Case0([["Content-Type", "application/json"]])),
     body: Value(Case1(Case4(body))),
     signal: Value(controller.signal()),
+    cache: None,
   })
   .wait()
 }

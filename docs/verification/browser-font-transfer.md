@@ -45,10 +45,10 @@ The browser MoonBit tests check empty, invalid and oversized bulk input, and
 that rejected replacement clears pending word input. Both targets passed 14
 package tests with the transfer change.
 
-Font fetching now uses the MoonBit browser host and the existing Fetch bindings.
+Font fetching uses the MoonBit browser host and generated WebSys Fetch bindings.
 The loader checks the cumulative 16-MiB bound before retaining each stream chunk.
 Stopping the host aborts the request, cancels an active reader and releases its
-lock. The response is assembled through the browser Blob API; the bound limits
+lock. Owned stream bytes are assembled in a MoonBit Buffer; the bound limits
 retained payload bytes, not total browser memory or transient assembly copies.
 
 The MoonBit request calls browser Web Crypto through the generated binding and
@@ -57,10 +57,13 @@ Its lifetime extends through digest completion: cancellation rejects the late
 result before font transfer or parser mutation. This does not cancel Web Crypto
 computation itself. The host retains byte transfer and its disposal guard.
 
-The dependency adds the Webref `webcrypto` and `webcrypto-modern-algos` inputs
-and the bounded [font integrity patch](../../patches/webapi-font-integrity.md).
-The digest byte view shares the returned ArrayBuffer; it does not copy or expose
-MoonBit GC arrays. The digest comparison and cancellation policy remain MoonBit.
+The WebSys surface in `browser_host/http.idl` includes WebCrypto digest and buffer
+Promise results. `ArrayBuffer::from_bytes` and `to_bytes` copy across the host
+boundary without sharing mutable storage. Digest comparison and cancellation
+policy remain MoonBit. JS uses the official async Promise entry; the experimental
+WasmGC backend uses a small host Promise-settlement adapter because that entry is
+not implemented in the pinned candidate. Neither adapter performs HTTP or hash
+validation in host code.
 
 The headless suite exercises HTTP 503, wrong digest, a 16-MiB-plus-one-byte
 response, stop before headers, stop while a controlled ReadableStream waits for

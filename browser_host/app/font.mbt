@@ -1,67 +1,111 @@
 ///|
+priv suberror FontFailure {
+  FontFailure(String)
+}
+
+///|
+impl Show for FontFailure with fn output(self, logger) {
+  let FontFailure(message) = self
+  logger.write_string(message)
+}
+
+///|
 priv struct FontRequest {
-  controller : @dom.AbortController
-  mut reader : @dom.ReadableStreamDefaultReader?
+  controller : @input_dom.AbortController
+  mut reader : @input_dom.ReadableStreamDefaultReader?
   mut live : Bool
-  mut received : Int
-  parts : Array[@dom.BlobPart]
+  bytes : Buffer
 }
 
 ///|
 let pending_font : Ref[FontRequest?] = Ref(None)
 
 ///|
-fn FontRequest::verify(
-  self : FontRequest,
-  buffer : @dom.ArrayBuffer,
-) -> @dom.JsPromise[@dom.JsValue] {
-  @dom.window()
-  .crypto()
-  .subtle()
-  .digest("SHA-256", buffer)
-  .then(fn(digest) {
-    if !self.live {
-      return font_rejection("Font loading cancelled")
-    }
-    let bytes = @dom.Uint8Array::from_buffer(digest)
-    let expected = "c2f3b4d463500a2ddcd3849cded1fceeb9fd6d1c32e6cbecd568453ba50fc68f"
-    let hex = "0123456789abcdef"
-    if bytes.length() != 32U {
-      return font_rejection("NotoSansJP.ttf SHA-256 mismatch")
-    }
-    for i in 0..<32 {
-      let byte = bytes.get(i).unwrap().to_int()
-      if hex[byte >> 4] != expected[2 * i] ||
-        hex[byte & 15] != expected[2 * i + 1] {
-        return font_rejection("NotoSansJP.ttf SHA-256 mismatch")
-      }
-    }
-    @dom.TJsValue::to_js(buffer)
-  })
-}
-
-///|
-fn font_rejection(message : String) -> @dom.JsValue {
-  let rejected : @dom.JsPromise[@dom.JsValue] = @dom.JsPromise::reject(
-    @dom.TJsValue::to_js(message),
-  )
-  @dom.TJsValue::to_js(rejected)
-}
-
-///|
 fn FontRequest::cleanup(self : FontRequest) -> Unit {
   self.live = false
   self.controller.abort()
-  self.parts.clear()
+  self.bytes.reset()
   if self.reader is Some(reader) {
     self.reader = None
-    ignore(
-      reader
-      .cancel()
-      .catch_(fn(_) { @dom.JsValue::undefined() })
-      .finally_(fn() { reader.release_lock() }),
-    )
+    @async.run_async_main(async fn() {
+      defer http_release_reader(reader)
+      http_cancel_reader(reader) catch {
+        _ => ()
+      }
+    })
   }
+}
+
+///|
+fn FontRequest::check_live(self : FontRequest) -> Unit raise FontFailure {
+  if !self.live {
+    raise FontFailure("Font loading cancelled")
+  }
+}
+
+///|
+async fn FontRequest::load(
+  self : FontRequest,
+) -> @input_dom.ArrayBuffer raise Error {
+  defer {
+    if self.live {
+      pending_font.val = None
+    }
+    self.cleanup()
+  }
+  let response = font_response(self.controller)
+  self.check_live()
+  let status = http_status(response)
+  if status < 200 || status > 299 {
+    raise FontFailure("Unable to fetch ./NotoSansJP.ttf (\{status})")
+  }
+  guard http_body(response) is Some(stream) else {
+    raise FontFailure("Missing font response body")
+  }
+  guard http_reader(stream) is Some(reader) else {
+    raise FontFailure("Unable to read font stream")
+  }
+  self.reader = Some(reader)
+  while true {
+    let (done, chunk) = http_read(reader)
+    self.check_live()
+    match done {
+      Some(true) => break
+      Some(false) => {
+        guard chunk is Some(chunk) else {
+          raise FontFailure("Missing font chunk")
+        }
+        if chunk.length() > 16777216 - self.bytes.length() {
+          raise FontFailure("Font exceeds 16 MiB")
+        }
+        self.bytes.write_bytes(chunk)
+        continue
+      }
+      None => raise FontFailure("Invalid font stream result")
+    }
+  }
+  http_release_reader(reader)
+  self.reader = None
+  let buffer = @input_dom.ArrayBuffer::from_bytes(self.bytes.to_bytes())
+  self.bytes.reset()
+  let digest = font_digest(buffer)
+  self.check_live()
+  guard digest.to_bytes() is Some(bytes) else {
+    raise FontFailure("Invalid font digest buffer")
+  }
+  let expected = "c2f3b4d463500a2ddcd3849cded1fceeb9fd6d1c32e6cbecd568453ba50fc68f"
+  let hex = "0123456789abcdef"
+  if bytes.length() != 32 {
+    raise FontFailure("NotoSansJP.ttf SHA-256 mismatch")
+  }
+  for i in 0..<32 {
+    let byte = bytes[i].to_int()
+    if hex[byte >> 4] != expected[2 * i] ||
+      hex[byte & 15] != expected[2 * i + 1] {
+      raise FontFailure("NotoSansJP.ttf SHA-256 mismatch")
+    }
+  }
+  buffer
 }
 
 ///|
@@ -74,95 +118,15 @@ pub fn font_fetch_cancel() -> Unit {
 }
 
 ///|
-fn FontRequest::read(
-  self : FontRequest,
-  reader : @dom.ReadableStreamDefaultReader,
-) -> @dom.JsPromise[@dom.JsValue] {
-  reader
-  .read()
-  .then(fn(result) {
-    if !self.live {
-      return font_rejection("Font loading cancelled")
-    }
-    match result.done() {
-      Some(true) => {
-        reader.release_lock()
-        self.reader = None
-        let blob = @dom.Blob::new(blob_parts=self.parts)
-        self.parts.clear()
-        @dom.TJsValue::to_js(
-          blob
-          .array_buffer()
-          .then(fn(buffer) {
-            if !self.live {
-              font_rejection("Font loading cancelled")
-            } else {
-              @dom.TJsValue::to_js(self.verify(buffer))
-            }
-          }),
-        )
-      }
-      Some(false) =>
-        match result.value() {
-          Some(value) => {
-            let chunk : @dom.Uint8Array = value.unsafe_into()
-            if chunk.length() > (16777216 - self.received).reinterpret_as_uint() {
-              return font_rejection("Font exceeds 16 MiB")
-            }
-            self.received += chunk.length().reinterpret_as_int()
-            let source : @dom.BufferSource = value.unsafe_into()
-            self.parts.push(@dom.BlobPart::from(source))
-            @dom.TJsValue::to_js(self.read(reader))
-          }
-          None => font_rejection("Missing font chunk")
-        }
-      None => font_rejection("Invalid font stream result")
-    }
-  })
-}
-
-///|
 #export_name("font_fetch")
-pub fn font_fetch() -> @dom.JsPromise[@dom.JsValue] {
+pub fn font_fetch() -> FontPromise {
   font_fetch_cancel()
   let request = FontRequest::{
-    controller: @dom.AbortController::new(),
+    controller: @input_dom.AbortController::new(),
     reader: None,
     live: true,
-    received: 0,
-    parts: [],
+    bytes: Buffer(),
   }
   pending_font.val = Some(request)
-  @dom.window()
-  .fetch(
-    "./NotoSansJP.ttf",
-    init=@dom.RequestInit::new(
-      signal=request.controller.signal(),
-      cache=NoCache,
-    ),
-  )
-  .then(fn(response) {
-    if !request.live {
-      return font_rejection("Font loading cancelled")
-    }
-    if !response.ok() {
-      return font_rejection(
-        "Unable to fetch ./NotoSansJP.ttf (\{response.status()})",
-      )
-    }
-    match response.body() {
-      None => font_rejection("Missing font response body")
-      Some(stream) => {
-        let reader = @dom.ReadableStreamDefaultReader::new(stream)
-        request.reader = Some(reader)
-        @dom.TJsValue::to_js(request.read(reader))
-      }
-    }
-  })
-  .finally_(fn() {
-    if request.live {
-      pending_font.val = None
-    }
-    request.cleanup()
-  })
+  font_export(async fn() { request.load() })
 }

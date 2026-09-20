@@ -15,7 +15,7 @@ remain comparison baselines until equivalent requirements pass.
 | `native_host/async_app`, `native_host/windows_loop` | Async jobs, cancellation, completion delivery and UI wakeup | Adopted `moonbitlang/async` structured tasks and external-loop API with the prepared window library; custom C workers replaced after [comparison](native-async.md); context-free C wake thunk retained |
 | `native_gpu`, `examples/p0/native_headless` | Persistent offscreen GPU resources, readback and capture | Adopted `Milky2018/wgpu_mbt@0.16.0`; headless C stub removed, stdio and file writing use MoonBit async |
 | `browser_host/app/input*.mbt` | Text-input listeners, DOM values, selection, composition, focus and scroll observation | Adopted generated WebSys bindings for JS/WasmGC through the pinned `local/websys-input` module; [input](browser-input.md) records generation, lifetime tests and bounded actual-IME acceptance |
-| Other `browser_host/app` operations | Scene/text GPU resources and frame submission, control placement, HTTP, timers and bounded font download | Retain generated `bikallem/webapi` bindings for JS/WasmGC; [HTTP](browser-http.md) and [text GPU](browser-text-gpu.md) records define the verified scope. Input migration does not imply replacement of these APIs |
+| Other `browser_host/app` operations | Scene/text GPU resources and frame submission, control placement, HTTP, timers and bounded font download | Generated WebSys bindings for JS/WasmGC; [HTTP](browser-http.md), [font transfer](browser-font-transfer.md) and [text GPU](browser-text-gpu.md) records describe the boundaries |
 | `examples/p0/browser/host/*.mjs` | Browser startup, adapter/device acquisition, canvas coordination, animation-frame scheduling, module loading and buffer transfer | Remaining JavaScript adapter; GPU drawing, text-input ownership, control placement and font hash validation have moved to MoonBit |
 | `tools/devtools/*.mjs`, `scripts/*` | CLI/MCP transport and development verification | MoonBit orchestration first; external SDK adapters scoped separately |
 | `examples/p0/text_position`, `semantics`, `task_scope` | Position validity, semantic actions and cancellation policy | Framework responsibilities; library presence does not replace these contracts |
@@ -60,11 +60,9 @@ that every line in the remaining adapters is irreducible.
 
 The [surface-reuse investigation](https://github.com/dijdzv/metonic/issues/58)
 and [window upstream proposals](https://github.com/dijdzv/metonic/issues/88)
-own further diagnostic/native-boundary evaluation. Browser Web Crypto generator
-corrections are tracked in [#218](https://github.com/dijdzv/metonic/issues/218)
-and [#293](https://github.com/dijdzv/metonic/issues/293). The font loader adopts
-only the [bounded digest binding changes](../../patches/webapi-font-integrity.md);
-the remaining proposal changes are not application dependencies. A retained comparison
+own further diagnostic/native-boundary evaluation. The font loader now uses WebSys
+WebCrypto and owned buffer conversions; earlier browser-binding patch proposals
+are not application dependencies. A retained comparison
 fixture is not evidence that its implementation is required in the application.
 WGSL shader text and HTML/CSS remain GPU/web formats, distinct from orchestration
 scripts. The generated Visual Studio environment `.cmd` bridge invokes the vendor
@@ -123,7 +121,7 @@ Open Issues own current priority and acceptance criteria.
   behavior has automated evidence. `Milky2018/moon_accesskit` is not adopted;
   further data-model reuse must preserve that OS adapter and semantic contract.
   Actual assistive-technology acceptance remains separate.
-- Browser: retain the adopted webapi path and its JS/WasmGC comparison. Further
+- Browser: retain the adopted WebSys path and its JS/WasmGC comparison. Further
   reductions concern the remaining startup/presentation and buffer
   adapters; `mizchi/js_browser` has not been selected as an additional runtime.
 - RPC: the integrated UI uses standard HTTP/JSON. Protobuf/gRPC remains an optional

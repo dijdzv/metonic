@@ -23,7 +23,7 @@ pub fn scheduled_task_rejections() -> Int {
 #export_name("scheduled_tasks_reset")
 pub fn scheduled_tasks_reset() -> Unit {
   for _, timer in task_timers {
-    @dom.window().clear_timeout(id=timer)
+    host_clear_timeout(timer)
   }
   task_timers.clear()
   task_epoch.val += 1
@@ -46,9 +46,9 @@ pub fn schedule_task(delay : Int, value : Int, fail : Int) -> Int {
   }
   http_cancel()
   let epoch = task_epoch.val
-  let callback = @dom.Function::new(fn(_) {
+  let callback = fn() {
     if epoch != task_epoch.val {
-      return @dom.JsValue::undefined()
+      return
     }
     task_timers.remove(id)
     let accepted = if fail == 1 {
@@ -64,10 +64,9 @@ pub fn schedule_task(delay : Int, value : Int, fail : Int) -> Int {
     } else {
       "metonic-task"
     }
-    ignore(@dom.document().dispatch_event(@dom.Event::new(event)))
-    @dom.JsValue::undefined()
-  })
-  let timer = @dom.window().set_timeout(callback, timeout=delay, [])
+    host_notify(event)
+  }
+  let timer = host_set_timeout(callback, delay)
   task_timers.set(id, timer)
   1
 }

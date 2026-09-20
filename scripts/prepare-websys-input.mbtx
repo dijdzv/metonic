@@ -86,7 +86,7 @@ async fn main {
   )
   @fs.mkdir(root + "/prepare.lock")
   defer @fs.rmdir(root + "/prepare.lock")
-  let revision = "e3e8ba5f401546b6c71f671bb5a632742107011c"
+  let revision = "9249b44b6920c10d1c30a58fd122f64588514da1"
   let archive = root + "/source-" + revision + ".tar.gz"
   if !@fs.exists(archive) {
     ignore(
@@ -108,7 +108,7 @@ async fn main {
     .split("\n")
     .any(line => {
       line.trim().to_owned() ==
-      "0fa24a785b1e910e546eb4700901823fbbf04ef85f996d0ff47678f2d1db5441"
+      "7bb7a2d135f064ed4f9ec7d697efafba2443962c12ea6283a9cb642b9551d8eb"
     }),
     msg="WebSys archive digest mismatch",
   )

@@ -10,7 +10,7 @@ an old completion. Success, failure, cancellation, and disposal are separate
 states. Request identifiers are not reused within a scope.
 
 The MoonBit browser adapter owns bounded timers (at most 16), admission checks,
-pending handles and callback epochs. It uses the pinned webapi Window timer and
+pending handles and callback epochs. It uses the pinned WebSys Window timer and
 Function bindings on JS and WasmGC. JavaScript validates numeric representation
 before passing integers across the export boundary and observes task events.
 Only an accepted success changes the rectangle. Accepted task-status transitions,
