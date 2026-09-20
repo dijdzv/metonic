@@ -12,24 +12,30 @@ interface EventTarget {
 };
 callback EventListener = undefined (Event event);
 interface Document : EventTarget {
+  Element createElement(DOMString localName);
   Element? getElementById(DOMString id);
   readonly attribute Element? activeElement;
 };
 interface Node : EventTarget {
+  Node appendChild(Node child);
+  attribute DOMString? textContent;
   boolean isSameNode(Node? otherNode);
 };
 interface Element : Node {
+  attribute DOMString id;
   attribute double scrollLeft;
   attribute double scrollTop;
 };
-interface HTMLElement : Element {};
+interface HTMLElement : Element { undefined focus(); };
 interface HTMLInputElement : HTMLElement {
+  undefined setSelectionRange(unsigned long start, unsigned long end, DOMString direction);
   attribute DOMString value;
   readonly attribute unsigned long? selectionStart;
   readonly attribute unsigned long? selectionEnd;
   readonly attribute DOMString? selectionDirection;
 };
 interface HTMLTextAreaElement : HTMLElement {
+  undefined setSelectionRange(unsigned long start, unsigned long end, DOMString direction);
   attribute DOMString value;
   readonly attribute unsigned long selectionStart;
   readonly attribute unsigned long selectionEnd;
@@ -49,5 +55,9 @@ interface InputEvent : UIEvent {
   readonly attribute boolean isComposing;
 };
 interface CompositionEvent : UIEvent {
+  constructor(DOMString type, CompositionEventInit init);
   readonly attribute DOMString data;
+};
+dictionary CompositionEventInit : EventInit {
+  DOMString data = "";
 };

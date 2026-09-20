@@ -1,69 +1,65 @@
 ///|
 fn main raise {
-  let root = @dom.document().get_element_by_id("app")
-  let editor : @dom.HTMLTextAreaElement = @dom.document()
-    .create_element("textarea")
-    .unsafe_into()
-  let query : @dom.HTMLInputElement = @dom.document()
-    .create_element("input")
-    .unsafe_into()
-  editor.set_id("text-input")
-  query.set_id("rpc-user")
+  let (editor, query) = create_fields()
   editor.set_value("A😀日本")
   query.set_value("1")
-  ignore(root.append_child(editor))
-  ignore(root.append_child(query))
   @host.initialize()
   @host.inputs_start()
   assert_eq(@host.inputs_error(), 0)
   assert_eq(@app.editor_field(0), 5)
-  editor.focus()
-  editor.set_selection_range(1U, 3U)
-  ignore(@dom.document().dispatch_event(@dom.Event::new("selectionchange")))
+  focus_editor(editor)
+  select_editor(editor, 1U, 3U)
+  ignore(dispatch_event(document_target(), event("selectionchange")))
   assert_eq(@app.editor_field(1), 1)
   assert_eq(@app.editor_field(2), 3)
-  ignore(editor.dispatch_event(@dom.CompositionEvent::new("compositionstart")))
+  ignore(
+    dispatch_event(editor_target(editor), composition_event("compositionstart")),
+  )
   assert_eq(@host.inputs_composing(), 1)
   ignore(
-    editor.dispatch_event(
-      @dom.CompositionEvent::new(
-        "compositionupdate",
-        event_init_dict=@dom.CompositionEventInit::new(data="にほん"),
-      ),
+    dispatch_event(
+      editor_target(editor),
+      composition_event("compositionupdate", data="にほん"),
     ),
   )
   editor.set_value("Aにほん日本")
-  editor.set_selection_range(2U, 2U)
-  ignore(editor.dispatch_event(@dom.Event::new("input")))
+  select_editor(editor, 2U, 2U)
+  ignore(dispatch_event(editor_target(editor), event("input")))
   assert_eq(@app.editor_field(0), 5)
   editor.set_value("A日本日本")
-  editor.set_selection_range(3U, 3U)
-  ignore(editor.dispatch_event(@dom.CompositionEvent::new("compositionend")))
+  select_editor(editor, 3U, 3U)
+  ignore(
+    dispatch_event(editor_target(editor), composition_event("compositionend")),
+  )
   assert_eq(@host.inputs_composing(), 0)
   assert_eq(@app.editor_unit(1), 0x65E5)
-  query.focus()
-  ignore(query.dispatch_event(@dom.CompositionEvent::new("compositionstart")))
+  focus_query(query)
+  ignore(
+    dispatch_event(query_target(query), composition_event("compositionstart")),
+  )
   assert_eq(@host.inputs_composing(), 1)
   ignore(
-    query.dispatch_event(
-      @dom.CompositionEvent::new(
-        "compositionupdate",
-        event_init_dict=@dom.CompositionEventInit::new(data="に"),
-      ),
+    dispatch_event(
+      query_target(query),
+      composition_event("compositionupdate", data="に"),
     ),
   )
   query.set_value("2")
-  query.set_selection_range(1U, 1U)
-  ignore(query.dispatch_event(@dom.CompositionEvent::new("compositionend")))
+  select_query(query, 1U, 1U)
+  ignore(
+    dispatch_event(query_target(query), composition_event("compositionend")),
+  )
   assert_eq(@host.inputs_error(), 0)
   assert_eq(@host.inputs_composing(), 0)
   let revision = @app.editor_field(3)
   @host.inputs_stop()
   @host.inputs_stop()
   editor.set_value("late")
-  ignore(editor.dispatch_event(@dom.Event::new("input")))
-  ignore(query.dispatch_event(@dom.CompositionEvent::new("compositionstart")))
-  ignore(@dom.document().dispatch_event(@dom.Event::new("selectionchange")))
+  ignore(dispatch_event(editor_target(editor), event("input")))
+  ignore(
+    dispatch_event(query_target(query), composition_event("compositionstart")),
+  )
+  ignore(dispatch_event(document_target(), event("selectionchange")))
   assert_eq(@app.editor_field(3), revision)
   assert_eq(@host.inputs_composing(), 0)
   @host.inputs_start()
