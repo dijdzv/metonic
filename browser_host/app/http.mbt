@@ -1,8 +1,8 @@
 ///|
 priv struct HttpRequest {
   id : Int
-  controller : @dom.AbortController
-  mut reader : @dom.ReadableStreamDefaultReader?
+  controller : @input_dom.AbortController
+  mut reader : @input_dom.ReadableStreamDefaultReader?
   mut live : Bool
   mut timer : Int?
   bytes : Array[Byte]
@@ -16,17 +16,17 @@ fn HttpRequest::cleanup(self : HttpRequest) -> Unit {
   self.live = false
   if self.timer is Some(timer) {
     self.timer = None
-    @dom.window().clear_timeout(id=timer)
+    http_clear_timeout(timer)
   }
   self.controller.abort()
   if self.reader is Some(reader) {
     self.reader = None
-    ignore(
-      reader
-      .cancel()
-      .catch_(fn(_error) { @dom.JsValue::undefined() })
-      .finally_(fn() { reader.release_lock() }),
-    )
+    @async.run_async_main(async fn() {
+      defer http_release_reader(reader)
+      http_cancel_reader(reader) catch {
+        _ => ()
+      }
+    })
   }
 }
 
@@ -46,50 +46,66 @@ fn HttpRequest::finish(
     None => @app.rpc_accept(self.id, status, Bytes::from_array(self.bytes))
   }
   if accepted == 1 {
-    ignore(@dom.document().dispatch_event(@dom.Event::new("metonic-rpc")))
+    http_notify()
   }
 }
 
 ///|
-fn HttpRequest::read(
-  self : HttpRequest,
-  status : Int,
-  reader : @dom.ReadableStreamDefaultReader,
-) -> Unit {
-  ignore(
-    reader
-    .read()
-    .then(fn(result) {
-      if !self.live {
-        return @dom.JsValue::undefined()
-      }
-      match result.done() {
-        Some(true) => self.finish(status, None)
-        Some(false) =>
-          match result.value() {
-            None => self.finish(status, Some(0))
-            Some(value) => {
-              let chunk : @dom.Uint8Array = value.unsafe_into()
-              if chunk.length() >
-                (65536 - self.bytes.length()).reinterpret_as_uint() {
-                self.finish(status, Some(2))
-              } else {
-                for i = 0; i < chunk.length().reinterpret_as_int(); i = i + 1 {
-                  self.bytes.push(chunk.get(i).unwrap())
-                }
-                self.read(status, reader)
-              }
-            }
-          }
-        None => self.finish(status, Some(0))
-      }
-      @dom.JsValue::undefined()
-    })
-    .catch_(fn(_error) {
+async fn HttpRequest::perform(self : HttpRequest, body : String) -> Unit {
+  let mut status = 0
+  try {
+    let response = http_fetch(body, self.controller)
+    if !self.live {
+      return
+    }
+    let content_type = http_content_type(response)
+    if content_type != Some("application/json") &&
+      content_type != Some("application/json; charset=utf-8") {
+      self.finish(0, Some(3))
+      return
+    }
+    status = http_status(response)
+    guard http_body(response) is Some(stream) else {
+      self.finish(status, None)
+      return
+    }
+    guard http_reader(stream) is Some(reader) else {
       self.finish(status, Some(0))
-      @dom.JsValue::undefined()
-    }),
-  )
+      return
+    }
+    self.reader = Some(reader)
+    while self.live {
+      let (done, chunk) = http_read(reader)
+      if !self.live {
+        return
+      }
+      match done {
+        Some(true) => {
+          self.finish(status, None)
+          return
+        }
+        Some(false) => {
+          guard chunk is Some(chunk) else {
+            self.finish(status, Some(0))
+            return
+          }
+          if chunk.length() > 65536 - self.bytes.length() {
+            self.finish(status, Some(2))
+            return
+          }
+          for byte in chunk {
+            self.bytes.push(byte)
+          }
+        }
+        None => {
+          self.finish(status, Some(0))
+          return
+        }
+      }
+    }
+  } catch {
+    _ => self.finish(status, Some(0))
+  }
 }
 
 ///|
@@ -107,10 +123,8 @@ pub fn http_start() -> Int {
   if inputs_composing() != 0 {
     return 0
   }
-  let input : @dom.HTMLInputElement = @dom.document()
-    .get_element_by_id("rpc-user")
-    .unsafe_into()
-  let body = match @app.rpc_prepare(input.value()) {
+  guard input_query() is Some(input) else { return 0 }
+  let body = match @app.rpc_prepare(InputElement::Query(input).value()) {
     Some(value) => value
     None => return 0
   }
@@ -121,55 +135,20 @@ pub fn http_start() -> Int {
   }
   let request = HttpRequest::{
     id,
-    controller: @dom.AbortController::new(),
+    controller: @input_dom.AbortController::new(),
     reader: None,
     live: true,
     timer: None,
     bytes: [],
   }
   pending_http.val = Some(request)
-  let timeout = @dom.Function::new(fn(_) {
-    request.finish(0, Some(1))
-    @dom.JsValue::undefined()
-  })
-  request.timer = Some(@dom.window().set_timeout(timeout, timeout=3000, []))
-  let headers = [["Content-Type", "application/json"]]
-  ignore(
-    @dom.window()
-    .fetch(
-      "/rpc",
-      init=@dom.RequestInit::new(
-        method_="POST",
-        headers~,
-        body=@dom.XMLHttpRequestBodyInit::from(body),
-        signal=request.controller.signal(),
-      ),
-    )
-    .then(fn(response) {
-      if !request.live {
-        return @dom.JsValue::undefined()
-      }
-      let content_type = response.headers().get("Content-Type")
-      if content_type != Some("application/json") &&
-        content_type != Some("application/json; charset=utf-8") {
-        request.finish(0, Some(3))
-      } else {
-        let status = response.status().reinterpret_as_int()
-        match response.body() {
-          None => request.finish(status, None)
-          Some(stream) => {
-            let reader = @dom.ReadableStreamDefaultReader::new(stream)
-            request.reader = Some(reader)
-            request.read(status, reader)
-          }
-        }
-      }
-      @dom.JsValue::undefined()
-    })
-    .catch_(fn(_error) {
+  match http_timeout(fn() { request.finish(0, Some(1)) }) {
+    Some(timer) => request.timer = Some(timer)
+    None => {
       request.finish(0, Some(0))
-      @dom.JsValue::undefined()
-    }),
-  )
+      return 1
+    }
+  }
+  @async.run_async_main(async fn() { request.perform(body) })
   1
 }

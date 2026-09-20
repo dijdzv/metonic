@@ -96,7 +96,10 @@ async fn run_suite(host : BrowserHost, metadata : String) -> String {
         string_field(result, "text") == "編集中 ABC 123",
         "RPC replaced editor contents",
       )
-      require(string_field(result, "result") == expected, "RPC result mismatch")
+      require(
+        string_field(result, "result") == expected,
+        "RPC result mismatch: target=\{target}, user=\{user}, expected=\{expected}, actual=\{result.stringify()}",
+      )
       require(int_field(result, "status") == status, "RPC task status mismatch")
     }
   }

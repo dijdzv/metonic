@@ -30,6 +30,7 @@ async fn fingerprint(root : String) -> String? {
     "scripts/prepare-websys-input.mbtx",
     "browser_host/input.idl",
     "browser_host/gpu.idl",
+    "browser_host/http.idl",
     "toolchain.json",
     root + "/LICENSE",
     root + "/prepare-async.mbtx",
@@ -85,7 +86,7 @@ async fn main {
   )
   @fs.mkdir(root + "/prepare.lock")
   defer @fs.rmdir(root + "/prepare.lock")
-  let revision = "19907a9b08c82421655cb693c5f39ba546402e66"
+  let revision = "e3e8ba5f401546b6c71f671bb5a632742107011c"
   let archive = root + "/source-" + revision + ".tar.gz"
   if !@fs.exists(archive) {
     ignore(
@@ -107,7 +108,7 @@ async fn main {
     .split("\n")
     .any(line => {
       line.trim().to_owned() ==
-      "cbcf69eb4d521ca0638e5fdb79480c19b385c45200095d551664d262e8a5b094"
+      "0fa24a785b1e910e546eb4700901823fbbf04ef85f996d0ff47678f2d1db5441"
     }),
     msg="WebSys archive digest mismatch",
   )
@@ -183,7 +184,9 @@ async fn main {
     combined_idl,
     @fs.read_file(repo + "/browser_host/input.idl").text() +
     "\n" +
-    @fs.read_file(repo + "/browser_host/gpu.idl").text(),
+    @fs.read_file(repo + "/browser_host/gpu.idl").text() +
+    "\n" +
+    @fs.read_file(repo + "/browser_host/http.idl").text(),
   )
   if @fs.exists(output) {
     assert_eq(

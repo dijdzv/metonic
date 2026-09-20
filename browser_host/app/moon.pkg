@@ -3,6 +3,7 @@ import {
   "local/p0/examples/p0/browser" @app,
   "local/websys-input" @input_dom,
   "moonbitlang/async/js_async",
+  "moonbitlang/async",
 }
 
 pkgtype(kind: "foreign_library")
@@ -15,6 +16,8 @@ options(
     "input_wasm.mbt": [ "wasm-gc" ],
     "gpu_js.mbt": [ "js" ],
     "gpu_wasm.mbt": [ "wasm-gc" ],
+    "http_js.mbt": [ "js" ],
+    "http_wasm.mbt": [ "wasm-gc" ],
   },
   link: {
     "js": { "format": "esm" },

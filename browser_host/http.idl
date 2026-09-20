@@ -1,0 +1,41 @@
+// Request/stream surface used by the browser application. Keep body and header
+// unions while omitting request options the application does not use.
+partial interface Window {
+  Promise<Response> fetch(USVString input, RequestInit init);
+  long setTimeout(TimeoutCallback handler, long timeout);
+  undefined clearTimeout(long id);
+};
+callback TimeoutCallback = undefined ();
+typedef (sequence<sequence<ByteString>> or record<ByteString, ByteString>) HeadersInit;
+typedef (ArrayBufferView or ArrayBuffer) BufferSource;
+typedef (Blob or BufferSource or FormData or URLSearchParams or USVString) XMLHttpRequestBodyInit;
+typedef (ReadableStream or XMLHttpRequestBodyInit) BodyInit;
+interface Blob {};
+interface FormData {};
+interface URLSearchParams {};
+dictionary RequestInit {
+  ByteString method;
+  HeadersInit headers;
+  BodyInit? body;
+  AbortSignal? signal;
+};
+interface Response {
+  readonly attribute unsigned short status;
+  readonly attribute Headers headers;
+  readonly attribute ReadableStream? body;
+};
+interface Headers { ByteString? get(ByteString name); };
+interface ReadableStream {};
+interface ReadableStreamDefaultReader {
+  constructor(ReadableStream stream);
+  Promise<ReadableStreamReadResult> read();
+  Promise<undefined> cancel();
+  undefined releaseLock();
+};
+dictionary ReadableStreamReadResult { any value; boolean done; };
+interface AbortSignal {};
+interface AbortController {
+  constructor();
+  readonly attribute AbortSignal signal;
+  undefined abort();
+};
