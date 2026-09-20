@@ -8,7 +8,7 @@ be used without the other.
 
 **Work in progress — not ready for production.** The current prototype connects
 GPU rendering, text editing and HTTP/JSON RPC on Windows and in a browser. It is
-not yet a usable UI framework; real IME, accessibility and distribution work
+not yet a usable UI framework; broader editing, reliability and distribution work
 remain incomplete. Public APIs may change substantially.
 
 ## Direction
@@ -21,9 +21,10 @@ remain incomplete. Public APIs may change substantially.
 - MIT OR Apache-2.0.
 
 The native prototype uses the official AccessKit adapter for production
-accessibility nodes, actions and shared-editor text/selection patterns. Actual
-assistive-technology usability and real IME acceptance remain incomplete;
-see the [verification record](docs/verification/native-accessibility.md).
+accessibility nodes, actions and shared-editor text/selection patterns. Bounded
+Narrator and real Japanese IME checks are accepted for the recorded environments;
+see the [verification index](docs/verification/p0.md) for evidence and remaining
+limitations. This does not establish support for every assistive client or IME.
 Development automation and production accessibility have separate responsibilities.
 
 ## Try the current prototype
