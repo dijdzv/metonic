@@ -1,5 +1,8 @@
 import {
   "local/p0/effects/clock",
+  "local/p0/effects/http",
+  "local/p0/examples/p0/user_load",
+  "local/metonic_async/http" @timed,
   "moonbitlang/async/cond_var",
   "local/p0/examples/p0/browser" @app,
   "local/websys-input" @input_dom,

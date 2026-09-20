@@ -67,7 +67,7 @@ async fn FontRequest::load(
   }
   self.reader = Some(reader)
   while true {
-    let (done, chunk) = http_read(reader)
+    let (done, chunk) = http_read(reader, self.controller)
     self.check_live()
     match done {
       Some(true) => break

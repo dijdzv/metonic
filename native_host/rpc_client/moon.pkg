@@ -1,9 +1,17 @@
 import {
   "local/p0/examples/p0/backend/api",
-  "local/p0/rpc/json" @wire,
+  "local/p0/examples/p0/user_load",
+  "local/p0/effects/clock",
+  "local/native_host/http" @transport,
+  "local/metonic_async/http" @timed,
   "moonbitlang/async",
-  "moonbitlang/async/http",
-  "moonbitlang/core/encoding/utf8",
 }
 
 supported_targets = "native"
+
+import {
+  "moonbitlang/async/http",
+  "moonbitlang/async/socket",
+  "moonbitlang/async/cond_var",
+  "local/metonic_async/clock" @virtual,
+} for "test"

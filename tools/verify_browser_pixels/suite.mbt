@@ -126,6 +126,28 @@ async fn run_suite(host : BrowserHost, metadata : String) -> String {
   }
   let summaries : Array[Json] = []
   for target in ["js", "wasm-gc"] {
+    for mode in ["cancel", "timeout"] {
+      let cleanup = command(host, {
+        "op": "rpc-stream-cleanup",
+        "target": Json::string(target),
+        "mode": Json::string(mode),
+      })
+      require(
+        int_field(cleanup, "aborts") == 1 &&
+        int_field(cleanup, "cancels") == 1 &&
+        int_field(cleanup, "locked") == 0 &&
+        int_field(cleanup, "status") == (if mode == "cancel" { 4 } else { 3 }),
+        "Pending RPC stream was not released: " + cleanup.stringify(),
+      )
+      if mode == "timeout" {
+        require(
+          string_field(cleanup, "result") == "\nRPC: timeout",
+          "RPC deadline result mismatch",
+        )
+      }
+    }
+  }
+  for target in ["js", "wasm-gc"] {
     for
       scenario in [("cancel", "", 4), ("replace", "\nRPC: domain:not_found", 3)] {
       let (mode, expected, status) = scenario

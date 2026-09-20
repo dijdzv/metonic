@@ -67,13 +67,10 @@ pub fn rpc_prepare(user_id : String) -> String? {
     "" {
     return None
   }
-  let request = @wire.request(@api.get_user(), @api.GetUserInput::{
-    id: user_id,
-  }).stringify()
-  if @utf8.encode(request).length() > 65536 {
-    return None
+  match @user_load.prepare(user_id) {
+    Ok(request) => Some(@utf8.decode(request.body)) catch { _ => None }
+    Err(_) => None
   }
-  Some(request)
 }
 
 ///|
@@ -94,7 +91,7 @@ pub fn rpc_output_byte(kind : Int, index : Int) -> Int {
 }
 
 ///|
-fn rpc_apply(id : Int, result : Result[String, String]) -> Int {
+pub fn rpc_apply(id : Int, result : Result[String, String]) -> Int {
   if application.val.complete_user(id, result) {
     1
   } else {
@@ -125,23 +122,10 @@ pub fn rpc_accept(id : Int, status : Int, bytes : Bytes) -> Int {
 
 ///|
 fn rpc_response_text(id : Int, status : Int, text : String) -> Int {
-  let json = @wire.parse_bounded(text) catch {
-    _ => return rpc_apply(id, Err("invalid_json"))
-  }
-  let result = match
-    @wire.response(@api.get_user(), status, json, code => {
-      if code == "not_found" {
-        Some(@api.GetUserError::NotFound)
-      } else {
-        None
-      }
-    }) {
-    Ok(user) => Ok(user.name)
-    Err(@wire.CallError::Domain(_)) => Err("domain:not_found")
-    Err(@wire.CallError::Protocol(code)) => Err("protocol:" + code)
-    Err(@wire.CallError::Remote(code)) => Err("remote:" + code)
-  }
-  rpc_apply(id, result)
+  rpc_apply(
+    id,
+    @user_load.decode(status, @utf8.encode(text)).map(user => user.name),
+  )
 }
 
 ///|

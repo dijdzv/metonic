@@ -1,17 +1,19 @@
 ///|
 async fn http_fetch(
-  body : String,
+  request : @http.Request,
   controller : @input_dom.AbortController,
 ) -> @input_dom.Response raise Error {
   input_window()
-  .fetch("/rpc", {
+  .fetch(request.path, {
     method_: Some("POST"),
-    headers: Some(Case0([["Content-Type", "application/json"]])),
-    body: Value(Case1(Case4(body))),
+    headers: Some(Case0([["Content-Type", request.content_type]])),
+    body: Value(
+      Case1(Case1(Case1(@input_dom.ArrayBuffer::from_bytes(request.body)))),
+    ),
     signal: Value(controller.signal()),
     cache: None,
   })
-  .wait()
+  .wait(abort=() => controller.abort())
 }
 
 ///|
@@ -39,8 +41,9 @@ fn http_reader(
 ///|
 async fn http_read(
   reader : @input_dom.ReadableStreamDefaultReader,
+  controller : @input_dom.AbortController,
 ) -> (Bool?, Bytes?) raise Error {
-  let result = reader.read().wait()
+  let result = reader.read().wait(abort=() => controller.abort())
   (
     result.done,
     match result.value {
@@ -60,18 +63,6 @@ async fn http_cancel_reader(
 ///|
 fn http_release_reader(reader : @input_dom.ReadableStreamDefaultReader) -> Unit {
   reader.release_lock()
-}
-
-///|
-fn http_timeout(callback : () -> Unit) -> Int? {
-  Some(
-    input_window().set_timeout(@input_dom.TimeoutCallback::new(callback), 3000),
-  )
-}
-
-///|
-fn http_clear_timeout(timer : Int) -> Unit {
-  input_window().clear_timeout(timer)
 }
 
 ///|

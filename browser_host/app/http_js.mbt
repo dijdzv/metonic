@@ -1,6 +1,6 @@
 ///|
 async fn http_fetch(
-  body : String,
+  request : @http.Request,
   controller : @input_dom.AbortController,
 ) -> @input_dom.Response raise Error {
   let options = @input_dom.RequestInit::{
@@ -8,17 +8,24 @@ async fn http_fetch(
     method_: Some("POST"),
     headers: Some(
       @input_dom.HeadersInit::from_array_of_array_of_string([
-        ["Content-Type", "application/json"],
+        ["Content-Type", request.content_type],
       ]),
     ),
     body: Value(
       @input_dom.BodyInit::from_xml_http_request_body_init(
-        @input_dom.XMLHttpRequestBodyInit::from_string(body),
+        @input_dom.XMLHttpRequestBodyInit::from_buffer_source(
+          @input_dom.BufferSource::from_array_buffer(
+            @input_dom.ArrayBuffer::from_bytes(request.body),
+          ),
+        ),
       ),
     ),
     signal: Value(controller.get_signal()),
   }
-  match input_window().fetch_with_string("/rpc", options).wait() {
+  match
+    input_window()
+    .fetch_with_string(request.path, options)
+    .wait(abort_controller=http_async_controller(controller)) {
     Ok(response) => response
     Err(_) => raise HttpBoundaryError
   }
@@ -52,8 +59,9 @@ fn http_reader(
 ///|
 async fn http_read(
   reader : @input_dom.ReadableStreamDefaultReader,
+  controller : @input_dom.AbortController,
 ) -> (Bool?, Bytes?) raise Error {
-  match reader.read().wait() {
+  match reader.read().wait(abort_controller=http_async_controller(controller)) {
     Ok(result) =>
       (
         result.done,
@@ -79,28 +87,6 @@ fn http_release_reader(reader : @input_dom.ReadableStreamDefaultReader) -> Unit 
 }
 
 ///|
-extern "js" fn http_timer_handler(callback : () -> Unit) -> @input_dom.Function =
-  #| callback => callback
-
-///|
-fn http_timeout(callback : () -> Unit) -> Int? {
-  match
-    input_window().set_timeout_with_function(
-      http_timer_handler(callback),
-      3000,
-      @input_dom.JsValue::undefined(),
-    ) {
-    Ok(timer) => Some(timer)
-    Err(_) => None
-  }
-}
-
-///|
-fn http_clear_timeout(timer : Int) -> Unit {
-  input_window().clear_timeout_with_id(timer)
-}
-
-///|
 fn http_notify() -> Unit {
   ignore(
     input_document_target().dispatch_event(@input_dom.Event::new("metonic-rpc")),
@@ -109,3 +95,10 @@ fn http_notify() -> Unit {
 
 ///|
 priv suberror HttpBoundaryError
+
+///|
+// Both libraries represent the same host AbortController; a new controller would not abort Fetch.
+extern "js" fn http_async_controller(
+  controller : @input_dom.AbortController,
+) -> @js_async.AbortController =
+  #| controller => controller
