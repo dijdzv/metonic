@@ -1,6 +1,12 @@
 # Native Japanese IME verification
 
-Status: implementation under verification; real IME acceptance is not complete.
+Status: native P0 IME acceptance is complete for the observed Windows environment
+in [#94](https://github.com/dijdzv/metonic/issues/94). Production observations cover
+both fields, conversion, cancellation, focus transfer, candidate placement and
+resize. The recorded environment has user-reported 100% scaling, with a separate
+owned production-window measurement of 96 DPI. Movement between monitors with
+different scaling was not tested. This is bounded acceptance, not a claim about
+every IME or display configuration.
 
 The additional `patches/window-ime-cancel.patch` follows the existing position
 patch during dependency preparation. It handles `WM_IME_COMPOSITION` without
@@ -149,5 +155,6 @@ do not increment host input counts. Posted window messages can increment them,
 so the counters alone do not prove a physical device was used. Production builds
 exclude this observation and still require the ordinary-input procedure above.
 
-Keep this requirement open until the scenarios have actual observed evidence.
-Missing multi-monitor hardware must be recorded as unverified, not passed.
+For future changes, repeat scenarios affected by the change or a reported
+regression. Do not repeat accepted manual checks solely to collect more detailed
+diagnostics. Missing multi-monitor hardware remains unverified, not passed.
