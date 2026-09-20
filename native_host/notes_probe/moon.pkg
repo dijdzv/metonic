@@ -1,0 +1,11 @@
+import {
+  "moonbitlang/async",
+  "local/p0/examples/notes/application" @notes,
+  "local/native_host/notes_application",
+  "local/native_host/window_host",
+  "local/p0/core/semantics",
+}
+
+pkgtype(kind: "executable")
+
+supported_targets = "native"

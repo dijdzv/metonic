@@ -18,7 +18,10 @@ async fn main {
       Some(value) => value
       None => "headless"
     }
-    if mode != "headless" &&
+    if mode != "notes" &&
+      mode != "notes-release" &&
+      mode != "notes-probe" &&
+      mode != "headless" &&
       mode != "window" &&
       mode != "window-release" &&
       mode != "release-probe" &&
@@ -36,7 +39,10 @@ async fn main {
     }
     let moon = @fs.realpath(".tools/moonbit/bin/moon.exe")
     let moon_home = @fs.realpath(".tools/moonbit")
-    if mode == "window" ||
+    if mode == "notes" ||
+      mode == "notes-release" ||
+      mode == "notes-probe" ||
+      mode == "window" ||
       mode == "window-release" ||
       mode == "window-dev" ||
       mode == "window-display-dev" ||
@@ -197,7 +203,10 @@ async fn main {
       println("NATIVE_BUILD_OK mode=host-gpu")
       return
     }
-    if mode == "async" ||
+    if mode == "notes" ||
+      mode == "notes-release" ||
+      mode == "notes-probe" ||
+      mode == "async" ||
       mode == "window" ||
       mode == "window-release" ||
       mode == "release-probe" ||
@@ -209,6 +218,8 @@ async fn main {
       mode == "window-display-dev" ||
       mode == "window-probe" {
       let host_apps = match mode {
+        "notes" | "notes-release" => ["notes_app"]
+        "notes-probe" => ["notes_probe"]
         "async" => ["async_app"]
         "window-dev" => ["window_dev"]
         "window-display-dev" => ["window_display_dev"]
@@ -225,8 +236,8 @@ async fn main {
       }
       let needs_accesskit = fn(host_app : String) {
         [
-          "window_app", "window_dev", "window_display_dev", "accessibility_probe",
-          "mailbox_probe", "sdk_mailbox_probe", "window_probe",
+          "notes_app", "notes_probe", "window_app", "window_dev", "window_display_dev",
+          "accessibility_probe", "mailbox_probe", "sdk_mailbox_probe", "window_probe",
         ].contains(host_app)
       }
       let native_host_build_dir = @fs.realpath(".") + "/.work/native-host-build"
@@ -271,7 +282,7 @@ async fn main {
           envmap.get("LIB").unwrap_or(""),
         )
       }
-      let profile = if mode == "window-release" {
+      let profile = if mode == "window-release" || mode == "notes-release" {
         build_args.push("--release")
         "release"
       } else {

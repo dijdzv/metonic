@@ -99,9 +99,11 @@ pub fn Registry::prepare_single_line(
   if !input.single_line || width <= 0 || width > 1024 {
     return false
   }
-  ignore(
-    @raster.render(input.engine, text, width, 32, single_line_scroll=Some(0)),
-  )
+  if !@raster.matches_layout(input.engine, text, width, true) {
+    ignore(
+      @raster.render(input.engine, text, width, 32, single_line_scroll=Some(0)),
+    )
+  }
   if @raster.caret_position(input.engine, text.length()) is Some((end_x, _)) {
     input.scroll_x = input.scroll_x.min((end_x - width + 1).max(0))
   }

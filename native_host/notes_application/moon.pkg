@@ -1,0 +1,7 @@
+import {
+  "local/p0/examples/notes/application" @notes,
+  "local/native_host/application" @host,
+  "local/p0/core/view_renderer" @renderer,
+}
+
+supported_targets = "native"

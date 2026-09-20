@@ -1,0 +1,78 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+}
+
+///|
+async fn main {
+  let pending = [
+    "local/native_host/window_host", "local/native_host/notes_app", "local/native_host/notes_probe",
+  ]
+  let seen : Map[String, Bool] = Map([])
+  let roots = [
+    ("local/native_host/", "native_host/"),
+    ("local/p0/", ""),
+    ("local/metonic_async/", "async_runtime/"),
+  ]
+  while pending.pop() is Some(package_path) {
+    if seen.contains(package_path) {
+      continue
+    }
+    seen[package_path] = true
+    assert_false(
+      package_path.has_prefix("local/p0/examples/p0/"),
+      msg="shared host imports P0: " + package_path,
+    )
+    assert_false(
+      package_path.has_prefix("local/native_host/p0_"),
+      msg="shared host imports P0 adapter: " + package_path,
+    )
+    assert_false(
+      package_path == "local/native_host/window_ui",
+      msg="independent app imports P0 entry",
+    )
+    for (prefix, directory) in roots {
+      if package_path.strip_prefix(prefix) is Some(relative) {
+        let manifest = directory + relative.to_owned() + "/moon.pkg"
+        assert_true(
+          @fs.exists(manifest),
+          msg="local dependency manifest missing: " + manifest,
+        )
+        let imports : Array[String] = []
+        let mut in_import = false
+        for line in @fs.read_file(manifest).text().split("\n") {
+          let trimmed = line.trim().to_owned()
+          if trimmed == "import {" {
+            in_import = true
+            imports.clear()
+            continue
+          }
+          if !in_import {
+            continue
+          }
+          if trimmed.has_prefix("}") {
+            if trimmed == "}" {
+              pending.append(imports)
+            } else {
+              assert_true(
+                trimmed == "} for \"test\"" || trimmed == "} for \"wbtest\"",
+                msg="unsupported import scope: " + manifest,
+              )
+            }
+            in_import = false
+            continue
+          }
+          let parts = trimmed.split("\"").to_array()
+          if parts.length() >= 3 {
+            let imported = parts[1].to_owned()
+            if roots.any(root => imported.has_prefix(root.0)) {
+              imports.push(imported)
+            }
+          }
+        }
+        assert_false(in_import, msg="unclosed import block: " + manifest)
+      }
+    }
+  }
+  println("HOST_BOUNDARIES_OK packages=" + seen.length().to_string())
+}
