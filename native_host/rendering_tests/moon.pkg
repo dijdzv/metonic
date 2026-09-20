@@ -1,0 +1,10 @@
+import {
+  "moonbitlang/async",
+  "local/p0/core/view",
+  "local/p0/core/view_renderer" @renderer,
+  "local/p0/text_raster" @raster,
+  "moonbitlang/async/fs",
+  "moonbitlang/core/env",
+} for "test"
+
+supported_targets = "native"

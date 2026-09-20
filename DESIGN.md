@@ -118,6 +118,14 @@ legacy default-input operations. It delegates editing to the core rather than
 implementing a second editor. Windows IMM attribute interpretation belongs to
 `platform/windows/ime_presentation`, not the platform-independent editor.
 
+`core/view` defines geometry and application-defined elements. `core/view_renderer`
+consumes an ordered list of text or bordered-control items, without importing a
+sample model. An explicit retained-item index separates the input layout needed
+for hit testing from layer compositing order. The P0 renderer adapter only maps
+its view and input presentation to these items; sample labels and layout remain
+in the application. See [rendering items](docs/rendering-items.md) for the current
+API and bounds.
+
 Track style/paint, layout, text-shaping, and semantic invalidation separately.
 A color change must not require reshaping text. Layout invalidation propagates
 to ancestors only when their measurements depend on the changed child.
