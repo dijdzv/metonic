@@ -111,7 +111,7 @@ fn App::observation(self : App) -> Observation {
     }),
     request_focused: self.model.request_focused(),
     accessibility_runs: self.accessibility
-    .map(bridge => bridge.fragments.map(fragment => fragment.id))
+    .map(bridge => bridge.fragment_ids())
     .unwrap_or([]),
     rendered_text: self.rendered_text,
     preedit_cursor: self.preedit_cursor,

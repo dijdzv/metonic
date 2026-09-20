@@ -12,6 +12,7 @@ import {
   "local/native_host/windows_loop" @loop,
   "local/native_host/rpc_client",
   "local/native_host/accessibility",
+  "local/native_host/p0_accessibility",
   "Milky2018/wgpu_mbt" @wgpu,
   "Milky2018/wgpu_mbt/c",
   "moonbitlang/async",

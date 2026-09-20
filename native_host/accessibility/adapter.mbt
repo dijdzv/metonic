@@ -108,18 +108,12 @@ pub struct TextFragment {
 
 ///|
 pub struct Bridge {
-  mut view : @application.View
-  mut adapter : UInt64
-  mut nodes : Array[@semantics.Node]
-  mut width : Int
-  mut height : Int
-  mut x : Int
-  mut y : Int
-  mut composing : Bool
-  mut rpc_result : String
-  mut fragments : Array[TextFragment]
-  mut editor_scroll : Int
-  mut next_text_id : UInt64
+  priv mut presentation : Presentation
+  priv mut adapter : UInt64
+  priv mut nodes : Array[@semantics.Node]
+  priv mut fragments : Array[TextFragment]
+  priv mut layout : Array[@raster.TextRun]?
+  priv mut next_text_id : UInt64
 }
 
 ///|
@@ -138,8 +132,15 @@ let current : Ref[Bridge?] = { val: None, }
 fn tree(_data : UInt64) -> UInt64 {
   let bridge = current.val.unwrap()
   let root = node_new(133)
-  label(root, b"Metonic", 7UL)
-  bounds(root, 0, 0, bridge.width.to_double(), bridge.height.to_double())
+  let title = @utf8.encode(bridge.presentation.title)
+  label(root, title, title.length().to_uint64())
+  bounds(
+    root,
+    0,
+    0,
+    bridge.presentation.width.to_double(),
+    bridge.presentation.height.to_double(),
+  )
   let mut focus = 0UL
   for node in bridge.nodes {
     if node.focused {
@@ -150,6 +151,8 @@ fn tree(_data : UInt64) -> UInt64 {
   set_tree(result, tree_new(0UL))
   for semantic in bridge.nodes {
     let id = semantic.reference.id.to_uint64()
+    let presentation = bridge.presentation.control(semantic.reference).unwrap()
+    let box = presentation.bounds
     let node = node_new(
       if semantic.role is @semantics.Button {
         18
@@ -165,43 +168,24 @@ fn tree(_data : UInt64) -> UInt64 {
       disabled(node)
     }
     add_action(node, 1)
+    bounds(
+      node,
+      box.x.to_double(),
+      box.y.to_double(),
+      box.width.to_double(),
+      box.height.to_double(),
+    )
     if semantic.role is @semantics.Button {
       add_action(node, 0)
-      if id == 1UL {
-        toggled(node, if semantic.value == "on" { 1 } else { 0 })
-        bounds(node, bridge.x.to_double(), bridge.y.to_double(), 120, 72)
-      } else {
-        let box = if bridge.view.start.reference is Some(reference) &&
-          reference.id.to_uint64() == id {
-          bridge.view.start.bounds
-        } else if bridge.view.cancel.reference is Some(reference) &&
-          reference.id.to_uint64() == id {
-          bridge.view.cancel.bounds
-        } else {
-          bridge.view.request.bounds
-        }
-        bounds(
-          node,
-          box.x.to_double(),
-          box.y.to_double(),
-          box.width.to_double(),
-          box.height.to_double(),
-        )
+      if presentation.toggled is Some(active) {
+        toggled(node, if active { 1 } else { 0 })
       }
-    } else if id == 2UL {
-      if bridge.composing {
+    } else if bridge.presentation.text_owner == Some(semantic.reference) {
+      if bridge.presentation.composing {
         read_only(node)
       } else {
         add_value_action(node)
       }
-      let box = bridge.view.editor.bounds
-      bounds(
-        node,
-        box.x.to_double(),
-        box.y.to_double(),
-        box.width.to_double(),
-        box.height.to_double(),
-      )
       clips_children(node)
       for fragment in bridge.fragments {
         let run = node_new(1)
@@ -218,14 +202,14 @@ fn tree(_data : UInt64) -> UInt64 {
           box.x.to_double(),
           box.y.to_double() +
           fragment.layout.top.to_double() -
-          bridge.editor_scroll.to_double(),
+          bridge.presentation.text_scroll.to_double(),
           fragment.layout.width.to_double(),
           fragment.layout.height.to_double(),
         )
         push_child(node, fragment.id)
         push_node(result, fragment.id, run)
       }
-      if !bridge.composing {
+      if !bridge.presentation.composing {
         match
           (
             bridge.text_position(semantic.selection_anchor),
@@ -239,25 +223,18 @@ fn tree(_data : UInt64) -> UInt64 {
         }
       }
     }
-    if semantic.role is @semantics.TextInput && id != 2UL {
+    if semantic.role is @semantics.TextInput &&
+      bridge.presentation.text_owner != Some(semantic.reference) {
       add_value_action(node)
-      let box = bridge.view.query.bounds
-      bounds(
-        node,
-        box.x.to_double(),
-        box.y.to_double(),
-        box.width.to_double(),
-        box.height.to_double(),
-      )
     }
     push_child(root, id)
     push_node(result, id, node)
   }
-  if bridge.rpc_result != "" {
+  for item in bridge.presentation.statuses {
     let status = node_new(3)
-    let text = @utf8.encode(bridge.rpc_result.trim().to_owned())
+    let text = @utf8.encode(item.text)
     value(status, text, text.length().to_uint64())
-    let box = bridge.view.result.bounds
+    let box = item.bounds
     bounds(
       status,
       box.x.to_double(),
@@ -265,22 +242,9 @@ fn tree(_data : UInt64) -> UInt64 {
       box.width.to_double(),
       box.height.to_double(),
     )
-    push_child(root, 4294967295UL)
-    push_node(result, 4294967295UL, status)
+    push_child(root, item.id)
+    push_node(result, item.id, status)
   }
-  let task_status = node_new(3)
-  let task_text = @utf8.encode(bridge.view.task_status.text)
-  value(task_status, task_text, task_text.length().to_uint64())
-  let task_box = bridge.view.task_status.bounds
-  bounds(
-    task_status,
-    task_box.x.to_double(),
-    task_box.y.to_double(),
-    task_box.width.to_double(),
-    task_box.height.to_double(),
-  )
-  push_child(root, 4294967294UL)
-  push_node(result, 4294967294UL, task_status)
   push_node(result, 0UL, root)
   result
 }
@@ -289,21 +253,17 @@ fn tree(_data : UInt64) -> UInt64 {
 pub fn open(
   hwnd : UInt64,
   nodes : Array[@semantics.Node],
-  view : @application.View,
+  presentation : Presentation,
 ) -> Bridge? {
-  guard current.val is None else { return None }
+  guard current.val is None && valid_presentation(nodes, presentation) else {
+    return None
+  }
   let bridge = Bridge::{
     adapter: 0UL,
-    view,
-    nodes,
-    width: 640,
-    height: 360,
-    x: 260,
-    y: 144,
-    composing: false,
-    rpc_result: "",
+    presentation: presentation.snapshot(),
+    nodes: nodes.copy(),
     fragments: [],
-    editor_scroll: 0,
+    layout: None,
     next_text_id: 4294967296UL,
   }
   current.val = Some(bridge)
@@ -317,53 +277,66 @@ pub fn open(
 }
 
 ///|
-pub fn Bridge::update(
+fn Bridge::replace_snapshot(
   self : Bridge,
   nodes : Array[@semantics.Node],
-  width : Int,
-  height : Int,
-  x : Int,
-  y : Int,
-  composing : Bool,
-  rpc_result : String,
+  presentation : Presentation,
   layout : Array[@raster.TextRun]?,
-  view : @application.View,
-  editor_scroll? : Int = 0,
-) -> Unit {
-  if self.adapter == 0UL {
-    return
+) -> Bool {
+  guard valid_presentation(nodes, presentation) else { return false }
+  let layout = layout.map(runs => runs.map(run => run.copy()))
+  let owner = owner_node(nodes, presentation.text_owner)
+  let old_owner = owner_node(self.nodes, self.presentation.text_owner)
+  if layout is Some(runs) {
+    guard owner is Some(node) else { return false }
+    for run in runs {
+      if run.start < 0 ||
+        run.end < run.start ||
+        run.end > node.value.length() ||
+        @position.utf16_to_scalar(node.value, run.start) is None ||
+        @position.utf16_to_scalar(node.value, run.end) is None {
+        return false
+      }
+    }
   }
   if layout is None {
     self.fragments = []
   } else if self.fragments.is_empty() ||
-    self.nodes[1].value != nodes[1].value ||
-    self.width != width {
-    let text = nodes[1].value
+    self.presentation.text_owner != presentation.text_owner ||
+    old_owner.map(node => node.value) != owner.map(node => node.value) ||
+    self.layout != layout {
+    let text = owner.unwrap().value
     let fragments : Array[TextFragment] = []
     for run in layout.unwrap() {
       let part = text[run.start:run.end].to_owned()
-      guard text_units(part) is Some(units) else {
-        fragments.clear()
-        break
-      }
+      guard text_units(part) is Some(units) else { return false }
       fragments.push({ id: self.next_text_id, layout: run, text: part, units, })
       self.next_text_id += 1UL
     }
     self.fragments = fragments
   }
-  self.view = view
-  self.editor_scroll = editor_scroll
-  self.nodes = nodes
-  self.width = width
-  self.height = height
-  self.x = x
-  self.y = y
-  self.composing = composing
-  self.rpc_result = rpc_result
+  self.presentation = presentation.snapshot()
+  self.nodes = nodes.copy()
+  self.layout = layout.map(runs => runs.copy())
+  true
+}
+
+///|
+pub fn Bridge::update(
+  self : Bridge,
+  nodes : Array[@semantics.Node],
+  presentation : Presentation,
+  layout : Array[@raster.TextRun]?,
+) -> Bool {
+  guard self.adapter != 0UL &&
+    self.replace_snapshot(nodes, presentation, layout) else {
+    return false
+  }
   let events = update_active(self.adapter, data => tree(data), 0UL)
   if events != 0UL {
     raise_events(events)
   }
+  true
 }
 
 ///|
@@ -398,7 +371,10 @@ pub fn Bridge::poll(self : Bridge) -> Array[Request] {
             }
           }
         }
-        3 if id == 2UL =>
+        3 if self.presentation.text_owner.map(reference => {
+            reference.id.to_uint64()
+          }) ==
+          Some(id) =>
           result.push(
             Select(
               selection_field(request, 0),
@@ -422,6 +398,11 @@ pub fn Bridge::close(self : Bridge) -> Unit {
     self.adapter = 0UL
     current.val = None
   }
+}
+
+///|
+pub fn Bridge::fragment_ids(self : Bridge) -> Array[UInt64] {
+  self.fragments.map(fragment => fragment.id)
 }
 
 ///|

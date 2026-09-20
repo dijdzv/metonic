@@ -41,7 +41,7 @@ pub fn Bridge::resolve_selection(
   self : Bridge,
   request : Request,
 ) -> (Int, Int)? {
-  guard !self.composing && self.adapter != 0UL else { return None }
+  guard !self.presentation.composing && self.adapter != 0UL else { return None }
   guard request is Select(anchor_node, anchor_index, focus_node, focus_index) else {
     return None
   }

@@ -127,7 +127,7 @@ pub impl @windows.ApplicationHandler for App with fn can_create_surfaces(
   self.accessibility = @accessibility.open(
     self.hwnd,
     @semantics.snapshot(self.model.editor),
-    self.model.view(),
+    @p0_accessibility.presentation(self.model),
   )
   if self.accessibility is None {
     self.error = Some(WindowFailure::Failure("accessibility attachment failed"))
@@ -470,17 +470,17 @@ fn App::draw(self : App) -> Unit raise Error {
   }
   if self.accessibility is Some(bridge) {
     let nodes = @semantics.snapshot(self.model.editor)
-    bridge.update(
-      nodes,
-      @scene.field(self.model.scene, 6),
-      @scene.field(self.model.scene, 7),
-      @scene.field(self.model.scene, 0),
-      @scene.field(self.model.scene, 1),
-      self.composition is Some(_),
-      self.model.result,
-      self.raster.bind(engine => @raster.text_runs(engine, nodes[1].value)),
-      self.model.view(),
-      editor_scroll=self.editor_scroll,
+    require(
+      bridge.update(
+        nodes,
+        @p0_accessibility.presentation(
+          self.model,
+          composing=self.composition is Some(_),
+          editor_scroll=self.editor_scroll,
+        ),
+        self.raster.bind(engine => @raster.text_runs(engine, nodes[1].value)),
+      ),
+      "invalid accessibility presentation",
     )
   }
 }
