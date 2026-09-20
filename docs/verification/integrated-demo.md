@@ -92,8 +92,11 @@ preedit arrives. Canceling discards the preedit without restoring the deleted
 selection. Enabling IME or receiving an empty preedit alone leaves the selection
 intact. This matches the replacement/cancel behavior observed in the browser's
 standard input and textarea. After cancellation, Enter inserts a newline in Text
-and leaves User ID unchanged. Native preedit still uses a blue background;
-composition presentation and actual IME acceptance remain tracked in Issue #371.
+and leaves User ID unchanged. Ordinary preedit does not retain the committed
+selection background. Native conversion attributes can highlight the active
+conversion range; the browser textarea/input interface does not expose those
+attributes. Replacement/cancellation acceptance is complete in Issue #371, with
+the broader browser/native IME evidence recorded in #6 and #94.
 
 Closing native ends the launcher and its owned server. An unexpected server exit
 fails the session and terminates its owned native child. Startup failure also
