@@ -1,7 +1,7 @@
 import {
   "local/browser_host" @host,
   "local/p0/examples/p0/browser" @app,
-  "bikallem/webapi" @dom,
+  "local/websys-input" @dom,
 }
 
 supported_targets = "+js+wasm-gc"
@@ -9,6 +9,7 @@ supported_targets = "+js+wasm-gc"
 pkgtype(kind: "executable")
 
 options(
+  targets: { "dom_js.mbt": [ "js" ], "dom_wasm.mbt": [ "wasm-gc" ] },
   link: {
     "wasm-gc": {
       "imported-string-constants": "_",

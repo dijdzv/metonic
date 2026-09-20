@@ -1,12 +1,9 @@
 ///|
 fn next_frame(check : () -> Unit raise) -> Unit {
   ignore(
-    @dom.window().request_animation_frame(fn(_) {
+    request_frame(fn(_) {
       check() catch {
-        error =>
-          @dom.document()
-          .get_element_by_id("app")
-          .set_text_content("FAIL production_input_owner: " + error.to_string())
+        error => status("FAIL production_input_owner: " + error.to_string())
       }
     }),
   )
@@ -20,9 +17,7 @@ fn check_frame_lifetime(
 ) -> Unit raise {
   if scenario == 6 {
     @host.inputs_stop()
-    @dom.document()
-    .get_element_by_id("app")
-    .set_text_content(
+    status(
       "PASS production_input_owner both_fields composition selection stop restart pending_frames",
     )
     return
@@ -34,35 +29,36 @@ fn check_frame_lifetime(
   query.set_value("query")
   @host.inputs_start()
   if is_query {
-    query.focus()
-    query.set_selection_range(0U, 5U)
-    ignore(query.dispatch_event(@dom.CompositionEvent::new("compositionstart")))
+    focus_query(query)
+    select_query(query, 0U, 5U)
     ignore(
-      query.dispatch_event(
-        @dom.CompositionEvent::new(
-          "compositionupdate",
-          event_init_dict=@dom.CompositionEventInit::new(data="pending"),
-        ),
+      dispatch_event(query_target(query), composition_event("compositionstart")),
+    )
+    ignore(
+      dispatch_event(
+        query_target(query),
+        composition_event("compositionupdate", data="pending"),
       ),
     )
     query.set_value("pending")
-    query.set_selection_range(7U, 7U)
+    select_query(query, 7U, 7U)
   } else {
-    editor.focus()
-    editor.set_selection_range(0U, 6U)
+    focus_editor(editor)
+    select_editor(editor, 0U, 6U)
     ignore(
-      editor.dispatch_event(@dom.CompositionEvent::new("compositionstart")),
+      dispatch_event(
+        editor_target(editor),
+        composition_event("compositionstart"),
+      ),
     )
     ignore(
-      editor.dispatch_event(
-        @dom.CompositionEvent::new(
-          "compositionupdate",
-          event_init_dict=@dom.CompositionEventInit::new(data="pending"),
-        ),
+      dispatch_event(
+        editor_target(editor),
+        composition_event("compositionupdate", data="pending"),
       ),
     )
     editor.set_value("pending")
-    editor.set_selection_range(7U, 7U)
+    select_editor(editor, 7U, 7U)
   }
   assert_eq(@host.inputs_composing(), 1)
   assert_eq(@app.input_cursor(is_query, "pending", 7), 0)

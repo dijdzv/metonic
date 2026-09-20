@@ -10,48 +10,42 @@ fn check_canceled_replacement(
       query.set_value("あいう")
       @host.inputs_start()
       let target = if is_query {
-        (query : &@dom.TEventTarget)
+        query_target(query)
       } else {
-        (editor : &@dom.TEventTarget)
+        editor_target(editor)
       }
       if is_query {
-        query.focus()
-        query.set_selection_range(0U, 3U)
+        focus_query(query)
+        select_query(query, 0U, 3U)
       } else {
-        editor.focus()
-        editor.set_selection_range(0U, 3U)
+        focus_editor(editor)
+        select_editor(editor, 0U, 3U)
       }
-      ignore(target.dispatch_event(@dom.Event::new("select")))
+      ignore(dispatch_event(target, event("select")))
+      ignore(dispatch_event(target, composition_event("compositionstart")))
       ignore(
-        target.dispatch_event(@dom.CompositionEvent::new("compositionstart")),
-      )
-      ignore(
-        target.dispatch_event(
-          @dom.CompositionEvent::new(
-            "compositionupdate",
-            event_init_dict=@dom.CompositionEventInit::new(data="あ"),
-          ),
+        dispatch_event(
+          target,
+          composition_event("compositionupdate", data="あ"),
         ),
       )
       if is_query {
         query.set_value("あ")
-        query.set_selection_range(1U, 1U)
+        select_query(query, 1U, 1U)
       } else {
         editor.set_value("あ")
-        editor.set_selection_range(1U, 1U)
+        select_editor(editor, 1U, 1U)
       }
-      ignore(target.dispatch_event(@dom.Event::new("input")))
+      ignore(dispatch_event(target, event("input")))
       assert_eq(@host.inputs_composing(), 1)
       if is_query {
         query.set_value(canceled)
-        query.set_selection_range(0U, canceled.length().reinterpret_as_uint())
+        select_query(query, 0U, canceled.length().reinterpret_as_uint())
       } else {
         editor.set_value(canceled)
-        editor.set_selection_range(0U, canceled.length().reinterpret_as_uint())
+        select_editor(editor, 0U, canceled.length().reinterpret_as_uint())
       }
-      ignore(
-        target.dispatch_event(@dom.CompositionEvent::new("compositionend")),
-      )
+      ignore(dispatch_event(target, composition_event("compositionend")))
       assert_eq(@host.inputs_composing(), 0)
       assert_eq(@host.inputs_error(), 0)
       assert_eq(
@@ -69,12 +63,12 @@ fn check_canceled_replacement(
       }
       if is_query {
         query.set_value("次")
-        query.set_selection_range(1U, 1U)
+        select_query(query, 1U, 1U)
       } else {
         editor.set_value("次")
-        editor.set_selection_range(1U, 1U)
+        select_editor(editor, 1U, 1U)
       }
-      ignore(target.dispatch_event(@dom.Event::new("input")))
+      ignore(dispatch_event(target, event("input")))
       assert_eq(@app.view_field(if is_query { 6 } else { 0 }, 4), 1)
       if is_query {
         assert_eq(@app.query_state(), ("次", 1, 1, false))
