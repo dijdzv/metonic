@@ -1,5 +1,14 @@
 # Browser input host
 
+Browser P0 IME acceptance is complete in
+[#6](https://github.com/dijdzv/metonic/issues/6). User-operated checks accepted
+conversion, selection replacement/cancellation, subsequent Enter, candidate
+placement during scrolling/resizing and composition-confirming Enter without
+query submission or changes to the main editor. These observations complement
+the controlled tests below; they do not establish every browser/IME combination
+or an exact internal event-order trace. Repeat affected checks only after a
+relevant change or a newly reported regression.
+
 The packaged browser application links `browser_host/app` and the shared
 `examples/p0/browser` state once. MoonBit owns listeners for the main textarea
 and User ID input, including composition, selection, focus and disposal.
