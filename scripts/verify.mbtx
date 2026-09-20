@@ -170,6 +170,15 @@ async fn main {
         ],
         envmap,
       )
+      for package in ["../async_runtime/http", "rpc_client"] {
+        run_checked(
+          moon,
+          [
+            "-C", "native_host", "test", package, "--target", "native", "--deny-warn",
+          ],
+          envmap,
+        )
+      }
       return
     }
     run_checked(moon, ["run", "scripts/doctor.mbtx"], envmap)

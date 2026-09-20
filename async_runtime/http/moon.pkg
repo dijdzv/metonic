@@ -1,0 +1,12 @@
+import {
+  "local/p0/effects/http" @capability,
+  "local/p0/effects/clock",
+  "moonbitlang/async",
+}
+
+import {
+  "local/metonic_async/clock" @virtual,
+  "moonbitlang/async/cond_var",
+  "local/p0/examples/p0/user_load",
+  "local/p0/examples/p0/task_scope",
+} for "test"

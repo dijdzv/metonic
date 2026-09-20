@@ -96,6 +96,12 @@ time and `async_runtime/clock` supplies virtual time for tests. Both retain the
 same task ownership and stale-result checks. [ADR 031](docs/adr/031-clock-capability.md)
 defines this boundary; it does not introduce a global Runtime or effect scheduler.
 
+User loading depends on `effects/http`, with deadline composition supplied by
+`async_runtime/http`. Native and generated-WebSys adapters own transport resources;
+the sample owns JSON and domain semantics in `examples/p0/user_load`.
+[ADR 032](docs/adr/032-http-capability.md) defines this bounded exchange and its
+verification requirements.
+
 Platform event loops own blocking waits. The host wakes the UI thread for input,
 task completion, and development commands. A second runtime must not block the
 same thread. Callbacks do not hold locks across reentrant UI work.

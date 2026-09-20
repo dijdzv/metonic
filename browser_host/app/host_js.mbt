@@ -52,3 +52,7 @@ fn host_style(
 fn host_text(element : @input_dom.HTMLElement, value : String) -> Unit {
   element.to_node().set_text_content(Some(value))
 }
+
+///|
+extern "js" fn http_timer_handler(callback : () -> Unit) -> @input_dom.Function =
+  #| callback => callback

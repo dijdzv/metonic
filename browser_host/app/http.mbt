@@ -1,23 +1,22 @@
 ///|
-priv struct HttpRequest {
-  id : Int
+priv struct BrowserHttp {
   controller : @input_dom.AbortController
   mut reader : @input_dom.ReadableStreamDefaultReader?
-  mut live : Bool
-  mut timer : Int?
-  bytes : Array[Byte]
 }
 
 ///|
-let pending_http : Ref[HttpRequest?] = Ref(None)
+priv struct PendingHttp {
+  id : Int
+  transport : BrowserHttp
+  mut task : @async.Task[Unit]?
+  mut live : Bool
+}
 
 ///|
-fn HttpRequest::cleanup(self : HttpRequest) -> Unit {
-  self.live = false
-  if self.timer is Some(timer) {
-    self.timer = None
-    http_clear_timeout(timer)
-  }
+let pending_http : Ref[PendingHttp?] = Ref(None)
+
+///|
+fn BrowserHttp::cleanup(self : BrowserHttp) -> Unit {
   self.controller.abort()
   if self.reader is Some(reader) {
     self.reader = None
@@ -31,80 +30,49 @@ fn HttpRequest::cleanup(self : HttpRequest) -> Unit {
 }
 
 ///|
-fn HttpRequest::finish(
-  self : HttpRequest,
-  status : Int,
-  failure : Int?,
-) -> Unit {
-  if !self.live {
-    return
+impl @http.Http for BrowserHttp with fn post(self, request) {
+  defer self.cleanup()
+  if request.response_limit < 0 {
+    return Err(@http.InvalidRequest)
   }
-  pending_http.val = None
-  self.cleanup()
-  let accepted = match failure {
-    Some(code) => @app.rpc_transport_error(self.id, code)
-    None => @app.rpc_accept(self.id, status, Bytes::from_array(self.bytes))
-  }
-  if accepted == 1 {
-    http_notify()
-  }
-}
-
-///|
-async fn HttpRequest::perform(self : HttpRequest, body : String) -> Unit {
-  let mut status = 0
   try {
-    let response = http_fetch(body, self.controller)
-    if !self.live {
-      return
-    }
+    let response = http_fetch(request, self.controller)
     let content_type = http_content_type(response)
-    if content_type != Some("application/json") &&
-      content_type != Some("application/json; charset=utf-8") {
-      self.finish(0, Some(3))
-      return
+    if !request.accepted_content_types.is_empty() &&
+      !(content_type is Some(value) &&
+      request.accepted_content_types.contains(value)) {
+      return Err(@http.InvalidContentType)
     }
-    status = http_status(response)
+    let status = http_status(response)
     guard http_body(response) is Some(stream) else {
-      self.finish(status, None)
-      return
+      return Ok({ status, content_type, body: b"", })
     }
     guard http_reader(stream) is Some(reader) else {
-      self.finish(status, Some(0))
-      return
+      return Err(@http.Transport)
     }
     self.reader = Some(reader)
-    while self.live {
-      let (done, chunk) = http_read(reader)
-      if !self.live {
-        return
-      }
+    let bytes : Array[Byte] = []
+    while true {
+      let (done, chunk) = http_read(reader, self.controller)
       match done {
-        Some(true) => {
-          self.finish(status, None)
-          return
-        }
+        Some(true) =>
+          return Ok({ status, content_type, body: Bytes::from_array(bytes), })
         Some(false) => {
-          guard chunk is Some(chunk) else {
-            self.finish(status, Some(0))
-            return
-          }
-          if chunk.length() > 65536 - self.bytes.length() {
-            self.finish(status, Some(2))
-            return
+          guard chunk is Some(chunk) else { return Err(@http.Transport) }
+          if chunk.length() > request.response_limit - bytes.length() {
+            return Err(@http.ResponseTooLarge)
           }
           for byte in chunk {
-            self.bytes.push(byte)
+            bytes.push(byte)
           }
         }
-        None => {
-          self.finish(status, Some(0))
-          return
-        }
+        None => return Err(@http.Transport)
       }
+    } nobreak {
+      Err(@http.Transport)
     }
   } catch {
-    _ => self.finish(status, Some(0))
+    _ => Err(@http.Transport)
   }
 }
 
@@ -113,7 +81,11 @@ async fn HttpRequest::perform(self : HttpRequest, body : String) -> Unit {
 pub fn http_cancel() -> Unit {
   if pending_http.val is Some(request) {
     pending_http.val = None
-    request.cleanup()
+    request.live = false
+    request.transport.cleanup()
+    if request.task is Some(task) {
+      @async.run_async_main(() => task.cancel())
+    }
   }
 }
 
@@ -124,31 +96,69 @@ pub fn http_start() -> Int {
     return 0
   }
   guard input_query() is Some(input) else { return 0 }
-  let body = match @app.rpc_prepare(InputElement::Query(input).value()) {
-    Some(value) => value
-    None => return 0
-  }
+  let user_id = InputElement::Query(input).value()
+  guard @app.rpc_prepare(user_id) is Some(_) else { return 0 }
   http_cancel()
   let id = @app.task_begin()
   if id < 0 {
     return 0
   }
-  let request = HttpRequest::{
+  let request = PendingHttp::{
     id,
-    controller: @input_dom.AbortController::new(),
-    reader: None,
+    transport: BrowserHttp::{
+      controller: @input_dom.AbortController::new(),
+      reader: None,
+    },
+    task: None,
     live: true,
-    timer: None,
-    bytes: [],
   }
   pending_http.val = Some(request)
-  match http_timeout(fn() { request.finish(0, Some(1)) }) {
-    Some(timer) => request.timer = Some(timer)
-    None => {
-      request.finish(0, Some(0))
-      return 1
-    }
-  }
-  @async.run_async_main(async fn() { request.perform(body) })
+  @async.run_async_main(async fn() {
+    @async.with_task_group(group => {
+      let task = group.spawn(() => {
+        if !request.live {
+          return
+        }
+        let clock = BrowserClock::{
+          wake: @cond_var.Cond(),
+          timer: None,
+          reset: false,
+          ready: false,
+        }
+        let result = @user_load.load(
+          @timed.TimedHttp::{
+            transport: request.transport,
+            clock,
+            milliseconds: 3000,
+          },
+          user_id,
+        )
+        if !request.live {
+          return
+        }
+        request.live = false
+        if pending_http.val is Some(current) && current.id == request.id {
+          pending_http.val = None
+        }
+        if @app.rpc_apply(id, result.map(user => user.name)) == 1 {
+          http_notify()
+        }
+      })
+      request.task = Some(task)
+      task.wait() catch {
+        @async.TaskCancelled => ()
+        _ =>
+          if request.live {
+            request.live = false
+            if pending_http.val is Some(current) && current.id == request.id {
+              pending_http.val = None
+            }
+            if @app.rpc_transport_error(id, 0) == 1 {
+              http_notify()
+            }
+          }
+      }
+    })
+  })
   1
 }

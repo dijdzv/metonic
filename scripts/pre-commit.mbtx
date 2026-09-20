@@ -116,6 +116,7 @@ async fn main {
     run(moon, ["-C", "experiments/wgpu_binding", "fmt"])
     run(moon, ["-C", "browser_host", "fmt", "app"])
     run(moon, ["-C", "browser_host", "fmt", "../async_runtime/clock"])
+    run(moon, ["-C", "browser_host", "fmt", "../async_runtime/http"])
     expect_clean(
       ["diff", "--exit-code"],
       "formatting changed files; review and stage explicitly",
@@ -127,6 +128,9 @@ async fn main {
     ])
   }
   if commit_only {
+    run(moon, [
+      "-C", "browser_host", "test", "../async_runtime/http", "--target", "js", "--deny-warn",
+    ])
     run(moon, [
       "-C", "browser_host", "test", "../async_runtime/clock", "--target", "js", "--deny-warn",
     ])

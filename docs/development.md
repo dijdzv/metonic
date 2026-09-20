@@ -158,6 +158,11 @@ The native workspace runner also runs this suite with its prepared MSVC
 environment. Use these workspaces rather than resolving dependencies from
 `async_runtime` alone; they select the verified native or browser async adapter.
 
+The controlled HTTP/deadline suite uses the same workspaces and runs in pre-commit:
+`-C browser_host test ../async_runtime/http --target js --deny-warn`.
+The native runner also executes this suite and `native_host/rpc_client` loopback
+tests. Production browser HTTP is covered by `mise run browser:headless`.
+
 For an interactive session, run `mise run demo`. It builds the browser host and
 ordinary native release window, then runs both against the browser server's
 HTTP endpoint. Closing native stops the owned server. Follow the

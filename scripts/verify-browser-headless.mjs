@@ -713,6 +713,50 @@ try {
         } catch (error) { await reportFailure(page); throw error }
         finally { release?.(); await page.close(); }
       }
+      case 'rpc-stream-cleanup': {
+        const page = await observedPage(browser);
+        let stage = 'ready';
+        try {
+          await page.goto(`${baseUrl}/?target=${encodeURIComponent(request.target)}`);
+          await waitStatus(page, `Ready: ${request.target}`);
+          await page.evaluate(() => {
+            const original = window.fetch.bind(window);
+            const observation = globalThis.rpcStreamObservation = { aborts: 0, cancels: 0, pulls: 0 };
+            window.fetch = (url, init) => {
+              if (!String(url).endsWith('/rpc')) return original(url, init);
+              init.signal.addEventListener('abort', () => observation.aborts++, { once: true });
+              const stream = globalThis.rpcTestStream = new ReadableStream({
+                pull() { observation.pulls++; },
+                cancel() { observation.cancels++; },
+              });
+              return Promise.resolve(new Response(stream, { headers: { 'Content-Type': 'application/json' } }));
+            };
+          });
+          await page.locator('#rpc-user').fill('1');
+          await page.locator('#rpc-load').click();
+          stage = 'reading';
+          await page.waitForFunction(() => globalThis.rpcTestStream?.locked && globalThis.rpcStreamObservation.pulls > 0);
+          if (request.mode === 'cancel') await page.locator('#task-cancel').click();
+          stage = 'released';
+          await page.waitForFunction(() => globalThis.rpcStreamObservation.cancels === 1 && !globalThis.rpcTestStream.locked);
+          return await page.evaluate(() => ({
+            ...globalThis.rpcStreamObservation,
+            locked: globalThis.rpcTestStream.locked ? 1 : 0,
+            status: JSON.parse(document.querySelector('#task-state').textContent)[0],
+            result: document.querySelector('#rpc-result').textContent,
+          }));
+        } catch (error) {
+          const observed = await page.evaluate(() => ({
+            counts: globalThis.rpcStreamObservation,
+            locked: globalThis.rpcTestStream?.locked,
+            state: document.querySelector('#task-state')?.textContent,
+            result: document.querySelector('#rpc-result')?.textContent,
+          })).catch(() => null);
+          await reportFailure(page);
+          throw new Error(`RPC stream ${request.target}/${request.mode} ${stage}: ${JSON.stringify(observed)}; ${error}`);
+        }
+        finally { await page.close(); }
+      }
       case 'scene': return runTarget(browser, request.target)
       case 'failures': return negativeTests(browser)
       case 'text': return textTarget(browser, request.target, request.reference)
