@@ -1,0 +1,67 @@
+// Renderer binding surface. Unused optional arguments and descriptor members
+// are omitted; buffer-source unions and numeric conversion contracts are retained.
+typedef [EnforceRange] unsigned long GPUSize32;
+typedef [EnforceRange] unsigned long GPUIndex32;
+typedef [EnforceRange] unsigned long GPUIntegerCoordinate;
+typedef [EnforceRange] unsigned long long GPUSize64;
+typedef unsigned long GPUBufferUsageFlags;
+typedef unsigned long GPUTextureUsageFlags;
+typedef (ArrayBuffer or SharedArrayBuffer or [AllowShared] ArrayBufferView) AllowSharedBufferSource;
+typedef (sequence<GPUIntegerCoordinate> or GPUExtent3DDict) GPUExtent3D;
+dictionary GPUExtent3DDict { required GPUIntegerCoordinate width; GPUIntegerCoordinate height = 1; GPUIntegerCoordinate depthOrArrayLayers = 1; };
+enum GPUTextureFormat { "rgba8unorm", "bgra8unorm" };
+enum GPUAutoLayoutMode { "auto" };
+enum GPULoadOp { "load", "clear" };
+enum GPUStoreOp { "store", "discard" };
+interface GPUDevice {
+  readonly attribute GPUQueue queue;
+  GPUShaderModule createShaderModule(GPUShaderModuleDescriptor descriptor);
+  GPURenderPipeline createRenderPipeline(GPURenderPipelineDescriptor descriptor);
+  Promise<GPURenderPipeline> createRenderPipelineAsync(GPURenderPipelineDescriptor descriptor);
+  GPUBuffer createBuffer(GPUBufferDescriptor descriptor);
+  GPUTexture createTexture(GPUTextureDescriptor descriptor);
+  GPUBindGroup createBindGroup(GPUBindGroupDescriptor descriptor);
+  GPUCommandEncoder createCommandEncoder();
+};
+interface GPUShaderModule {};
+interface GPUPipelineLayout {};
+interface GPURenderPipeline { GPUBindGroupLayout getBindGroupLayout(unsigned long index); };
+interface GPUBindGroupLayout {};
+interface GPUBindGroup {};
+interface GPUBuffer { undefined destroy(); };
+interface GPUTexture { GPUTextureView createView(); undefined destroy(); };
+interface GPUTextureView {};
+interface GPUSampler {};
+interface GPUExternalTexture {};
+interface GPUCanvasContext { GPUTexture getCurrentTexture(); };
+interface GPUCommandBuffer {};
+interface GPUCommandEncoder { GPURenderPassEncoder beginRenderPass(GPURenderPassDescriptor descriptor); GPUCommandBuffer finish(); };
+interface GPURenderPassEncoder {
+  undefined setPipeline(GPURenderPipeline pipeline);
+  undefined setBindGroup(GPUIndex32 index, GPUBindGroup? bindGroup);
+  undefined draw(GPUSize32 vertexCount);
+  undefined end();
+};
+interface GPUQueue {
+  undefined writeBuffer(GPUBuffer buffer, GPUSize64 bufferOffset, AllowSharedBufferSource data);
+  undefined writeTexture(GPUTexelCopyTextureInfo destination, AllowSharedBufferSource data, GPUTexelCopyBufferLayout dataLayout, GPUExtent3D size);
+  undefined submit(sequence<GPUCommandBuffer> commandBuffers);
+};
+dictionary GPUShaderModuleDescriptor { required USVString code; };
+dictionary GPUProgrammableStage { required GPUShaderModule module; USVString entryPoint; };
+dictionary GPUVertexState : GPUProgrammableStage {};
+dictionary GPUColorTargetState { required GPUTextureFormat format; };
+dictionary GPUFragmentState : GPUProgrammableStage { required sequence<GPUColorTargetState?> targets; };
+dictionary GPURenderPipelineDescriptor { required (GPUPipelineLayout or GPUAutoLayoutMode) layout; required GPUVertexState vertex; GPUFragmentState fragment; };
+dictionary GPUBufferDescriptor { required GPUSize64 size; required GPUBufferUsageFlags usage; boolean mappedAtCreation = false; };
+dictionary GPUTextureDescriptor { required GPUExtent3D size; required GPUTextureFormat format; required GPUTextureUsageFlags usage; };
+dictionary GPUBufferBinding { required GPUBuffer buffer; GPUSize64 offset = 0; GPUSize64 size; };
+typedef (GPUSampler or GPUTexture or GPUTextureView or GPUBuffer or GPUBufferBinding or GPUExternalTexture) GPUBindingResource;
+dictionary GPUBindGroupEntry { required GPUIndex32 binding; required GPUBindingResource resource; };
+dictionary GPUBindGroupDescriptor { required GPUBindGroupLayout layout; required sequence<GPUBindGroupEntry> entries; };
+dictionary GPUTexelCopyTextureInfo { required GPUTexture texture; };
+dictionary GPUTexelCopyBufferLayout { GPUSize64 offset = 0; GPUSize32 bytesPerRow; GPUSize32 rowsPerImage; };
+dictionary GPUColorDict { required double r; required double g; required double b; required double a; };
+typedef (sequence<double> or GPUColorDict) GPUColor;
+dictionary GPURenderPassColorAttachment { required GPUTextureView view; GPUColor clearValue; required GPULoadOp loadOp; required GPUStoreOp storeOp; };
+dictionary GPURenderPassDescriptor { required sequence<GPURenderPassColorAttachment?> colorAttachments; };

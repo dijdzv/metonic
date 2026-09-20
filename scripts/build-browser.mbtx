@@ -151,6 +151,9 @@ async fn main {
       ".work/websys-input/generated/runtime.mjs", ".work/browser-dist/websys-input.mjs",
     ),
     (".work/websys-input/LICENSE", ".work/browser-dist/LICENSE-websys"),
+    (
+      ".work/websys-input/async-dependency/LICENSE", ".work/browser-dist/LICENSE-async",
+    ),
     (".work/browser-gpu/generated/webapi.mjs", ".work/browser-dist/webapi.mjs"),
     (".work/browser-gpu/LICENSE-webapi", ".work/browser-dist/LICENSE-webapi"),
     ("examples/p0/browser/host/index.html", ".work/browser-dist/index.html"),

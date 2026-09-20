@@ -57,13 +57,19 @@ event downcasts are checked. Document/window acquisition remains a host boundary
 it does not duplicate DOM operations or input state management.
 
 `scripts/prepare-websys-input.mbtx` verifies the SHA256 of WebSys revision
-`2ffc99595ca4eeaac316864e9318dc988494c4d3`. It combines the unchanged JS sources
-with the WasmGC surface generated from `browser_host/input.idl`, selecting files
+`19907a9b08c82421655cb693c5f39ba546402e66`. It combines the upstream JS sources
+with the WasmGC surface generated from `browser_host/input.idl` and
+`browser_host/gpu.idl`, selecting files
 by target in one local module. The generator uses its own pinned compiler and
 Bun 1.3.14 through mise; Metonic checks the resulting package with its compiler.
 Unused-import warning 29 is disabled only in that generated package because its
-JS dependency is unused on WasmGC. The JS source imports async 0.21.3; this does
-not move Metonic's input scheduling to that library.
+backend-specific imports are unused on the other target. The browser workspace
+uses the upstream official-async candidate and minimal WasmGC patch bundled in
+the verified WebSys source. Preparation verifies the candidate revision and
+patch, without modifying registry packages. This supports generated GPU Promise
+types; it does not move input scheduling to that library. The native workspace
+retains its existing async dependency. MoonBit 0.10.12 is required for the
+candidate's cancellation intrinsic.
 
 Preparation verifies the archive on every invocation. A content fingerprint of
 the preparation script, IDL, toolchain manifest, generated sources/manifests,

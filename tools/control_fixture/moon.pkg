@@ -4,7 +4,6 @@ import {
   "local/p0/tools/cli_lines" @lines,
   "moonbitlang/core/json",
   "moonbitlang/core/encoding/utf8",
-  "moonbitlang/core/env",
 }
 
 pkgtype(kind: "executable")

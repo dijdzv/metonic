@@ -12,7 +12,14 @@ async fn checked(command : String, args : Array[String]) -> String {
     args,
     no_console_window=true,
   )
-  assert_eq(code, 0, msg=command + ": " + @utf8.decode_lossy(err.binary()))
+  assert_eq(
+    code,
+    0,
+    msg=command +
+      ": " +
+      @utf8.decode_lossy(out.binary()) +
+      @utf8.decode_lossy(err.binary()),
+  )
   @utf8.decode_lossy(out.binary())
 }
 
@@ -22,8 +29,12 @@ async fn fingerprint(root : String) -> String? {
   let files = [
     "scripts/prepare-websys-input.mbtx",
     "browser_host/input.idl",
+    "browser_host/gpu.idl",
     "toolchain.json",
     root + "/LICENSE",
+    root + "/prepare-async.mbtx",
+    root + "/async-wasmgc.patch",
+    root + "/moon.work",
     generated + "/moon.mod",
     generated + "/moon.pkg",
     generated + "/bindings.mbt",
@@ -74,8 +85,8 @@ async fn main {
   )
   @fs.mkdir(root + "/prepare.lock")
   defer @fs.rmdir(root + "/prepare.lock")
-  let revision = "2ffc99595ca4eeaac316864e9318dc988494c4d3"
-  let archive = root + "/source.tar.gz"
+  let revision = "19907a9b08c82421655cb693c5f39ba546402e66"
+  let archive = root + "/source-" + revision + ".tar.gz"
   if !@fs.exists(archive) {
     ignore(
       checked("curl.exe", [
@@ -96,14 +107,16 @@ async fn main {
     .split("\n")
     .any(line => {
       line.trim().to_owned() ==
-      "28d687538ade55d2b1748d6cb4c4cd0fc4c7c48e79637c32d60431e9c455ee37"
+      "cbcf69eb4d521ca0638e5fdb79480c19b385c45200095d551664d262e8a5b094"
     }),
     msg="WebSys archive digest mismatch",
   )
   let stamp = root + "/prepared.sha256"
   if @fs.exists(stamp) {
     let saved = @fs.read_file(stamp).text()
-    if fingerprint(root) == Some(saved) {
+    if fingerprint(root) == Some(saved) &&
+      @fs.exists(root + "/prepare-async.mbtx") {
+      ignore(checked(moon, ["run", root + "/prepare-async.mbtx"]))
       println("WEBSYS_INPUT_CACHED revision=" + revision)
       return
     }
@@ -128,6 +141,24 @@ async fn main {
   }
   ignore(checked("tar", ["-xf", archive, "-C", stage]))
   let source = stage + "/websys.mbt-" + revision
+  @fs.write_file(
+    root + "/async-wasmgc.patch",
+    @fs.read_file(source + "/patches/async-wasmgc.patch").binary(),
+  )
+  let prepare_async = @fs.read_file(
+      source + "/scripts/prepare-async-wasmgc.mbtx",
+    )
+    .text()
+    .replace_all(
+      old=".work/dependencies/async-wasmgc",
+      new=".work/websys-input/async-dependency",
+    )
+    .replace_all(
+      old="patches/async-wasmgc.patch",
+      new=".work/websys-input/async-wasmgc.patch",
+    )
+  @fs.write_file(root + "/prepare-async.mbtx", prepare_async)
+  ignore(checked(moon, ["run", root + "/prepare-async.mbtx"]))
   ignore(
     checked("mise", [
       "exec", "bun@1.3.14", "--", "bun", "install", "--cwd", source, "--frozen-lockfile",
@@ -147,6 +178,13 @@ async fn main {
     ]),
   )
   let output = root + "/generated"
+  let combined_idl = stage + "/browser.idl"
+  @fs.write_file(
+    combined_idl,
+    @fs.read_file(repo + "/browser_host/input.idl").text() +
+    "\n" +
+    @fs.read_file(repo + "/browser_host/gpu.idl").text(),
+  )
   if @fs.exists(output) {
     assert_eq(
       @fs.realpath(output).replace_all(old="\\", new="/").to_lower(),
@@ -166,14 +204,14 @@ async fn main {
       "bun",
       source + "/generator/_build/js/release/build/webidl-bindgen.js",
       "--wasm-gc-input",
-      repo + "/browser_host/input.idl",
+      combined_idl,
       "-o",
       output,
     ]),
   )
   @fs.write_file(
     output + "/moon.mod",
-    "name = \"local/websys-input\"\nversion = \"0.0.0\"\nimport { \"moonbitlang/async@0.21.3\" }\n",
+    "name = \"local/websys-input\"\nversion = \"0.0.0\"\nimport { \"moonbitlang/async@0.22.1\" }\n",
   )
   @fs.write_file(root + "/LICENSE", @fs.read_file(source + "/LICENSE").binary())
   let targets : Array[String] = ["\"bindings.mbt\": [\"wasm-gc\"]"]
@@ -189,9 +227,13 @@ async fn main {
   }
   @fs.write_file(
     output + "/moon.pkg",
-    "// JS-only imports are unused when checking the WasmGC source.\nimport { \"moonbitlang/core/debug\", \"moonbitlang/async/js_async\" }\nwarnings = \"-29\"\nsupported_targets = \"+js+wasm-gc\"\noptions(targets: {" +
+    "// Backend-specific imports are unused on the other target.\nimport { \"moonbitlang/core/debug\", \"moonbitlang/async/js_async\", \"moonbitlang/async/wasm_async\" }\nwarnings = \"-29\"\nsupported_targets = \"+js+wasm-gc\"\noptions(targets: {" +
     targets.join(",\n") +
     "})\n",
+  )
+  @fs.write_file(
+    root + "/moon.work",
+    "members = [\"generated\", \"async-dependency\"]\n",
   )
   ignore(checked(moon, ["-C", output, "update"]))
   ignore(

@@ -1,11 +1,11 @@
 {
-  "checkedAt": "2026-09-06",
-  "channel": "latest (non-dev)",
-  "compiler": "v0.10.11+6ff76a5f9",
-  "moon": "0.1.20260827",
+  "checkedAt": "2026-09-20",
+  "channel": "pinned stable (WebSys-compatible)",
+  "compiler": "v0.10.12+1634b282e",
+  "moon": "0.1.20260904",
   "platform": "windows-x86_64",
-  "archiveUrl": "https://cli.moonbitlang.com/binaries/0.10.11%2B6ff76a5f9/moonbit-windows-x86_64.zip",
-  "archiveSha256": "f08e1d54efff3a99319f686b11ceb1a1454288e460e7f20a77219f8d4e08f538",
-  "coreUrl": "https://cli.moonbitlang.com/cores/core-0.10.11%2B6ff76a5f9.zip",
-  "coreSha256": "f8dfefe34cf7b6826e9b9dd62b6141572bb111910f07c29d53fe650f285f77df"
+  "archiveUrl": "https://cli.moonbitlang.com/binaries/0.10.12%2B1634b282e/moonbit-windows-x86_64.zip",
+  "archiveSha256": "3e5449e862d4979b2fc64e6a248ec5babbd110440c8f2a7bf813c6fa01d8581f",
+  "coreUrl": "https://cli.moonbitlang.com/cores/core-0.10.12%2B1634b282e.zip",
+  "coreSha256": "f770d1f314f4aa88389e854c7e76814a534a2d84e93fe33e1737a516614d327f"
 }

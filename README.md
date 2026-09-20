@@ -77,7 +77,7 @@ browser UI; neither target is a finished product.
 
 The bootstrap installs the pinned MoonBit toolchain into `.tools/moonbit`,
 verifies download hashes, and bundles the standard library. It does not depend
-on an older global MoonBit installation. The baseline is **MoonBit 0.10.11**,
+on an older global MoonBit installation. The baseline is **MoonBit 0.10.12**,
 checked against the current non-dev distribution on 2026-09-06.
 
 For the browser probe and automated headless GPU checks:

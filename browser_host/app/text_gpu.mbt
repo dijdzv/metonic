@@ -1,14 +1,14 @@
 ///|
 priv struct TextGpuLayer {
-  texture : @dom.GPUTexture
-  mut uniform : @dom.GPUBuffer?
-  mut group : @dom.GPUBindGroup?
+  texture : @input_dom.GPUTexture
+  mut uniform : @input_dom.GPUBuffer?
+  mut group : @input_dom.GPUBindGroup?
 }
 
 ///|
 priv struct TextGpu {
-  device : @dom.GPUDevice
-  pipeline : @dom.GPURenderPipeline
+  device : @input_dom.GPUDevice
+  pipeline : @input_dom.GPURenderPipeline
   mut layers : Array[TextGpuLayer]
   mut pending : Array[TextGpuLayer]
 }
@@ -39,31 +39,24 @@ pub fn text_gpu_dispose() -> Unit {
 
 ///|
 #export_name("text_gpu_init")
-pub fn text_gpu_init(device : @dom.GPUDevice, format : String) -> Int {
+pub fn text_gpu_init(device : @input_dom.GPUDevice, format : String) -> Int {
   text_gpu_dispose()
-  guard @dom.GPUTextureFormat::from(format) is Some(format) else { return 0 }
-  let shader = device.create_shader_module(
-    @dom.GPUShaderModuleDescriptor::new(
-      (
-        #|struct U { viewport: vec2f, origin: vec2f, size: vec2f, tex: vec2f };
-        #|@group(0) @binding(0) var<uniform> u: U;
-        #|@group(0) @binding(1) var text_tex: texture_2d<f32>;
-        #|struct VertexOut { @builtin(position) position: vec4f, @location(0) uv: vec2f };
-        #|@vertex fn vs(@builtin(vertex_index) i:u32)->VertexOut { var p=array<vec2f,6>(vec2f(0,0),vec2f(1,0),vec2f(0,1),vec2f(0,1),vec2f(1,0),vec2f(1,1)); let q=u.origin+p[i]*u.size; var out:VertexOut; out.position=vec4f(q.x/u.viewport.x*2-1,1-q.y/u.viewport.y*2,0,1); out.uv=p[i]; return out; }
-        #|@fragment fn fs(in:VertexOut)->@location(0) vec4f { let dims=vec2i(textureDimensions(text_tex)); let pos=min(vec2i(in.uv*vec2f(dims)),dims-vec2i(1)); return textureLoad(text_tex,pos,0); }
-      ),
+  guard @input_dom.GPUTextureFormat::from_string(format) is Some(format) else {
+    return 0
+  }
+  let shader = gpu_shader(
+    device,
+    (
+      #|struct U { viewport: vec2f, origin: vec2f, size: vec2f, tex: vec2f };
+      #|@group(0) @binding(0) var<uniform> u: U;
+      #|@group(0) @binding(1) var text_tex: texture_2d<f32>;
+      #|struct VertexOut { @builtin(position) position: vec4f, @location(0) uv: vec2f };
+      #|@vertex fn vs(@builtin(vertex_index) i:u32)->VertexOut { var p=array<vec2f,6>(vec2f(0,0),vec2f(1,0),vec2f(0,1),vec2f(0,1),vec2f(1,0),vec2f(1,1)); let q=u.origin+p[i]*u.size; var out:VertexOut; out.position=vec4f(q.x/u.viewport.x*2-1,1-q.y/u.viewport.y*2,0,1); out.uv=p[i]; return out; }
+      #|@fragment fn fs(in:VertexOut)->@location(0) vec4f { let dims=vec2i(textureDimensions(text_tex)); let pos=min(vec2i(in.uv*vec2f(dims)),dims-vec2i(1)); return textureLoad(text_tex,pos,0); }
     ),
   )
   let pipeline = device.create_render_pipeline(
-    @dom.GPURenderPipelineDescriptor::new(
-      @dom.GPUAutoLayoutMode::Auto,
-      @dom.GPUVertexState::new(shader, entry_point="vs"),
-      fragment=@dom.GPUFragmentState::new(
-        shader,
-        [@dom.GPUColorTargetState::new(format)],
-        entry_point="fs",
-      ),
-    ),
+    gpu_pipeline_descriptor(shader, format),
   )
   text_gpu.val = Some({ device, pipeline, layers: [], pending: [], })
   1
@@ -79,39 +72,22 @@ pub fn text_gpu_abort() -> Unit {
 
 ///|
 #export_name("text_gpu_add")
-pub fn text_gpu_add(index : Int, pixels : @dom.AllowSharedBufferSource) -> Int {
+pub fn text_gpu_add(index : Int, pixels : @input_dom.ArrayBufferView) -> Int {
   guard text_gpu.val is Some(gpu) else { return 0 }
   guard index == gpu.pending.length() && index < @app.view_layer_count() else {
     return 0
   }
-  let width = @app.view_layer_field(index, 2).reinterpret_as_uint()
-  let height = @app.view_layer_field(index, 3).reinterpret_as_uint()
-  let size = @dom.GPUExtent3DDict::new(width, height~)
-  let texture = gpu.device.create_texture(
-    @dom.GPUTextureDescriptor::new(size, Rgba8unorm, 6U),
-  )
+  let width = @app.view_layer_field(index, 2)
+  let height = @app.view_layer_field(index, 3)
+  let texture = gpu_texture(gpu.device, width, height)
   // A later host API call can throw; the JS boundary then aborts this pending batch.
   let layer = TextGpuLayer::{ texture, uniform: None, group: None, }
   gpu.pending.push(layer)
-  let uniform = gpu.device.create_buffer(
-    @dom.GPUBufferDescriptor::new(32UL, 72U),
-  )
+  let uniform = gpu_uniform(gpu.device)
   layer.uniform = Some(uniform)
-  gpu.device
-  .queue()
-  .write_texture(
-    @dom.GPUTexelCopyTextureInfo::new(texture),
-    pixels,
-    @dom.GPUTexelCopyBufferLayout::new(bytes_per_row=width * 4U),
-    size,
-  )
+  gpu_upload_texture(gpu.device, texture, pixels, width, height)
   layer.group = Some(
-    gpu.device.create_bind_group(
-      @dom.GPUBindGroupDescriptor::new(gpu.pipeline.get_bind_group_layout(0U), [
-        @dom.GPUBindGroupEntry::new(0U, @dom.GPUBufferBinding::new(uniform)),
-        @dom.GPUBindGroupEntry::new(1U, texture.create_view()),
-      ]),
-    ),
+    gpu_group(gpu.device, gpu.pipeline, uniform, Some(texture)),
   )
   1
 }
@@ -130,9 +106,9 @@ pub fn text_gpu_commit() -> Int {
 ///|
 #export_name("text_gpu_record")
 pub fn text_gpu_record(
-  pass : @dom.GPURenderPassEncoder,
+  pass : @input_dom.GPURenderPassEncoder,
   index : Int,
-  data : @dom.AllowSharedBufferSource,
+  data : @input_dom.ArrayBufferView,
 ) -> Int {
   guard text_gpu.val is Some(gpu) else { return 0 }
   guard index >= 0 && index < gpu.layers.length() else { return 0 }
@@ -140,9 +116,6 @@ pub fn text_gpu_record(
   guard layer.uniform is Some(uniform) && layer.group is Some(group) else {
     return 0
   }
-  gpu.device.queue().write_buffer(uniform, 0UL, data)
-  pass.set_pipeline(gpu.pipeline)
-  pass.set_bind_group(0U, group)
-  pass.draw(6U)
+  gpu_record(gpu.device, uniform, data, pass, gpu.pipeline, group)
   1
 }
