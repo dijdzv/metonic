@@ -1,4 +1,5 @@
 members = [
+  "../async_runtime",
   "../.work/native-deps/sources/cosmic-wrap-affinity",
   ".",
   "..",

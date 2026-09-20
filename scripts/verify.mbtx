@@ -162,6 +162,14 @@ async fn main {
         ["run", "scripts/plan-native-verification.mbtx"],
         envmap,
       )
+      run_checked(
+        moon,
+        [
+          "-C", "native_host", "test", "../async_runtime/clock", "--target", "native",
+          "--deny-warn",
+        ],
+        envmap,
+      )
       return
     }
     run_checked(moon, ["run", "scripts/doctor.mbtx"], envmap)

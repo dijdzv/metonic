@@ -115,6 +115,7 @@ async fn main {
     run(moon, ["run", "scripts/format-scripts.mbtx"])
     run(moon, ["-C", "experiments/wgpu_binding", "fmt"])
     run(moon, ["-C", "browser_host", "fmt", "app"])
+    run(moon, ["-C", "browser_host", "fmt", "../async_runtime/clock"])
     expect_clean(
       ["diff", "--exit-code"],
       "formatting changed files; review and stage explicitly",
@@ -126,6 +127,9 @@ async fn main {
     ])
   }
   if commit_only {
+    run(moon, [
+      "-C", "browser_host", "test", "../async_runtime/clock", "--target", "js", "--deny-warn",
+    ])
     run(moon, ["run", "scripts/verify.mbtx", "--", "--native-workspace"])
     for target in ["js", "wasm-gc"] {
       run(moon, [

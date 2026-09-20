@@ -1,5 +1,5 @@
 ///|
-let task_timers : Map[Int, Int] = Map([])
+let task_timers : Map[Int, BrowserClock] = Map([])
 
 ///|
 let task_epoch : Ref[Int] = Ref(0)
@@ -23,7 +23,7 @@ pub fn scheduled_task_rejections() -> Int {
 #export_name("scheduled_tasks_reset")
 pub fn scheduled_tasks_reset() -> Unit {
   for _, timer in task_timers {
-    host_clear_timeout(timer)
+    timer.cancel()
   }
   task_timers.clear()
   task_epoch.val += 1
@@ -46,7 +46,23 @@ pub fn schedule_task(delay : Int, value : Int, fail : Int) -> Int {
   }
   http_cancel()
   let epoch = task_epoch.val
-  let callback = fn() {
+  let clock = BrowserClock::{
+    wake: @cond_var.Cond(),
+    timer: None,
+    reset: false,
+    ready: false,
+  }
+  task_timers.set(id, clock)
+  @async.run_async_main(async fn() {
+    let result = @clock.after(clock, delay, value) catch {
+      ClockReset => return
+      _ => {
+        task_timers.remove(id)
+        ignore(@app.task_fail(id, 7))
+        host_notify("metonic-task")
+        return
+      }
+    }
     if epoch != task_epoch.val {
       return
     }
@@ -54,7 +70,7 @@ pub fn schedule_task(delay : Int, value : Int, fail : Int) -> Int {
     let accepted = if fail == 1 {
       @app.task_fail(id, 7)
     } else {
-      @app.task_complete(id, value)
+      @app.task_complete(id, result)
     }
     if accepted != 1 {
       rejected_callbacks.val += 1
@@ -65,8 +81,6 @@ pub fn schedule_task(delay : Int, value : Int, fail : Int) -> Int {
       "metonic-task"
     }
     host_notify(event)
-  }
-  let timer = host_set_timeout(callback, delay)
-  task_timers.set(id, timer)
+  })
   1
 }

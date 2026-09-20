@@ -90,6 +90,12 @@ Async completions carry request identity/generation so superseded responses cann
 overwrite newer state. Worker threads enqueue results; only the UI thread mutates
 UI state. Cancellation is an explicit outcome, not proof that external work stopped.
 
+External dependencies can be expressed as small capability traits independently
+of reactive effects. Delayed operations use `effects/clock`; hosts supply real
+time and `async_runtime/clock` supplies virtual time for tests. Both retain the
+same task ownership and stale-result checks. [ADR 031](docs/adr/031-clock-capability.md)
+defines this boundary; it does not introduce a global Runtime or effect scheduler.
+
 Platform event loops own blocking waits. The host wakes the UI thread for input,
 task completion, and development commands. A second runtime must not block the
 same thread. Callbacks do not hold locks across reentrant UI work.
