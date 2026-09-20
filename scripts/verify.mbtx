@@ -157,6 +157,11 @@ async fn main {
       )
       envmap.set("LIB", libraries + ";" + envmap.get("LIB").unwrap_or(""))
       envmap.set("PATH", libraries + ";" + envmap.get("PATH").unwrap_or(""))
+      run_checked(moon, ["run", "scripts/prepare-text-assets.mbtx"], envmap)
+      envmap.set(
+        "METONIC_RENDER_TEST_FONT",
+        @fs.realpath(".work/text-assets/NotoSansJP.ttf"),
+      )
       run_checked(
         moon,
         ["run", "scripts/plan-native-verification.mbtx"],
