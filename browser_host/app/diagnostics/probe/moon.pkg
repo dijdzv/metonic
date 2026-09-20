@@ -1,6 +1,6 @@
 import {
   "local/browser_host/diagnostics" @trace,
-  "bikallem/webapi" @dom,
+  "local/websys-input" @dom,
 }
 
 supported_targets = "js"
