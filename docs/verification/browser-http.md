@@ -6,7 +6,7 @@ The shared browser application accepts request strings and response bytes direct
 the legacy numeric exports delegate to the same validation and state transitions.
 
 Each request owns a live flag and its reader. Replacement, Cancel, Reset and Stop
-invalidate it before aborting I/O. Every response callback checks that flag before
+invalidate it before aborting I/O. Each resumed request checks that flag before
 touching the application. Cleanup cancels the reader and releases its lock after
 the cancellation promise settles. Late rejection cannot complete a new request.
 Task-scope validation remains a second check when a result reaches shared state.
@@ -16,8 +16,8 @@ rejected before its bytes are appended; the complete payload is decoded as stric
 UTF-8. Empty bodies reach the ordinary invalid-JSON path. Content-type acceptance
 and the three-second deadline match the previous transport.
 
-Each MoonBit request owns its deadline timer through the existing webapi Window
-and Function bindings. Common cleanup clears it on completion, cancellation,
+Each MoonBit request owns its deadline timer through generated WebSys Window
+bindings. Common cleanup clears it on completion, cancellation,
 replacement or disposal. Its callback captures the original request, whose live
 flag rejects late completion; it never selects a replacement request from global
 state. DOM result notification connects the transport to the existing renderer.
@@ -25,17 +25,27 @@ GPU calls, frame scheduling and module bootstrap remain separate host boundaries
 
 ## Binding selection
 
-The pinned webapi source is prepared with `webapi-http-boundary.patch` after the
-existing callback-identity and warning patches. It exposes nullable Response.body
-through a JsValue-to-Option conversion and adds Uint8Array length and bounds-checked
-byte reads on JS/WasmGC. The source preparation compares an existing destination
-instead of overwriting it; the runtime packaged with the app matches that source.
+`browser_host/http.idl` supplies the WasmGC request, stream, abort and timer surface;
+JS uses the matching upstream WebSys sources. Both come from the verified snapshot
+prepared by `prepare-websys-input.mbtx`. Backend adapters normalize generated
+descriptor and error representations; the request loop, budget and live-state
+checks remain shared MoonBit code. Stream chunks are copied through WebSys's
+checked `JsValue::to_bytes` conversion, preserving view bounds and ownership.
 
-A generator correction for nullable attributes was evaluated separately with
-regressions and regenerated browser execution. This adoption includes the Response
-getter needed here; it does not change every nullable attribute's public API.
-Other attribute consumers require their own migration. The typed-array extension
-is a candidate for the existing binding library. No upstream publication is implied.
+The request loop and reader cleanup use the browser workspace's pinned experimental
+official-async candidate. Its hidden `run_async_main` integration entry starts the request and cleanup
+coroutines; WebSys Promise adapters resume them. This does not replace the existing
+application task scope or move animation/input scheduling into an independent
+scheduler. WasmGC support remains dependent on the reviewed async patch described
+in the [dependency record](dependencies.md). This is a pinned integration boundary,
+not a stable public async API: the candidate does not yet provide a working
+WasmGC `Promise::from_async` entry. Upstream entry-point compatibility must be
+checked when updating the candidate.
+
+The JS timer adapter only converts the compiled callback to WebSys's opaque
+Function type. Fetch, stream operations, timer registration and DOM notification
+all use generated APIs. Font fetching and other unmigrated operations still retain
+webapi until their separate migration is complete.
 
 ## Verification
 

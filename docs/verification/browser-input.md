@@ -18,7 +18,7 @@ presentation and frame scheduling. MoonBit `view_dom.mbt` places both input fiel
 and the request/task buttons from the shared view, including CSS classes and the
 request label. It uses the existing webapi DOM binding; resize invokes the same
 placement path for development and packaged hosts. MoonBit `scene_gpu.mbt` and `frame_gpu.mbt`
-own scene drawing and frame encoding/submission through generated webapi; the
+own scene drawing and frame encoding/submission through generated WebSys; the
 [MoonBit text GPU renderer](browser-text-gpu.md) owns text GPU resources and draws. The
 [MoonBit HTTP host](browser-http.md) owns bounded fetch and cancellation.
 `metonic-input` requests a render after an input update.
@@ -57,9 +57,9 @@ event downcasts are checked. Document/window acquisition remains a host boundary
 it does not duplicate DOM operations or input state management.
 
 `scripts/prepare-websys-input.mbtx` verifies the SHA256 of WebSys revision
-`19907a9b08c82421655cb693c5f39ba546402e66`. It combines the upstream JS sources
+`e3e8ba5f401546b6c71f671bb5a632742107011c`. It combines the upstream JS sources
 with the WasmGC surface generated from `browser_host/input.idl` and
-`browser_host/gpu.idl`, selecting files
+`browser_host/gpu.idl` and `browser_host/http.idl`, selecting files
 by target in one local module. The generator uses its own pinned compiler and
 Bun 1.3.14 through mise; Metonic checks the resulting package with its compiler.
 Unused-import warning 29 is disabled only in that generated package because its
@@ -67,7 +67,8 @@ backend-specific imports are unused on the other target. The browser workspace
 uses the upstream official-async candidate and minimal WasmGC patch bundled in
 the verified WebSys source. Preparation verifies the candidate revision and
 patch, without modifying registry packages. This supports generated GPU Promise
-types; it does not move input scheduling to that library. The native workspace
+types and HTTP request/cleanup coroutines; it does not move input scheduling to
+that library. The native workspace
 retains its existing async dependency. MoonBit 0.10.12 is required for the
 candidate's cancellation intrinsic.
 
