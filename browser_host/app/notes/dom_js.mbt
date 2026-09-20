@@ -1,8 +1,8 @@
 ///|
-fn http_notify() -> Unit {
+fn notify() -> Unit {
   ignore(
     @input_binding.document_target().dispatch_event(
-      @input_dom.Event::new("metonic-rpc"),
+      @dom.Event::new("metonic-notes"),
     ),
   )
 }

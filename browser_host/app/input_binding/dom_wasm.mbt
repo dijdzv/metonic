@@ -5,25 +5,25 @@ fn input_document() -> @input_dom.Document = "websys" "input_document"
 fn input_window() -> @input_dom.Window = "websys" "input_window"
 
 ///|
-fn InputElement::target(self : InputElement) -> @input_dom.EventTarget {
+fn Element::target(self : Element) -> @input_dom.EventTarget {
   match self {
-    Editor(v) => v.as_event_target()
-    Query(v) => v.as_event_target()
+    Multiline(v) => v.as_event_target()
+    SingleLine(v) => v.as_event_target()
   }
 }
 
 ///|
-fn InputElement::value(self : InputElement) -> String {
+pub fn Element::value(self : Element) -> String {
   match self {
-    Editor(v) => v.value()
-    Query(v) => v.value()
+    Multiline(v) => v.value()
+    SingleLine(v) => v.value()
   }
 }
 
 ///|
-fn InputElement::selection(self : InputElement) -> (Int, Int, Bool)? {
+fn Element::selection(self : Element) -> (Int, Int, Bool)? {
   match self {
-    Editor(v) =>
+    Multiline(v) =>
       Some(
         (
           v.selection_start().reinterpret_as_int(),
@@ -31,7 +31,7 @@ fn InputElement::selection(self : InputElement) -> (Int, Int, Bool)? {
           v.selection_direction() == "backward",
         ),
       )
-    Query(v) => {
+    SingleLine(v) => {
       guard v.selection_start() is Some(start) else { return None }
       guard v.selection_end() is Some(end) else { return None }
       Some(
@@ -46,13 +46,13 @@ fn InputElement::selection(self : InputElement) -> (Int, Int, Bool)? {
 }
 
 ///|
-fn InputElement::active(self : InputElement) -> Bool {
+fn Element::active(self : Element) -> Bool {
   guard input_document().active_element() is Some(active) else { return false }
   active.is_same_node(
     Some(
       match self {
-        Editor(v) => v.as_node()
-        Query(v) => v.as_node()
+        Multiline(v) => v.as_node()
+        SingleLine(v) => v.as_node()
       },
     ),
   )
@@ -74,31 +74,14 @@ fn input_document_target() -> @input_dom.EventTarget {
 }
 
 ///|
-fn input_notify() -> Unit {
-  ignore(
-    input_document_target().dispatch_event(
-      @input_dom.Event::new("metonic-input", {
-        bubbles: None,
-        cancelable: None,
-        composed: None,
-      }),
-    ),
-  )
-}
-
-///|
-fn input_editor() -> @input_dom.HTMLTextAreaElement? {
-  guard input_document().get_element_by_id("text-input") is Some(v) else {
-    return None
-  }
+pub fn textarea(id : String) -> @input_dom.HTMLTextAreaElement? {
+  guard input_document().get_element_by_id(id) is Some(v) else { return None }
   @input_dom.HTMLTextAreaElement::from_element_opt(v)
 }
 
 ///|
-fn input_query() -> @input_dom.HTMLInputElement? {
-  guard input_document().get_element_by_id("rpc-user") is Some(v) else {
-    return None
-  }
+pub fn input(id : String) -> @input_dom.HTMLInputElement? {
+  guard input_document().get_element_by_id(id) is Some(v) else { return None }
   @input_dom.HTMLInputElement::from_element_opt(v)
 }
 
@@ -145,4 +128,14 @@ fn input_request_frame(callback : (Double) -> Unit) -> UInt {
 ///|
 fn input_cancel_frame(frame : UInt) -> Unit {
   input_window().cancel_animation_frame(frame)
+}
+
+///|
+pub fn document() -> @input_dom.Document {
+  input_document()
+}
+
+///|
+pub fn document_target() -> @input_dom.EventTarget {
+  input_document_target()
 }

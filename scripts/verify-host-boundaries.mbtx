@@ -7,12 +7,16 @@ import {
 async fn main {
   let pending = [
     "local/native_host/window_host", "local/native_host/notes_app", "local/native_host/notes_probe",
+    "local/browser_host/input_binding", "local/browser_host/gpu_renderer", "local/browser_host/http_transport",
+    "local/browser_host/clock_driver", "local/browser_host/font_loader", "local/browser_host/dom_view",
+    "local/browser_host/notes",
   ]
   let seen : Map[String, Bool] = Map([])
   let roots = [
     ("local/native_host/", "native_host/"),
     ("local/p0/", ""),
     ("local/metonic_async/", "async_runtime/"),
+    ("local/browser_host/", "browser_host/app/"),
   ]
   while pending.pop() is Some(package_path) {
     if seen.contains(package_path) {
@@ -28,7 +32,8 @@ async fn main {
       msg="shared host imports P0 adapter: " + package_path,
     )
     assert_false(
-      package_path == "local/native_host/window_ui",
+      package_path == "local/native_host/window_ui" ||
+      package_path == "local/browser_host",
       msg="independent app imports P0 entry",
     )
     for (prefix, directory) in roots {
@@ -65,7 +70,8 @@ async fn main {
           let parts = trimmed.split("\"").to_array()
           if parts.length() >= 3 {
             let imported = parts[1].to_owned()
-            if roots.any(root => imported.has_prefix(root.0)) {
+            if imported == "local/browser_host" ||
+              roots.any(root => imported.has_prefix(root.0)) {
               imports.push(imported)
             }
           }

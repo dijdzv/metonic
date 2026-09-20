@@ -173,6 +173,10 @@ failures. Request animation frames when work is dirty; avoid perpetual polling
 for a static screen. Input DOM and semantic DOM are permitted even though standard
 visible components are GPU-rendered.
 
+The [browser host boundaries](docs/browser-host-boundaries.md) separate input,
+GPU sessions, HTTP, timers, font resources and DOM placement from sample routing.
+Applications own their semantic model and configure these services explicitly.
+
 ## 6. Text, input, and accessibility
 
 Text rendering and text editing share a coherent position model but have separate

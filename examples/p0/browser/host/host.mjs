@@ -1,3 +1,4 @@
+import { createSurface } from './surface.mjs';
 import { loadApp } from './loader.mjs';
 import { createTextRenderer } from './text-renderer.mjs';
 import * as environment from './environment.mjs';
@@ -6,7 +7,7 @@ const $ = (id) => document.getElementById(id);
 const canvas = $('canvas');
 const status = $('status');
 const target = environment.target;
-let app, device, context, observer, raf = 0, disposed = false, dirty = false;
+let app, device, context, disposed = false, dirty = false;
 let cssW = 0, cssH = 0, backingW = 0, backingH = 0, submitted = 0, transferred = 0, format;
 const textInput = $('text-input');
 const DEFAULT_TEXT = textInput.value;
@@ -82,11 +83,23 @@ function renderStats() {
   }
 }
 
-function schedule() {
-  if (!disposed && !raf) raf = requestAnimationFrame(draw);
-}
+const surface = createSurface({
+  canvas,
+  onError: message => stop(message, true),
+  onFrame: draw,
+  onResize: size => {
+    cssW = size.width; cssH = size.height;
+    backingW = size.backingWidth; backingH = size.backingHeight;
+    app.resize(cssW, cssH);
+    textRenderer?.rasterText(cssW);
+    app.view_place();
+    environment.dimensions(cssW, cssH, backingW, backingH);
+    dirty = true;
+    schedule();
+  },
+});
+function schedule() { if (!disposed) surface.schedule(); }
 function draw() {
-  raf = 0;
   if (disposed || !device || !dirty) return;
   dirty = false;
   try {
@@ -103,32 +116,7 @@ function draw() {
     stop(error?.message || String(error), true);
   }
 }
-function resize(force = false) {
-  if (disposed || !app || !device) return;
-  const rect = canvas.getBoundingClientRect();
-  const nextCssW = Math.max(1, Math.round(rect.width));
-  const nextCssH = Math.max(1, Math.round(rect.height));
-  const dpr = Math.max(1, window.devicePixelRatio || 1);
-  const max = device.limits.maxTextureDimension2D;
-  const nextBackingW = Math.min(max, Math.max(1, Math.round(nextCssW * dpr)));
-  const nextBackingH = Math.min(max, Math.max(1, Math.round(nextCssH * dpr)));
-  const changedSize = force || nextCssW !== cssW || nextCssH !== cssH || nextBackingW !== backingW || nextBackingH !== backingH;
-  if (!changedSize) return;
-  cssW = nextCssW;
-  cssH = nextCssH;
-  backingW = nextBackingW;
-  backingH = nextBackingH;
-  canvas.width = backingW;
-  canvas.height = backingH;
-  context.configure({ device, format, alphaMode: 'opaque' });
-  app.resize(cssW, cssH);
-  textRenderer?.rasterText(cssW);
-  app.view_place();
-  environment.dimensions(cssW, cssH, backingW, backingH);
-  dirty = true;
-  schedule();
-}
-function onResize() { resize(false); }
+function resize(force = false) { if (!disposed && app) surface.resize(force); }
 function changed(result = 1) {
   if (Number(result) !== 0) {
     dirty = true;
@@ -213,11 +201,6 @@ function stop(reason = 'Stopped.', error = false) {
   app?.scheduled_tasks_reset();
   try { app?.task_dispose?.(); } catch {}
   if (app) updateTaskDiagnostics();
-  if (raf) cancelAnimationFrame(raf);
-  raf = 0;
-  observer?.disconnect();
-  observer = undefined;
-  window.removeEventListener('resize', onResize);
   window.removeEventListener('pagehide', onStop);
   canvas.removeEventListener('pointerdown', onPointer);
   canvas.removeEventListener('keydown', onKey);
@@ -229,39 +212,18 @@ function stop(reason = 'Stopped.', error = false) {
   $('task-start').removeEventListener('click', onTaskStart);
   environment.detach();
   $('task-cancel').removeEventListener('click', onTaskCancel);
-  try { context?.unconfigure?.(); } catch {}
   try { app?.scene_gpu_dispose(); } catch {}
-  try { device?.destroy(); } catch {}
+  surface.dispose();
   setStatus(reason, error);
 }
 async function main() {
   if (!['js', 'wasm-gc'].includes(target)) {
     throw new Error(`Unknown target “${target}”; choose js or wasm-gc.`);
   }
-  if (!window.isSecureContext) {
-    throw new Error('WebGPU requires a secure context (HTTPS or localhost).');
-  }
-  if (!navigator.gpu) {
-    throw new Error('WebGPU is unavailable in this browser.');
-  }
-  const adapter = await navigator.gpu.requestAdapter();
-  if (disposed) return;
-  if (!adapter) throw new Error('WebGPU requestAdapter returned no adapter.');
-  const nextDevice = await adapter.requestDevice();
-  if (disposed) {
-    nextDevice.destroy();
-    return;
-  }
-  device = nextDevice;
-  device.lost.then((info) => {
-    if (!disposed) stop(`GPU device lost: ${info.message || info.reason}`, true);
-  });
-  device.addEventListener('uncapturederror', (event) => {
-    if (!disposed) stop(`GPU error: ${event.error.message}`, true);
-  });
-  context = canvas.getContext('webgpu');
-  if (!context) throw new Error('Could not acquire a WebGPU canvas context.');
-  format = navigator.gpu.getPreferredCanvasFormat();
+  const resources = await surface.start();
+  if (!resources || disposed) return;
+  const adapter = resources.adapter;
+  ({ device, context, format } = resources);
   const loaded = await loadApp(target);
   if (disposed) return;
   app = loaded.app;
@@ -279,9 +241,7 @@ async function main() {
   document.addEventListener('metonic-rpc', onRpcChanged);
   document.addEventListener('metonic-task', onTaskChanged);
   document.addEventListener('metonic-task-render', onTaskChanged);
-  observer = new ResizeObserver(onResize);
-  observer.observe(canvas);
-  window.addEventListener('resize', onResize);
+  surface.observe();
   canvas.addEventListener('pointerdown', onPointer);
   canvas.addEventListener('keydown', onKey);
   $('reset').addEventListener('click', onReset);

@@ -1,0 +1,68 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+}
+
+///|
+async fn main {
+  let destination = ".work/browser-notes"
+  if !@fs.exists(destination) {
+    @fs.mkdir(destination, recursive=true)
+  }
+  let entries = [
+    ("examples/notes/browser/index.html", "index.html"),
+    ("examples/notes/browser/host.mjs", "notes-host.mjs"),
+    (
+      "browser_host/_build/js/release/build/local/browser_host/notes/notes.js", "notes.mjs",
+    ),
+    (
+      "browser_host/_build/wasm-gc/release/build/local/browser_host/notes/notes.wasm",
+      "notes.wasm",
+    ),
+    ("browser_host/runtime/surface.mjs", "surface.mjs"),
+    ("browser_host/runtime/layer-renderer.mjs", "layer-renderer.mjs"),
+    ("browser_host/runtime/wasm-imports.mjs", "wasm-imports.mjs"),
+    (".work/browser-dist/browser-buffer.mjs", "browser-buffer.mjs"),
+    (".work/browser-dist/websys-input.mjs", "websys-input.mjs"),
+    (".work/browser-dist/NotoSansJP.ttf", "NotoSansJP.ttf"),
+    (".work/browser-dist/OFL.txt", "OFL.txt"),
+    (".work/browser-dist/LICENSE-websys", "LICENSE-websys"),
+    (".work/browser-dist/LICENSE-async", "LICENSE-async"),
+    ("LICENSE-MIT", "LICENSE-MIT"),
+    ("LICENSE-APACHE", "LICENSE-APACHE"),
+  ]
+  let names = entries.map(entry => entry.1)
+  for name in @fs.readdir(destination) {
+    assert_true(names.contains(name), msg="unexpected Notes artifact: " + name)
+  }
+  for (source, name) in entries {
+    let data = @fs.read_file(source)
+    if name.has_suffix(".mjs") || name.has_suffix(".html") {
+      for
+        forbidden in [
+          "metonicAsyncProbe", "metonicInputTrace", "query_state_json", "environment-dev",
+          "input-diagnostics", "gpu-probe", "8examples2p0",
+        ] {
+        assert_false(
+          data.text().contains(forbidden),
+          msg="sample/development code in Notes artifact " +
+            name +
+            ": " +
+            forbidden,
+        )
+      }
+    }
+    @fs.write_file(destination + "/" + name, data.binary())
+  }
+  assert_true(
+    @fs.read_file(".work/browser-dist/app.mjs").text().contains("8examples2p0"),
+    msg="missing P0 exclusion positive control",
+  )
+  assert_true(
+    @fs.read_file(".work/browser-dist/environment.mjs")
+    .text()
+    .contains("metonicAsyncProbe"),
+    msg="missing development exclusion positive control",
+  )
+  println("BROWSER_NOTES_PACKAGED")
+}

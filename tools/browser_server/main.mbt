@@ -49,8 +49,19 @@ async fn main {
           None => raw_path
         }
         let release = path.has_prefix("/release/")
-        let path = if release { path[8:].to_owned() } else { path }
+        let notes = path.has_prefix("/notes/")
+        let path = if release {
+          path[8:].to_owned()
+        } else if notes {
+          path[6:].to_owned()
+        } else {
+          path
+        }
         let entry = match path {
+          "/gpu-probe.mjs" if !release && !notes =>
+            Some(("gpu-probe.mjs", "text/javascript; charset=utf-8"))
+          "/gpu-probe.wasm" if !release && !notes =>
+            Some(("gpu-probe.wasm", "application/wasm"))
           "/" => Some(("index.html", "text/html; charset=utf-8"))
           "/index.html" => Some(("index.html", "text/html; charset=utf-8"))
           "/style.css" => Some(("style.css", "text/css; charset=utf-8"))
@@ -63,6 +74,17 @@ async fn main {
           "/LICENSE-async" =>
             Some(("LICENSE-async", "text/plain; charset=utf-8"))
           "/host.mjs" => Some(("host.mjs", "text/javascript; charset=utf-8"))
+          "/notes-host.mjs" if notes =>
+            Some(("notes-host.mjs", "text/javascript; charset=utf-8"))
+          "/notes.mjs" if notes =>
+            Some(("notes.mjs", "text/javascript; charset=utf-8"))
+          "/notes.wasm" if notes => Some(("notes.wasm", "application/wasm"))
+          "/layer-renderer.mjs" =>
+            Some(("layer-renderer.mjs", "text/javascript; charset=utf-8"))
+          "/surface.mjs" =>
+            Some(("surface.mjs", "text/javascript; charset=utf-8"))
+          "/wasm-imports.mjs" =>
+            Some(("wasm-imports.mjs", "text/javascript; charset=utf-8"))
           "/loader.mjs" =>
             Some(("loader.mjs", "text/javascript; charset=utf-8"))
           "/loader-common.mjs" =>
@@ -89,7 +111,9 @@ async fn main {
           Some((filename, content_type)) => {
             let content = Some(
               @fs.read_file(
-                (if release {
+                (if notes {
+                  ".work/browser-notes/"
+                } else if release {
                   ".work/browser-release/"
                 } else {
                   ".work/browser-dist/"

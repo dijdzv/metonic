@@ -90,17 +90,173 @@ async function waitStatus(page, expected) {
   await pixelVerify({ action: 'ready', actual, expected })
 }
 
+async function verifyNotes(browser) {
+  const results = [];
+  for (const target of ['js', 'wasm-gc']) {
+    const page = await observedPage(browser, { viewport: { width: 800, height: 600 } });
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    const settle = () => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    try {
+      await page.goto(`${baseUrl}/notes/?target=${target}`);
+      await page.waitForFunction(() => {
+        const status = document.querySelector('#status')?.textContent;
+        return status && !status.startsWith('Loading');
+      }, null, { timeout: 30000 });
+      assert.equal(await text(page, '#status'), `Ready: Notes (${target})`);
+      const artifact = await page.evaluate(async target => {
+        const exports = target === 'js' ? Object.keys(await import('./notes.mjs'))
+          : WebAssembly.Module.exports(await WebAssembly.compile(await (await fetch('./notes.wasm')).arrayBuffer(),
+            { builtins: ['js-string'], importedStringConstants: '_' })).filter(entry => entry.kind === 'function').map(entry => entry.name);
+        return { exports: exports.sort(), dev: typeof globalThis.metonicAsyncProbe, trace: typeof globalThis.metonicInputTrace };
+      }, target);
+      assert.deepEqual(artifact, {
+        exports: ['load_font', 'install_font', 'start', 'resize', 'render', 'clear', 'layer_count', 'layer_field',
+          'layer_bytes', 'upload_begin', 'upload_layer', 'upload_commit', 'frame_begin', 'frame_text', 'frame_submit',
+          'frame_abort', 'stop'].sort(), dev: 'undefined', trace: 'undefined',
+      });
+      await settle();
+      const canvas = page.locator('#canvas');
+      const initial = await canvas.screenshot();
+      const note = page.locator('#note');
+      assert.equal(await note.inputValue(), 'A small independent application');
+      await note.fill('日本語のノート\nSecond line');
+      await settle();
+      const edited = await canvas.screenshot({ path: path.join(outputDir, `notes-${target}.png`) });
+      assert.notDeepEqual(edited, initial, 'Notes editing did not change GPU output');
+      await note.evaluate(element => {
+        element.focus();
+        element.setSelectionRange(0, 3);
+        document.dispatchEvent(new Event('selectionchange'));
+      });
+      await settle();
+      assert.notDeepEqual(await canvas.screenshot(), edited, 'Notes selection did not change GPU output');
+      await page.locator('#clear').click();
+      await settle();
+      assert.equal(await note.inputValue(), '');
+      assert.notDeepEqual(await canvas.screenshot(), edited, 'Notes clear did not change GPU output');
+      await page.setViewportSize({ width: 420, height: 600 });
+      await settle();
+      assert.equal(await canvas.evaluate(element => element.width), 372);
+      assert.equal(await text(page, '#status'), `Ready: Notes (${target})`);
+      await page.locator('#stop').click();
+      assert.equal(await text(page, '#status'), 'Stopped.');
+      assert.equal(await note.isDisabled(), true);
+      assert.equal(await page.locator('#clear').isDisabled(), true);
+      const stopped = await canvas.screenshot();
+      await note.evaluate(element => { element.value = 'late'; element.dispatchEvent(new Event('input')); });
+      await settle();
+      assert.deepEqual(await canvas.screenshot(), stopped, 'Stopped Notes accepted a late input');
+      const gpuSessions = await page.evaluate(async target => {
+        let probe;
+        if (target === 'js') probe = await import('/gpu-probe.mjs');
+        else {
+          const { wasmImports } = await import('/wasm-imports.mjs');
+          const { instance } = await WebAssembly.instantiateStreaming(fetch('/gpu-probe.wasm'), wasmImports(),
+            { builtins: ['js-string'], importedStringConstants: '_' });
+          probe = instance.exports;
+        }
+        const adapter = await navigator.gpu.requestAdapter();
+        const device = await adapter.requestDevice();
+        const canvas = document.createElement('canvas');
+        canvas.width = canvas.height = 16;
+        const context = canvas.getContext('webgpu');
+        const format = navigator.gpu.getPreferredCanvasFormat();
+        context.configure({ device, format });
+        device.pushErrorScope('validation');
+        try {
+          const result = probe.verify_sessions(device, context, format, new Uint8Array([255, 0, 255, 255]),
+            new Float32Array([16, 16, 0, 0, 1, 1, 0, 0]));
+          await device.queue.onSubmittedWorkDone();
+          const error = await device.popErrorScope();
+          return { result, error: error?.message ?? null };
+        } finally { context.unconfigure(); device.destroy(); }
+      }, target);
+      assert.deepEqual(gpuSessions, { result: 1, error: null });
+      assert.deepEqual(errors, []);
+      results.push({ target, editing: true, selection: true, clear: true, resize: true, stop: true, independentGpuSessions: true });
+    } catch (error) { await reportFailure(page); throw error; }
+    finally { await page.close(); }
+    for (const stage of ['adapter', 'device', 'font']) {
+      const pending = await observedPage(browser);
+      const errors = [];
+      pending.on('pageerror', error => errors.push(error.message));
+      try {
+        await pending.addInitScript(stage => {
+          const state = globalThis.notesLifetime = { held: false, created: 0, destroyed: 0, aborted: 0, canceled: 0, submitted: 0, released: false };
+          const hold = value => new Promise(resolve => {
+            state.held = true;
+            globalThis.releaseNotes = () => { state.released = true; resolve(value); };
+          });
+          const acquire = navigator.gpu.requestAdapter.bind(navigator.gpu);
+          navigator.gpu.requestAdapter = async (...args) => {
+            const adapter = await acquire(...args);
+            if (stage === 'adapter') return hold(adapter);
+            const requestDevice = adapter.requestDevice.bind(adapter);
+            adapter.requestDevice = async (...args) => {
+              const device = await requestDevice(...args);
+              state.created++;
+              const destroy = device.destroy.bind(device);
+              device.destroy = () => { state.destroyed++; destroy(); };
+              const submit = device.queue.submit.bind(device.queue);
+              device.queue.submit = (...args) => { state.submitted++; submit(...args); };
+              return stage === 'device' ? hold(device) : device;
+            };
+            return adapter;
+          };
+          if (stage === 'font') {
+            const fetch = window.fetch.bind(window);
+            window.fetch = (url, options) => {
+              if (!String(url).endsWith('/NotoSansJP.ttf')) return fetch(url, options);
+              options.signal.addEventListener('abort', () => state.aborted++, { once: true });
+              const stream = globalThis.notesPendingStream = new ReadableStream({
+                pull() { state.held = true; }, cancel() { state.canceled++; },
+              });
+              globalThis.releaseNotes = () => { state.released = true; };
+              return Promise.resolve(new Response(stream));
+            };
+          }
+        }, stage);
+        await pending.goto(`${baseUrl}/notes/?target=${target}`);
+        await pending.waitForFunction(() => globalThis.notesLifetime?.held);
+        await pending.locator('#stop').click();
+        await pending.evaluate(() => globalThis.releaseNotes());
+        await pending.waitForFunction(stage => {
+          const state = globalThis.notesLifetime;
+          return state.released && (stage === 'adapter' || state.destroyed === 1)
+            && (stage !== 'font' || state.aborted === 1 && state.canceled === 1 && !globalThis.notesPendingStream.locked);
+        }, stage);
+        await pending.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+        assert.equal(await text(pending, '#status'), 'Stopped.');
+        assert.equal(await pending.locator('#note').isDisabled(), true);
+        const state = await pending.evaluate(() => globalThis.notesLifetime);
+        assert.equal(state.created, stage === 'adapter' ? 0 : 1);
+        assert.equal(state.destroyed, stage === 'adapter' ? 0 : 1);
+        assert.equal(state.submitted, 0);
+        assert.deepEqual(errors, []);
+        results.push({ target, stopDuring: stage, released: true });
+      } catch (error) { await reportFailure(pending); throw error; }
+      finally { await pending.close(); }
+    }
+  }
+  await fs.writeFile(path.join(outputDir, 'notes-results.json'), JSON.stringify(results, null, 2));
+  console.log('NOTES_BROWSER_OK js wasm-gc editing selection clear resize stop');
+}
+
 async function runTargetUnsafe(browser, target) {
   const page = await observedPage(browser, { viewport: { width: 1000, height: 800 }, deviceScaleFactor: 1 })
   await page.route('**/text-renderer.mjs', async (route) => {
     const response = await route.fetch()
     const source = await response.text()
-    const marker = 'if (app.text_gpu_add(index, pixels)'
+    const marker = 'upload: (index, pixels) => app.text_gpu_add(index, pixels),'
     assert.equal(source.split(marker).length, 2)
-    const transferStart = source.indexOf('const transferred = app.view_layer_bytes(index);')
+    const transferSource = await fs.readFile('browser_host/runtime/layer-renderer.mjs', 'utf8')
+    const transferStart = transferSource.indexOf('const transferred = layerBytes(index);')
     assert(transferStart >= 0)
-    const transfer = source.slice(transferStart, source.indexOf(marker))
+    const transfer = transferSource.slice(transferStart, transferSource.indexOf('if (upload(index, pixels)'))
+      .replace('layerBytes(index)', 'app.view_layer_bytes(index)')
     const verification = `
+        const width = app.view_layer_field(index, 2), height = app.view_layer_field(index, 3);
         for (let offset = 0; offset < pixels.length; offset += 4) {
           const expected = app.view_layer_pixel(index, offset / 4);
           const actual = pixels[offset] | (pixels[offset + 1] << 8) | (pixels[offset + 2] << 16) | (pixels[offset + 3] << 24);
@@ -137,7 +293,8 @@ async function runTargetUnsafe(browser, target) {
           };
         }
         `
-    await route.fulfill({ response, body: source.replace(marker, verification + marker) })
+    await route.fulfill({ response, body: "import { unpack } from './browser-buffer.mjs';\n" + source.replace(marker,
+      `upload: (index, pixels) => { ${verification} return app.text_gpu_add(index, pixels); },`) })
   })
   activePage = page
   const pageErrors = []
@@ -505,6 +662,7 @@ try {
           ['/app.js', request.op === 'input-diagnostics' ? 'browser_host/_build/js/release/build/local/browser_host/diagnostics/probe/probe.js' : 'browser_host/_build/js/release/build/local/browser_host/probe/probe.js', 'text/javascript'],
           ['/app.wasm', 'browser_host/_build/wasm-gc/release/build/local/browser_host/probe/probe.wasm', 'application/wasm'],
           ['/loader-common.mjs', 'examples/p0/browser/host/loader-common.mjs', 'text/javascript'],
+          ['/wasm-imports.mjs', 'browser_host/runtime/wasm-imports.mjs', 'text/javascript'],
           ['/websys-input.mjs', '.work/browser-dist/websys-input.mjs', 'text/javascript'],
         ]) assets.set(url, { body: await fs.readFile(file), contentType });
         const script = target === 'js' ? "import '/app.js';" : `import { wasmImports } from '/loader-common.mjs'; const {instance} = await WebAssembly.instantiateStreaming(fetch('/app.wasm'), wasmImports(), {builtins:['js-string'], importedStringConstants:'_'}); instance.exports._start();`;
@@ -810,6 +968,7 @@ try {
       default: throw new Error(`Unknown suite command: ${request.op}`)
     }
   }, JSON.stringify({ backend, browser: browser.version(), node: process.version }))
+  await verifyNotes(browser)
   await fs.writeFile(path.join(outputDir, 'results.json'), output)
   console.log(JSON.stringify({ backend, gpu: gpuInfo }, null, 2))
 } catch (error) {

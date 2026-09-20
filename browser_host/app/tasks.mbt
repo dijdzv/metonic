@@ -1,5 +1,5 @@
 ///|
-let task_timers : Map[Int, BrowserClock] = Map([])
+let task_timers : Map[Int, @clock_driver.BrowserClock] = Map([])
 
 ///|
 let task_epoch : Ref[Int] = Ref(0)
@@ -46,16 +46,11 @@ pub fn schedule_task(delay : Int, value : Int, fail : Int) -> Int {
   }
   http_cancel()
   let epoch = task_epoch.val
-  let clock = BrowserClock::{
-    wake: @cond_var.Cond(),
-    timer: None,
-    reset: false,
-    ready: false,
-  }
+  let clock = @clock_driver.create()
   task_timers.set(id, clock)
   @async.run_async_main(async fn() {
     let result = @clock.after(clock, delay, value) catch {
-      ClockReset => return
+      @clock_driver.ClockReset => return
       _ => {
         task_timers.remove(id)
         ignore(@app.task_fail(id, 7))

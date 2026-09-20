@@ -8,14 +8,12 @@ priv struct SceneGpu {
 }
 
 ///|
-let scene_gpu : Ref[SceneGpu?] = Ref(None)
 
 ///|
-#export_name("scene_gpu_dispose")
-pub fn scene_gpu_dispose() -> Unit {
-  gpu_frame_abort()
-  if scene_gpu.val is Some(gpu) {
-    scene_gpu.val = None
+pub fn Session::scene_gpu_dispose(self : Session) -> Unit {
+  self.gpu_frame_abort()
+  if self.scene_gpu.val is Some(gpu) {
+    self.scene_gpu.val = None
     gpu.live = false
     if gpu.uniform is Some(buffer) {
       buffer.destroy()
@@ -27,12 +25,12 @@ pub fn scene_gpu_dispose() -> Unit {
 }
 
 ///|
-#export_name("scene_gpu_init")
-pub fn scene_gpu_init(
+pub fn Session::scene_gpu_init(
+  self : Session,
   device : @input_dom.GPUDevice,
   format : String,
 ) -> GpuInitPromise {
-  scene_gpu_dispose()
+  self.scene_gpu_dispose()
   guard @input_dom.GPUTextureFormat::from_string(format) is Some(format) else {
     return gpu_resolve(0)
   }
@@ -43,7 +41,7 @@ pub fn scene_gpu_init(
     uniform: None,
     group: None,
   }
-  scene_gpu.val = Some(gpu)
+  self.scene_gpu.val = Some(gpu)
   let shader = gpu_shader(
     device,
     (
@@ -76,12 +74,12 @@ pub fn scene_gpu_init(
 }
 
 ///|
-#export_name("scene_gpu_record")
-pub fn scene_gpu_record(
+pub fn Session::scene_gpu_record(
+  self : Session,
   pass : @input_dom.GPURenderPassEncoder,
   data : @input_dom.ArrayBufferView,
 ) -> Int {
-  guard scene_gpu.val is Some(gpu) && gpu.live else { return 0 }
+  guard self.scene_gpu.val is Some(gpu) && gpu.live else { return 0 }
   guard gpu.pipeline is Some(pipeline) &&
     gpu.uniform is Some(uniform) &&
     gpu.group is Some(group) else {
