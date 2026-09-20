@@ -851,8 +851,8 @@ async fn run_loop(
                     )
                     app.queue(UserLoaded(id, result.map(user => user.name)))
                   } else {
-                    @async.sleep(1000)
-                    app.queue(Updated(id, target))
+                    let result = @clock.after(RealClock::{ }, 1000, target)
+                    app.queue(Updated(id, result))
                   }
                 }),
               )

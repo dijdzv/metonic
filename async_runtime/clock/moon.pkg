@@ -1,0 +1,9 @@
+import {
+  "local/p0/effects/clock" @capability,
+  "moonbitlang/async/cond_var",
+}
+
+import {
+  "moonbitlang/async",
+  "local/p0/examples/p0/task_scope",
+} for "test"

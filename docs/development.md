@@ -151,6 +151,13 @@ future tools or dependencies are included automatically.
 
 ## Integrated window HTTP requests
 
+The Clock capability's virtual-time suite runs automatically in pre-commit on JS
+and native. For a focused JS run, use the pinned Moon executable with
+`-C browser_host test ../async_runtime/clock --target js --deny-warn`.
+The native workspace runner also runs this suite with its prepared MSVC
+environment. Use these workspaces rather than resolving dependencies from
+`async_runtime` alone; they select the verified native or browser async adapter.
+
 For an interactive session, run `mise run demo`. It builds the browser host and
 ordinary native release window, then runs both against the browser server's
 HTTP endpoint. Closing native stops the owned server. Follow the

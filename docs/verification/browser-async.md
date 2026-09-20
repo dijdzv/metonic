@@ -13,6 +13,11 @@ The MoonBit browser adapter owns bounded timers (at most 16), admission checks,
 pending handles and callback epochs. It uses the pinned WebSys Window timer and
 Function bindings on JS and WasmGC. JavaScript validates numeric representation
 before passing integers across the export boundary and observes task events.
+Delayed results pass through the runtime-independent Clock capability described
+in [ADR 031](../adr/031-clock-capability.md). The browser adapter owns its host
+timer and async condition-variable waiter; reset clears the timer and releases
+the suspended operation. Virtual-time tests exercise the same `after` operation
+without replacing the existing task-scope admission rules.
 Only an accepted success changes the rectangle. Accepted task-status transitions,
 including failure and cancellation, also schedule rendering of the shared status
 label. Rejected completions cannot move the rectangle; an unchanged task status
