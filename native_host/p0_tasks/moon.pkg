@@ -1,0 +1,12 @@
+import {
+  "local/p0/core/application_task" @task,
+  "local/p0/examples/p0/tasks" @sample,
+  "local/p0/examples/p0/application",
+  "local/p0/effects/clock",
+  "local/native_host/http" @transport,
+  "local/metonic_async/http" @timed,
+  "moonbitlang/async",
+  "moonbitlang/core/env",
+}
+
+supported_targets = "native"

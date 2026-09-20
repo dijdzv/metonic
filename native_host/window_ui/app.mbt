@@ -29,11 +29,8 @@ priv enum Event {
   CompositionEnd
   Backspace
   Delete
-  StartUpdate
-  LoadUser(String)
-  UserLoaded(Int, Result[String, String])
-  CancelUpdate
-  Updated(Int, Int)
+  ApplicationTask(@task.Request, TaskGate)
+  ApplicationResult(@task.Completion)
   Development(DevelopmentRequest)
   Accessibility(@accessibility.Request)
   SelectBoundary(Int, Bool)
@@ -201,10 +198,12 @@ pub impl @windows.ApplicationHandler for App with fn window_event(
             self.queue(SelectBoundary(2, self.shift_pressed))
           @core.Key::Named(@core.NamedKey::Tab) =>
             self.queue(ToggleFocus(self.shift_pressed))
-          @core.Key::Named(@core.NamedKey::F5) => self.queue(StartUpdate)
+          @core.Key::Named(@core.NamedKey::F5) =>
+            self.queue(self.movement_request())
           @core.Key::Named(@core.NamedKey::F7) =>
-            self.queue(LoadUser(self.model.query()))
-          @core.Key::Named(@core.NamedKey::F6) => self.queue(CancelUpdate)
+            self.queue(self.user_request(self.model.query()))
+          @core.Key::Named(@core.NamedKey::F6) =>
+            self.queue(self.cancel_request())
           @core.Key::Named(@core.NamedKey::Backspace) => self.queue(Backspace)
           @core.Key::Named(@core.NamedKey::Delete) => self.queue(Delete)
           @core.Key::Named(@core.NamedKey::ArrowLeft) =>
@@ -680,8 +679,8 @@ async fn run_loop(
             | Delete
             | Input(_)
             | Enter
-            | StartUpdate
-            | LoadUser(_) if app.ime_pointer.pending() => ()
+            | ApplicationTask(_, PointerIdle | CommittedInput) if app.ime_pointer.pending() =>
+              ()
             Enter => ()
             Development(request) => app.dispatch_development(request)
             Accessibility(_) if app.composition is Some(_) => ()
@@ -703,7 +702,7 @@ async fn run_loop(
                 @accessibility.Click(target) if target ==
                   app.model.request_button.id => {
                   ignore(app.model.focus_request())
-                  app.queue(LoadUser(app.model.query()))
+                  app.queue(app.user_request(app.model.query()))
                   app.draw()
                 }
                 @accessibility.Click(target) if target ==
@@ -717,9 +716,9 @@ async fn run_loop(
                   )
                   app.queue(
                     if target == app.model.start_button.id {
-                      StartUpdate
+                      app.movement_request()
                     } else {
-                      CancelUpdate
+                      app.cancel_request()
                     },
                   )
                 }
@@ -812,62 +811,19 @@ async fn run_loop(
               )
               app.draw()
             }
-            LoadUser(_) if app.composition is Some(_) => ()
-            StartUpdate | LoadUser(_) => {
-              let user_id = match event {
-                LoadUser(value) => Some(value)
-                _ => None
-              }
-              ignore(app.model.cancel_update())
-              if update is Some(previous) {
-                previous.cancel()
-                previous.wait() catch {
-                  error if @async.is_cancellation_error(error) => ()
-                  error => raise error
-                }
-              }
-              let id = app.model.begin_update()
-              require(id > 0, "update scope unavailable")
-              let target = app.model.movement_target()
-              app.draw()
-              update = Some(
-                group.spawn(() => {
-                  if user_id is Some(value) {
-                    let result = @rpc_client.get_user(
-                      @env.get_env_var("METONIC_RPC_BASE").unwrap_or(
-                        "http://127.0.0.1:4174",
-                      ),
-                      value,
-                    )
-                    app.queue(UserLoaded(id, result.map(user => user.name)))
-                  } else {
-                    let result = @clock.after(RealClock::{ }, 1000, target)
-                    app.queue(Updated(id, result))
-                  }
-                }),
-              )
-            }
-            CancelUpdate => {
-              ignore(app.model.cancel_update())
-              if update is Some(previous) {
-                previous.cancel()
-                previous.wait() catch {
-                  error if @async.is_cancellation_error(error) => ()
-                  error => raise error
-                }
-              }
-              update = None
+            ApplicationTask(_, CommittedInput) if app.composition is Some(_) =>
+              ()
+            ApplicationTask(request, _) => {
+              update = @task_runner.dispatch(request, update, group, result => {
+                app.queue(ApplicationResult(result))
+              })
               app.draw()
             }
-            UserLoaded(id, result) =>
-              if app.model.complete_user(id, result) {
-                app.draw()
-              }
-            Updated(id, value) =>
-              if app.model.complete_movement(id, value) {
-                app.draw()
-              } else {
-                app.diagnostics.rejected()
+            ApplicationResult(result) =>
+              match result.apply() {
+                @task.Changed => app.draw()
+                @task.Rejected => app.diagnostics.rejected()
+                @task.Unchanged => ()
               }
             Close => {
               app.closed = true
@@ -987,14 +943,15 @@ async fn run_loop(
             TextPointer(x, y, extend_selection) =>
               app.apply_pointer(x, y, extend_selection)
             Input(Activate) if app.model.request_focused() &&
-              app.composition is None => app.queue(LoadUser(app.model.query()))
+              app.composition is None =>
+              app.queue(app.user_request(app.model.query()))
             Input(Activate) if app.model.control_focused() &&
               app.composition is None =>
               app.queue(
                 if app.model.view().start.focused {
-                  StartUpdate
+                  app.movement_request()
                 } else {
-                  CancelUpdate
+                  app.cancel_request()
                 },
               )
             Input(_) if app.composition is Some(_) ||
@@ -1046,13 +1003,7 @@ async fn run_loop(
           error => raise error
         }
       }
-      if update is Some(previous) {
-        previous.cancel()
-        previous.wait() catch {
-          error if @async.is_cancellation_error(error) => ()
-          error => raise error
-        }
-      }
+      @task_runner.cancel_and_wait(update)
       if initializing {
         init.cancel()
         init.wait() catch {
@@ -1122,12 +1073,18 @@ fn App::apply_pointer(
           },
         ),
       )
-      app.queue(if start { StartUpdate } else { CancelUpdate })
+      app.queue(
+        if start {
+          app.movement_request()
+        } else {
+          app.cancel_request()
+        },
+      )
     }
     (x, y, _) if app.model.view().request.bounds.contains(x, y) &&
       app.composition is None => {
       ignore(app.model.focus_request())
-      app.queue(LoadUser(app.model.query()))
+      app.queue(app.user_request(app.model.query()))
       app.draw()
     }
     (x, y, extend_selection) =>

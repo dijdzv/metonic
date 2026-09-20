@@ -253,9 +253,9 @@ async fn App::apply_action(self : App, action : Action) -> Unit {
     Activate => Input(@scene.Action::Activate)
     Insert(text) => Commit(text)
     Backspace => Event::Backspace
-    StartUpdate => Event::StartUpdate
-    LoadUser(id) => Event::LoadUser(id)
-    CancelUpdate => Event::CancelUpdate
+    StartUpdate => self.movement_request()
+    LoadUser(id) => self.user_request(id)
+    CancelUpdate => self.cancel_request()
     Close => Event::Close
   }
   let applied = Ref(false)

@@ -175,7 +175,10 @@ async fn main {
         ],
         envmap,
       )
-      for package in ["../async_runtime/http", "rpc_client"] {
+      for
+        package in [
+          "../async_runtime/http", "../async_runtime/application_task", "rpc_client",
+        ] {
         run_checked(
           moon,
           [
