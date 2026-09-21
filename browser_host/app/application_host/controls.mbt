@@ -71,6 +71,12 @@ fn Session::reconcile_controls(
       root
     }
   }
+  let mut reorder = self.owned.length() != keys.length()
+  for index, key in keys {
+    if index < self.owned.length() && self.owned[index].key != key {
+      reorder = true
+    }
+  }
   let retained : Array[OwnedControl] = []
   for owned in self.owned {
     if keys.contains(owned.key) {
@@ -119,7 +125,9 @@ fn Session::reconcile_controls(
       }
     }
     ordered.push(owned)
-    @dom_view.order_control(root, owned.element)
+    if reorder {
+      @dom_view.order_control(root, owned.element)
+    }
     if control.element.reference is Some(reference) {
       bindings.push({ reference, element_id: owned.id, })
       if @semantics.node(self.application.editor, reference) is Ok(node) {
