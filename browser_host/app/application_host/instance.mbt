@@ -89,6 +89,13 @@ pub fn create(
     () => {
       if !session.stopped {
         (application.close_requested)()
+        for editor in session.editors { editor.sync(application.editor) }
+        for binding in session.bindings {
+          if @semantics.node(application.editor, binding.reference) is Ok(node) &&
+            node.enabled && node.focused {
+            @dom_view.element(binding.element_id).focus()
+          }
+        }
         session.notify()
       }
     },

@@ -51,6 +51,7 @@ export function runApplication({ title, artifact, eventName, canvasId, statusId,
   function requestStop() {
     if (app && app.can_close() !== 1) {
       app.request_close();
+      if (disposed) return true;
       status.textContent = 'Save or discard changes before stopping.';
       return false;
     }
