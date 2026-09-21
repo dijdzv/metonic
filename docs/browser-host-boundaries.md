@@ -8,6 +8,7 @@ package names.
 
 | Package under `local/browser_host/` | Responsibility |
 | --- | --- |
+| `application_host` | Instantiate a portable application; own configured inputs, raster layers, GPU resources and disposal behind an opaque browser instance |
 | `input_binding` | Register supplied input elements and editing callbacks; own event listeners, composition state and pending animation frames |
 | `gpu_renderer` | Own scene/text resources and frame submission in an explicit `Session`; accept caller-supplied layer dimensions and counts |
 | `http_transport` | Implement the bounded POST `Http` contract; expose shared response/stream operations used by resource loading |
@@ -39,6 +40,10 @@ GPU recording through supplied callbacks. P0 and the [Notes example](notes-examp
 provide their own model-to-layer adapters; neither copies that transfer loop.
 
 ## Ownership
+
+Applications can use the [portable application entry](application-entry.md)
+instead of assembling the low-level packages. `runtime/application.mjs` provides
+shared browser startup and lifecycle; the Notes entry only supplies configuration.
 
 Create an input session from application-provided `Binding` values. Each binding
 owns an element and callbacks for focus, scroll, composition and committed edits.

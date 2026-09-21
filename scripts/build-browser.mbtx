@@ -106,7 +106,10 @@ async fn main {
     }
   }
   let dist = ".work/browser-dist"
-  for name in ["surface.mjs", "wasm-imports.mjs", "layer-renderer.mjs"] {
+  for
+    name in [
+      "surface.mjs", "wasm-imports.mjs", "layer-renderer.mjs", "application.mjs",
+    ] {
     assert_eq(
       @process.run(
         "node",

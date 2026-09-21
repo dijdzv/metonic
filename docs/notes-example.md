@@ -5,6 +5,9 @@ rendering primitives as P0. Its shared model is in `examples/notes/application`;
 it does not import the P0 model or backend. The native adapter uses
 `native_host/window_host`. The browser adapter uses the input, font, GPU and DOM
 packages described in [Browser host boundaries](browser-host-boundaries.md).
+Both adapters consume the same [application definition](application-entry.md).
+The browser artifact exports only `create`; shared host code owns its rendering
+and input callbacks.
 
 ## Browser
 

@@ -111,10 +111,26 @@ async function verifyNotes(browser) {
         return { exports: exports.sort(), dev: typeof globalThis.metonicAsyncProbe, trace: typeof globalThis.metonicInputTrace };
       }, target);
       assert.deepEqual(artifact, {
-        exports: ['load_font', 'install_font', 'start', 'resize', 'render', 'clear', 'layer_count', 'layer_field',
-          'layer_bytes', 'upload_begin', 'upload_layer', 'upload_commit', 'frame_begin', 'frame_text', 'frame_submit',
-          'frame_abort', 'stop'].sort(), dev: 'undefined', trace: 'undefined',
+        exports: ['create'], dev: 'undefined', trace: 'undefined',
       });
+      const stoppedInstance = await page.evaluate(async target => {
+        let factory;
+        if (target === 'js') factory = (await import('./notes.mjs')).create;
+        else {
+          const { wasmImports } = await import('./wasm-imports.mjs');
+          const { instance } = await WebAssembly.instantiateStreaming(await fetch('./notes.wasm'), wasmImports(),
+            { builtins: ['js-string'], importedStringConstants: '_' });
+          factory = instance.exports.create;
+        }
+        const unused = factory();
+        unused.stop();
+        unused.stop();
+        let rejected = false;
+        try { await unused.load_font(); } catch { rejected = true; }
+        return { rejected, start: unused.start(null, ''), resize: unused.resize(480, 240),
+          render: unused.render(), activate: unused.activate(1), layers: unused.layer_count() };
+      }, target);
+      assert.deepEqual(stoppedInstance, { rejected: true, start: 0, resize: 0, render: 0, activate: 0, layers: 0 });
       await settle();
       const canvas = page.locator('#canvas');
       const initial = await canvas.screenshot();

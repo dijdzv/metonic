@@ -1,0 +1,18 @@
+import {
+  "local/p0/core/application" @app,
+  "local/p0/core/semantics",
+  "local/p0/core/view_renderer" @renderer,
+  "local/p0/core/text_position",
+  "local/p0/text_raster" @raster,
+  "local/browser_host/input_binding",
+  "local/browser_host/dom_view",
+  "local/browser_host/font_loader",
+  "local/browser_host/gpu_renderer",
+  "local/websys-input" @dom,
+}
+
+supported_targets = "+js+wasm-gc"
+
+options(
+  targets: { "bridge_js.mbt": [ "js" ], "bridge_wasm.mbt": [ "wasm-gc" ] },
+)

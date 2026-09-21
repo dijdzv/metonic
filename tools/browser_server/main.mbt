@@ -76,6 +76,8 @@ async fn main {
           "/host.mjs" => Some(("host.mjs", "text/javascript; charset=utf-8"))
           "/notes-host.mjs" if notes =>
             Some(("notes-host.mjs", "text/javascript; charset=utf-8"))
+          "/application.mjs" if notes =>
+            Some(("application.mjs", "text/javascript; charset=utf-8"))
           "/notes.mjs" if notes =>
             Some(("notes.mjs", "text/javascript; charset=utf-8"))
           "/notes.wasm" if notes => Some(("notes.wasm", "application/wasm"))

@@ -20,6 +20,7 @@ async fn main {
       "notes.wasm",
     ),
     ("browser_host/runtime/surface.mjs", "surface.mjs"),
+    ("browser_host/runtime/application.mjs", "application.mjs"),
     ("browser_host/runtime/layer-renderer.mjs", "layer-renderer.mjs"),
     ("browser_host/runtime/wasm-imports.mjs", "wasm-imports.mjs"),
     (".work/browser-dist/browser-buffer.mjs", "browser-buffer.mjs"),

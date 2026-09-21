@@ -615,8 +615,12 @@ async fn prepare(args : Array[String]) -> Unit raise Error {
     } else {
       without_obsolete + test_import
     }
-    if @fs.exists(existing_path) &&
-      @fs.read_file(existing_path).text() == original {
+    let needs_upgrade = if @fs.exists(existing_path) {
+      @fs.read_file(existing_path).text() == original
+    } else {
+      false
+    }
+    if needs_upgrade {
       import_upgrades.push((staged_path, existing_path, corrected))
     } else {
       @fs.write_file(staged_path, corrected)
