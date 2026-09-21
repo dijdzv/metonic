@@ -250,6 +250,7 @@ fn App::snapshot(self : App) -> Snapshot {
 ///|
 async fn App::apply_action(self : App, action : Action) -> Unit {
   require(!self.closed, "window closed")
+  let prepared = Ref(true)
   let event = match action {
     Resize(width, height) => {
       require(
@@ -267,11 +268,18 @@ async fn App::apply_action(self : App, action : Action) -> Unit {
     Activate => Input(Activate)
     Insert(text) => Commit(text)
     Backspace => Event::Backspace
-    Task(request, gate) => ApplicationTask(request, gate)
+    Task(request, gate) => {
+      prepared.val = false
+      ApplicationTask(request, gate, () => prepared.val = true)
+    }
     Close => Event::Close
   }
   let applied = Ref(false)
   self.events.put(event)
+  while !prepared.val && !self.closed {
+    @async.sleep(1)
+  }
+  guard !self.closed else { return }
   self.events.put(Development(Barrier(applied)))
   while !applied.val && !self.closed {
     @async.sleep(1)

@@ -39,7 +39,7 @@ priv enum Event {
   CompositionEnd
   Backspace
   Delete
-  ApplicationTask(@task.Request, TaskGate)
+  ApplicationTask(@task.Request, TaskGate, () -> Unit)
   ApplicationResult(@task.Completion)
   Development(DevelopmentRequest)
   Accessibility(@accessibility.Request)
@@ -321,7 +321,7 @@ pub impl @windows.ApplicationHandler for App with fn window_event(
                 self.shift_pressed,
               )
               is Some(action) {
-              self.queue(ApplicationTask(action.request, action.gate))
+              self.queue(ApplicationTask(action.request, action.gate, () => ()))
             }
         }
       }
@@ -577,7 +577,7 @@ async fn run_loop(
     )
     require(app.presenter is Some(_), "presentation font could not be loaded")
     if (host.initialize)() is Some(action) {
-      app.queue(ApplicationTask(action.request, action.gate))
+      app.queue(ApplicationTask(action.request, action.gate, () => ()))
     }
     let window = app.window.unwrap()
     ignore(
@@ -703,9 +703,7 @@ async fn run_loop(
             | Backspace
             | Delete
             | Input(_)
-            | Enter
-            | ApplicationTask(_, PointerIdle | CommittedInput) if app.ime_pointer.pending() =>
-              ()
+            | Enter if app.ime_pointer.pending() => ()
             Enter => ()
             Development(request) => app.dispatch_development(request)
             Accessibility(_) if app.composition is Some(_) => ()
@@ -767,10 +765,13 @@ async fn run_loop(
                 )
                 app.draw()
               }
-            ApplicationTask(_, CommittedInput) if app.composition is Some(_) =>
-              ()
-            ApplicationTask(request, _) => {
-              if !tasks.submit(request) {
+            ApplicationTask(_, PointerIdle | CommittedInput, acknowledge) if app.ime_pointer.pending() =>
+              acknowledge()
+            ApplicationTask(_, CommittedInput, acknowledge) if app.composition
+              is Some(_) => acknowledge()
+            ApplicationTask(request, _, acknowledge) => {
+              if !tasks.submit(request, on_prepared=acknowledge) {
+                acknowledge()
                 (app.host.input_error)(
                   Some("Application task capacity is full."),
                 )

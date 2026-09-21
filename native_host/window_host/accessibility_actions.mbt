@@ -26,7 +26,7 @@ fn App::apply_accessibility(
       guard node.role == @semantics.Button else { return }
       ignore(@semantics.focus(app.host.editor, node.reference))
       if (app.host.activate)(node.reference) is Some(action) {
-        app.queue(ApplicationTask(action.request, action.gate))
+        app.queue(ApplicationTask(action.request, action.gate, () => ()))
       }
     }
     @accessibility.SetValue(target, text) => {

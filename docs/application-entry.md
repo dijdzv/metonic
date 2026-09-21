@@ -57,8 +57,15 @@ Expected failures should be returned as typed work results and displayed by the
 application. Rendering must not start storage or network operations.
 
 Both hosts use the shared operation driver. Replacement invalidates earlier
-results for that identity and awaits its active cleanup before preparing new work.
+results for that identity synchronously when admission succeeds, then awaits its
+active cleanup before preparing new work. The canceled model state is visible
+at admission, before resource cleanup finishes.
 Other operations and the native event loop can continue during that wait.
+Native control commands await their own preparation (including preceding cleanup)
+and the queued redraw before returning a snapshot; they do not await work completion.
+The driver's optional `on_prepared` callback runs once for an accepted command
+after preparation or retirement by replacement/closure. Rejected submissions
+do not invoke it. Acknowledgement alone does not mean that work succeeded.
 Cancellation keeps the identity reusable; removing a component must cancel its
 owned operations and invalidate its model references. Independent operation
 identities do not automatically infer semantic-node ownership.
@@ -431,7 +438,7 @@ ended. The following boundaries are deliberately different:
 | --- | --- | --- |
 | Time | `effects/clock.Clock`; browser `clock_driver.create`; `async_runtime/clock.VirtualClock` for tests | Select a clock when work needs one. Cancellation belongs to the async task. Native `SystemClock` implementations currently remain private to the RPC/sample packages; there is no public native clock factory. |
 | HTTP | Bounded POST through `effects/http.Http`, native `http.NativeHttp`, browser `http_transport.create`; `async_runtime/http.TimedHttp` adds a deadline | Select the endpoint, accepted content types and response limit. Browser CORS/permissions still apply. Create a browser transport per exchange; its controller/reader are cleaned up after use. |
-| Display and host | `core/application.Control`, native `application.from_application`/`window_host.run`, browser `application_host.create` | Define layout, state, semantic references and actions. Hosts own GPU objects, rasterization, input and shutdown. Ordinary applications need no GPU types. Browser element bindings are fixed at startup. |
+| Display and host | `core/application.Control`, native `application.from_application`/`window_host.run`, browser `application_host.create` | Define layout, state, semantic references and actions. Hosts own GPU objects, rasterization, input and shutdown. Ordinary applications need no GPU types. The managed browser entry reconciles element bindings with the current view. |
 | Storage | Native `snapshot_store.Store` and browser `snapshot_store.load/save` | Adapt bytes or strings into the application's format and recovery policy. Native locking/async IO and browser synchronous origin-scoped storage have different lifetime and failure contracts, described below. |
 | Clipboard | `core/text_clipboard` editing policy and native backend; browser DOM editing | Display input-operation failures separately from storage failures. Native access does not grant browser clipboard permissions. Rich text, images and clipboard history are not provided. |
 | Fonts and packaged assets | Native executable-relative resource resolution/font override; browser font URL and digest | Select and distribute licensed resources. Host code loads and rasterizes the configured font. `resources.asset_path` resolves a file path; it does not decode an image. |
@@ -439,7 +446,7 @@ ended. The following boundaries are deliberately different:
 
 Storage serialization and memo CRUD belong to the consumer. GPU setup, OS input
 handling and resource teardown belong to the hosts. Task requests use the
-existing replacement/cancellation lane; resource interfaces do not own a second
+shared replacement/cancellation driver with independent operation identities; resource interfaces do not own a second
 scheduler or hide platform permissions and persistence differences.
 
 ## Current limits and verification

@@ -1,4 +1,97 @@
 ///|
+async test "command acknowledgement observes preparation before work completes" {
+  @async.with_timeout(5000, () => {
+    let driver = @application_task.driver()
+    let ready = @async.CondVar::Cond()
+    let finish = @async.CondVar::Cond()
+    let state = Ref(0)
+    let acknowledged = Ref(0)
+    assert_true(
+      driver.submit(
+        @task.replace(() => (), () => {
+          state.val = 1
+          Some(
+            @task.work(
+              () => {
+                finish.wait()
+                2
+              },
+              value => {
+                state.val = value
+                @task.Changed
+              },
+            ),
+          )
+        }),
+        on_prepared=() => {
+          acknowledged.val += 1
+          ready.signal()
+        },
+      ),
+    )
+    assert_eq(acknowledged.val, 0)
+    @async.with_task_group(group => {
+      let running = group.spawn(() => {
+        driver.run(result => ignore(result.apply()))
+      })
+      ready.wait()
+      assert_eq(state.val, 1)
+      assert_eq(acknowledged.val, 1)
+      driver.close()
+      running.wait()
+      assert_eq(acknowledged.val, 1)
+      assert_eq(state.val, 1)
+    })
+  })
+}
+
+///|
+async test "superseded and closed commands acknowledge once while rejected commands do not" {
+  @async.with_timeout(5000, () => {
+    let driver = @application_task.driver()
+    let ready = @async.CondVar::Cond()
+    let acknowledgements : Array[Int] = []
+    let prepared : Array[Int] = []
+    for i in 0..<2 {
+      assert_true(
+        driver.submit(
+          @task.replace(() => (), () => {
+            prepared.push(i)
+            None
+          }),
+          on_prepared=() => {
+            acknowledgements.push(i)
+            ready.signal()
+          },
+        ),
+      )
+    }
+    @async.with_task_group(group => {
+      let running = group.spawn(() => driver.run(_ => ()))
+      while acknowledgements.length() < 2 {
+        ready.wait()
+      }
+      assert_eq(prepared, [1])
+      assert_eq(acknowledgements, [0, 1])
+      driver.close()
+      running.wait()
+    })
+    let closed = @application_task.driver()
+    let count = Ref(0)
+    assert_true(
+      closed.submit(@task.cancel(() => ()), on_prepared=() => count.val += 1),
+    )
+    closed.close()
+    closed.close()
+    assert_eq(count.val, 1)
+    assert_false(
+      closed.submit(@task.cancel(() => ()), on_prepared=() => count.val += 1),
+    )
+    assert_eq(count.val, 1)
+  })
+}
+
+///|
 async test "canceling search does not cancel an independent save" {
   @async.with_timeout(5000, () => {
     let driver = @application_task.driver()
@@ -177,6 +270,33 @@ async test "a delayed replacement cleanup does not block another operation" {
 
 ///|
 suberror OperationFailure derive(Debug)
+
+///|
+test "accepted commands invalidate synchronously before asynchronous preparation" {
+  let driver = @application_task.driver()
+  let operation = @task.Operation::new()
+  let state = Ref(1)
+  let prepared = Ref(false)
+  assert_true(
+    driver.submit(
+      @task.replace(
+        () => state.val = 4,
+        () => {
+          prepared.val = true
+          None
+        },
+        operation~,
+      ),
+    ),
+  )
+  assert_eq(state.val, 4)
+  assert_false(prepared.val)
+  assert_true(driver.submit(@task.cancel(() => state.val = 5, operation~)))
+  assert_eq(state.val, 5)
+  driver.close()
+  assert_false(driver.submit(@task.cancel(() => state.val = -1, operation~)))
+  assert_eq(state.val, 5)
+}
 
 ///|
 async test "a full set of active operations still accepts cancellation and closes all work" {

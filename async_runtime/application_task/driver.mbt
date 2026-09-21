@@ -7,7 +7,7 @@ priv struct Lane {
 
 ///|
 pub struct Driver {
-  priv commands : @aqueue.Queue[(Lane, Int, @task.Request)]
+  priv commands : @aqueue.Queue[(Lane, Int, @task.Request, () -> Unit)]
   priv lanes : Map[@task.Operation, Lane]
   priv mut accepting : Bool
   priv mut started : Bool
@@ -26,7 +26,11 @@ pub fn driver() -> Driver {
 }
 
 ///|
-pub fn Driver::submit(self : Driver, request : @task.Request) -> Bool {
+pub fn Driver::submit(
+  self : Driver,
+  request : @task.Request,
+  on_prepared? : () -> Unit = () => (),
+) -> Bool {
   guard self.accepting && self.pending_commands < 16 else { return false }
   let operation = request.operation()
   let lane = match self.lanes.get(operation) {
@@ -37,13 +41,14 @@ pub fn Driver::submit(self : Driver, request : @task.Request) -> Bool {
     }
   }
   let generation = lane.generation + 1
-  let accepted = self.commands.try_put((lane, generation, request)) catch {
+  let accepted = self.commands.try_put((lane, generation, request, on_prepared)) catch {
     _ => false
   }
   if accepted {
     self.pending_commands += 1
     lane.generation = generation
     self.lanes[operation] = lane
+    request.invalidate()
   }
   accepted
 }
@@ -52,6 +57,11 @@ pub fn Driver::submit(self : Driver, request : @task.Request) -> Bool {
 pub fn Driver::close(self : Driver) -> Unit {
   guard self.accepting else { return }
   self.accepting = false
+  while (self.commands.try_get() catch { _ => None })
+        is Some((_, _, _, on_prepared)) {
+    self.pending_commands -= 1
+    on_prepared()
+  }
   self.commands.close(clear=true)
   for _, lane in self.lanes {
     if lane.running is Some(running) {
@@ -100,15 +110,24 @@ pub async fn Driver::run(
         @aqueue.QueueAlreadyClosed => None
         other => raise other
       }
-      guard command is Some((lane, generation, request)) else { break }
-      guard self.accepting else { break }
-      request.invalidate()
+      guard command is Some((lane, generation, request, on_prepared)) else {
+        break
+      }
+      guard self.accepting else {
+        self.pending_commands -= 1
+        on_prepared()
+        break
+      }
       let previous = lane.running
       lane.running = Some(
         group.spawn(() => {
           let posted = Ref(false)
           let preparing = Ref(true)
+          let acknowledged = Ref(false)
           defer {
+            if !acknowledged.val {
+              on_prepared()
+            }
             if preparing.val {
               self.pending_commands -= 1
             }
@@ -120,11 +139,11 @@ pub async fn Driver::run(
           self.pending_commands -= 1
           preparing.val = false
           guard self.accepting && lane.generation == generation else { return }
-          guard request.prepare() is Some(work) else {
-            on_state_change()
-            return
-          }
+          let work = request.prepare()
           on_state_change()
+          acknowledged.val = true
+          on_prepared()
+          guard work is Some(work) else { return }
           let completion = work.run() catch {
             error if cancellation_error(error) => raise error
             error => {
