@@ -1,0 +1,10 @@
+import {
+  "local/websys-input" @dom,
+  "moonbitlang/core/debug",
+}
+
+supported_targets = "+js+wasm-gc"
+
+options(
+  targets: { "storage_js.mbt": [ "js" ], "storage_wasm.mbt": [ "wasm-gc" ] },
+)

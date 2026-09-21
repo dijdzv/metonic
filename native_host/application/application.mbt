@@ -23,7 +23,7 @@ pub(all) struct TaskAction {
 pub(all) struct Application {
   editor : @semantics.Tree
   default_input : @semantics.NodeRef
-  initialize : () -> Unit
+  initialize : () -> TaskAction?
   initial_size : (Int, Int)
   view : () -> View
   focus_order : () -> Array[@semantics.NodeRef]
@@ -35,6 +35,8 @@ pub(all) struct Application {
   pointer_unhandled : (Int, Int) -> Bool
   resize : (Int, Int) -> Bool
   stop : () -> Unit
+  can_close : () -> Bool
+  dispose : async () -> Unit
 }
 
 ///|

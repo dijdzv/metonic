@@ -1,17 +1,47 @@
 # Application entry
 
 `core/application.Application` is an experimental platform-independent entry for
-synchronous text, button and input views. It contains the semantic editor,
-default input reference, initial size, view, activation, resize and disposal
+text, button and input views. It contains the semantic editor,
+default input reference, initial size, initialization, view, activation, resize and disposal
 callbacks. A view supplies `Control` values with a common view element and kind.
 The application owns its model and semantic references; it does not own GPU
 devices, raster engines or platform input listeners.
 
 `examples/notes/application.Model::application` is a minimal implementation.
 Windows uses `native_host/application.from_application` to adapt it to the
-existing window host. The richer native task/action interface remains available;
-asynchronous persistence and its application notifications are not yet represented
-by this first portable entry. It is not a stable public package release.
+existing window host. It is not a stable public package release.
+
+Initialization and activation return an optional `core/application_task.Request`.
+The host owns execution and cleanup; the application supplies the typed work and
+the completion that updates its model. Returning `None` permits synchronous
+changes without starting work. Requests share one replace/cancel lane per host;
+independent concurrent application operations are not provided by this entry.
+Expected failures should be returned as typed work results and displayed by the
+application. Rendering must not start storage or network operations.
+
+The browser driver rejects submissions after closure or when its bounded queue
+is full. Replacement invalidates earlier results and awaits active work cleanup
+before preparing new work. A completion delivered before replacement or closure
+is rejected if applied afterward. Stop prevents further application mutations
+and requests cancellation; the asynchronous driver returns after owned cleanup.
+This does not promise that a browser page exit waits for pending storage writes.
+
+`stop` invalidates application state synchronously and must be idempotent.
+`dispose` is a separate asynchronous callback invoked once after host-owned
+application work has ended, including failed startup and task failure paths.
+Release stores and other resources that active work may still use in `dispose`,
+not `stop`. Hosts protect disposal from cancellation. Browser shutdown requests
+this cleanup asynchronously; navigation or process termination cannot guarantee
+that it finishes. Storage must not rely on page-exit cleanup to save edits.
+
+`can_close` is the application's close policy. Native close requests and the
+browser Stop action consult it before stopping. Return false while unsaved edits
+or an in-flight save require attention; provide an explicit save/retry/discard
+operation so users can resolve that condition. Browser navigation also installs
+a `beforeunload` handler, requesting the browser's confirmation when close is
+refused. Browser policy can suppress that prompt, and forced termination cannot
+be vetoed. Fatal host failures and an already-committed page exit still perform
+unconditional cleanup.
 
 ## Browser entry
 
@@ -87,12 +117,43 @@ of a reproducible external installation.
 
 ## Current limits and verification
 
+`native_host/snapshot_store` stores one opaque snapshot in an application-selected
+directory. It holds an exclusive writer lock until `Store.close`, bounds reads
+and writes to 1 MiB, writes a sibling staging file with file synchronization, and
+replaces the live snapshot only after staging succeeds. A missing snapshot is
+distinct from an IO failure. The application owns serialization, its storage
+directory and user-visible recovery; this package does not interpret memo data.
+
+The caller must finish or cancel and await outstanding IO before closing the
+store. Concurrent calls and premature close are rejected. A failed or canceled
+save may leave `snapshot.pending`; it is replaced by the next save under the
+writer lock. This mechanism protects against truncating the last snapshot during
+staging, but does not claim power-loss durability of directory metadata or support
+for noncooperating writers. Close the store in the application's `dispose`
+callback, after host-owned work has ended.
+
+`browser_host/app/snapshot_store` exposes `load(key)` and `save(key, text)` on JS
+and WasmGC, returning `Result` for storage access and write failures. It uses
+the current origin's localStorage through generated WebSys bindings. A missing
+key returns `Ok(None)`; access denial is an error. The application owns the key,
+serialization, versioning and retry policy. Calls are synchronous and intended
+for small snapshots; use them inside the application's task adapter, not its
+view callback.
+
+Browser storage belongs to a browser profile and origin, so changing the host or
+port changes the visible data. Private browsing, site-data removal, browser
+retention policies and quota limits affect availability. A successful write means
+localStorage accepted the value, not a backup or a power-loss durability promise.
+This API does not coordinate competing tabs: the latest successful write wins.
+Applications requiring concurrent editing must add conflict detection or use a
+storage backend with the required transaction contract.
+
 Input is limited to 1024 UTF-16 code units and the existing raster layer limits
 apply. Native still requires a live default input. The browser configuration
 does not dynamically create DOM controls or provide a general layout system.
-Persistence, application task notifications and external dependency preparation
-remain separate work; this entry removes host duplication before those features
-are added.
+Application-visible unexpected task failure reporting remains under development.
+The portable task entry alone does not establish durable saving or recovery;
+applications must connect a storage backend and handle its returned failures.
 
 The Notes owned-window probe and browser JS/WasmGC gate exercise the same
 application definition. Browser checks cover actual rendered edits, selection,

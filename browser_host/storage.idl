@@ -1,0 +1,7 @@
+partial interface Window {
+  readonly attribute Storage localStorage;
+};
+interface Storage {
+  DOMString? getItem(DOMString key);
+  undefined setItem(DOMString key, DOMString value);
+};

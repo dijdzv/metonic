@@ -1,5 +1,6 @@
 import {
   "local/p0/core/application" @app,
+  "local/p0/core/application_task" @task,
   "local/p0/core/semantics",
   "local/p0/core/view_renderer" @renderer,
   "local/p0/core/text_position",
@@ -9,6 +10,8 @@ import {
   "local/browser_host/font_loader",
   "local/browser_host/gpu_renderer",
   "local/websys-input" @dom,
+  "local/metonic_async/application_task" @task_driver,
+  "moonbitlang/async",
 }
 
 supported_targets = "+js+wasm-gc"

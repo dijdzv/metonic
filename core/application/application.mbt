@@ -17,8 +17,11 @@ pub(all) struct Application {
   editor : @semantics.Tree
   default_input : @semantics.NodeRef
   initial_size : (Int, Int)
+  initialize : () -> @task.Request?
   view : () -> Array[Control]
-  activate : (@semantics.NodeRef) -> Unit
+  activate : (@semantics.NodeRef) -> @task.Request?
   resize : (Int, Int) -> Bool
   stop : () -> Unit
+  can_close : () -> Bool
+  dispose : async () -> Unit
 }
