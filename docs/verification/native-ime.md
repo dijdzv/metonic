@@ -33,8 +33,13 @@ nonempty native preedit, the host removes the selected text and continues the
 composition at the collapsed insertion point. Commit inserts the result once;
 cancellation removes preedit but does not restore that deleted selection.
 Composition start without nonempty preedit does not delete the selection.
-A revision change invalidates the composition. CLI/MCP edits and selection changes are
-rejected with `composition_active` while the IME owns the edit.
+Changing the target input's content or selection, disabling it, removing it or
+replacing its identity invalidates the composition. Updates to unrelated controls
+do not. CLI/MCP edits and selection changes are rejected with `composition_active`
+while the IME owns the edit. The portable `Application.edited` callback reports
+only the final committed change; intermediate selection removal is withheld until
+completion or cancellation. These ownership and notification rules have synthetic
+native/browser coverage and do not extend the physical IME acceptance above.
 
 The pinned window library needs `patches/window-ime-position.patch`. It forwards
 the IMM composition cursor, including cursor-only and empty-preedit updates, and
