@@ -129,10 +129,16 @@ access boundary. A filesystem-generated temporary name is not sufficient evidenc
 of a cryptographically secure capability. Detailed discovery implementation and
 its stale-session tests remain tracked in issue #198.
 
-The browser can use a development-only host bridge connected by DevTools, with
-the same semantic/action contract. Its global hook must be absent from production
-bundles. DevTools remains useful for host errors and browser traces even without
-that hook.
+The browser application host exposes semantic DOM controls and routes their
+events through its normal input/action handlers. Reuse the CLI and MCP included
+in pinned Playwright through existing-browser CDP attachment; an additional
+page-global bridge is unnecessary for this path. The browser's DOM references
+and native's revision-checked semantic targets have different concurrency
+guarantees. Attachment selects an explicit browser and tab, and disconnecting
+must leave the application running. Development tooling remains outside the
+application distribution. A future host bridge, if required for capabilities
+not represented by DOM controls, must be separately opt-in and excluded from
+production. See [application entry](../application-entry.md#browser-development-control).
 
 ## Initial command contract
 
