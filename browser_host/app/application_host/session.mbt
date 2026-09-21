@@ -435,6 +435,7 @@ fn Session::activate_reference(
     return 0
   }
   ignore(@semantics.focus(self.application.editor, reference))
+  self.applied_focus = Some(reference)
   if (self.application.activate)(reference) is Some(request) {
     if !self.submit(request) {
       return 0
@@ -444,6 +445,7 @@ fn Session::activate_reference(
     editor.preview = None
     editor.sync(self.application.editor)
   }
+  self.sync_focus((self.application.view)())
   self.notify()
   1
 }
