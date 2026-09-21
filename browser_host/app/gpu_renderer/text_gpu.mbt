@@ -84,7 +84,7 @@ pub fn Session::text_gpu_add(
     width > 0 &&
     width <= 1024 &&
     height > 0 &&
-    height <= 96 else {
+    height <= 1024 else {
     return 0
   }
   let texture = gpu_texture(gpu.device, width, height)

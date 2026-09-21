@@ -57,6 +57,22 @@ Bindings and input kinds are fixed at startup. Changing text, geometry and butto
 availability is supported; adding or replacing input nodes requires a new host
 instance. Give each running surface its own elements and refresh event name.
 
+Each render synchronizes a bound button's DOM text and disabled state from its
+semantic node. Use `semantics.set_name` when a reusable control represents a new
+item; this preserves its identity, focus and input selection while invalidating
+the accessibility tree. Update the view's displayed text alongside its semantic
+name. Bound buttons must be `HTMLButtonElement` elements and contain plain text;
+the host replaces their text content.
+
+Button activation focuses the target before calling the application. An
+application may then focus another semantic control (for example the editor of
+a newly selected item); the browser host reflects that focus in its DOM binding.
+
+Each raster layer supports dimensions from 1 to 1024 pixels on either axis.
+The native surface currently accepts at most 16 layers per frame. Applications
+must keep their visible controls within these bounds; these are resource limits,
+not a limit on how many records an application can store.
+
 The small browser entry calls `runApplication` from `runtime/application.mjs`
 with the artifact prefix, element IDs, refresh event name and button actions.
 An action is an index into the stable binding array, not the current view order.

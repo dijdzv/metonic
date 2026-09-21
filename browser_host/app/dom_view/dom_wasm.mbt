@@ -28,3 +28,12 @@ fn host_style(
 pub fn text(element : @input_dom.HTMLElement, value : String) -> Unit {
   element.set_text_content(Some(value))
 }
+
+///|
+pub fn button(id : String, label : String, enabled : Bool) -> Unit {
+  let button = @input_dom.HTMLButtonElement::from_element_opt(
+    @input_binding.document().get_element_by_id(id).unwrap(),
+  ).unwrap()
+  button.set_disabled(!enabled)
+  text(element(id), label)
+}

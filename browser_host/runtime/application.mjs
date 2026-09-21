@@ -92,7 +92,6 @@ export function runApplication({ title, artifact, eventName, canvasId, statusId,
     surface.observe();
     document.addEventListener(eventName, refresh);
     for (const action of actions) action.element.addEventListener('click', action.callback);
-    for (const action of actions) action.element.disabled = false;
     status.textContent = `Ready: ${title} (${target})`;
   }
   stopButton.addEventListener('click', requestStop);

@@ -73,7 +73,7 @@ pub fn render(
     if bounds.width < 1 ||
       bounds.width > 1024 ||
       bounds.height < 1 ||
-      bounds.height > 96 {
+      bounds.height > 1024 {
       return Err("invalid_item_bounds")
     }
   }

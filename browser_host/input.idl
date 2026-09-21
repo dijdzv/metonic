@@ -45,6 +45,9 @@ interface HTMLInputElement : HTMLElement {
   readonly attribute unsigned long? selectionEnd;
   readonly attribute DOMString? selectionDirection;
 };
+interface HTMLButtonElement : HTMLElement {
+  attribute boolean disabled;
+};
 interface HTMLTextAreaElement : HTMLElement {
   attribute boolean disabled;
   undefined setSelectionRange(unsigned long start, unsigned long end, DOMString direction);

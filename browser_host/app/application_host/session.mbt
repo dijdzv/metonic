@@ -210,6 +210,13 @@ fn Session::render(self : Session) -> Int {
   guard self.engine is Some(engine) else { return 0 }
   let items : Array[@renderer.Item] = []
   for control in (self.application.view)() {
+    if control.kind == @app.Button &&
+      control.element.reference is Some(reference) &&
+      self.bindings.iter().find_first(binding => binding.reference == reference)
+      is Some(binding) &&
+      @semantics.node(self.application.editor, reference) is Ok(node) {
+      @dom_view.button(binding.element_id, node.name, node.enabled)
+    }
     if control.kind is @app.Input(..) &&
       control.element.reference is Some(reference) {
       guard self.editors
@@ -292,15 +299,22 @@ fn Session::activate(self : Session, index : Int) -> Int {
   if !node.enabled {
     return 0
   }
+  ignore(@semantics.focus(self.application.editor, reference))
   if (self.application.activate)(reference) is Some(request) {
     if !self.submit(request) {
       return 0
     }
   }
-  ignore(@semantics.focus(self.application.editor, reference))
   for editor in self.editors {
     editor.preview = None
     editor.sync(self.application.editor)
+  }
+  for binding in self.bindings {
+    if @semantics.node(self.application.editor, binding.reference) is Ok(node) &&
+      node.enabled &&
+      node.focused {
+      @dom_view.element(binding.element_id).focus()
+    }
   }
   self.notify()
   1
