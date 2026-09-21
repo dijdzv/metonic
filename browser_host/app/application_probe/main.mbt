@@ -54,6 +54,7 @@ fn Model::change(self : Model, command : Int) -> Unit {
       for reference in self.inputs {
         ignore(@semantics.set_text(self.tree, reference, "programmatic"))
       }
+    12 => ignore(@semantics.set_button_value(self.tree, self.add, "updated"))
     6 => {
       for reference in self.inputs {
         ignore(@semantics.remove(self.tree, reference))

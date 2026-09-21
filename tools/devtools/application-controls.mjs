@@ -106,6 +106,7 @@ export async function verifyDynamicControls(browser, baseUrl, outputDir) {
       }, { finish, value });
       await compose(false, '');
       assert.equal((await edits())[0], 2);
+      await change(12);
       await compose(true, '青う');
       assert.deepEqual(await edits(), [3, 3, '青う']);
       await compose(false, '');

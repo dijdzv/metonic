@@ -11,7 +11,7 @@ priv struct Editor {
   single_line : Bool
   mut preview : (String, Int)?
   mut composing : Bool
-  mut composition_revision : Int?
+  mut composition : @semantics.Composition?
   mut scroll : Int
   mut inputs : @input_binding.Session?
   mut retired : Bool
@@ -110,7 +110,7 @@ fn Editor::retire(self : Editor) -> Unit {
   self.inputs = None
   self.preview = None
   self.composing = false
-  self.composition_revision = None
+  self.composition = None
 }
 
 ///|
@@ -167,7 +167,7 @@ fn Session::reconcile_editors(
         single_line,
         preview: None,
         composing: false,
-        composition_revision: None,
+        composition: None,
         scroll: 0,
         inputs: None,
         retired: false,
@@ -244,7 +244,10 @@ fn Session::bind_editor(self : Session, editor : Editor) -> Unit {
         return 0
       }
       editor.composing = true
-      editor.composition_revision = Some(@semantics.revision(tree))
+      editor.composition = @semantics.begin_composition(
+        tree,
+        target=editor.reference,
+      )
       1
     },
     end_composition: () => {
@@ -263,9 +266,11 @@ fn Session::bind_editor(self : Session, editor : Editor) -> Unit {
       1
     },
     commit: (value, start, end) => {
-      if editor.composition_revision is Some(revision) {
-        editor.composition_revision = None
-        if revision != @semantics.revision(tree) {
+      if editor.composition is Some(composition) {
+        editor.composition = None
+        let current = composition.preview("") is Some(_)
+        composition.cancel()
+        if !current {
           editor.sync(tree)
           return 0
         }

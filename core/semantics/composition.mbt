@@ -2,7 +2,6 @@
 pub struct Composition {
   priv tree : Tree
   priv node : Node
-  priv revision : Int
   priv mut active : Bool
 }
 
@@ -14,15 +13,14 @@ pub fn begin_composition(tree : Tree, target~ : NodeRef) -> Composition? {
   let (id, _) = resolve(tree, target)
   let node = if id < 0 { None } else { input_node(tree, id) }
   match node {
-    Some(node) if node.enabled =>
-      Some({ tree, node, revision: tree.revision, active: true, })
+    Some(node) if node.enabled => Some({ tree, node, active: true, })
     _ => None
   }
 }
 
 ///|
 pub fn Composition::preview(self : Composition, preedit : String) -> String? {
-  if !self.active || self.tree.closed || self.tree.revision != self.revision {
+  if !self.active || !self.current() {
     return None
   }
   Some(
@@ -38,7 +36,7 @@ pub fn Composition::commit(self : Composition, text : String) -> String {
     return "composition_ended"
   }
   self.active = false
-  if self.tree.closed || self.tree.revision != self.revision {
+  if !self.current() {
     return "stale_composition"
   }
   replace_selection(self.tree, self.node.reference, text)
@@ -65,7 +63,7 @@ pub fn Composition::cancel(self : Composition) -> Unit {
 
 ///|
 pub fn Composition::remove_selected_text(self : Composition) -> Composition? {
-  if !self.active || self.tree.closed || self.tree.revision != self.revision {
+  if !self.active || !self.current() {
     return None
   }
   if self.node.selection_start == self.node.selection_end {
@@ -73,4 +71,16 @@ pub fn Composition::remove_selected_text(self : Composition) -> Composition? {
   }
   guard self.commit("") == "" else { return None }
   begin_composition(self.tree, target=self.node.reference)
+}
+
+///|
+fn Composition::current(self : Composition) -> Bool {
+  guard !self.tree.closed && node(self.tree, self.node.reference) is Ok(current) else {
+    return false
+  }
+  current.enabled &&
+  current.value == self.node.value &&
+  current.selection_start == self.node.selection_start &&
+  current.selection_end == self.node.selection_end &&
+  current.selection_anchor == self.node.selection_anchor
 }

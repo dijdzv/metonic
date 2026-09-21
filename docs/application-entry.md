@@ -141,6 +141,8 @@ selected range deleted; this is the established input behavior, not restoration
 of the old selection. Native intermediate selection removal is withheld until
 that composition finishes. Removed/replaced inputs, obsolete composition
 snapshots and stopped hosts cannot deliver late edit notifications.
+Composition ownership checks the target's identity, content, selection and
+enabled state. Updating an unrelated control does not invalidate that input.
 
 The revision describes an event, not a promise that the model will remain at
 that revision. Capture the desired save value, use operation-scoped replacement
