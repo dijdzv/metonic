@@ -1,7 +1,7 @@
 import {
   "local/browser_host/dom_view",
   "local/browser_host/font_loader",
-  "local/browser_host/clock_driver",
+  "local/metonic_async/clock" @production_clock,
   "local/browser_host/http_transport",
   "local/browser_host/gpu_renderer",
   "local/browser_host/input_binding",

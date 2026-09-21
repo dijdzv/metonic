@@ -1,5 +1,11 @@
 ///|
-let task_timers : Map[Int, @clock_driver.BrowserClock] = Map([])
+priv struct PendingDelay {
+  mut task : @async.Task[Int]?
+  mut live : Bool
+}
+
+///|
+let task_timers : Map[Int, PendingDelay] = Map([])
 
 ///|
 let task_epoch : Ref[Int] = Ref(0)
@@ -22,8 +28,11 @@ pub fn scheduled_task_rejections() -> Int {
 ///|
 #export_name("scheduled_tasks_reset")
 pub fn scheduled_tasks_reset() -> Unit {
-  for _, timer in task_timers {
-    timer.cancel()
+  for _, pending in task_timers {
+    pending.live = false
+    if pending.task is Some(task) {
+      @async.run_async_main(() => task.cancel())
+    }
   }
   task_timers.clear()
   task_epoch.val += 1
@@ -46,19 +55,31 @@ pub fn schedule_task(delay : Int, value : Int, fail : Int) -> Int {
   }
   http_cancel()
   let epoch = task_epoch.val
-  let clock = @clock_driver.create()
-  task_timers.set(id, clock)
+  let pending = PendingDelay::{ task: None, live: true, }
+  task_timers.set(id, pending)
   @async.run_async_main(async fn() {
-    let result = @clock.after(clock, delay, value) catch {
-      @clock_driver.ClockReset => return
+    let result = @async.with_task_group(group => {
+      let task = group.spawn(() => {
+        if !pending.live {
+          return value
+        }
+        @clock.after(@production_clock.SystemClock::new(), delay, value)
+      })
+      pending.task = Some(task)
+      task.wait()
+    }) catch {
+      @async.TaskCancelled => return
       _ => {
+        if !pending.live || epoch != task_epoch.val {
+          return
+        }
         task_timers.remove(id)
         ignore(@app.task_fail(id, 7))
         host_notify("metonic-task")
         return
       }
     }
-    if epoch != task_epoch.val {
+    if !pending.live || epoch != task_epoch.val {
       return
     }
     task_timers.remove(id)
