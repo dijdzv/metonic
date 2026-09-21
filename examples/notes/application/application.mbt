@@ -3,7 +3,7 @@ pub fn Model::application(self : Model) -> @app.Application {
   {
     title: "Metonic Notes",
     editor: self.editor,
-    default_input: self.note,
+    default_input: Some(self.note),
     initial_size: self.size(),
     initialize: () => None,
     view: () => {

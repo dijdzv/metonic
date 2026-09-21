@@ -66,6 +66,8 @@ struct App {
   clipboard : @text_clipboard.Backend
   diagnostics : Diagnostics
   mut composition : @semantics.Composition?
+  mut composition_target : @semantics.NodeRef?
+  mut retired_composition : Bool
   ime_pointer : @ime_focus.Transfer
   mut pointer_pressed : Bool
   mut pointer_position : (Int, Int)?
@@ -104,14 +106,69 @@ fn App::queue(self : App, event : Event) -> Unit {
 }
 
 ///|
-fn App::input_node(self : App) -> @semantics.Node {
+fn App::default_node(self : App) -> @semantics.Node? {
+  guard self.host.default_input is Some(reference) else { return None }
+  guard (self.host.view)().inputs.any(input => input.reference == reference) else {
+    return None
+  }
+  match @semantics.node(self.host.editor, reference) {
+    Ok(node) if node.role == @semantics.TextInput => Some(node)
+    _ => None
+  }
+}
+
+///|
+fn App::input_node(self : App) -> @semantics.Node? {
+  let inputs = (self.host.view)().inputs
   let nodes = @semantics.snapshot(self.host.editor)
   for node in nodes {
-    if node.role is @semantics.TextInput && node.focused {
-      return node
+    if node.role is @semantics.TextInput &&
+      node.focused &&
+      inputs.any(input => input.reference == node.reference) {
+      return Some(node)
     }
   }
-  @semantics.node(self.host.editor, self.host.default_input).unwrap()
+  self.default_node()
+}
+
+///|
+fn App::reconcile_input(self : App) -> Unit {
+  if self.drag is Some(drag) {
+    let retained = (self.host.view)().inputs.any(input => {
+      input.reference == drag.reference
+    })
+    let eligible = match @semantics.node(self.host.editor, drag.reference) {
+      Ok(node) =>
+        node.enabled && node.focused && node.role == @semantics.TextInput
+      Err(_) => false
+    }
+    if !retained || !eligible {
+      self.cancel_pointer()
+    }
+  }
+  guard self.composition_target is Some(reference) else { return }
+  let valid_node = match @semantics.node(self.host.editor, reference) {
+    Ok(node) =>
+      node.role == @semantics.TextInput && node.enabled && node.focused
+    Err(_) => false
+  }
+  let live = valid_node &&
+    (self.host.view)().inputs.any(input => input.reference == reference)
+  if !live {
+    if self.composition is Some(composition) {
+      composition.cancel()
+    }
+    self.composition = None
+    self.composition_target = None
+    // The OS may still deliver the retired session's result before its end.
+    // Redirecting that untagged text to the new focus would corrupt another input.
+    self.retired_composition = true
+    self.preedit = ""
+    self.preedit_cursor = 0
+    self.preedit_attributes = b""
+    self.ime_pointer.cancel()
+    self.cancel_pointer()
+  }
 }
 
 ///|
@@ -288,12 +345,14 @@ pub impl @windows.ApplicationHandler for App with fn window_event(
 
 ///|
 fn App::draw(self : App) -> Unit raise Error {
+  self.reconcile_input()
   let view = (self.host.view)()
   if self.renderer is Some(renderer) {
     let presenter = self.presenter.unwrap()
     let input = self.input_node()
-    let preedit : @view_presentation.Preedit? = match self.composition {
-      Some(composition) =>
+    let preedit : @view_presentation.Preedit? = match
+      (self.composition, input) {
+      (Some(composition), Some(input)) =>
         composition
         .preview(self.preedit)
         .map(text => {
@@ -312,7 +371,7 @@ fn App::draw(self : App) -> Unit raise Error {
             (range.0 + input.selection_start, range.1 + input.selection_start)
           }),
         })
-      None => None
+      _ => None
     }
     let rendered = presenter.render(view.items, view.inputs, preedit)
     let layers = match rendered {
@@ -330,7 +389,8 @@ fn App::draw(self : App) -> Unit raise Error {
         }),
       )
     }
-    if presenter.caret_position(input.reference) is Some((x, y)) {
+    if input is Some(input) &&
+      presenter.caret_position(input.reference) is Some((x, y)) {
       if self.window is Some(window) {
         window.set_ime_cursor_area(
           @dpi.PhysicalPosition(x, y).into_position(),
@@ -455,6 +515,8 @@ async fn run_loop(
     clipboard: clipboard.unwrap_or_else(@platform_clipboard.backend),
     diagnostics: Diagnostics::new(),
     composition: None,
+    composition_target: None,
+    retired_composition: false,
     ime_pointer: @ime_focus.Transfer::new(),
     pointer_pressed: false,
     pointer_position: None,
@@ -578,6 +640,7 @@ async fn run_loop(
             }
             _ => ()
           }
+          app.reconcile_input()
           match event {
             Navigate(_, _)
             | SelectBoundary(_, _)
@@ -598,29 +661,34 @@ async fn run_loop(
             | Backspace
             | Delete
             | CompositionStart =>
-              if app.presenter is Some(presenter) {
-                presenter.reveal_input(app.input_node().reference)
+              if app.presenter is Some(presenter) &&
+                app.input_node() is Some(node) {
+                presenter.reveal_input(node.reference)
               }
             _ => ()
           }
           let event = match event {
-            Enter if app.composition is None => {
-              let node = app.input_node()
-              if node.focused &&
+            Enter if app.composition is None =>
+              if app.input_node() is Some(node) &&
+                node.focused &&
                 app.input_layouts.single_line(node.reference) == Some(false) {
                 Commit("\n")
               } else {
                 Input(Activate)
               }
-            }
             _ => event
           }
           match event {
+            Commit(_) | CompositionUpdate(_, _, _) if app.retired_composition =>
+              ()
             Commit(_)
             | Backspace
             | Delete
             | CompositionStart
-            | CompositionUpdate(_, _, _) if !app.input_node().enabled => ()
+            | CompositionUpdate(_, _, _) if !app
+              .input_node()
+              .map(node => node.enabled)
+              .unwrap_or(false) => ()
             ToggleFocus(_)
             | Navigate(_, _)
             | NavigateVertical(_, _)
@@ -649,8 +717,7 @@ async fn run_loop(
             NavigateVertical(down, extend_selection) =>
               app.navigate_vertical(down, extend_selection)
             Navigate(forward, extend_selection) => {
-              let node = app.input_node()
-              if node.focused {
+              if app.input_node() is Some(node) && node.focused {
                 ignore(
                   @semantics.navigate(
                     app.host.editor,
@@ -673,27 +740,27 @@ async fn run_loop(
               }
               app.draw()
             }
-            SelectBoundary(kind, extend_selection) => {
-              let node = app.input_node()
-              ignore(@semantics.focus(app.host.editor, node.reference))
-              let end = if kind == 1 { 0 } else { node.value.length() }
-              let anchor = if kind == 0 {
-                0
-              } else if extend_selection {
-                node.selection_anchor
-              } else {
-                end
+            SelectBoundary(kind, extend_selection) =>
+              if app.input_node() is Some(node) {
+                ignore(@semantics.focus(app.host.editor, node.reference))
+                let end = if kind == 1 { 0 } else { node.value.length() }
+                let anchor = if kind == 0 {
+                  0
+                } else if extend_selection {
+                  node.selection_anchor
+                } else {
+                  end
+                }
+                ignore(
+                  @semantics.set_selection_directed(
+                    app.host.editor,
+                    node.reference,
+                    anchor,
+                    end,
+                  ),
+                )
+                app.draw()
               }
-              ignore(
-                @semantics.set_selection_directed(
-                  app.host.editor,
-                  node.reference,
-                  anchor,
-                  end,
-                ),
-              )
-              app.draw()
-            }
             ApplicationTask(_, CommittedInput) if app.composition is Some(_) =>
               ()
             ApplicationTask(request, _) => {
@@ -709,7 +776,9 @@ async fn run_loop(
                 @task.Unchanged => ()
               }
             Close if app.composition is Some(_) || app.ime_pointer.pending() => {
-              (app.host.input_error)(Some("Finish or cancel text composition before closing."))
+              (app.host.input_error)(
+                Some("Finish or cancel text composition before closing."),
+              )
               app.draw()
             }
             Close if !(app.host.can_close)() => {
@@ -730,10 +799,12 @@ async fn run_loop(
               }
             Redraw => app.draw()
             CompositionStart =>
-              if app.composition is None {
+              if app.composition is None && app.input_node() is Some(node) {
+                app.retired_composition = false
+                app.composition_target = Some(node.reference)
                 app.composition = @semantics.begin_composition(
                   app.host.editor,
-                  target=app.input_node().reference,
+                  target=node.reference,
                 )
                 app.preedit = ""
                 app.preedit_cursor = 0
@@ -741,10 +812,11 @@ async fn run_loop(
                 app.draw()
               }
             CompositionUpdate(value, cursor, attributes) => {
-              if app.composition is None {
+              if app.composition is None && app.input_node() is Some(node) {
+                app.composition_target = Some(node.reference)
                 app.composition = @semantics.begin_composition(
                   app.host.editor,
-                  target=app.input_node().reference,
+                  target=node.reference,
                 )
               }
               if value != "" && app.composition is Some(composition) {
@@ -767,6 +839,7 @@ async fn run_loop(
                 composition.cancel()
               }
               app.composition = None
+              app.composition_target = None
               app.preedit = ""
               app.preedit_attributes = b""
               app.draw()
@@ -776,6 +849,8 @@ async fn run_loop(
                 composition.cancel()
               }
               app.composition = None
+              app.composition_target = None
+              app.retired_composition = false
               app.preedit = ""
               app.preedit_attributes = b""
               let pointer = app.ime_pointer.finish()
@@ -787,44 +862,52 @@ async fn run_loop(
             Commit(value) if app.composition is Some(composition) => {
               ignore(composition.commit(value))
               app.composition = None
+              app.composition_target = None
               app.preedit = ""
               app.preedit_attributes = b""
               app.draw()
             }
             // Space also arrives as text after scene activation; it must not
             // transfer focus to the editor a second time.
-            Commit(" ") if !app.input_node().focused => ()
-            Commit(value) => {
-              let reference = app.input_node().reference
-              ignore(@semantics.focus(app.host.editor, reference))
-              require(
-                @semantics.replace_selection(app.host.editor, reference, value) ==
-                "",
-                "committed text rejected",
-              )
-              app.draw()
-            }
+            Commit(" ") if !app
+              .input_node()
+              .map(node => node.focused)
+              .unwrap_or(false) => ()
+            Commit(value) =>
+              if app.input_node() is Some(node) {
+                let reference = node.reference
+                ignore(@semantics.focus(app.host.editor, reference))
+                require(
+                  @semantics.replace_selection(
+                    app.host.editor,
+                    reference,
+                    value,
+                  ) ==
+                  "",
+                  "committed text rejected",
+                )
+                app.draw()
+              }
             Backspace | Delete if app.composition is Some(_) ||
-              !app.input_node().focused => ()
-            Backspace => {
-              let reference = app.input_node().reference
-              require(
-                @semantics.delete_backward(app.host.editor, reference) == "",
-                "backspace rejected",
-              )
-              app.draw()
-            }
-            Delete => {
-              require(
-                @semantics.delete_forward(
-                  app.host.editor,
-                  app.input_node().reference,
-                ) ==
-                "",
-                "forward deletion rejected",
-              )
-              app.draw()
-            }
+              !app.input_node().map(node => node.focused).unwrap_or(false) => ()
+            Backspace =>
+              if app.input_node() is Some(node) {
+                let reference = node.reference
+                require(
+                  @semantics.delete_backward(app.host.editor, reference) == "",
+                  "backspace rejected",
+                )
+                app.draw()
+              }
+            Delete =>
+              if app.input_node() is Some(node) {
+                require(
+                  @semantics.delete_forward(app.host.editor, node.reference) ==
+                  "",
+                  "forward deletion rejected",
+                )
+                app.draw()
+              }
             TextPointer(x, y, extend_selection) if app.ime_pointer.pending() ||
               app.composition is Some(_) =>
               app.ime_pointer.request(x, y, extend_selection, () => {
@@ -850,14 +933,21 @@ async fn run_loop(
             Clipboard(action) => app.edit_clipboard(action)
             Input(_) if app.composition is Some(_) => ()
             Input(Activate) => app.activate_focused()
-            Input(Move(x, y)) if !app.input_node().focused =>
+            Input(Move(x, y)) if !app
+              .input_node()
+              .map(node => node.focused)
+              .unwrap_or(false) =>
               if (app.host.navigate_unhandled)(x, y) {
                 app.draw()
               }
             Input(_) => ()
           }
           app.hooks.processed(event, app)
-          if !app.closed && app.composition is None && !app.ime_pointer.pending() && (app.host.close_ready)() && (app.host.can_close)() {
+          if !app.closed &&
+            app.composition is None &&
+            !app.ime_pointer.pending() &&
+            (app.host.close_ready)() &&
+            (app.host.can_close)() {
             app.queue(Close)
           }
           if initializing && app.hooks.has_lifecycle() {

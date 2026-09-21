@@ -15,7 +15,7 @@ pub(all) struct Control {
 pub(all) struct Application {
   title : String
   editor : @semantics.Tree
-  default_input : @semantics.NodeRef
+  default_input : @semantics.NodeRef?
   initial_size : (Int, Int)
   initialize : () -> @task.Request?
   view : () -> Array[Control]

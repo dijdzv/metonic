@@ -5,6 +5,7 @@ pub(all) enum Injected {
   CompositionUpdate(String, Int?)
   CompositionAttributes(String, Int?, Bytes)
   CompositionCancel
+  CompositionEnd
   NavigateVertical(Bool, Bool)
   AccessibilityValue(Int, String)
   AccessibilitySelection(UInt64, UInt64, UInt64, UInt64)
@@ -93,7 +94,7 @@ fn App::observation(self : App) -> Observation {
         return None
       }
       let caret = if self.composition is Some(_) &&
-        self.input_node().reference == reference {
+        self.input_node().map(node => node.reference) == Some(reference) {
         node.selection_start +
         @ime_presentation.display_cursor(
           self.preedit,
@@ -141,6 +142,7 @@ fn App::observation(self : App) -> Observation {
           CompositionAttributes(text, cursor, attributes) =>
             CompositionUpdate(text, cursor, attributes)
           CompositionCancel => CompositionCancel
+          CompositionEnd => CompositionEnd
           NavigateVertical(down, extend_selection) =>
             NavigateVertical(down, extend_selection)
           AccessibilityValue(target, text) =>

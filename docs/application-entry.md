@@ -427,7 +427,8 @@ The browser application host accepts input up to 1024 UTF-16 code units. The
 semantic editor and native clipboard policy do not impose that same content cap;
 applications must enforce their own document limits and report rejection without
 discarding unsaved text. The existing raster layer size limits also apply.
-Native still requires a live default input. The browser configuration
+The native default input is optional, allowing empty and button-only views.
+The browser configuration
 does not dynamically create DOM controls or provide a general layout system.
 Application-visible unexpected task failure reporting remains under development.
 The portable task entry alone does not establish durable saving or recovery;

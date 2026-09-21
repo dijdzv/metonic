@@ -19,6 +19,7 @@ pub(all) enum ControlAction {
 
 ///|
 pub struct Snapshot {
+  default_input : @semantics.NodeRef?
   controls : Array[@semantics.Node]
   ime_events : Array[Json]
   raw_ime_events : Array[Json]
@@ -211,8 +212,9 @@ fn App::handle(self : App) -> Handle {
 
 ///|
 fn App::snapshot(self : App) -> Snapshot {
-  let node = @semantics.node(self.host.editor, self.host.default_input).unwrap()
+  let node = self.default_node()
   {
+    default_input: node.map(node => node.reference),
     controls: @semantics.snapshot(self.host.editor),
     input: self.diagnostics.input,
     ime_events: self.diagnostics.ime_events.map(value => value),
@@ -222,11 +224,11 @@ fn App::snapshot(self : App) -> Snapshot {
     width: (self.host.view)().accessibility.width,
     height: (self.host.view)().accessibility.height,
     semantic_revision: @semantics.revision(self.host.editor),
-    text: node.value,
-    selection_start: node.selection_start,
-    selection_end: node.selection_end,
-    selection_anchor: node.selection_anchor,
-    caret: @semantics.caret(node),
+    text: node.map(node => node.value).unwrap_or(""),
+    selection_start: node.map(node => node.selection_start).unwrap_or(0),
+    selection_end: node.map(node => node.selection_end).unwrap_or(0),
+    selection_anchor: node.map(node => node.selection_anchor).unwrap_or(0),
+    caret: node.map(node => @semantics.caret(node)).unwrap_or(0),
     frames: self.diagnostics.frames,
     composing: self.composition is Some(_),
     preedit: self.preedit,
