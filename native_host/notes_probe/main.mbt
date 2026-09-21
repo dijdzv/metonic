@@ -71,6 +71,7 @@ async fn main {
         verify_disabled_pointer(model, handle, activations)
         verify_drag_selection(model, handle, activations)
         verify_clipboard(model, handle, clipboard)
+        verify_wheel_scroll(model, handle)
         let current = (handle.inspect)()
         assert_eq(current.controls.length(), 2)
         assert_eq(

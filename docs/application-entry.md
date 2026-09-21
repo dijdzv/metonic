@@ -119,6 +119,13 @@ its ownership. An active IME composition keeps the existing completion-before-
 pointer contract: selection never extends through live preedit, and completion
 after button release may apply the deferred click but cannot restart dragging.
 
+The vertical mouse wheel scrolls an enabled multiline input under the pointer
+without moving its selection or changing its text. Line-based wheel events move
+three 32-pixel lines per unit; pixel-based events use their reported distance.
+The viewport is clamped to the document. Ordinary redraws preserve a manually
+scrolled viewport; editing, selection navigation or a new pointer selection
+reveals the caret again. Single-line inputs do not consume vertical scrolling.
+
 `native:notes-test` covers selection, replacement, cancellation and scrolling
 with synthetic messages in an owned hidden window. These checks do not establish
 physical mouse or IME behavior.

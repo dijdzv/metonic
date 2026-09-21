@@ -49,6 +49,8 @@ priv enum Event {
   ToggleFocus(Bool)
   TextPointer(Int, Int, Bool)
   PointerMove(Int, Int)
+  PointerLeave
+  Wheel(Int)
   PointerRelease(Int, Int)
   PointerCancel
   Clipboard(@text_clipboard.Action)
@@ -66,6 +68,7 @@ struct App {
   mut composition : @semantics.Composition?
   ime_pointer : @ime_focus.Transfer
   mut pointer_pressed : Bool
+  mut pointer_position : (Int, Int)?
   mut drag : PointerDrag?
   mut preedit : String
   mut preedit_cursor : Int
@@ -187,6 +190,16 @@ pub impl @windows.ApplicationHandler for App with fn window_event(
     @core.WindowEvent::Destroyed => self.queue(PointerCancel)
     @core.WindowEvent::PointerMoved(_, position, _, @core.PointerSource::Mouse) =>
       self.queue(PointerMove(position.x().to_int(), position.y().to_int()))
+    @core.WindowEvent::PointerLeft(_, _, _, _) => self.queue(PointerLeave)
+    @core.WindowEvent::MouseWheel(_, delta, _) => {
+      let pixels = match delta {
+        @core.MouseScrollDelta::LineDelta(_, y) => -y * 96.0
+        @core.MouseScrollDelta::PixelDelta(position) => -position.y()
+      }
+      if pixels == pixels {
+        self.queue(Wheel(pixels.max(-1048576.0).min(1048576.0).to_int()))
+      }
+    }
     @core.WindowEvent::PointerButton(
       _,
       @core.ElementState::Released,
@@ -444,6 +457,7 @@ async fn run_loop(
     composition: None,
     ime_pointer: @ime_focus.Transfer::new(),
     pointer_pressed: false,
+    pointer_position: None,
     drag: None,
     preedit: "",
     preedit_cursor: 0,
@@ -573,6 +587,20 @@ async fn run_loop(
             | Backspace
             | Delete
             | CompositionStart => app.input_navigation.reset()
+            _ => ()
+          }
+          match event {
+            Navigate(_, _)
+            | NavigateVertical(_, _)
+            | SelectBoundary(_, _)
+            | TextPointer(_, _, _)
+            | Commit(_)
+            | Backspace
+            | Delete
+            | CompositionStart =>
+              if app.presenter is Some(presenter) {
+                presenter.reveal_input(app.input_node().reference)
+              }
             _ => ()
           }
           let event = match event {
@@ -799,7 +827,12 @@ async fn run_loop(
               })
             TextPointer(x, y, extend_selection) =>
               app.apply_pointer(x, y, extend_selection)
-            PointerMove(x, y) => app.move_drag(x, y)
+            PointerMove(x, y) => {
+              app.pointer_position = Some((x, y))
+              app.move_drag(x, y)
+            }
+            PointerLeave => app.pointer_position = None
+            Wheel(delta) => app.scroll_pointer(delta)
             PointerRelease(x, y) => {
               app.move_drag(x, y)
               app.pointer_pressed = false
