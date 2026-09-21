@@ -1,0 +1,84 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/json",
+}
+
+///|
+fn field(value : Json, key : String) -> Json {
+  guard value is Json::Object(fields) else { abort("expected object") }
+  fields.get(key).unwrap()
+}
+
+///|
+async fn main {
+  @async.with_timeout(30000, () => {
+    @async.with_task_group() <| group => {
+      let (input, writer) = @process.write_to_process()
+      defer writer.close()
+      let (reader, output) = @process.read_from_process()
+      defer reader.close()
+      let child = @process.spawn(
+        group,
+        "native_host/.metonic-build/native/debug/build/local/native_host/notes_dev/notes_dev.exe",
+        [],
+        stdin=input,
+        stdout=output,
+        no_console_window=true,
+        cancel_handler=@process.hard_cancel(),
+      )
+      writer.write("{\"id\":1,\"op\":\"snapshot\"}\n")
+      let ready = @json.parse(reader.read_until("\n").unwrap())
+      assert_eq(field(ready, "error"), Json::string(""))
+      assert_eq(field(ready, "application_protocol"), Json::number(1))
+      guard field(ready, "controls") is Json::Array(controls) else {
+        abort("controls missing")
+      }
+      assert_eq(controls.length(), 2)
+      let target = field(controls[0], "target")
+      guard field(controls[0], "value") is Json::String(original) else {
+        abort("text missing")
+      }
+      let select : Json = {
+        "id": 2,
+        "op": "select",
+        "target": target,
+        "expected_semantic_revision": field(ready, "semantic_revision"),
+        "selection_start": 0,
+        "selection_end": original.length(),
+      }
+      writer.write(select.stringify() + "\n")
+      let selected = @json.parse(reader.read_until("\n").unwrap())
+      assert_eq(field(selected, "error"), Json::string(""))
+      let insert : Json = {
+        "id": 3,
+        "op": "insert",
+        "target": target,
+        "expected_semantic_revision": field(selected, "semantic_revision"),
+        "text": "接続から編集",
+      }
+      writer.write(insert.stringify() + "\n")
+      let edited = @json.parse(reader.read_until("\n").unwrap())
+      assert_eq(field(edited, "error"), Json::string(""))
+      guard field(edited, "controls") is Json::Array(edited_controls) else {
+        abort("controls missing")
+      }
+      assert_eq(
+        field(edited_controls[0], "value"),
+        Json::string("接続から編集"),
+      )
+      writer.write("{\"id\":4,\"op\":\"capture\"}\n")
+      let captured = @json.parse(reader.read_until("\n").unwrap())
+      assert_eq(field(captured, "error"), Json::string(""))
+      assert_eq(
+        field(field(captured, "image"), "mimeType"),
+        Json::string("image/png"),
+      )
+      writer.close()
+      assert_eq(child.wait(), 0)
+      println(
+        "APPLICATION_CONTROL_STDIO_OK inspect targeted_edit capture eof_shutdown",
+      )
+    }
+  })
+}

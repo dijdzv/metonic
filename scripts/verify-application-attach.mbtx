@@ -1,0 +1,55 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+}
+
+///|
+async fn main {
+  @async.with_timeout(45000, () => {
+    @async.with_task_group() <| group => {
+      let temporary = @fs.tmpdir(prefix="application-attach-")
+      defer @fs.rmdir(temporary, recursive=true)
+      let log_path = temporary + "/app.log"
+      let log = @process.redirect_to_file(log_path)
+      defer log.close()
+      let name = "metonic_application_" + @async.now().to_string()
+      let child = @process.spawn(
+        group,
+        "native_host/.metonic-build/native/debug/build/local/native_host/notes_dev/notes_dev.exe",
+        [],
+        extra_env=Map([("METONIC_DEV_PIPE", name)]),
+        stdout=log,
+        stderr=log,
+        no_console_window=true,
+        cancel_handler=@process.hard_cancel(),
+      )
+      defer child.cancel()
+      let mut discovery = ""
+      while discovery == "" {
+        assert_true(child.try_wait() is None)
+        for line in @fs.read_file(log_path).text().split("\n") {
+          if line.strip_prefix("METONIC_DEV_SESSION ") is Some(path) {
+            discovery = path.trim().to_owned()
+          }
+        }
+        if discovery == "" {
+          @async.sleep(20)
+        }
+      }
+      assert_eq(
+        @process.run(
+          "node",
+          ["scripts/verify-application-mcp.mjs", discovery],
+          no_console_window=true,
+        ),
+        0,
+      )
+      assert_true(
+        child.try_wait() is None,
+        msg="MCP disconnect must leave the app running",
+      )
+      println("APPLICATION_ATTACH_OK application_survives_client_disconnect")
+    }
+  })
+}

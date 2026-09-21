@@ -1,0 +1,12 @@
+import {
+  "local/native_host/window_host" @host,
+  "local/native_host/development_transport" @transport,
+  "local/p0/core/semantics",
+  "moonbitlang/async/io",
+  "moonbitlang/core/json",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/encoding/base64",
+  "mizchi/image",
+}
+
+supported_targets = "native"

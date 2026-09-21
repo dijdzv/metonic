@@ -6,10 +6,11 @@ import {
 ///|
 async fn main {
   let pending = [
-    "local/native_host/window_host", "local/native_host/notes_app", "local/native_host/notes_probe",
-    "local/browser_host/input_binding", "local/browser_host/gpu_renderer", "local/browser_host/http_transport",
-    "local/browser_host/clock_driver", "local/browser_host/font_loader", "local/browser_host/dom_view",
-    "local/browser_host/notes", "local/browser_host/application_host",
+    "local/native_host/development_transport", "local/native_host/application_control",
+    "local/native_host/notes_dev", "local/native_host/window_host", "local/native_host/notes_app",
+    "local/native_host/notes_probe", "local/browser_host/input_binding", "local/browser_host/gpu_renderer",
+    "local/browser_host/http_transport", "local/browser_host/clock_driver", "local/browser_host/font_loader",
+    "local/browser_host/dom_view", "local/browser_host/notes", "local/browser_host/application_host",
   ]
   let seen : Map[String, Bool] = Map([])
   let roots = [

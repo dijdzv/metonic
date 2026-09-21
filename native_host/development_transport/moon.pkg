@@ -1,0 +1,13 @@
+import {
+  "local/p0/tools/cli_lines" @lines,
+  "moonbitlang/async",
+  "moonbitlang/async/aqueue",
+  "moonbitlang/async/cond_var",
+  "moonbitlang/async/stdio",
+  "moonbitlang/async/io",
+  "moonbitlang/async/named_pipe" @pipe,
+  "moonbitlang/async/fs",
+  "moonbitlang/core/env",
+}
+
+supported_targets = "native"

@@ -277,6 +277,18 @@ env = { METONIC_NATIVE_BUILD = "window" }
 run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/build-native.mbtx'
 env = { METONIC_NATIVE_BUILD = "notes-release" }
 
+[tasks."native:application-dev-build"]
+run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/build-native.mbtx'
+env = { METONIC_NATIVE_BUILD = "application", METONIC_NATIVE_WORKSPACE = "native_host", METONIC_NATIVE_PACKAGE = "notes_dev", METONIC_NATIVE_ARTIFACT = "local/native_host/notes_dev" }
+
+[tasks."native:application-control-test"]
+depends = ["native:application-dev-build", "devtools:wire-build"]
+run = [
+  '.\\.tools\\moonbit\\bin\\moon.exe build tools/native_cli --target wasm --release --frozen --deny-warn',
+  '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-application-control.mbtx',
+  '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-application-attach.mbtx',
+]
+
 [tasks."native:notes-probe-build"]
 run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/build-native.mbtx'
 env = { METONIC_NATIVE_BUILD = "notes-probe" }

@@ -173,6 +173,50 @@ that checkout's scripts rather than relying on an arbitrary sibling checkout or
 editing downloaded sources. The source build entry is experimental; it is not a
 published, version-stable package installer.
 
+## Native development control
+
+A separate debug entry can pass
+`controller=Some(application_control.control)` to `window_host.run`. Import
+`local/native_host/application_control` in that entry only. The ordinary release
+entry must omit the controller and its import; the release host API does not
+expose it. This interface is experimental and Windows-only. It does not establish
+browser development control.
+
+Set `METONIC_DEV_PIPE` to a unique local name before starting the debug app. Its
+stderr announces `METONIC_DEV_SESSION <path>`. Keep that discovery path for the
+instance. After building `tools/native_cli` for Wasm release, run the pinned
+`moonrun` with its artifact and `--session <path>`. Send JSON lines such as
+`{"op":"snapshot"}`; mutation arguments belong in `args`.
+
+Alternatively, after `mise run devtools:wire-build`, an MCP client can run
+`node tools/devtools/application-mcp.mjs --session <path>` from the framework
+directory. This connects to an already-running app; it does not start one. It
+checks the application protocol before exposing operations. The P0 window MCP
+entry remains separate.
+
+Snapshots contain a semantic revision and controls with target identity, role,
+name, value, enabled/focused state and selection. Use the returned target and
+`expected_semantic_revision` for `insert`, `select`, `backspace` and `activate`.
+Targets include session, window, ID and generation; do not infer them from list
+positions. `insert` replaces the selected text. Selection offsets are UTF-16
+positions. Re-read state after a successful mutation or `stale_revision` error.
+Host dispatch rejects disabled/stale targets, unsupported roles and operations
+during active composition. Button activation uses the application's callback and
+normal task queue; success does not mean its asynchronous work has completed.
+
+`capture` returns a PNG from the shared offscreen pass and its corresponding
+state. It does not certify physical presentation or IME behavior. The connection
+has bounded input lines and request admission. Disconnecting a pipe client leaves
+the app running; reconnecting obtains the current state. Cancellation cannot undo
+an operation already dispatched. Without `METONIC_DEV_PIPE`, the entry serves
+stdin/stdout and requests normal app closure at EOF; the application's unsaved
+changes policy still applies.
+
+`mise run native:application-control-test` checks the generic Notes fixture's
+stdio edit/capture/EOF shutdown and MCP edit/capture/reconnect. The attachment
+test terminates its owned app afterward; it is not a normal pipe-mode shutdown
+test. External consumer acceptance and browser support require separate checks.
+
 ## Distribution
 
 Package an explicit inventory of runtime files rather than copying the build

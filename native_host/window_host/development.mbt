@@ -1,5 +1,6 @@
 ///|
 priv enum DevelopmentRequest {
+  Operate(@semantics.NodeRef, ControlAction, Int, Ref[String?])
   Barrier(Ref[Bool])
   Capture(Ref[Result[Captured, Error]?], (Snapshot) -> Unit)
   CaptureRetained(Int64, Ref[Result[@gpu.RetainedCapture, Error]?])
@@ -14,6 +15,8 @@ async fn App::dispatch_development(
   request : DevelopmentRequest,
 ) -> Unit {
   match request {
+    Operate(target, action, revision, result) =>
+      result.val = Some(app.operate_control(target, action, revision))
     DisplayStatus(id, result) =>
       result.val = Some(app.renderer.unwrap().poll_display_status(id))
     Barrier(applied) => applied.val = true
@@ -82,4 +85,50 @@ async fn App::dispatch_development(
         result.val = Some(error)
       }
   }
+}
+
+///|
+fn App::operate_control(
+  app : App,
+  target : @semantics.NodeRef,
+  action : ControlAction,
+  revision : Int,
+) -> String raise {
+  if app.composition is Some(_) || app.ime_pointer.pending() {
+    return "composition_active"
+  }
+  if revision != @semantics.revision(app.host.editor) {
+    return "stale_revision"
+  }
+  let node = match @semantics.node(app.host.editor, target) {
+    Ok(node) => node
+    Err(error) => return error
+  }
+  if !node.enabled {
+    return "disabled"
+  }
+  let error = match action {
+    ActivateControl => {
+      if node.role != @semantics.Button {
+        return "unsupported_action"
+      }
+      ignore(@semantics.focus(app.host.editor, target))
+      if (app.host.activate)(target) is Some(action) {
+        app.queue(ApplicationTask(action.request, action.gate))
+      }
+      ""
+    }
+    InsertText(text) =>
+      @semantics.replace_selection(app.host.editor, target, text)
+    DeleteBackward => @semantics.delete_backward(app.host.editor, target)
+    SelectRange(start, end) =>
+      @semantics.set_selection(app.host.editor, target, start, end)
+  }
+  if error == "" {
+    if !(action is ActivateControl) {
+      ignore(@semantics.focus(app.host.editor, target))
+    }
+    app.draw()
+  }
+  error
 }

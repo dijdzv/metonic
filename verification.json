@@ -9,7 +9,7 @@
     "verify", "verify-native", "browser:verify", "browser:server-test",
     "browser:supervisor-test", "browser:headless", "browser:async", "devtools:test",
     "native:headless-integration", "native:window",
-    "native:window-integration", "native:notes-test", "native:pipe-verify",
+    "native:window-integration", "native:notes-test", "native:application-control-test", "native:pipe-verify",
     "native:host-verify", "native:async",
     "native:surface", "native:binding", "rpc:verify", "native:production-integration",
     "demo:test",

@@ -18,6 +18,9 @@ fn integer(value : Json, low : Double, high : Double) -> Bool {
 ///|
 fn native_response(value : Json, window : Bool) -> Bool {
   if window {
+    if field(value, "application_protocol") != Json::null() {
+      return application_response(value)
+    }
     return field(value, "text") is Json::String(_) &&
       integer(field(value, "semantic_revision"), 0, 9007199254740991) &&
       integer(field(value, "frames"), 0, 9007199254740991) &&
@@ -37,6 +40,36 @@ fn native_response(value : Json, window : Bool) -> Bool {
   integer(state[6], 1, 2048) &&
   integer(state[7], 1, 2048) &&
   integer(field(value, "frame"), 0, 9007199254740991)
+}
+
+///|
+fn application_response(value : Json) -> Bool {
+  guard field(value, "application_protocol") == Json::number(1) &&
+    integer(field(value, "semantic_revision"), 0, 2147483647) &&
+    integer(field(value, "frames"), 0, 2147483647) &&
+    integer(field(value, "width"), 1, 2147483647) &&
+    integer(field(value, "height"), 1, 2147483647) &&
+    field(value, "composing") is (Json::True | Json::False) &&
+    field(value, "closed") is (Json::True | Json::False) &&
+    field(value, "controls") is Json::Array(controls) else {
+    return false
+  }
+  controls.all(control => {
+    let target = field(control, "target")
+    ["session", "window", "id", "generation"].all(name => {
+      integer(field(target, name), 0, 2147483647)
+    }) &&
+    (
+      field(control, "role") == Json::string("button") ||
+      field(control, "role") == Json::string("text_input")
+    ) &&
+    field(control, "name") is Json::String(_) &&
+    field(control, "value") is Json::String(_) &&
+    field(control, "enabled") is (Json::True | Json::False) &&
+    field(control, "focused") is (Json::True | Json::False) &&
+    integer(field(control, "selection_start"), 0, 2147483647) &&
+    integer(field(control, "selection_end"), 0, 2147483647)
+  })
 }
 
 ///|
