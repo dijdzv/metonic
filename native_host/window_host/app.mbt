@@ -708,7 +708,12 @@ async fn run_loop(
                 @task.Rejected => app.diagnostics.rejected()
                 @task.Unchanged => ()
               }
+            Close if app.composition is Some(_) || app.ime_pointer.pending() => {
+              (app.host.input_error)(Some("Finish or cancel text composition before closing."))
+              app.draw()
+            }
             Close if !(app.host.can_close)() => {
+              (app.host.input_error)(None)
               (app.host.close_requested)()
               app.draw()
             }
@@ -852,7 +857,7 @@ async fn run_loop(
             Input(_) => ()
           }
           app.hooks.processed(event, app)
-          if !app.closed && (app.host.close_ready)() && (app.host.can_close)() {
+          if !app.closed && app.composition is None && !app.ime_pointer.pending() && (app.host.close_ready)() && (app.host.can_close)() {
             app.queue(Close)
           }
           if initializing && app.hooks.has_lifecycle() {

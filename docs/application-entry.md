@@ -69,6 +69,9 @@ this cleanup asynchronously; navigation or process termination cannot guarantee
 that it finishes. Storage must not rely on page-exit cleanup to save edits.
 
 `can_close` is a side-effect-free query of the application's close policy.
+While IME composition is active, interactive close keeps the editor available
+and reports that composition must be finished or canceled before retrying close.
+It does not freeze inputs under a live preedit or silently discard that preedit.
 Native close requests and the browser Stop action consult it before stopping.
 When it returns false, the host calls `close_requested` and redraws the app so
 the application can present save/discard/cancel actions. Repeated requests must

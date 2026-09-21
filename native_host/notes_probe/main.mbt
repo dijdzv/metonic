@@ -81,6 +81,21 @@ async fn main {
           @async.sleep(1)
         }
         let window = notes_window()
+        assert_true(pointer_post(window, 0x10DU, 0UL, 0L) != 0)
+        @async.with_timeout(2000, () => {
+          while !(handle.inspect)().composing { @async.sleep(5) }
+        })
+        assert_true(pointer_post(window, 0x10U, 0UL, 0L) != 0)
+        @async.with_timeout(2000, () => {
+          while clipboard.error is None { @async.sleep(5) }
+        })
+        assert_eq(clipboard.error, Some("Finish or cancel text composition before closing."))
+        assert_eq(close_requests.val, 0)
+        assert_true((handle.inspect)().composing)
+        assert_true(pointer_post(window, 0x10EU, 0UL, 0L) != 0)
+        @async.with_timeout(2000, () => {
+          while (handle.inspect)().composing { @async.sleep(5) }
+        })
         assert_true(pointer_post(window, 0x10U, 0UL, 0L) != 0)
         @async.with_timeout(2000, () => {
           while close_requests.val != 1 { @async.sleep(5) }
