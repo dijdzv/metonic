@@ -387,6 +387,11 @@ fn App::finish(self : App) -> Unit raise Error {
   match self.error {
     Some(error) => {
       (self.report)("WINDOW_PROBE_FAILED")
+      match error {
+        WindowFailure::Failure(message) =>
+          (self.report)("WINDOW_ERROR " + message)
+        _ => ()
+      }
       raise error
     }
     None => ()
@@ -399,6 +404,7 @@ async fn run_loop(
   hooks : Hooks,
   hidden : Bool,
   minimum_size : (Int, Int)?,
+  font_path : String?,
   report : (String) -> Unit,
 ) -> Unit {
   let event_loop = @windows.EventLoop::new()
@@ -445,11 +451,19 @@ async fn run_loop(
     }
     app.pump(driver)
     app.message_hwnd = driver.message_window_handle()
-    let font = @fs.read_file(
-      @env.get_env_var("METONIC_FONT_PATH").unwrap_or(
-        ".work/text-assets/NotoSansJP.ttf",
-      ),
-    ).binary()
+    let path = match (font_path, @env.get_env_var("METONIC_FONT_PATH")) {
+      (Some(path), _) | (_, Some(path)) => path
+      _ => @resources.asset_path("assets/NotoSansJP.ttf")
+    }
+    let font = @fs.read_file(path).binary() catch {
+      error if @async.is_cancellation_error(error) => raise error
+      _ =>
+        raise WindowFailure::Failure(
+          "Unable to read font: " +
+          path +
+          ". Include assets/NotoSansJP.ttf beside the executable or specify font_path.",
+        )
+    }
     app.presenter = @view_presentation.create(
       host.editor,
       app.input_layouts,

@@ -219,6 +219,7 @@ pub async fn run(
   controller? : (async (Handle) -> Unit)? = None,
   hidden? : Bool = false,
   minimum_size? : (Int, Int)? = None,
+  font_path? : String? = None,
   report? : (String) -> Unit = println,
 ) -> Unit {
   run_loop(
@@ -226,6 +227,7 @@ pub async fn run(
     { display_feedback, observer, completed, lifecycle, controller, },
     hidden,
     minimum_size,
+    font_path,
     report,
   )
 }

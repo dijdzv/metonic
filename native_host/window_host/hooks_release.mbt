@@ -40,9 +40,10 @@ pub async fn run(
   application : @host_application.Application,
   hidden? : Bool = false,
   minimum_size? : (Int, Int)? = None,
+  font_path? : String? = None,
   report? : (String) -> Unit = println,
 ) -> Unit {
-  run_loop(application, Hooks::{ }, hidden, minimum_size, report)
+  run_loop(application, Hooks::{ }, hidden, minimum_size, font_path, report)
 }
 
 ///|
