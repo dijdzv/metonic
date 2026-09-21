@@ -1,5 +1,9 @@
 import {
   "moonbitlang/async",
+  "moonbitlang/core/env",
+  "wzzc-dev/window/windows",
+  "wzzc-dev/window/core" @window_core,
+  "wzzc-dev/window/dpi",
   "local/p0/examples/notes/application" @notes,
   "local/native_host/notes_application",
   "local/native_host/window_host",

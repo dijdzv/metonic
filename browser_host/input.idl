@@ -25,6 +25,8 @@ interface Element : Node {
   attribute DOMString id;
   attribute double scrollLeft;
   attribute double scrollTop;
+  readonly attribute long scrollHeight;
+  readonly attribute long clientHeight;
 };
 interface HTMLElement : Element { undefined focus(); };
 partial interface HTMLElement {

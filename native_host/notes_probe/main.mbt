@@ -1,5 +1,9 @@
 ///|
 async fn main {
+  if @env.args().contains("--minimum") {
+    verify_minimum_size()
+    return
+  }
   let model = @notes.create()
   let base = @notes_application.create(model)
   let started = Ref(false)
@@ -44,6 +48,7 @@ async fn main {
   @window_host.run(
     app,
     hidden=true,
+    minimum_size=Some((320, 240)),
     controller=Some(handle => {
       @async.with_timeout(15000, async fn() {
         assert_eq((app.view)().rectangle, None)

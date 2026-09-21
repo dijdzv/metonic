@@ -218,12 +218,14 @@ pub async fn run(
   lifecycle? : ((Lifecycle, Observation) -> Bool raise Error)? = None,
   controller? : (async (Handle) -> Unit)? = None,
   hidden? : Bool = false,
+  minimum_size? : (Int, Int)? = None,
   report? : (String) -> Unit = println,
 ) -> Unit {
   run_loop(
     application,
     { display_feedback, observer, completed, lifecycle, controller, },
     hidden,
+    minimum_size,
     report,
   )
 }

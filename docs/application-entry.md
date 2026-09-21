@@ -11,6 +11,14 @@ devices, raster engines or platform input listeners.
 Windows uses `native_host/application.from_application` to adapt it to the
 existing window host. It is not a stable public package release.
 
+Windows `window_host.run` accepts `minimum_size=Some((width, height))` in
+physical client-area pixels. Both dimensions must be positive; omission leaves
+the window unconstrained. The host passes this constraint to the window library,
+which accounts for the current non-client frame and DPI when Windows queries its
+minimum tracking size. Requested client sizes are also clamped to the minimum.
+Browser applications set their minimum canvas dimensions and overflow policy in
+their page layout; the host cannot constrain the browser window.
+
 Initialization and activation return an optional `core/application_task.Request`.
 The host owns execution and cleanup; the application supplies the typed work and
 the completion that updates its model. Returning `None` permits synchronous
@@ -56,6 +64,12 @@ The HTML supplies accessible, initially disabled input and button elements.
 Bindings and input kinds are fixed at startup. Changing text, geometry and button
 availability is supported; adding or replacing input nodes requires a new host
 instance. Give each running surface its own elements and refresh event name.
+
+On resize, multiline fields preserve their scroll position. A field scrolled to
+the bottom remains at the bottom after its viewport changes; a fully visible,
+focused field with its collapsed caret at the end follows that end when it
+becomes scrollable. A reader positioned earlier in the text is not moved to the
+bottom. The host applies the resulting DOM scroll offset before rasterizing.
 
 Each render synchronizes a bound button's DOM text and disabled state from its
 semantic node. Use `semantics.set_name` when a reusable control represents a new

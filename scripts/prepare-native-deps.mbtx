@@ -515,6 +515,50 @@ async fn prepare(args : Array[String]) -> Unit raise Error {
     args.push("patches/window-ime-attributes.patch")
     ignore(run_checked("git", args, repo_root))
   }
+  let minimum_files = [
+    "/modules/window/windows/app_state.mbt", "/modules/window/windows/event.mbt",
+    "/modules/window/windows/window.mbt", "/modules/window/windows/minimum_size.mbt",
+    "/modules/window/windows/minimum_size_wbtest.mbt", "/modules/window/windows/event_wbtest.mbt",
+    "/modules/window/windows/show.mbt",
+  ]
+  let minimum_before : Map[String, String?] = Map([])
+  for suffix in minimum_files {
+    let path = window_stage + suffix
+    minimum_before[suffix] = if @fs.exists(path) {
+      Some(@fs.read_file(path).text())
+    } else {
+      None
+    }
+  }
+  for check_only in [true, false] {
+    let args = ["apply", "--directory=" + window_stage_relative]
+    if check_only {
+      args.push("--check")
+    }
+    args.push("patches/window-minimum-size.patch")
+    ignore(run_checked("git", args, repo_root))
+  }
+  let minimum_upgrades : Array[(String, String, String)] = []
+  if @fs.exists(window_existing) {
+    for suffix in minimum_files {
+      let staged = window_stage + suffix
+      let existing = window_existing + suffix
+      let corrected = @fs.read_file(staged).text()
+      let previous = minimum_before[suffix]
+      let current = if @fs.exists(existing) {
+        Some(@fs.read_file(existing).text())
+      } else {
+        None
+      }
+      if current == previous {
+        minimum_upgrades.push((staged, existing, corrected))
+        match previous {
+          Some(text) => @fs.write_file(staged, text)
+          None => @fs.remove(staged)
+        }
+      }
+    }
+  }
   let async_existing = sources + "/async-local-control"
   let worker_suffix = "/src/internal/event_loop/thread_pool.c"
   let previous_worker = @fs.read_file(async_stage + worker_suffix).text()
@@ -634,6 +678,17 @@ async fn prepare(args : Array[String]) -> Unit raise Error {
   compare_sources(window_stage, window_existing, repo_root)
   compare_sources(async_stage, async_existing, repo_root)
   compare_sources(cosmic_stage, cosmic_existing, repo_root)
+  for upgrade in minimum_upgrades {
+    let (staged, existing, corrected) = upgrade
+    assert_true(is_strictly_inside(@fs.realpath(window_existing), root_real))
+    if @fs.exists(existing) {
+      assert_true(is_strictly_inside(@fs.realpath(existing), root_real))
+    }
+    @fs.write_file(staged, corrected)
+    let replacement = staged + ".upgrade"
+    @fs.write_file(replacement, corrected)
+    @fs.rename(replacement, existing, replace=true)
+  }
   for upgrade in import_upgrades {
     let (staged_path, existing_path, corrected) = upgrade
     assert_true(is_strictly_inside(@fs.realpath(existing_path), root_real))

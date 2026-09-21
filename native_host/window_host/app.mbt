@@ -69,6 +69,7 @@ struct App {
   input_layouts : @input_layout.Registry
   mut presenter : @view_presentation.Presenter?
   hidden : Bool
+  minimum_size : (Int, Int)?
   report : (String) -> Unit
   mut window : @windows.Window?
   mut accessibility : @accessibility.Bridge?
@@ -109,14 +110,20 @@ pub impl @windows.ApplicationHandler for App with fn can_create_surfaces(
   event_loop,
 ) {
   let view = (self.host.view)()
-  let window = event_loop.create_window(
-    @core.WindowAttributes::default()
+  let attributes = @core.WindowAttributes::default()
     .with_title(view.accessibility.title)
     .with_visible(false)
     .with_inner_size(
       @dpi.PhysicalSize(view.accessibility.width, view.accessibility.height).into_size(),
-    ),
-  )
+    )
+  let attributes = match self.minimum_size {
+    Some((width, height)) =>
+      attributes.with_min_inner_size(
+        @dpi.PhysicalSize(width, height).into_size(),
+      )
+    None => attributes
+  }
+  let window = event_loop.create_window(attributes)
   self.window = Some(window)
   self.hwnd = window.native_window_handle()
   self.accessibility = @accessibility.open(
@@ -391,6 +398,7 @@ async fn run_loop(
   host : @host_application.Application,
   hooks : Hooks,
   hidden : Bool,
+  minimum_size : (Int, Int)?,
   report : (String) -> Unit,
 ) -> Unit {
   let event_loop = @windows.EventLoop::new()
@@ -411,6 +419,7 @@ async fn run_loop(
     input_layouts: @input_layout.create(host.editor),
     presenter: None,
     hidden,
+    minimum_size,
     report,
     window: None,
     accessibility: None,
@@ -431,6 +440,9 @@ async fn run_loop(
   @async.set_external_event_loop(driver)
   event_loop.set_control_flow(@core.ControlFlow::Wait)
   try {
+    if minimum_size is Some((width, height)) {
+      require(width > 0 && height > 0, "minimum client size must be positive")
+    }
     app.pump(driver)
     app.message_hwnd = driver.message_window_handle()
     let font = @fs.read_file(
@@ -513,8 +525,12 @@ async fn run_loop(
             _ => event
           }
           match event {
-            Commit(_) | Backspace | Delete | CompositionStart
-            | CompositionUpdate(_, _, _) | TextPointer(_, _, _) if !app.input_node().enabled => ()
+            Commit(_)
+            | Backspace
+            | Delete
+            | CompositionStart
+            | CompositionUpdate(_, _, _)
+            | TextPointer(_, _, _) if !app.input_node().enabled => ()
             ToggleFocus(_)
             | Navigate(_, _)
             | NavigateVertical(_, _)
