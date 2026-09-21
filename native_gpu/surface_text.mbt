@@ -67,7 +67,7 @@ pub fn SurfaceRenderer::set_text_layers(
       layer.width < 1 ||
       layer.width > 1024 ||
       layer.height < 1 ||
-      layer.height > 128 ||
+      layer.height > 1024 ||
       layer.pixels.length() != layer.width * layer.height * 4 {
       raise InvalidTextPixels
     }

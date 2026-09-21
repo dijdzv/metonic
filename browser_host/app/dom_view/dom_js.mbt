@@ -31,3 +31,13 @@ fn host_style(
 pub fn text(element : @input_dom.HTMLElement, value : String) -> Unit {
   element.to_node().set_text_content(Some(value))
 }
+
+///|
+pub fn button(id : String, label : String, enabled : Bool) -> Unit {
+  let element = element(id)
+  let button = @input_dom.HTMLButtonElement::from_js_value_opt(
+    element.to_js_value(),
+  ).unwrap()
+  button.set_disabled(!enabled)
+  text(element, label)
+}

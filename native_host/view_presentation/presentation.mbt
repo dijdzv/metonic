@@ -101,7 +101,7 @@ pub fn Presenter::render(
       bounds.width < 1 ||
       bounds.width > 1024 ||
       bounds.height < 1 ||
-      bounds.height > 96 {
+      bounds.height > 1024 {
       return Err("invalid_bounds")
     }
     if item.element.reference is Some(reference) {

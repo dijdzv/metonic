@@ -41,7 +41,7 @@ pub fn render(
   vertical_scroll? : Int = 0,
   follow_caret? : Int? = None,
 ) -> Bytes {
-  if width < 1 || width > 1024 || height < 1 || height > 96 {
+  if width < 1 || width > 1024 || height < 1 || height > 1024 {
     Bytes::makei(0, _ => b'\x00')
   } else {
     let mut buffer = @cosmic.Buffer::new(@cosmic.Metrics::new(24.0F, 32.0F))

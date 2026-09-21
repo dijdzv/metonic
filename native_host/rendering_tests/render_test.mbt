@@ -57,4 +57,20 @@ async test "application item order and retained input layout are independent" {
     ])
     is Err("invalid_item_bounds"),
   )
+  let tall = {
+    ..input,
+    bounds: { ..input.bounds, height: 300, },
+    text: "one\ntwo\nthree\nfour\nfive\nsix",
+  }
+  let tall_layer = @renderer.render(engine, [@renderer.item(tall)]).unwrap()[0]
+  assert_eq(tall_layer.pixels.length(), 200 * 300 * 4)
+  assert_true(@raster.hit_caret(engine, 0, 160).unwrap().0 >= 24)
+  assert_eq(@raster.render(engine, "", 1, 1024).length(), 4096)
+  assert_eq(@raster.render(engine, "", 1, 1025).length(), 0)
+  assert_true(
+    @renderer.render(engine, [
+      @renderer.item({ ..tall, bounds: { ..tall.bounds, height: 1025, }, }),
+    ])
+    is Err("invalid_item_bounds"),
+  )
 }

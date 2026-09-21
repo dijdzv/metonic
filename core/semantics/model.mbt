@@ -103,6 +103,21 @@ pub fn node(tree : Tree, reference : NodeRef) -> Result[Node, String] {
 }
 
 ///|
+pub fn set_name(tree : Tree, reference : NodeRef, name : String) -> String {
+  let (id, error) = resolve(tree, reference)
+  if id < 0 {
+    return error
+  }
+  let node = extra_node(tree, id).unwrap()
+  if node.name == name {
+    return ""
+  }
+  store_input(tree, { ..node, name, })
+  tree.revision += 1
+  ""
+}
+
+///|
 pub fn set_button_value(
   tree : Tree,
   reference : NodeRef,

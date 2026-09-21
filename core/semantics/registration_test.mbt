@@ -22,6 +22,34 @@ test "an empty tree supports inputs before buttons and independent focus" {
 }
 
 ///|
+test "renaming preserves identity and editing state and invalidates accessibility once" {
+  let tree = empty(7, 8)
+  let input = add_input(tree, "Memo", "日本語").unwrap()
+  let button = add_button(tree, "First memo").unwrap()
+  assert_eq(set_selection(tree, input, 0, 2), "")
+  assert_eq(focus(tree, input), "")
+  let before = revision(tree)
+  assert_eq(set_name(tree, input, "Selected memo"), "")
+  let renamed = node(tree, input).unwrap()
+  assert_eq(renamed.name, "Selected memo")
+  assert_eq(renamed.value, "日本語")
+  assert_eq(renamed.selection_start, 0)
+  assert_eq(renamed.selection_end, 2)
+  assert_true(renamed.focused)
+  assert_eq(revision(tree), before + 1)
+  assert_eq(set_name(tree, input, "Selected memo"), "")
+  assert_eq(revision(tree), before + 1)
+  assert_eq(set_enabled(tree, button, false), "")
+  assert_eq(set_name(tree, button, "No memo"), "")
+  assert_false(node(tree, button).unwrap().enabled)
+  assert_eq(node(tree, button).unwrap().name, "No memo")
+  assert_eq(remove(tree, button), "")
+  assert_eq(set_name(tree, button, "stale"), "stale_target")
+  assert_true(dispose(tree))
+  assert_eq(set_name(tree, input, "closed"), "closed")
+}
+
+///|
 test "explicit composition and restored slots preserve target generations" {
   let tree = create(4, 9, [
     { role: TextInput, name: "Draft", value: "abc", },
