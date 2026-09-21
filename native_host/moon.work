@@ -1,4 +1,5 @@
 members = [
+  "../.work/native-deps/sources/proton-clipboard-window-owner",
   "../async_runtime",
   "../.work/native-deps/sources/cosmic-wrap-affinity",
   ".",

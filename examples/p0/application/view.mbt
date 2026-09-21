@@ -91,13 +91,19 @@ pub fn Model::view(
         },
         height: 32,
       },
-      text: match self.task_field(0) {
-        0 => "Idle"
-        1 => "Working..."
-        2 => "Completed"
-        3 => "Failed"
-        4 => "Canceled"
-        _ => "Stopped"
+      text: {
+        let status = match self.task_field(0) {
+          0 => "Idle"
+          1 => "Working..."
+          2 => "Completed"
+          3 => "Failed"
+          4 => "Canceled"
+          _ => "Stopped"
+        }
+        match self.input_error {
+          Some(error) => status + " | " + error
+          None => status
+        }
       },
       reference: None,
       focused: false,

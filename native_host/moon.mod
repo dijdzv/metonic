@@ -7,6 +7,7 @@ license = "MIT OR Apache-2.0"
 preferred_target = "native"
 
 import {
+  "moonbit-community/proton_clipboard@0.3.3",
   "local/p0@0.0.0",
   "local/metonic_async@0.0.0",
   "moonbitlang/async@0.21.2",

@@ -1,4 +1,6 @@
 import {
+  "local/p0/core/text_clipboard",
+  "local/native_host/text_clipboard" @platform_clipboard,
   "local/p0/core/input_navigation",
   "local/native_host/input_layout",
   "local/native_host/view_presentation",

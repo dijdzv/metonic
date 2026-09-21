@@ -51,6 +51,7 @@ priv enum Event {
   PointerMove(Int, Int)
   PointerRelease(Int, Int)
   PointerCancel
+  Clipboard(@text_clipboard.Action)
   Close
 }
 
@@ -60,6 +61,7 @@ struct App {
   events : @aqueue.Queue[Event]
   hooks : Hooks
   host : @host_application.Application
+  clipboard : @text_clipboard.Backend
   diagnostics : Diagnostics
   mut composition : @semantics.Composition?
   ime_pointer : @ime_focus.Transfer
@@ -218,6 +220,12 @@ pub impl @windows.ApplicationHandler for App with fn window_event(
         match key.logical_key() {
           @core.Key::Character("a" | "A") if self.control_pressed =>
             self.queue(SelectBoundary(0, false))
+          @core.Key::Character("c" | "C") if self.control_pressed =>
+            self.queue(Clipboard(Copy))
+          @core.Key::Character("x" | "X") if self.control_pressed =>
+            self.queue(Clipboard(Cut))
+          @core.Key::Character("v" | "V") if self.control_pressed =>
+            self.queue(Clipboard(Paste))
           @core.Key::Named(@core.NamedKey::Home) =>
             self.queue(SelectBoundary(1, self.shift_pressed))
           @core.Key::Named(@core.NamedKey::End) =>
@@ -423,6 +431,7 @@ async fn run_loop(
   minimum_size : (Int, Int)?,
   font_path : String?,
   report : (String) -> Unit,
+  clipboard : @text_clipboard.Backend?,
 ) -> Unit {
   let event_loop = @windows.EventLoop::new()
   let app : App = {
@@ -430,6 +439,7 @@ async fn run_loop(
     events: @aqueue.Queue::Queue(kind=@aqueue.Blocking(64)),
     hooks,
     host,
+    clipboard: clipboard.unwrap_or_else(@platform_clipboard.backend),
     diagnostics: Diagnostics::new(),
     composition: None,
     ime_pointer: @ime_focus.Transfer::new(),
@@ -796,6 +806,7 @@ async fn run_loop(
               app.drag = None
             }
             PointerCancel => app.cancel_pointer()
+            Clipboard(action) => app.edit_clipboard(action)
             Input(_) if app.composition is Some(_) => ()
             Input(Activate) => app.activate_focused()
             Input(Move(x, y)) if !app.input_node().focused =>

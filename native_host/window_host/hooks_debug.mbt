@@ -221,6 +221,7 @@ pub async fn run(
   minimum_size? : (Int, Int)? = None,
   font_path? : String? = None,
   report? : (String) -> Unit = println,
+  clipboard? : @text_clipboard.Backend? = None,
 ) -> Unit {
   run_loop(
     application,
@@ -229,6 +230,7 @@ pub async fn run(
     minimum_size,
     font_path,
     report,
+    clipboard,
   )
 }
 

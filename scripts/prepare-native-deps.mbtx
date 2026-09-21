@@ -269,6 +269,8 @@ async fn prepare(args : Array[String]) -> Unit raise Error {
   let window_archive = cache +
     "/window-b33c9f0ac85002bca4a9cceccbbcd512d13b7ceb.zip"
   let async_archive = cache + "/async-0.21.2.zip"
+  let clipboard_archive = cache + "/proton-clipboard-0.3.3.zip"
+  let clipboard_sha = "215422f7abcfd217cc46c401380460748d20366139502374ae61bbc51f53a966"
   let cosmic_revision = "b307f2599accac591199a7cd16ab6594067ba272"
   let cosmic_archive = cache + "/cosmic-" + cosmic_revision + ".zip"
   let cosmic_sha = "ea973f2192496fb665e8dd796e0dac0b009104331f549b4fdb698530c2b18f50"
@@ -299,6 +301,10 @@ async fn prepare(args : Array[String]) -> Unit raise Error {
 
   if !offline {
     download_archive(
+      clipboard_archive, "https://download.mooncakes.io/user/moonbit-community/proton_clipboard/0.3.3.zip",
+      clipboard_sha, repo_root,
+    )
+    download_archive(
       cosmic_archive,
       "https://github.com/moonbit-community/moon_cosmic/archive/" +
       cosmic_revision +
@@ -318,6 +324,7 @@ async fn prepare(args : Array[String]) -> Unit raise Error {
   verify_archive(window_archive, window_sha, repo_root)
   verify_archive(async_archive, async_sha, repo_root)
   verify_archive(cosmic_archive, cosmic_sha, repo_root)
+  verify_archive(clipboard_archive, clipboard_sha, repo_root)
 
   let staging = create_staging(root)
   let staging_real = @fs.realpath(staging)
@@ -332,6 +339,24 @@ async fn prepare(args : Array[String]) -> Unit raise Error {
     }
   })
   let window_parent = staging + "/window"
+  let clipboard_stage = staging + "/clipboard"
+  let clipboard_existing = sources + "/proton-clipboard-window-owner"
+  @fs.mkdir(clipboard_stage)
+  ignore(
+    run_checked(
+      "tar.exe",
+      ["-xf", clipboard_archive, "-C", clipboard_stage],
+      repo_root,
+    ),
+  )
+  for check_only in [true, false] {
+    let args = ["apply", "--directory=" + clipboard_stage]
+    if check_only {
+      args.push("--check")
+    }
+    args.push("patches/proton-clipboard-window-owner.patch")
+    ignore(run_checked("git", args, repo_root))
+  }
   let cosmic_parent = staging + "/cosmic"
   @fs.mkdir(cosmic_parent)
   ignore(
@@ -686,6 +711,7 @@ async fn prepare(args : Array[String]) -> Unit raise Error {
   compare_sources(window_stage, window_existing, repo_root)
   compare_sources(async_stage, async_existing, repo_root)
   compare_sources(cosmic_stage, cosmic_existing, repo_root)
+  compare_sources(clipboard_stage, clipboard_existing, repo_root)
   for upgrade in minimum_upgrades {
     let (staged, existing, corrected) = upgrade
     assert_true(is_strictly_inside(@fs.realpath(window_existing), root_real))
@@ -740,6 +766,9 @@ async fn prepare(args : Array[String]) -> Unit raise Error {
   }
   if !@fs.exists(cosmic_existing) {
     @fs.rename(cosmic_stage, cosmic_existing, replace=false)
+  }
+  if !@fs.exists(clipboard_existing) {
+    @fs.rename(clipboard_stage, clipboard_existing, replace=false)
   }
   if args.length() == 3 {
     let requested = configurations.get(args[2]).unwrap()

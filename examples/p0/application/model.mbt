@@ -11,6 +11,7 @@ pub struct Model {
   mut result : String
   mut result_label : String
   mut result_utf8 : Bytes
+  priv mut input_error : String?
 }
 
 ///|
@@ -32,7 +33,13 @@ pub fn create(session : Int, window : Int) -> Model {
     result: "",
     result_label: "",
     result_utf8: b"",
+    input_error: None,
   }
+}
+
+///|
+pub fn Model::set_input_error(self : Model, message : String?) -> Unit {
+  self.input_error = message
 }
 
 ///|
