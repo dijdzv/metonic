@@ -5,7 +5,9 @@ pub fn from_application(app : @portable.Application) -> Application {
     editor: app.editor,
     default_input: app.default_input,
     initial_size: app.initial_size,
-    initialize: () => (),
+    initialize: () => {
+      (app.initialize)().map(request => { request, gate: Always, })
+    },
     view: () => {
       let controls = (app.view)()
       let inputs : Array[@view_presentation.Input] = []
@@ -55,8 +57,10 @@ pub fn from_application(app : @portable.Application) -> Application {
       })
     },
     activate: reference => {
-      (app.activate)(reference)
-      None
+      (app.activate)(reference).map(request => {
+        request,
+        gate: CommittedInput,
+      })
     },
     activate_unhandled: () => false,
     shortcut: (_, _, _) => None,
@@ -71,5 +75,7 @@ pub fn from_application(app : @portable.Application) -> Application {
       changed
     },
     stop: app.stop,
+    can_close: app.can_close,
+    dispose: app.dispose,
   }
 }

@@ -1,6 +1,7 @@
 import {
   "local/p0/core/application_task" @task,
   "moonbitlang/async",
+  "moonbitlang/async/aqueue",
 }
 
 import {

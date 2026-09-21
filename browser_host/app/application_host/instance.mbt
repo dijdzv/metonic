@@ -23,7 +23,9 @@ pub fn create(
     engine: None,
     layers: [],
     stopped: false,
+    tasks: @task_driver.driver(),
   }
+  @async.run_async_main(async fn() { session.run_tasks() })
   make_bridge(
     () => if session.stopped { rejected_font() } else { session.font.fetch() },
     buffer => {
@@ -83,5 +85,6 @@ pub fn create(
     () => session.gpu.gpu_frame_submit(),
     () => session.gpu.gpu_frame_abort(),
     () => session.stop(),
+    () => if session.stopped || (application.can_close)() { 1 } else { 0 },
   )
 }

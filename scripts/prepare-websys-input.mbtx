@@ -41,6 +41,9 @@ async fn fingerprint(root : String) -> String? {
     "browser_host/input.idl",
     "browser_host/gpu.idl",
     "browser_host/http.idl",
+    "browser_host/storage.idl",
+    "browser_host/getter-errors.json",
+    "browser_host/method-errors.json",
     "toolchain.json",
     root + "/LICENSE",
     root + "/prepare-async.mbtx",
@@ -96,7 +99,7 @@ async fn main {
   )
   @fs.mkdir(root + "/prepare.lock")
   defer @fs.rmdir(root + "/prepare.lock")
-  let revision = "9249b44b6920c10d1c30a58fd122f64588514da1"
+  let revision = "71e7dbe57144cf88e569265a6c13776c853e2c16"
   let archive = root + "/source-" + revision + ".tar.gz"
   if !@fs.exists(archive) {
     ignore(
@@ -118,7 +121,7 @@ async fn main {
     .split("\n")
     .any(line => {
       line.trim().to_owned() ==
-      "7bb7a2d135f064ed4f9ec7d697efafba2443962c12ea6283a9cb642b9551d8eb"
+      "aaf2496158095ca3359a37ee85a784bc687052886ef72f04dd795e4e03a22a73"
     }),
     msg="WebSys archive digest mismatch",
   )
@@ -200,7 +203,9 @@ async fn main {
     "\n" +
     @fs.read_file(repo + "/browser_host/gpu.idl").text() +
     "\n" +
-    @fs.read_file(repo + "/browser_host/http.idl").text(),
+    @fs.read_file(repo + "/browser_host/http.idl").text() +
+    "\n" +
+    @fs.read_file(repo + "/browser_host/storage.idl").text(),
   )
   if @fs.exists(output) {
     assert_eq(
@@ -222,6 +227,10 @@ async fn main {
       source + "/generator/_build/js/release/build/webidl-bindgen.js",
       "--wasm-gc-input",
       combined_idl,
+      "--getter-errors",
+      repo + "/browser_host/getter-errors.json",
+      "--method-errors",
+      repo + "/browser_host/method-errors.json",
       "-o",
       output,
     ]),

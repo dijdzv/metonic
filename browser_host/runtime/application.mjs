@@ -36,8 +36,9 @@ export function runApplication({ title, artifact, eventName, canvasId, statusId,
     disposed = true;
     document.removeEventListener(eventName, refresh);
     window.removeEventListener('pagehide', stopPage);
+    window.removeEventListener('beforeunload', beforeUnload);
     for (const action of actions) action.element.removeEventListener('click', action.callback);
-    stopButton.removeEventListener('click', stopPage);
+    stopButton.removeEventListener('click', requestStop);
     renderer?.dispose();
     app?.stop();
     surface.dispose();
@@ -46,6 +47,20 @@ export function runApplication({ title, artifact, eventName, canvasId, statusId,
     status.textContent = message;
   }
   function stopPage() { stop(); }
+  function requestStop() {
+    if (app && app.can_close() !== 1) {
+      status.textContent = 'Save or discard changes before stopping.';
+      return false;
+    }
+    stop();
+    return true;
+  }
+  function beforeUnload(event) {
+    if (!disposed && app && app.can_close() !== 1) {
+      event.preventDefault();
+      event.returnValue = '';
+    }
+  }
   async function main() {
     const target = new URL(location.href).searchParams.get('target') || 'wasm-gc';
     if (!['js', 'wasm-gc'].includes(target)) throw new Error('Unknown application target');
@@ -77,11 +92,12 @@ export function runApplication({ title, artifact, eventName, canvasId, statusId,
     surface.observe();
     document.addEventListener(eventName, refresh);
     for (const action of actions) action.element.addEventListener('click', action.callback);
-    for (const control of elements) control.element.disabled = false;
+    for (const action of actions) action.element.disabled = false;
     status.textContent = `Ready: ${title} (${target})`;
   }
-  stopButton.addEventListener('click', stopPage);
+  stopButton.addEventListener('click', requestStop);
+  window.addEventListener('beforeunload', beforeUnload);
   window.addEventListener('pagehide', stopPage);
   main().catch(error => { if (!disposed) stop(error?.message || String(error)); });
-  return { stop };
+  return { stop: requestStop };
 }

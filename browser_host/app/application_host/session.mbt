@@ -27,11 +27,13 @@ priv struct Session {
   mut engine : @raster.Engine?
   mut layers : Array[@renderer.Layer]
   mut stopped : Bool
+  tasks : @task_driver.Driver
 }
 
 ///|
 fn Editor::sync(self : Editor, tree : @semantics.Tree) -> Unit {
   guard @semantics.node(tree, self.reference) is Ok(node) else { return }
+  self.element.set_enabled(node.enabled)
   if self.element.value() != node.value {
     match self.element {
       Multiline(value) => value.set_value(node.value)
@@ -45,6 +47,17 @@ fn Session::notify(self : Session) -> Unit {
   if !self.stopped {
     dispatch(self.event_name)
   }
+}
+
+///|
+fn Session::submit(self : Session, request : @task.Request) -> Bool {
+  let accepted = self.tasks.submit(request)
+  if accepted {
+    // DOM callbacks run outside the async scheduler; waking a queue alone does
+    // not drain runnable coroutines until the host re-enters the event loop.
+    @async.run_async_main(() => ())
+  }
+  accepted
 }
 
 ///|
@@ -119,6 +132,10 @@ fn Session::start(
         1
       },
       commit: (value, start, end) => {
+        guard @semantics.node(tree, editor.reference) is Ok(node) &&
+          node.enabled else {
+          return 0
+        }
         if self.stopped ||
           value.length() > 1024 ||
           start > end ||
@@ -137,7 +154,26 @@ fn Session::start(
     }
   })
   self.inputs = Some(@input_binding.start(input_bindings, () => self.notify()))
+  if (self.application.initialize)() is Some(request) {
+    ignore(self.submit(request))
+  }
   1
+}
+
+///|
+async fn Session::run_tasks(self : Session) -> Unit {
+  defer @async.protect_from_cancel(self.application.dispose)
+  defer self.stop()
+  self.tasks.run(completion => {
+    if !self.stopped {
+      if completion.apply() is Changed {
+        for editor in self.editors {
+          editor.sync(self.application.editor)
+        }
+        self.notify()
+      }
+    }
+  })
 }
 
 ///|
@@ -256,7 +292,11 @@ fn Session::activate(self : Session, index : Int) -> Int {
   if !node.enabled {
     return 0
   }
-  (self.application.activate)(reference)
+  if (self.application.activate)(reference) is Some(request) {
+    if !self.submit(request) {
+      return 0
+    }
+  }
   ignore(@semantics.focus(self.application.editor, reference))
   for editor in self.editors {
     editor.preview = None
@@ -272,6 +312,8 @@ fn Session::stop(self : Session) -> Unit {
     return
   }
   self.stopped = true
+  self.tasks.close()
+  @async.run_async_main(() => ())
   self.font.cancel()
   if self.inputs is Some(inputs) {
     inputs.stop()

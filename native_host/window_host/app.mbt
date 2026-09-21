@@ -445,7 +445,9 @@ async fn run_loop(
       font,
     )
     require(app.presenter is Some(_), "presentation font could not be loaded")
-    (host.initialize)()
+    if (host.initialize)() is Some(action) {
+      app.queue(ApplicationTask(action.request, action.gate))
+    }
     let window = app.window.unwrap()
     ignore(
       window.request_inner_size(
@@ -511,6 +513,8 @@ async fn run_loop(
             _ => event
           }
           match event {
+            Commit(_) | Backspace | Delete | CompositionStart
+            | CompositionUpdate(_, _, _) | TextPointer(_, _, _) if !app.input_node().enabled => ()
             ToggleFocus(_)
             | Navigate(_, _)
             | NavigateVertical(_, _)
@@ -598,6 +602,7 @@ async fn run_loop(
                 @task.Rejected => app.diagnostics.rejected()
                 @task.Unchanged => ()
               }
+            Close if !(app.host.can_close)() => app.draw()
             Close => {
               app.closed = true
               app.events.close(clear=true)
@@ -781,5 +786,8 @@ async fn run_loop(
       (app.host.stop)()
       app.error = Some(error)
     }
+  }
+  @async.protect_from_cancel(host.dispose) catch {
+    error => if app.error is None { app.error = Some(error) }
   }
 }

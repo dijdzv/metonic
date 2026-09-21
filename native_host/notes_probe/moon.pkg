@@ -4,6 +4,7 @@ import {
   "local/native_host/notes_application",
   "local/native_host/window_host",
   "local/p0/core/semantics",
+  "local/p0/core/application_task" @task,
 }
 
 pkgtype(kind: "executable")

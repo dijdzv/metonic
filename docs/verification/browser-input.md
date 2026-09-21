@@ -57,7 +57,7 @@ event downcasts are checked. Document/window acquisition remains a host boundary
 it does not duplicate DOM operations or input state management.
 
 `scripts/prepare-websys-input.mbtx` verifies the SHA256 of WebSys revision
-`9249b44b6920c10d1c30a58fd122f64588514da1`. It combines the upstream JS sources
+`71e7dbe57144cf88e569265a6c13776c853e2c16`. It combines the upstream JS sources
 with the WasmGC surface generated from `browser_host/input.idl` and
 `browser_host/gpu.idl` and `browser_host/http.idl`, selecting files
 by target in one local module. The generator uses its own pinned compiler and

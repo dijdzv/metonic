@@ -19,6 +19,7 @@ pub fn create(model : @application.Model) -> @host.Application {
           "日本語の描画を確認します ABC 123",
         ),
       )
+      None
     },
     initial_size: (640, 360),
     view: () => {
@@ -103,5 +104,7 @@ pub fn create(model : @application.Model) -> @host.Application {
     },
     resize: (width, height) => @scene.resize(model.scene, width, height),
     stop: () => ignore(model.stop()),
+    can_close: () => true,
+    dispose: () => (),
   }
 }

@@ -10,6 +10,14 @@ pub(all) enum Element {
 }
 
 ///|
+pub fn Element::set_enabled(self : Element, enabled : Bool) -> Unit {
+  match self {
+    Multiline(value) => value.set_disabled(!enabled)
+    SingleLine(value) => value.set_disabled(!enabled)
+  }
+}
+
+///|
 pub(all) struct Binding {
   element : Element
   scroll : (Int) -> Unit
