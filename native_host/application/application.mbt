@@ -28,6 +28,7 @@ pub(all) struct Application {
   view : () -> View
   focus_order : () -> Array[@semantics.NodeRef]
   activate : (@semantics.NodeRef) -> TaskAction?
+  edited : (@portable.TextEdit) -> TaskAction?
   activate_unhandled : () -> Bool
   shortcut : (@core.Key, Bool, Bool) -> TaskAction?
   navigate_unhandled : (Int, Int) -> Bool

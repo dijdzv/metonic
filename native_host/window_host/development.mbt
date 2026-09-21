@@ -61,6 +61,7 @@ async fn App::dispatch_development(
           None => @semantics.delete_backward(app.host.editor, reference)
         }
         if error == "" {
+          app.report_edit(reference, node.value)
           app.draw()
         }
         result.val = Some(error)
@@ -129,6 +130,10 @@ fn App::operate_control(
       @semantics.set_selection(app.host.editor, target, start, end)
   }
   if error == "" {
+    match action {
+      InsertText(_) | DeleteBackward => app.report_edit(target, node.value)
+      _ => ()
+    }
     if !(action is ActivateControl) {
       ignore(@semantics.focus(app.host.editor, target))
     }

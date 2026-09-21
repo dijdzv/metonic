@@ -67,6 +67,7 @@ struct App {
   diagnostics : Diagnostics
   mut composition : @semantics.Composition?
   mut composition_target : @semantics.NodeRef?
+  mut composition_original : (@semantics.NodeRef, String)?
   mut retired_composition : Bool
   ime_pointer : @ime_focus.Transfer
   mut pointer_pressed : Bool
@@ -160,6 +161,7 @@ fn App::reconcile_input(self : App) -> Unit {
     }
     self.composition = None
     self.composition_target = None
+    self.composition_original = None
     // The OS may still deliver the retired session's result before its end.
     // Redirecting that untagged text to the new focus would corrupt another input.
     self.retired_composition = true
@@ -516,6 +518,7 @@ async fn run_loop(
     diagnostics: Diagnostics::new(),
     composition: None,
     composition_target: None,
+    composition_original: None,
     retired_composition: false,
     ime_pointer: @ime_focus.Transfer::new(),
     pointer_pressed: false,
@@ -815,6 +818,7 @@ async fn run_loop(
               if app.composition is None && app.input_node() is Some(node) {
                 app.retired_composition = false
                 app.composition_target = Some(node.reference)
+                app.composition_original = Some((node.reference, node.value))
                 app.composition = @semantics.begin_composition(
                   app.host.editor,
                   target=node.reference,
@@ -827,6 +831,7 @@ async fn run_loop(
             CompositionUpdate(value, cursor, attributes) => {
               if app.composition is None && app.input_node() is Some(node) {
                 app.composition_target = Some(node.reference)
+                app.composition_original = Some((node.reference, node.value))
                 app.composition = @semantics.begin_composition(
                   app.host.editor,
                   target=node.reference,
@@ -848,6 +853,9 @@ async fn run_loop(
             CompositionCancel => {
               app.cancel_pointer()
               app.ime_pointer.cancel()
+              let accepted = app.composition
+                .map(composition => composition.preview("") is Some(_))
+                .unwrap_or(false)
               if app.composition is Some(composition) {
                 composition.cancel()
               }
@@ -855,9 +863,13 @@ async fn run_loop(
               app.composition_target = None
               app.preedit = ""
               app.preedit_attributes = b""
+              app.finish_edit(accepted)
               app.draw()
             }
             CompositionEnd => {
+              let accepted = app.composition
+                .map(composition => composition.preview("") is Some(_))
+                .unwrap_or(false)
               if app.composition is Some(composition) {
                 composition.cancel()
               }
@@ -867,17 +879,19 @@ async fn run_loop(
               app.preedit = ""
               app.preedit_attributes = b""
               let pointer = app.ime_pointer.finish()
+              app.finish_edit(accepted)
               app.draw()
               if pointer is Some((x, y, extend_selection)) {
                 app.apply_pointer(x, y, extend_selection)
               }
             }
             Commit(value) if app.composition is Some(composition) => {
-              ignore(composition.commit(value))
+              let accepted = composition.commit(value) == ""
               app.composition = None
               app.composition_target = None
               app.preedit = ""
               app.preedit_attributes = b""
+              app.finish_edit(accepted)
               app.draw()
             }
             // Space also arrives as text after scene activation; it must not
@@ -899,6 +913,7 @@ async fn run_loop(
                   "",
                   "committed text rejected",
                 )
+                app.report_edit(reference, node.value)
                 app.draw()
               }
             Backspace | Delete if app.composition is Some(_) ||
@@ -910,6 +925,7 @@ async fn run_loop(
                   @semantics.delete_backward(app.host.editor, reference) == "",
                   "backspace rejected",
                 )
+                app.report_edit(reference, node.value)
                 app.draw()
               }
             Delete =>
@@ -919,6 +935,7 @@ async fn run_loop(
                   "",
                   "forward deletion rejected",
                 )
+                app.report_edit(node.reference, node.value)
                 app.draw()
               }
             TextPointer(x, y, extend_selection) if app.ime_pointer.pending() ||

@@ -4,6 +4,7 @@ async fn verify_no_input() -> Unit {
   let button = @semantics.add_button(tree, "Action").unwrap()
   let input : Ref[@semantics.NodeRef?] = Ref(None)
   let activated = Ref(0)
+  let edited = Ref(0)
   let disposed = Ref(0)
   let finished = Ref(false)
   let observation : Ref[@window_host.Observation?] = Ref(None)
@@ -51,6 +52,10 @@ async fn verify_no_input() -> Unit {
     close_requested: () => (),
     close_ready: () => false,
     input_error: _ => (),
+    edited: _ => {
+      edited.val += 1
+      None
+    },
     dispose: () => disposed.val += 1,
   }
   @window_host.run(
@@ -83,6 +88,7 @@ async fn verify_no_input() -> Unit {
         assert_eq(@semantics.focus(tree, reference), "")
         (handle.apply)(Insert("X"))
         assert_eq(@semantics.node(tree, reference).unwrap().value, "日本語X")
+        assert_eq(edited.val, 1)
         input.val = None
         (handle.apply)(Insert("hidden"))
         assert_eq(@semantics.node(tree, reference).unwrap().value, "日本語X")
@@ -111,10 +117,12 @@ async fn verify_no_input() -> Unit {
         (observe.inject)(CompositionUpdate("late preview", None))
         (handle.apply)(Insert("late commit"))
         assert_eq(@semantics.node(tree, replacement).unwrap().value, "safe")
+        assert_eq(edited.val, 1)
         assert_false((handle.inspect)().composing)
         (observe.inject)(CompositionEnd)
         (handle.apply)(Insert("!"))
         assert_eq(@semantics.node(tree, replacement).unwrap().value, "safe!")
+        assert_eq(edited.val, 2)
         assert_eq(@semantics.remove(tree, replacement), "")
         input.val = None
         assert_eq(
@@ -126,6 +134,7 @@ async fn verify_no_input() -> Unit {
         assert_eq((handle.inspect)().controls.length(), 1)
         assert_false((handle.inspect)().composing)
         assert_eq(activated.val, 2)
+        assert_eq(edited.val, 2)
         let frame = (handle.capture)(_ => ())
         assert_eq(frame.pixels.length(), 480 * 240 * 4)
         finished.val = true
@@ -156,6 +165,7 @@ async fn verify_empty_view() -> Unit {
     close_requested: () => (),
     close_ready: () => false,
     input_error: _ => (),
+    edited: _ => None,
     stop: () => ignore(@semantics.dispose(empty_tree)),
     dispose: () => empty_disposed.val += 1,
   }

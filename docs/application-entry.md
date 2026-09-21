@@ -45,7 +45,8 @@ lifecycle probe also accepts `METONIC_RELEASE_EXECUTABLE` and
 it still selects only a window belonging to its owned child process. These checks
 do not replace the complete dependency/license inventory required for packaging.
 
-Initialization and activation return an optional `core/application_task.Request`.
+Initialization, activation and committed text edits return an optional
+`core/application_task.Request`.
 The host owns execution and cleanup; the application supplies the typed work and
 the completion that updates its model. Returning `None` permits synchronous
 changes without starting work. Create and retain a `core/application_task.Operation`
@@ -118,6 +119,36 @@ a `beforeunload` handler, requesting the browser's confirmation when close is
 refused. Browser policy can suppress that prompt, and forced termination cannot
 be vetoed. Fatal host failures and an already-committed page exit still perform
 unconditional cleanup.
+
+### Committed text edits
+
+`Application.edited` receives `TextEdit { target, text, revision }` after a host
+accepts a content change. `target` retains the semantic node generation, `text`
+is the accepted content snapshot and `revision` is the tree revision at that
+notification. Return a task request to schedule save/search work through the
+same operation driver, or `None` for a synchronous model update. Applications
+that do not need edit notifications supply `edited: _ => None`.
+
+Keyboard editing, clipboard mutations, native accessibility value edits and
+development text-edit commands use this boundary. Selection-only movement,
+unchanged text, failed edits and application/model-to-view updates do not emit
+notifications. The callback runs after mutation; it is not input validation and
+cannot veto an already accepted edit. Rendering remains free of IO.
+
+IME preview does not emit committed edits. At completion or cancellation, a
+changed final value emits once. Canceling a replacement can leave the originally
+selected range deleted; this is the established input behavior, not restoration
+of the old selection. Native intermediate selection removal is withheld until
+that composition finishes. Removed/replaced inputs, obsolete composition
+snapshots and stopped hosts cannot deliver late edit notifications.
+Composition ownership checks the target's identity, content, selection and
+enabled state. Updating an unrelated control does not invalidate that input.
+
+The revision describes an event, not a promise that the model will remain at
+that revision. Capture the desired save value, use operation-scoped replacement
+for debounce, and check current ownership before applying asynchronous results.
+Programmatic changes must schedule their own work explicitly; they do not loop
+back through `edited`.
 
 ### Native text clipboard
 

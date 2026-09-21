@@ -108,6 +108,7 @@ pub fn create(model : @application.Model) -> @host.Application {
     close_requested: () => (),
     close_ready: () => false,
     input_error: message => model.set_input_error(message),
+    edited: _ => None,
     dispose: () => (),
   }
 }

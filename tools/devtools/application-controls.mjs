@@ -32,6 +32,21 @@ export async function verifyDynamicControls(browser, baseUrl, outputDir) {
       await page.waitForFunction(() => !document.querySelector('#status').textContent.startsWith('Loading'));
       assert.equal(await page.locator('#status').textContent(), `Ready: Notes (${target})`);
       assert.equal(await page.locator('#controls textarea').count(), 0);
+      const edits = () => page.evaluate(async target => {
+        const probe = target === 'js' ? await import('./notes.mjs') : globalThis.dynamicProbe;
+        return [probe.edit_count(), probe.edit_completed(), probe.edit_text()];
+      }, target);
+      const expectEdits = async (count, text) => {
+        const observed = await edits();
+        assert.equal(observed[0], count);
+        assert.equal(observed[2], text);
+        await page.waitForFunction(async ({ target, count }) => {
+          const probe = target === 'js' ? await import('./notes.mjs') : globalThis.dynamicProbe;
+          return probe.edit_completed() === count;
+        }, { target, count }, { timeout: 5000 });
+        assert.deepEqual(await edits(), [count, count, text]);
+      };
+      await expectEdits(0, '');
       await page.getByRole('button', { name: 'Add input', exact: true }).click();
       const first = page.getByRole('textbox', { name: 'Input 1', exact: true });
       assert.equal(await first.evaluate(element => document.activeElement === element), true);
@@ -43,6 +58,7 @@ export async function verifyDynamicControls(browser, baseUrl, outputDir) {
       await change(-1);
       assert.equal(await page.locator('#stop').evaluate(element => document.activeElement === element), true);
       await first.fill('abcdef\none\ntwo\nthree\nfour\nfive');
+      await expectEdits(1, 'abcdef\none\ntwo\nthree\nfour\nfive');
       const retained = await first.elementHandle();
       await retained.evaluate(element => {
         globalThis.retainedInput = element;
@@ -68,6 +84,7 @@ export async function verifyDynamicControls(browser, baseUrl, outputDir) {
       });
       await change(1);
       assert.equal(await retained.evaluate(element => element.value), 'あお');
+      assert.equal((await edits())[0], 1);
       assert.equal(await retained.evaluate(element => document.activeElement === element), true);
       await change(3);
       assert.equal(await retained.evaluate(element => element.isConnected), false);
@@ -80,6 +97,43 @@ export async function verifyDynamicControls(browser, baseUrl, outputDir) {
       });
       assert.equal(await replacement.inputValue(), 'safe');
       await retained.dispose();
+      assert.equal((await edits())[0], 1);
+      await replacement.fill('あいう');
+      await expectEdits(2, 'あいう');
+      const compose = async (finish, value) => replacement.evaluate((element, { finish, value }) => {
+        if (!finish) {
+          element.setSelectionRange(0, 2);
+          element.dispatchEvent(new Event('select'));
+          element.dispatchEvent(new CompositionEvent('compositionstart', { data: '' }));
+          element.value = '青う';
+          element.dispatchEvent(new InputEvent('input', { isComposing: true, data: '青' }));
+        } else {
+          element.value = value;
+          element.setSelectionRange(1, 1);
+          element.dispatchEvent(new CompositionEvent('compositionend', { data: value }));
+          element.dispatchEvent(new InputEvent('input', { isComposing: false, data: value }));
+        }
+      }, { finish, value });
+      await compose(false, '');
+      assert.equal((await edits())[0], 2);
+      await change(12);
+      await compose(true, '青う');
+      await expectEdits(3, '青う');
+      await compose(false, '');
+      assert.equal((await edits())[0], 3);
+      await compose(true, '');
+      await expectEdits(4, '');
+      await replacement.evaluate(element => {
+        element.dispatchEvent(new Event('select'));
+        element.dispatchEvent(new Event('scroll'));
+        element.dispatchEvent(new Event('input'));
+      });
+      assert.equal((await edits())[0], 4);
+      await compose(false, '');
+      await change(11);
+      await compose(true, 'obsolete');
+      assert.equal(await replacement.inputValue(), 'programmatic');
+      assert.equal((await edits())[0], 4);
       await change(6);
       assert.equal(await page.locator('#controls textarea').count(), 0);
       await page.getByRole('button', { name: 'Add input', exact: true }).click();
@@ -109,6 +163,35 @@ export async function verifyDynamicControls(browser, baseUrl, outputDir) {
         assert.equal(await page.locator('#controls textarea, #controls button').count(), 0);
         assert.equal(await page.locator('#controls').getAttribute('data-metonic-owner'), null);
       }
+      await page.reload();
+      await page.waitForFunction(() => document.querySelector('#status').textContent.startsWith('Ready:'));
+      await change(10);
+      await page.getByRole('button', { name: 'Add input', exact: true }).click();
+      const single = page.getByRole('textbox', { name: 'Input 1', exact: true });
+      await single.fill('あいう');
+      await expectEdits(1, 'あいう');
+      await single.evaluate(element => {
+        element.setSelectionRange(0, 2);
+        element.dispatchEvent(new Event('select'));
+        element.dispatchEvent(new CompositionEvent('compositionstart', { data: '' }));
+        element.value = '青う';
+        element.dispatchEvent(new InputEvent('input', { isComposing: true, data: '青' }));
+      });
+      assert.equal((await edits())[0], 1);
+      await single.evaluate(element => {
+        element.value = 'う';
+        element.dispatchEvent(new CompositionEvent('compositionend', { data: '' }));
+        element.dispatchEvent(new Event('input'));
+      });
+      await expectEdits(2, 'う');
+      const stoppedInput = await single.elementHandle();
+      await page.locator('#stop').click();
+      await stoppedInput.evaluate(element => {
+        element.value = 'late';
+        element.dispatchEvent(new Event('input'));
+      });
+      assert.equal((await edits())[0], 2);
+      await stoppedInput.dispose();
       await page.reload();
       await page.waitForFunction(() => document.querySelector('#status').textContent.startsWith('Ready:'));
       await change(9);
