@@ -184,7 +184,7 @@ fn App::apply_pointer(
     } else {
       ignore(@semantics.focus(app.host.editor, reference))
       if (app.host.activate)(reference) is Some(action) {
-        app.queue(ApplicationTask(action.request, action.gate))
+        app.queue(ApplicationTask(action.request, action.gate, () => ()))
       }
     }
     app.draw()

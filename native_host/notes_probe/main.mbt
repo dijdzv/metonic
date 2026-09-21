@@ -1,5 +1,9 @@
 ///|
 async fn main {
+  if @env.args().contains("--operations") {
+    verify_operations()
+    return
+  }
   if @env.args().contains("--empty-view") {
     verify_empty_view()
     return

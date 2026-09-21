@@ -301,6 +301,7 @@ run = [
   '.\\.work\\native-host-build\\native\\debug\\build\\local\\native_host\\notes_probe\\notes_probe.exe --minimum',
   '.\\.work\\native-host-build\\native\\debug\\build\\local\\native_host\\notes_probe\\notes_probe.exe --no-input',
   '.\\.work\\native-host-build\\native\\debug\\build\\local\\native_host\\notes_probe\\notes_probe.exe --empty-view',
+  '.\\.work\\native-host-build\\native\\debug\\build\\local\\native_host\\notes_probe\\notes_probe.exe --operations',
   '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-resource-relocation.mbtx',
 ]
 

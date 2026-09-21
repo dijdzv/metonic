@@ -109,6 +109,38 @@ export async function verifyDynamicControls(browser, baseUrl, outputDir) {
         assert.equal(await page.locator('#controls textarea, #controls button').count(), 0);
         assert.equal(await page.locator('#controls').getAttribute('data-metonic-owner'), null);
       }
+      await page.reload();
+      await page.waitForFunction(() => document.querySelector('#status').textContent.startsWith('Ready:'));
+      await change(9);
+      const state = index => page.evaluate(async ({ target, index }) => {
+        const probe = target === 'js' ? await import('./notes.mjs') : globalThis.dynamicProbe;
+        return probe.operation_state(index);
+      }, { target, index });
+      const waitState = async (index, expected) => {
+        await page.waitForFunction(async ({ target, index, expected }) => {
+          const probe = target === 'js' ? await import('./notes.mjs') : globalThis.dynamicProbe;
+          return probe.operation_state(index) === expected;
+        }, { target, index, expected });
+      };
+      await page.getByRole('button', { name: 'Start slow', exact: true }).click();
+      await waitState(0, 1);
+      await page.getByRole('button', { name: 'Run other', exact: true }).click();
+      await waitState(1, 1);
+      assert.equal(await state(0), 1);
+      assert.equal(await state(3), 0);
+      await page.getByRole('button', { name: 'Fail work', exact: true }).click();
+      await waitState(2, 1);
+      assert.equal(await state(0), 1);
+      await page.getByRole('button', { name: 'Cancel slow', exact: true }).click();
+      await waitState(0, 3);
+      await waitState(3, 1);
+      await page.getByRole('button', { name: 'Run other', exact: true }).click();
+      await waitState(1, 2);
+      await page.getByRole('button', { name: 'Start slow', exact: true }).click();
+      await waitState(0, 1);
+      await page.locator('#stop').click();
+      await waitState(4, 1);
+      assert.equal(await state(3), 2);
       assert.deepEqual(errors, []);
       results.push({ target, add: true, reorder: true, retainedSelectionScrollComposition: true, replaceGeneration: true, lateEvents: true, removeLast: true, stop: true, exclusiveRoot: true, duplicateAndKindRejection: true });
     } catch (error) { await reportFailure(page); throw error; }

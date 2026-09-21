@@ -39,7 +39,7 @@ priv enum Event {
   CompositionEnd
   Backspace
   Delete
-  ApplicationTask(@task.Request, TaskGate)
+  ApplicationTask(@task.Request, TaskGate, () -> Unit)
   ApplicationResult(@task.Completion)
   Development(DevelopmentRequest)
   Accessibility(@accessibility.Request)
@@ -321,7 +321,7 @@ pub impl @windows.ApplicationHandler for App with fn window_event(
                 self.shift_pressed,
               )
               is Some(action) {
-              self.queue(ApplicationTask(action.request, action.gate))
+              self.queue(ApplicationTask(action.request, action.gate, () => ()))
             }
         }
       }
@@ -577,7 +577,7 @@ async fn run_loop(
     )
     require(app.presenter is Some(_), "presentation font could not be loaded")
     if (host.initialize)() is Some(action) {
-      app.queue(ApplicationTask(action.request, action.gate))
+      app.queue(ApplicationTask(action.request, action.gate, () => ()))
     }
     let window = app.window.unwrap()
     ignore(
@@ -606,7 +606,13 @@ async fn run_loop(
       }
       let mut initializing = true
       let mut may_present = true
-      let mut update : @async.Task[Unit]? = None
+      let tasks = @task_runner.driver()
+      defer tasks.close()
+      let tasks_running = group.spawn(() => {
+        tasks.run(result => app.queue(ApplicationResult(result)), on_state_change=() => {
+          app.queue(Redraw)
+        })
+      })
       let mut control_task : @async.Task[Unit]? = None
       if app.hooks.has_lifecycle() {
         @async.pause()
@@ -697,9 +703,7 @@ async fn run_loop(
             | Backspace
             | Delete
             | Input(_)
-            | Enter
-            | ApplicationTask(_, PointerIdle | CommittedInput) if app.ime_pointer.pending() =>
-              ()
+            | Enter if app.ime_pointer.pending() => ()
             Enter => ()
             Development(request) => app.dispatch_development(request)
             Accessibility(_) if app.composition is Some(_) => ()
@@ -761,12 +765,17 @@ async fn run_loop(
                 )
                 app.draw()
               }
-            ApplicationTask(_, CommittedInput) if app.composition is Some(_) =>
-              ()
-            ApplicationTask(request, _) => {
-              update = @task_runner.dispatch(request, update, group, result => {
-                app.queue(ApplicationResult(result))
-              })
+            ApplicationTask(_, PointerIdle | CommittedInput, acknowledge) if app.ime_pointer.pending() =>
+              acknowledge()
+            ApplicationTask(_, CommittedInput, acknowledge) if app.composition
+              is Some(_) => acknowledge()
+            ApplicationTask(request, _, acknowledge) => {
+              if !tasks.submit(request, on_prepared=acknowledge) {
+                acknowledge()
+                (app.host.input_error)(
+                  Some("Application task capacity is full."),
+                )
+              }
               app.draw()
             }
             ApplicationResult(result) =>
@@ -774,6 +783,10 @@ async fn run_loop(
                 @task.Changed => app.draw()
                 @task.Rejected => app.diagnostics.rejected()
                 @task.Unchanged => ()
+                @task.Failed(message) => {
+                  (app.host.input_error)(Some(message))
+                  app.draw()
+                }
               }
             Close if app.composition is Some(_) || app.ime_pointer.pending() => {
               (app.host.input_error)(
@@ -991,7 +1004,8 @@ async fn run_loop(
           error => raise error
         }
       }
-      @task_runner.cancel_and_wait(update)
+      tasks.close()
+      tasks_running.wait()
       if initializing {
         init.cancel()
         init.wait() catch {

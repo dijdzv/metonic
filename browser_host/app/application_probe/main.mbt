@@ -5,6 +5,7 @@ priv struct Model {
   mut inputs : Array[@semantics.NodeRef]
   mut serial : Int
   mut invalid : Int
+  operations : @operations.Model
 }
 
 ///|
@@ -46,18 +47,17 @@ fn Model::change(self : Model, command : Int) -> Unit {
           )
         }
       }
-    4 | 5 => self.invalid = command
+    4 | 5 | 9 => self.invalid = command
     6 => {
       for reference in self.inputs {
         ignore(@semantics.remove(self.tree, reference))
       }
       self.inputs.clear()
     }
-    7 | 8 => {
+    7 | 8 =>
       for reference in self.inputs {
         ignore(@semantics.set_enabled(self.tree, reference, command == 8))
       }
-    }
     _ => ()
   }
 }
@@ -80,6 +80,12 @@ pub fn value(index : Int) -> String {
 }
 
 ///|
+#export_name("operation_state")
+pub fn operation_state(index : Int) -> Int {
+  active.val.map(model => model.operations.state(index)).unwrap_or(-1)
+}
+
+///|
 #export_name("create")
 pub fn create() -> @host.Instance {
   let tree = @semantics.empty(901, 1)
@@ -89,6 +95,7 @@ pub fn create() -> @host.Instance {
     inputs: [],
     serial: 0,
     invalid: 0,
+    operations: @operations.create(() => @async.CondVar::Cond().wait(), tree~),
   }
   active.val = Some(model)
   let app : @app.Application = {
@@ -98,6 +105,9 @@ pub fn create() -> @host.Instance {
     initial_size: (480, 400),
     initialize: () => None,
     view: () => {
+      if model.invalid == 9 {
+        return (model.operations.application().view)()
+      }
       let controls : Array[@app.Control] = [
         {
           element: {
@@ -127,6 +137,9 @@ pub fn create() -> @host.Instance {
       controls
     },
     activate: reference => {
+      if model.invalid == 9 {
+        return (model.operations.application().activate)(reference)
+      }
       if reference == model.add {
         model.change(0)
         ignore(@semantics.focus(tree, model.inputs[model.inputs.length() - 1]))
@@ -134,12 +147,15 @@ pub fn create() -> @host.Instance {
       None
     },
     resize: (_, _) => true,
-    stop: () => ignore(@semantics.dispose(tree)),
+    stop: () => {
+      ignore(@semantics.dispose(tree))
+      (model.operations.application().stop)()
+    },
     can_close: () => true,
     close_requested: () => (),
     close_ready: () => false,
     input_error: _ => (),
-    dispose: () => (),
+    dispose: () => (model.operations.application().dispose)(),
   }
   @host.create(
     app,
