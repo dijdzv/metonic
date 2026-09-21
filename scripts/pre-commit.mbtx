@@ -127,6 +127,7 @@ async fn main {
     run(moon, [
       "test", "tools/verification_impact_cli", "--target", "wasm", "--deny-warn",
     ])
+    run(moon, ["run", "scripts/verify-application-build-inputs.mbtx"])
   }
   if commit_only {
     run(moon, [

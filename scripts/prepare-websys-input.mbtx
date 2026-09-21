@@ -3,13 +3,23 @@ import {
   "moonbitlang/async@0.21.2/fs",
   "moonbitlang/async@0.21.2/process",
   "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/env",
 }
 
 ///|
 async fn checked(command : String, args : Array[String]) -> String {
+  let inherited = @env.get_env_var("GIT_CONFIG_PARAMETERS").unwrap_or("")
+  let git_config = if inherited == "" {
+    "'core.longpaths=true'"
+  } else {
+    inherited + " 'core.longpaths=true'"
+  }
   let (code, out, err) = @process.collect_output(
     command,
     args,
+    // Nested consumer workspaces can exceed Git for Windows' default path limit.
+    // A process setting avoids changing the developer's global Git configuration.
+    extra_env=Map([("GIT_CONFIG_PARAMETERS", git_config)]),
     no_console_window=true,
   )
   assert_eq(
@@ -140,8 +150,12 @@ async fn main {
     )
     @fs.rmdir(stage, recursive=true)
   }
-  ignore(checked("tar", ["-xf", archive, "-C", stage]))
-  let source = stage + "/websys.mbt-" + revision
+  // The archive's commit-length prefix leaves too little room for compiler
+  // artifacts in a nested Windows consumer checkout.
+  ignore(
+    checked("tar", ["-xf", archive, "--strip-components", "1", "-C", stage]),
+  )
+  let source = stage
   @fs.write_file(
     root + "/async-wasmgc.patch",
     @fs.read_file(source + "/patches/async-wasmgc.patch").binary(),
