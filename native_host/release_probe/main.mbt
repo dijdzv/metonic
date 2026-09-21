@@ -38,10 +38,17 @@ extern "C" fn window_title(
 ///|
 fn owned_window(pid : Int) -> UInt64 raise {
   let owner = FixedArray::make(1, 0)
-  let title = FixedArray::make(16, b'\x00')
-  let expected : FixedArray[Byte] = [
-    b'M', 0, b'e', 0, b't', 0, b'o', 0, b'n', 0, b'i', 0, b'c', 0, 0, 0,
-  ]
+  let name = @env.get_env_var("METONIC_RELEASE_TITLE").unwrap_or("Metonic")
+  assert_true(name != "" && name.length() < 1024)
+  let title = FixedArray::make(name.length() * 2 + 2, b'\x00')
+  let encoded = @utf16.encode(name, bom=false, endianness=Little)
+  let expected : FixedArray[Byte] = FixedArray::makei(encoded.length() + 2, index => {
+    if index < encoded.length() {
+      encoded[index]
+    } else {
+      0
+    }
+  })
   let mut selected = 0UL
   let mut cursor = 0UL
   for _ in 0..<4096 {
@@ -52,8 +59,8 @@ fn owned_window(pid : Int) -> UInt64 raise {
     if window_pid(cursor, owner) != 0U &&
       owner[0] == pid &&
       visible(cursor) != 0 &&
-      window_title_length(cursor) == 7 &&
-      window_title(cursor, title, 8) == 7 &&
+      window_title_length(cursor) == name.length() &&
+      window_title(cursor, title, name.length() + 1) == name.length() &&
       title == expected {
       guard selected == 0UL else { fail("multiple owned Metonic windows") }
       selected = cursor
@@ -68,7 +75,9 @@ async fn verify_close(system_key : Bool) -> Unit raise Error {
   @async.with_task_group() <| group => {
     @async.with_timeout(15000, async fn() {
       let executable = @fs.realpath(
-        ".work/native-host-build/native/release/build/local/native_host/window_app/window_app.exe",
+        @env.get_env_var("METONIC_RELEASE_EXECUTABLE").unwrap_or(
+          ".work/native-host-build/native/release/build/local/native_host/window_app/window_app.exe",
+        ),
       )
       let child = @process.spawn(
         group,

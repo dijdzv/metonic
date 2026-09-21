@@ -47,6 +47,7 @@ async fn main {
   let completed = Ref(false)
   @window_host.run(
     app,
+    font_path=@env.args().get(1),
     hidden=true,
     minimum_size=Some((320, 240)),
     controller=Some(handle => {

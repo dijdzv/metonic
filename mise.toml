@@ -287,6 +287,7 @@ run = [
   '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-host-boundaries.mbtx',
   '.\\.work\\native-host-build\\native\\debug\\build\\local\\native_host\\notes_probe\\notes_probe.exe',
   '.\\.work\\native-host-build\\native\\debug\\build\\local\\native_host\\notes_probe\\notes_probe.exe --minimum',
+  '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-resource-relocation.mbtx',
 ]
 
 [tasks."native:window-release-build"]

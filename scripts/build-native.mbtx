@@ -421,6 +421,16 @@ async fn main {
           fail("native host " + mode + " build artifact missing")
         }
         if needs_accesskit(host_app) {
+          let assets = directory + "/assets"
+          if !@fs.exists(assets) {
+            @fs.mkdir(assets)
+          }
+          for name in ["NotoSansJP.ttf", "OFL.txt"] {
+            @fs.write_file(
+              assets + "/" + name,
+              @fs.read_file(".work/text-assets/" + name).binary(),
+            )
+          }
           @fs.write_file(
             directory + "/accesskit.dll",
             @fs.read_file(".work/accesskit-focus-build/release/accesskit.dll").binary(),

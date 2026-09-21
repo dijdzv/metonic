@@ -1,0 +1,76 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/env",
+}
+
+///|
+async fn main {
+  @async.with_timeout(30000, async fn() {
+    let original_font = @env.get_env_var("METONIC_FONT_PATH")
+    @env.unset_env_var("METONIC_FONT_PATH")
+    defer (match original_font {
+      Some(path) => @env.set_env_var("METONIC_FONT_PATH", path)
+      None => @env.unset_env_var("METONIC_FONT_PATH")
+    })
+    let temporary = @fs.tmpdir(prefix="metonic-resource-relocation-")
+    let resolved = @fs.realpath(temporary)
+    defer {
+      assert_eq(@fs.realpath(temporary), resolved)
+      @fs.rmdir(temporary, recursive=true)
+    }
+    let source = ".work/native-host-build/native/debug/build/local/native_host/notes_probe"
+    let bundle = temporary + "/移動した app 📝"
+    let working = temporary + "/unrelated-working-directory"
+    @fs.mkdir(bundle + "/assets", recursive=true)
+    @fs.mkdir(working)
+    for
+      name in [
+        "notes_probe.exe", "accesskit.dll", "assets/NotoSansJP.ttf", "assets/OFL.txt",
+      ] {
+      @fs.write_file(
+        bundle + "/" + name,
+        @fs.read_file(source + "/" + name).binary(),
+      )
+    }
+    let executable = bundle + "/notes_probe.exe"
+    let (code, output, errors) = @process.collect_output(
+      executable,
+      [],
+      cwd=working,
+      no_console_window=true,
+    )
+    assert_eq(code, 0, msg=output.text() + errors.text())
+    assert_true(output.text().contains("NOTES_HOST_OK"))
+    assert_true(output.text().contains("WINDOW_CLEANUP_OK"))
+    let custom_font = bundle + "/custom-font.ttf"
+    @fs.rename(bundle + "/assets/NotoSansJP.ttf", custom_font)
+    let (missing_code, missing_output, missing_errors) = @process.collect_output(
+      executable,
+      [],
+      cwd=working,
+      no_console_window=true,
+    )
+    let diagnostic = missing_output.text() + missing_errors.text()
+    assert_true(missing_code != 0)
+    assert_true(diagnostic.contains("Unable to read font:"), msg=diagnostic)
+    assert_true(diagnostic.contains("assets/NotoSansJP.ttf"))
+    assert_true(diagnostic.contains("WINDOW_CLEANUP_OK"))
+    let (custom_code, custom_output, custom_errors) = @process.collect_output(
+      executable,
+      [custom_font],
+      cwd=working,
+      extra_env=Map([
+        ("METONIC_FONT_PATH", working + "/missing-environment-font.ttf"),
+      ]),
+      no_console_window=true,
+    )
+    assert_eq(custom_code, 0, msg=custom_output.text() + custom_errors.text())
+    assert_true(custom_output.text().contains("NOTES_HOST_OK"))
+    assert_true(custom_output.text().contains("WINDOW_CLEANUP_OK"))
+    println(
+      "RESOURCE_RELOCATION_OK unicode_path unrelated_cwd missing_font_cleanup explicit_font_precedence",
+    )
+  })
+}

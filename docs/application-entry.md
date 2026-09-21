@@ -19,6 +19,32 @@ minimum tracking size. Requested client sizes are also clamped to the minimum.
 Browser applications set their minimum canvas dimensions and overflow policy in
 their page layout; the host cannot constrain the browser window.
 
+Native builds place the default font and its OFL notice in `assets/` beside each
+window executable. The host resolves `assets/NotoSansJP.ttf` relative to the
+running executable, so moving the bundle or changing the working directory does
+not change resource lookup. Applications can pass `font_path=Some(path)` to
+`window_host.run`; this takes precedence over `METONIC_FONT_PATH`, which remains
+available for development and existing launchers. An explicit path is used as
+given, and a missing font produces a path-specific error rather than falling back
+to a different font. Include the complete asset directory when copying a build.
+
+`native_host/resources.asset_path(relative)` resolves other bundled files from
+the same executable directory. It accepts relative paths with either Windows
+or forward separators and rejects rooted paths, drive/stream prefixes, empty
+components and `.`/`..`. It does not change the process working directory or own
+application data storage. Its executable path comes from
+[GetModuleFileNameW](https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getmodulefilenamew),
+with retry on a truncated buffer; the pinned core/async APIs do not provide this
+query. This is a Windows FFI boundary implemented in MoonBit, not a C helper.
+
+`mise run native:notes-test` includes a relocated owned-window check under a
+Unicode directory with an unrelated working directory and no font override. It
+checks rendering/editing/cleanup and the missing-font diagnostic. The release
+lifecycle probe also accepts `METONIC_RELEASE_EXECUTABLE` and
+`METONIC_RELEASE_TITLE` to verify a copied external application's start and close;
+it still selects only a window belonging to its owned child process. These checks
+do not replace the complete dependency/license inventory required for packaging.
+
 Initialization and activation return an optional `core/application_task.Request`.
 The host owns execution and cleanup; the application supplies the typed work and
 the completion that updates its model. Returning `None` permits synchronous
