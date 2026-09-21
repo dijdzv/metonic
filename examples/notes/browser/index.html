@@ -14,10 +14,8 @@ canvas { display: block; width: 100%; height: 240px; }
 </style>
 <h1>Notes</h1>
 <p>A small application using the shared Metonic host.</p>
-<div class="view">
+<div class="view" id="controls">
   <canvas id="canvas" aria-hidden="true"></canvas>
-  <textarea id="note" class="gpu-input" aria-label="Note" maxlength="1024" disabled></textarea>
-  <button id="clear" class="gpu-button" disabled>Clear note</button>
 </div>
 <p id="status" role="status">Loading…</p>
 <button id="stop">Stop</button>

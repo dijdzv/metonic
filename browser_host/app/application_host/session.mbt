@@ -12,18 +12,26 @@ priv struct Editor {
   mut preview : (String, Int)?
   mut composing : Bool
   mut scroll : Int
+  mut inputs : @input_binding.Session?
+  mut retired : Bool
 }
 
 ///|
 priv struct Session {
   application : @app.Application
   bindings : Array[Binding]
+  managed_root : String?
+  mut root_element : @dom.HTMLElement?
+  owned : Array[OwnedControl]
+  mut next_control : Int
   canvas_id : String
   event_name : String
   font : @font_loader.Loader
   gpu : @gpu_renderer.Session
   editors : Array[Editor]
-  mut inputs : @input_binding.Session?
+  mut started : Bool
+  mut reconciling : Bool
+  mut applied_focus : @semantics.NodeRef?
   mut engine : @raster.Engine?
   mut layers : Array[@renderer.Layer]
   mut stopped : Bool
@@ -34,7 +42,7 @@ priv struct Session {
 fn Editor::sync(self : Editor, tree : @semantics.Tree) -> Unit {
   guard @semantics.node(tree, self.reference) is Ok(node) else { return }
   self.element.set_enabled(node.enabled)
-  if self.element.value() != node.value {
+  if !self.composing && self.element.value() != node.value {
     match self.element {
       Multiline(value) => value.set_value(node.value)
       SingleLine(value) => value.set_value(node.value)
@@ -44,7 +52,7 @@ fn Editor::sync(self : Editor, tree : @semantics.Tree) -> Unit {
 
 ///|
 fn Session::notify(self : Session) -> Unit {
-  if !self.stopped {
+  if !self.stopped && !self.reconciling {
     dispatch(self.event_name)
   }
 }
@@ -66,28 +74,85 @@ fn Session::start(
   device : @dom.GPUDevice,
   format : String,
 ) -> Int {
-  if self.stopped || self.inputs is Some(_) {
+  if self.stopped || self.started {
+    return 0
+  }
+  if self.managed_root is Some(_) && !self.bindings.is_empty() {
     return 0
   }
   let view = (self.application.view)()
+  if !self.reconcile_controls(view) {
+    return 0
+  }
+  if self.gpu.text_gpu_init(device, format) != 1 {
+    return 0
+  }
+  if !self.reconcile_editors(view) {
+    return 0
+  }
+  self.started = true
+  if (self.application.initialize)() is Some(request) {
+    ignore(self.submit(request))
+  }
+  1
+}
+
+///|
+fn Editor::retire(self : Editor) -> Unit {
+  self.retired = true
+  if self.inputs is Some(inputs) {
+    inputs.stop()
+  }
+  self.inputs = None
+  self.preview = None
+  self.composing = false
+}
+
+///|
+fn Session::reconcile_editors(
+  self : Session,
+  view : Array[@app.Control],
+) -> Bool {
+  if self.reconciling {
+    return true
+  }
+  self.reconciling = true
+  defer {
+    self.reconciling = false
+  }
   let editors : Array[Editor] = []
   for control in view {
     if control.kind is @app.Input(single_line~) {
-      guard control.element.reference is Some(reference) else { return 0 }
+      guard control.element.reference is Some(reference) else { return false }
+      if editors.any(editor => editor.reference == reference) {
+        return false
+      }
+      guard @semantics.node(self.application.editor, reference) is Ok(node) &&
+        node.role == @semantics.TextInput else {
+        return false
+      }
+      if self.editors.iter().find_first(editor => editor.reference == reference)
+        is Some(editor) {
+        if editor.single_line != single_line {
+          return false
+        }
+        editors.push(editor)
+        continue
+      }
       guard self.bindings
         .iter()
         .find_first(binding => binding.reference == reference)
         is Some(binding) else {
-        return 0
+        return false
       }
       let element = if single_line {
         guard @input_binding.input(binding.element_id) is Some(value) else {
-          return 0
+          return false
         }
         @input_binding.SingleLine(value)
       } else {
         guard @input_binding.textarea(binding.element_id) is Some(value) else {
-          return 0
+          return false
         }
         @input_binding.Multiline(value)
       }
@@ -98,66 +163,118 @@ fn Session::start(
         preview: None,
         composing: false,
         scroll: 0,
+        inputs: None,
+        retired: false,
       })
     }
   }
-  if self.gpu.text_gpu_init(device, format) != 1 {
-    return 0
-  }
-  self.editors.append(editors)
-  let tree = self.application.editor
-  let input_bindings = self.editors.map(editor => {
-    editor.sync(tree)
-    @input_binding.Binding::{
-      element: editor.element,
-      scroll: value => editor.scroll = value.max(0),
-      focus: () => ignore(@semantics.focus(tree, editor.reference)),
-      begin_composition: () => {
-        editor.composing = true
-        1
-      },
-      end_composition: () => {
-        editor.composing = false
-        editor.preview = None
-      },
-      // DOM preview includes replacement context that raw preedit text does not.
-      preedit: _ => (),
-      preview: (value, cursor) => {
-        if self.stopped ||
-          value.length() > 1024 ||
-          @text_position.utf16_to_scalar(value, cursor) is None {
-          return 0
-        }
-        editor.preview = Some((value, cursor))
-        1
-      },
-      commit: (value, start, end) => {
-        guard @semantics.node(tree, editor.reference) is Ok(node) &&
-          node.enabled else {
-          return 0
-        }
-        if self.stopped ||
-          value.length() > 1024 ||
-          start > end ||
-          @text_position.utf16_to_scalar(value, start) is None ||
-          @text_position.utf16_to_scalar(value, end) is None {
-          return 0
-        }
-        if @semantics.set_text(tree, editor.reference, value) != "" {
-          return 0
-        }
-        if @semantics.set_selection(tree, editor.reference, start, end) != "" {
-          return 0
-        }
-        1
-      },
+  for editor in self.editors {
+    if !editors.any(retained => retained.reference == editor.reference) {
+      editor.retire()
     }
-  })
-  self.inputs = Some(@input_binding.start(input_bindings, () => self.notify()))
-  if (self.application.initialize)() is Some(request) {
-    ignore(self.submit(request))
   }
-  1
+  self.editors.clear()
+  self.editors.append(editors)
+  for editor in self.editors {
+    if editor.inputs is None {
+      self.bind_editor(editor)
+    }
+  }
+  self.sync_focus(view)
+  true
+}
+
+///|
+fn Session::sync_focus(self : Session, view : Array[@app.Control]) -> Unit {
+  let focused = self.bindings
+    .iter()
+    .find_first(binding => {
+      view.any(control => control.element.reference == Some(binding.reference)) &&
+      (match @semantics.node(self.application.editor, binding.reference) {
+        Ok(node) => node.enabled && node.focused
+        Err(_) => false
+      })
+    })
+  let reference = focused.map(binding => binding.reference)
+  // Redraws must not reclaim focus from browser chrome or an outside control
+  // when the application has not changed its semantic focus target.
+  if reference != self.applied_focus {
+    self.applied_focus = reference
+    if focused is Some(binding) {
+      @dom_view.element(binding.element_id).focus()
+    }
+  }
+}
+
+///|
+fn Session::accepts_input(self : Session, editor : Editor) -> Bool {
+  !self.stopped &&
+  !editor.retired &&
+  (self.application.view)().any(control => {
+    control.element.reference == Some(editor.reference) &&
+    control.kind == @app.Input(single_line=editor.single_line)
+  }) &&
+  (match @semantics.node(self.application.editor, editor.reference) {
+    Ok(node) => node.enabled
+    Err(_) => false
+  })
+}
+
+///|
+fn Session::bind_editor(self : Session, editor : Editor) -> Unit {
+  let tree = self.application.editor
+  editor.sync(tree)
+  let binding = @input_binding.Binding::{
+    element: editor.element,
+    scroll: value => editor.scroll = value.max(0),
+    focus: () => {
+      if self.accepts_input(editor) {
+        ignore(@semantics.focus(tree, editor.reference))
+      }
+    },
+    begin_composition: () => {
+      if !self.accepts_input(editor) {
+        return 0
+      }
+      editor.composing = true
+      1
+    },
+    end_composition: () => {
+      editor.composing = false
+      editor.preview = None
+    },
+    // DOM preview includes replacement context that raw preedit text does not.
+    preedit: _ => (),
+    preview: (value, cursor) => {
+      if !self.accepts_input(editor) ||
+        value.length() > 1024 ||
+        @text_position.utf16_to_scalar(value, cursor) is None {
+        return 0
+      }
+      editor.preview = Some((value, cursor))
+      1
+    },
+    commit: (value, start, end) => {
+      guard @semantics.node(tree, editor.reference) is Ok(node) && node.enabled else {
+        return 0
+      }
+      if !self.accepts_input(editor) ||
+        value.length() > 1024 ||
+        start > end ||
+        @text_position.utf16_to_scalar(value, start) is None ||
+        @text_position.utf16_to_scalar(value, end) is None {
+        return 0
+      }
+      if @semantics.set_text(tree, editor.reference, value) != "" {
+        return 0
+      }
+      if @semantics.set_selection(tree, editor.reference, start, end) != "" {
+        return 0
+      }
+      1
+    },
+  }
+  editor.inputs = Some(@input_binding.start([binding], () => self.notify()))
 }
 
 ///|
@@ -212,8 +329,15 @@ fn Session::render(self : Session) -> Int {
     return 0
   }
   guard self.engine is Some(engine) else { return 0 }
+  let view = (self.application.view)()
+  if !self.reconcile_controls(view) {
+    return 0
+  }
+  if !self.reconcile_editors(view) {
+    return 0
+  }
   let items : Array[@renderer.Item] = []
-  for control in (self.application.view)() {
+  for control in view {
     if control.kind == @app.Button &&
       control.element.reference is Some(reference) &&
       self.bindings.iter().find_first(binding => binding.reference == reference)
@@ -283,14 +407,21 @@ fn Session::render(self : Session) -> Int {
 
 ///|
 fn Session::activate(self : Session, index : Int) -> Int {
+  if index < 0 || index >= self.bindings.length() {
+    return 0
+  }
+  self.activate_reference(self.bindings[index].reference)
+}
+
+///|
+fn Session::activate_reference(
+  self : Session,
+  reference : @semantics.NodeRef,
+) -> Int {
   if self.stopped || self.editors.any(editor => editor.composing) {
     return 0
   }
   let view = (self.application.view)()
-  if index < 0 || index >= self.bindings.length() {
-    return 0
-  }
-  let reference = self.bindings[index].reference
   if !view.any(control => {
       control.kind == @app.Button &&
       control.element.reference == Some(reference)
@@ -313,13 +444,6 @@ fn Session::activate(self : Session, index : Int) -> Int {
     editor.preview = None
     editor.sync(self.application.editor)
   }
-  for binding in self.bindings {
-    if @semantics.node(self.application.editor, binding.reference) is Ok(node) &&
-      node.enabled &&
-      node.focused {
-      @dom_view.element(binding.element_id).focus()
-    }
-  }
   self.notify()
   1
 }
@@ -333,11 +457,11 @@ fn Session::stop(self : Session) -> Unit {
   self.tasks.close()
   @async.run_async_main(() => ())
   self.font.cancel()
-  if self.inputs is Some(inputs) {
-    inputs.stop()
+  for editor in self.editors {
+    editor.retire()
   }
-  self.inputs = None
   self.editors.clear()
+  self.release_controls()
   self.gpu.gpu_frame_abort()
   self.gpu.text_gpu_dispose()
   self.layers = []

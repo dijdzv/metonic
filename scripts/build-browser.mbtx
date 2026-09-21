@@ -82,7 +82,7 @@ async fn main {
         moon,
         [
           "-C", "browser_host", "build", "app/probe", "app/notes", "app/gpu_probe",
-          "--target", target, "--release", "--deny-warn",
+          "app/application_probe", "--target", target, "--release", "--deny-warn",
         ],
         no_console_window=true,
       ),

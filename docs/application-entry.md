@@ -149,10 +149,32 @@ host instance contains the rendering callbacks consumed by the shared browser
 runtime. Its JS object boundary uses typed FFI callbacks rather than exposing
 MoonBit record layouts. Application code does not implement GPU forwarding.
 
-The HTML supplies accessible, initially disabled input and button elements.
-Bindings and input kinds are fixed at startup. Changing text, geometry and button
-availability is supported; adding or replacing input nodes requires a new host
-instance. Give each running surface its own elements and refresh event name.
+For dynamic views, pass an empty binding array and `root_id=Some("controls")`.
+The HTML supplies that container and the canvas, status and Stop elements; the
+host creates the view's inputs, buttons and display text. Omit `controls` from
+`runApplication`. The container has one active owner and each running surface
+needs its own container and refresh event name. Do not mutate host-owned children
+or the reserved `data-metonic-owner` attribute from application code.
+
+Interactive controls require unique live semantic references. Their full
+session/window/id/generation identity retains DOM, listeners, selection,
+composition and scroll across reordering. Changing an existing identity's kind
+is rejected; replace its semantic node instead. Anonymous display text has
+positional identity and carries no editing state. The host uses DOM `moveBefore`
+to preserve input state during moves; browsers must support that operation.
+Input and button styling uses the `gpu-input` and `gpu-button` classes shown in
+the Notes page. Placement remains explicit until shared layout APIs are available.
+
+Removing an input revokes its listeners and pending composition before DOM
+detachment. Late callbacks cannot target a replacement generation. Stop removes
+owned children and releases the container. A second instance cannot claim an
+active container, and stopping that rejected instance leaves its owner intact.
+
+Omitting `root_id` retains the explicit-binding path: HTML supplies the input and
+button elements, and action indices refer to the supplied stable binding array.
+Input nodes can enter and leave the view when their bindings already exist;
+creating arbitrary DOM controls requires the managed path. Do not combine
+managed containers with explicit bindings.
 
 On resize, multiline fields preserve their scroll position. A field scrolled to
 the bottom remains at the bottom after its viewport changes; a fully visible,
@@ -169,7 +191,9 @@ the host replaces their text content.
 
 Button activation focuses the target before calling the application. An
 application may then focus another semantic control (for example the editor of
-a newly selected item); the browser host reflects that focus in its DOM binding.
+a newly selected item); the browser host reflects that focus after creating any
+new DOM binding. An unchanged semantic focus target does not reclaim browser
+focus during an unrelated redraw.
 
 Each raster layer supports dimensions from 1 to 1024 pixels on either axis.
 The native surface currently accepts at most 16 layers per frame. Applications
@@ -178,14 +202,17 @@ not a limit on how many records an application can store.
 
 The small browser entry calls `runApplication` from `runtime/application.mjs`
 with the artifact prefix, element IDs, refresh event name and button actions.
-An action is an index into the stable binding array, not the current view order.
+In the explicit-binding path, an action is an index into the stable binding
+array, not the current view order. Managed buttons activate their semantic
+reference directly and do not need an application-supplied action index.
 The host checks that the bound reference still represents an enabled button in
 the current view before invoking the application. Inputs retain per-field
 composition preview and scroll state, separate from committed semantic text.
 
 The runtime owns GPU acquisition, artifact loading, font installation, frame
-submission, DOM button listeners, resizing and shutdown. The MoonBit host owns
-input sessions, raster layers, GPU resources and application disposal. Startup
+submission, legacy DOM button listeners, resizing and shutdown. The MoonBit host
+owns managed DOM/button listeners, input sessions, raster layers, GPU resources
+and application disposal. Startup
 and disposal use the existing surface and input ownership rules. Stop is
 idempotent; a stopped instance rejects another font request and returns failure
 for start, resize, rendering and activation. An instance is not restartable.
@@ -428,8 +455,8 @@ semantic editor and native clipboard policy do not impose that same content cap;
 applications must enforce their own document limits and report rejection without
 discarding unsaved text. The existing raster layer size limits also apply.
 The native default input is optional, allowing empty and button-only views.
-The browser configuration
-does not dynamically create DOM controls or provide a general layout system.
+The managed browser entry creates DOM controls dynamically, but does not yet
+provide a general layout system.
 Application-visible unexpected task failure reporting remains under development.
 The portable task entry alone does not establish durable saving or recovery;
 applications must connect a storage backend and handle its returned failures.

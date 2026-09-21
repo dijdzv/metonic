@@ -4,6 +4,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { chromium } from 'playwright'
 import { observedPage, reportFailure } from '../tools/devtools/browser-observation.mjs'
+import { verifyDynamicControls } from '../tools/devtools/application-controls.mjs'
 import { verify as verifyPixels, runScene, runFailures, runFontFailures, runText, runDpr, runSuite, runRelease, runEditorScroll, runQueryObservation } from '../_build/js/release/build/tools/verify_browser_pixels/verify_browser_pixels.js'
 
 if (process.env.METONIC_BROWSER_SUPERVISED !== '1') throw new Error('Run mise run browser:async/headless')
@@ -134,7 +135,7 @@ async function verifyNotes(browser) {
       await settle();
       const canvas = page.locator('#canvas');
       const initial = await canvas.screenshot();
-      const note = page.locator('#note');
+      const note = page.locator('#controls textarea');
       assert.equal(await note.inputValue(), 'A small independent application');
       await note.fill('日本語のノート\nSecond line');
       await settle();
@@ -147,7 +148,7 @@ async function verifyNotes(browser) {
       });
       await settle();
       assert.notDeepEqual(await canvas.screenshot(), edited, 'Notes selection did not change GPU output');
-      await page.locator('#clear').click();
+      await page.locator('#controls button').click();
       await settle();
       assert.equal(await note.inputValue(), '');
       assert.notDeepEqual(await canvas.screenshot(), edited, 'Notes clear did not change GPU output');
@@ -155,12 +156,14 @@ async function verifyNotes(browser) {
       await settle();
       assert.equal(await canvas.evaluate(element => element.width), 372);
       assert.equal(await text(page, '#status'), `Ready: Notes (${target})`);
+      const detachedNote = await note.elementHandle();
       await page.locator('#stop').click();
       assert.equal(await text(page, '#status'), 'Stopped.');
-      assert.equal(await note.isDisabled(), true);
-      assert.equal(await page.locator('#clear').isDisabled(), true);
+      assert.equal(await note.count(), 0);
+      assert.equal(await page.locator('#controls button').count(), 0);
       const stopped = await canvas.screenshot();
-      await note.evaluate(element => { element.value = 'late'; element.dispatchEvent(new Event('input')); });
+      await detachedNote.evaluate(element => { element.value = 'late'; element.dispatchEvent(new Event('input')); });
+      await detachedNote.dispose();
       await settle();
       assert.deepEqual(await canvas.screenshot(), stopped, 'Stopped Notes accepted a late input');
       const gpuSessions = await page.evaluate(async target => {
@@ -244,7 +247,7 @@ async function verifyNotes(browser) {
         }, stage);
         await pending.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
         assert.equal(await text(pending, '#status'), 'Stopped.');
-        assert.equal(await pending.locator('#note').isDisabled(), true);
+        assert.equal(await pending.locator('#controls textarea').count(), 0);
         const state = await pending.evaluate(() => globalThis.notesLifetime);
         assert.equal(state.created, stage === 'adapter' ? 0 : 1);
         assert.equal(state.destroyed, stage === 'adapter' ? 0 : 1);
@@ -666,6 +669,8 @@ try {
     finally { await dpr.close() }
     return true
   }
+  await verifyNotes(browser)
+  await verifyDynamicControls(browser, baseUrl, outputDir)
   const output = await runSuite(async (request) => {
     if (request.op === 'input-lifetime' || request.op === 'input-diagnostics') {
       const page = await observedPage(browser);
@@ -984,7 +989,6 @@ try {
       default: throw new Error(`Unknown suite command: ${request.op}`)
     }
   }, JSON.stringify({ backend, browser: browser.version(), node: process.version }))
-  await verifyNotes(browser)
   await fs.writeFile(path.join(outputDir, 'results.json'), output)
   console.log(JSON.stringify({ backend, gpu: gpuInfo }, null, 2))
 } catch (error) {

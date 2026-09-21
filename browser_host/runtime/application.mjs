@@ -2,7 +2,7 @@ import { createSurface } from './surface.mjs';
 import { createLayerRenderer } from './layer-renderer.mjs';
 import { wasmImports } from './wasm-imports.mjs';
 
-export function runApplication({ title, artifact, eventName, canvasId, statusId, stopId, controls }) {
+export function runApplication({ title, artifact, eventName, canvasId, statusId, stopId, controls = [] }) {
   const canvas = document.getElementById(canvasId);
   const status = document.getElementById(statusId), stopButton = document.getElementById(stopId);
   const elements = controls.map(control => ({ ...control, element: document.getElementById(control.id) }));
