@@ -1,0 +1,227 @@
+diff --git a/modules/window/core/event.mbt b/modules/window/core/event.mbt
+index b89a821..8b2d0b4 100644
+--- a/modules/window/core/event.mbt
++++ b/modules/window/core/event.mbt
+@@ -601,6 +601,7 @@ pub(all) enum WindowEvent {
+   PointerMoved(DeviceId?, @dpi.PhysicalPositionF64, Bool, PointerSource)
+   PointerEntered(DeviceId?, @dpi.PhysicalPositionF64, Bool, PointerKind)
+   PointerLeft(DeviceId?, @dpi.PhysicalPositionF64?, Bool, PointerKind)
++  PointerCanceled(DeviceId?)
+   PointerButton(
+     DeviceId?,
+     ElementState,
+@@ -687,6 +688,9 @@ pub fn WindowEvent::into_winit_events(
+       [CursorEntered(device_id)]
+     PointerLeft(device_id, _position, _is_primary, _kind) =>
+       [CursorLeft(device_id)]
++    // Legacy winit events have no cancellation equivalent; a fabricated release
++    // would lose the distinction between completing and abandoning a gesture.
++    PointerCanceled(_) => []
+     PointerButton(device_id, state, _position, _is_primary, source) =>
+       match source {
+         Mouse(button) => [MouseInput(device_id, state, button)]
+diff --git a/modules/window/windows/event.mbt b/modules/window/windows/event.mbt
+index 7129daf..9e84082 100644
+--- a/modules/window/windows/event.mbt
++++ b/modules/window/windows/event.mbt
+@@ -352,6 +352,7 @@ fn dispatch_native_input_event(
+         MouseWheel(None, LineDelta(lines, 0.0), Moved),
+       )
+     }
++    22 => app_state_queue_window_event(raw_id, PointerCanceled(None))
+     30 => {
+       let vk_code = wparam.to_int()
+       let physical_key = vk_to_physical_key(vk_code, lparam)
+diff --git a/modules/window/windows/native_window.c b/modules/window/windows/native_window.c
+index 31195b4..c1df407 100644
+--- a/modules/window/windows/native_window.c
++++ b/modules/window/windows/native_window.c
+@@ -382,6 +382,14 @@ static void mbw_queue_ime_text(HWND hwnd, MBWWindowState *state, int32_t kind,
+                            (uint64_t)(uintptr_t)text, (int64_t)payload);
+ }
+ 
++static void mbw_release_idle_capture(HWND hwnd, WPARAM buttons) {
++  const UINT mouse_buttons = MK_LBUTTON | MK_RBUTTON | MK_MBUTTON |
++                             MK_XBUTTON1 | MK_XBUTTON2;
++  if (!(LOWORD(buttons) & mouse_buttons) && GetCapture() == hwnd) {
++    ReleaseCapture();
++  }
++}
++
+ static LRESULT CALLBACK mbw_wnd_proc(HWND hwnd, UINT msg, WPARAM wparam,
+                                      LPARAM lparam) {
+   MBWWindowState *state =
+@@ -548,52 +556,64 @@ static LRESULT CALLBACK mbw_wnd_proc(HWND hwnd, UINT msg, WPARAM wparam,
+                                lparam);
+       return 0;
+ 
++    case WM_CAPTURECHANGED:
++      g_input_event_trampoline(g_input_event_closure, state->raw_id, 22, 0, 0);
++      return 0;
++
++    case WM_CANCELMODE:
++      g_input_event_trampoline(g_input_event_closure, state->raw_id, 22, 0, 0);
++      // Default handling also cancels menus/scrolling and may release capture.
++      // A resulting capture-loss notification is idempotent cancellation.
++      return DefWindowProcW(hwnd, msg, wparam, lparam);
++
+     case WM_LBUTTONDOWN:
+-      SetCapture(hwnd);
++      if (GetCapture() != hwnd) SetCapture(hwnd);
+       g_input_event_trampoline(g_input_event_closure, state->raw_id, 12,
+                                wparam, lparam);
+       return 0;
+ 
+     case WM_LBUTTONUP:
+-      ReleaseCapture();
+       g_input_event_trampoline(g_input_event_closure, state->raw_id, 13,
+                                wparam, lparam);
++      // ReleaseCapture can synchronously deliver WM_CAPTURECHANGED. Preserve
++      // the final pointer coordinate before canceling any remaining gesture.
++      mbw_release_idle_capture(hwnd, wparam);
+       return 0;
+ 
+     case WM_RBUTTONDOWN:
+-      SetCapture(hwnd);
++      if (GetCapture() != hwnd) SetCapture(hwnd);
+       g_input_event_trampoline(g_input_event_closure, state->raw_id, 14,
+                                wparam, lparam);
+       return 0;
+ 
+     case WM_RBUTTONUP:
+-      ReleaseCapture();
+       g_input_event_trampoline(g_input_event_closure, state->raw_id, 15,
+                                wparam, lparam);
++      mbw_release_idle_capture(hwnd, wparam);
+       return 0;
+ 
+     case WM_MBUTTONDOWN:
+-      SetCapture(hwnd);
++      if (GetCapture() != hwnd) SetCapture(hwnd);
+       g_input_event_trampoline(g_input_event_closure, state->raw_id, 16,
+                                wparam, lparam);
+       return 0;
+ 
+     case WM_MBUTTONUP:
+-      ReleaseCapture();
+       g_input_event_trampoline(g_input_event_closure, state->raw_id, 17,
+                                wparam, lparam);
++      mbw_release_idle_capture(hwnd, wparam);
+       return 0;
+ 
+     case WM_XBUTTONDOWN:
+-      SetCapture(hwnd);
++      if (GetCapture() != hwnd) SetCapture(hwnd);
+       g_input_event_trampoline(g_input_event_closure, state->raw_id, 18,
+                                wparam, lparam);
+       return 0;
+ 
+     case WM_XBUTTONUP:
+-      ReleaseCapture();
+       g_input_event_trampoline(g_input_event_closure, state->raw_id, 19,
+                                wparam, lparam);
++      mbw_release_idle_capture(hwnd, wparam);
+       return 0;
+ 
+     case WM_MOUSEWHEEL:
+diff --git a/modules/window/windows/pointer_capture_wbtest.mbt b/modules/window/windows/pointer_capture_wbtest.mbt
+new file mode 100644
+index 0000000..4adf08e
+--- /dev/null
++++ b/modules/window/windows/pointer_capture_wbtest.mbt
+@@ -0,0 +1,95 @@
++///|
++extern "C" fn capture_test_send(
++  hwnd : UInt64,
++  message : UInt,
++  keys : UInt64,
++  point : Int64,
++) -> Int64 = "SendMessageW"
++
++///|
++extern "C" fn capture_test_get() -> UInt64 = "GetCapture"
++
++///|
++extern "C" fn capture_test_set(hwnd : UInt64) -> UInt64 = "SetCapture"
++
++///|
++test "owned windows retain capture for held buttons and deliver final release before loss" {
++  reset_event_test_state()
++  let event_loop = EventLoop::new()
++  defer event_loop.drop()
++  let app : RecordingApp = { events: [], }
++  app_state_set_running(true)
++  app_state_set_dispatch_handler(app, event_loop.window_target())
++  defer {
++    app_state_clear_dispatch_handler()
++    app_state_set_running(false)
++  }
++  let window = event_loop.create_window(
++    @core.WindowAttributes::default().with_visible(false),
++  )
++  defer window.drop()
++  let other = event_loop.create_window(
++    @core.WindowAttributes::default().with_visible(false),
++  )
++  defer other.drop()
++  app_state_dispatch_deferred_callbacks()
++  app.events.clear()
++  let hwnd = window.native_window_handle()
++  let other_hwnd = other.native_window_handle()
++  ignore(capture_test_send(hwnd, 0x201U, 1UL, lparam_position(10, 20)))
++  assert_eq(capture_test_get(), hwnd)
++  ignore(capture_test_send(hwnd, 0x204U, 3UL, lparam_position(10, 20)))
++  ignore(capture_test_send(hwnd, 0x205U, 1UL, lparam_position(30, 40)))
++  assert_eq(capture_test_get(), hwnd)
++  assert_false(app.events.iter().any(event => event is PointerCanceled(_)))
++  ignore(capture_test_send(hwnd, 0x202U, 0UL, lparam_position(-12, 34)))
++  assert_eq(capture_test_get(), 0UL)
++  let count = app.events.length()
++  guard app.events[count - 2]
++    is PointerButton(_, Released, position, _, Mouse(Left)) else {
++    fail("Final release must precede capture loss")
++  }
++  assert_eq(position.x(), -12.0)
++  assert_eq(position.y(), 34.0)
++  assert_true(app.events[count - 1] is PointerCanceled(_))
++
++  ignore(capture_test_send(hwnd, 0x201U, 1UL, 0L))
++  app.events.clear()
++  ignore(capture_test_set(other_hwnd))
++  assert_eq(capture_test_get(), other_hwnd)
++  assert_true(app.events.iter().any(event => event is PointerCanceled(_)))
++  ignore(capture_test_send(hwnd, 0x202U, 0UL, 0L))
++  assert_eq(capture_test_get(), other_hwnd)
++
++  app.events.clear()
++  ignore(capture_test_send(other_hwnd, 0x1FU, 0UL, 0L))
++  assert_eq(capture_test_get(), 0UL)
++  assert_true(app.events.iter().any(event => event is PointerCanceled(_)))
++  assert_false(
++    app.events.iter().any(event => event is PointerButton(_, Released, _, _, _)),
++  )
++
++  app.events.clear()
++  ignore(capture_test_send(hwnd, 0x06U, 0UL, 0L))
++  assert_true(app.events.iter().any(event => event is Focused(false)))
++  ignore(capture_test_send(hwnd, 0x201U, 1UL, 0L))
++  window.drop()
++  assert_true(capture_test_get() != hwnd)
++  assert_true(app.events.iter().any(event => event is Destroyed))
++}
++
++///|
++test "pointer cancellation does not invent a legacy mouse release" {
++  assert_eq(
++    @core.WindowEvent::PointerCanceled(None).into_winit_events().length(),
++    0,
++  )
++  let app = begin_recording()
++  register_input_test_window(42)
++  dispatch_native_input_event(0, 22, 0UL, 0L)
++  dispatch_native_input_event(43, 22, 0UL, 0L)
++  assert_eq(app.events.length(), 0)
++  dispatch_native_input_event(42, 22, 0UL, 0L)
++  assert_eq(app.events.length(), 1)
++  assert_true(app.events[0] is PointerCanceled(None))
++}

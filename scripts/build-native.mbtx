@@ -384,19 +384,26 @@ async fn main {
         fail("MoonBit host " + mode + " build failed")
       }
       if mode == "notes-probe" {
-        let test_args = [
-          "-C", workspace, "test", "../.work/native-deps/sources/window-ime-presentation/modules/window/windows",
-          "--filter", "minimum*", "--target", "native", "--target-dir", native_host_build_dir,
-          "--deny-warn",
-        ]
-        if @process.run(
-            moon,
-            test_args,
-            extra_env=envmap,
-            no_console_window=true,
-          ) !=
-          0 {
-          fail("Windows minimum constraint tests failed")
+        for
+          filter in [
+            "minimum*", "owned windows retain capture*", "pointer cancellation*",
+          ] {
+          let test_args = [
+            "-C", workspace, "test", "../.work/native-deps/sources/window-pointer-capture/modules/window/windows",
+            "--filter", filter, "--target", "native", "--target-dir", native_host_build_dir,
+            "--deny-warn",
+          ]
+          if @process.run(
+              moon,
+              test_args,
+              extra_env=envmap,
+              no_console_window=true,
+            ) !=
+            0 {
+            fail(
+              "Windows constraint or pointer capture tests failed: " + filter,
+            )
+          }
         }
       }
       for host_app in host_apps {

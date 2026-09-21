@@ -446,7 +446,7 @@ async fn prepare(args : Array[String]) -> Unit raise Error {
     ),
   )
 
-  let window_existing = sources + "/window-ime-presentation"
+  let window_existing = sources + "/window-pointer-capture"
   for check_only in [true, false] {
     let args = ["apply", "--directory=" + window_stage_relative]
     if check_only {
@@ -558,6 +558,14 @@ async fn prepare(args : Array[String]) -> Unit raise Error {
         }
       }
     }
+  }
+  for check_only in [true, false] {
+    let args = ["apply", "--directory=" + window_stage_relative]
+    if check_only {
+      args.push("--check")
+    }
+    args.push("patches/window-pointer-capture.patch")
+    ignore(run_checked("git", args, repo_root))
   }
   let async_existing = sources + "/async-local-control"
   let worker_suffix = "/src/internal/event_loop/thread_pool.c"
