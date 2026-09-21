@@ -217,6 +217,62 @@ stdio edit/capture/EOF shutdown and MCP edit/capture/reconnect. The attachment
 test terminates its owned app afterward; it is not a normal pipe-mode shutdown
 test. External consumer acceptance and browser support require separate checks.
 
+## Browser development control
+
+The pinned Playwright 1.63.0 includes both CLI and MCP entry points. Use its
+existing-browser attachment with the application's semantic DOM controls;
+Metonic does not require a second browser control protocol or a page-global
+development hook. The normal button and input handlers remain responsible for
+application updates, including the JS and WasmGC builds.
+
+Start a dedicated Chromium development instance with a separate user-data
+directory and loopback remote debugging, for example using the browser's
+`--remote-debugging-address=127.0.0.1`, `--remote-debugging-port=9222` and
+`--user-data-dir=<dedicated-development-profile>` launch options. Open the
+application's served URL in that instance. Do not point automation at a personal
+profile or expose its debugging port to the network. A debug browser endpoint
+grants control of the browser, not just the application's origin.
+
+From the prepared framework checkout:
+
+```text
+mise exec -- pnpm exec playwright cli -s=metonic-dev attach --cdp=http://127.0.0.1:9222
+mise exec -- pnpm exec playwright cli -s=metonic-dev tab-list
+mise exec -- pnpm exec playwright cli -s=metonic-dev tab-select <index>
+mise exec -- pnpm exec playwright cli -s=metonic-dev snapshot
+mise exec -- pnpm exec playwright cli -s=metonic-dev click <current-button-reference>
+mise exec -- pnpm exec playwright cli -s=metonic-dev fill <current-input-reference> "Text"
+mise exec -- pnpm exec playwright cli -s=metonic-dev screenshot
+mise exec -- pnpm exec playwright cli -s=metonic-dev detach
+```
+
+Inspect the tab list and select the application's exact URL before operating.
+Read a fresh snapshot after navigation or a UI change; references belong to the
+current page. The DOM automation path does not provide native control's
+`expected_semantic_revision` transaction guard. Serialize editing clients and
+observe the application's save/error state instead of interpreting a successful
+click as completed asynchronous work.
+
+For an MCP client, launch the pinned Node executable with the absolute path to
+`node_modules/playwright/cli.js`, followed by `mcp --cdp-endpoint
+http://127.0.0.1:9222`. This is a stdio MCP server. Use `browser_tabs` to inspect
+and select the existing tab, `browser_snapshot` for controls, `browser_click` and
+`browser_type` for operations, and `browser_take_screenshot` for rendering.
+Ending the attaching MCP connection or using CLI `detach` leaves the app open;
+do not use a browser/tab-close command when only disconnecting is intended.
+
+The application does not import Playwright or an MCP SDK. Keep these tools and
+the development browser profile outside the distribution inventory. The same
+ordinary application bundle is inspected through browser-owned DevTools, so
+there is no Metonic debug endpoint to strip from its runtime. This boundary is
+different from native's separately compiled controller.
+
+An external consumer should verify attachment, editing, actual persistence,
+capture, reconnect, detach and reload on both JS and WasmGC. DOM text insertion
+and headless screenshots do not establish physical IME or on-screen display
+behavior. Browser automation retains the browser's permission and storage
+semantics; it cannot make private-profile data durable or bypass denied access.
+
 ## Distribution
 
 Package an explicit inventory of runtime files rather than copying the build
