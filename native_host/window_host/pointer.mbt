@@ -10,6 +10,27 @@ priv struct PointerDrag {
 }
 
 ///|
+fn App::scroll_pointer(app : App, delta : Int) -> Unit raise {
+  guard delta != 0 &&
+    app.pointer_position is Some((x, y)) &&
+    app.presenter is Some(presenter) else {
+    return
+  }
+  let view = (app.host.view)()
+  for index = view.items.length() - 1; index >= 0; index = index - 1 {
+    let item = view.items[index]
+    if !item.element.bounds.contains(x, y) {
+      continue
+    }
+    guard item.element.reference is Some(reference) else { return }
+    if presenter.scroll_input(reference, delta) {
+      app.draw()
+    }
+    return
+  }
+}
+
+///|
 fn App::cancel_pointer(app : App) -> Unit {
   // Capture loss after a normal release must not erase a deferred IME click.
   if app.pointer_pressed {
@@ -71,6 +92,7 @@ fn App::move_drag(app : App, x : Int, y : Int) -> Unit raise {
     return
   }
   drag.caret = caret
+  presenter.reveal_input(drag.reference)
   if presenter.input_width(drag.reference) is Some(width) {
     ignore(
       app.input_navigation.remember(drag.reference, caret, width, after, None),

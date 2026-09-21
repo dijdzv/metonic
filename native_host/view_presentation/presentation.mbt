@@ -21,6 +21,7 @@ pub struct Presenter {
   priv decoration : @raster.Engine
   priv mut inputs : Array[@semantics.NodeRef]
   priv mut previous : Array[@renderer.Item]?
+  priv mut manual_scroll : Array[@renderer.Item]
 }
 
 ///|
@@ -38,6 +39,7 @@ pub fn create(
     decoration,
     inputs: [],
     previous: None,
+    manual_scroll: [],
   })
 }
 
@@ -53,7 +55,11 @@ fn input_for(inputs : Array[Input], reference : @semantics.NodeRef?) -> Input? {
 }
 
 ///|
-fn copy_item(item : @renderer.Item, vertical_scroll? : Int) -> @renderer.Item {
+fn copy_item(
+  item : @renderer.Item,
+  vertical_scroll? : Int,
+  follow? : Bool = true,
+) -> @renderer.Item {
   @renderer.item(
     item.element,
     surface=item.surface,
@@ -63,7 +69,7 @@ fn copy_item(item : @renderer.Item, vertical_scroll? : Int) -> @renderer.Item {
     caret_after=item.caret_after,
     single_line_scroll=item.single_line_scroll,
     vertical_scroll=vertical_scroll.unwrap_or(item.vertical_scroll),
-    follow_caret=item.follow_caret,
+    follow_caret=if follow { item.follow_caret } else { None },
   )
 }
 
@@ -142,6 +148,9 @@ pub fn Presenter::render(
     }
   }
   self.inputs = references
+  self.manual_scroll = self.manual_scroll.filter(item => {
+    item.element.reference is Some(reference) && references.contains(reference)
+  })
   let prepared = items.map(item => {
     guard input_for(inputs, item.element.reference) is Some(input) else {
       return copy_item(item)
@@ -178,7 +187,7 @@ pub fn Presenter::render(
         ),
       )
     }
-    @renderer.item(
+    let prepared = @renderer.item(
       { ..item.element, text, focused: node.focused, },
       surface=item.surface,
       selection~,
@@ -207,6 +216,17 @@ pub fn Presenter::render(
       vertical_scroll=self.layouts.scroll_y(input.reference),
       follow_caret=if input.single_line { None } else { Some(caret) },
     )
+    let held = self.manual_scroll
+      .iter()
+      .find_first(old => old.element.reference == Some(input.reference))
+    if held is Some(old) && same_editor_state(old, prepared) {
+      copy_item(prepared, follow=false)
+    } else {
+      self.manual_scroll = self.manual_scroll.filter(old => {
+        old.element.reference != Some(input.reference)
+      })
+      prepared
+    }
   })
   if self.previous == Some(prepared) {
     return Ok(None)
@@ -239,6 +259,52 @@ pub fn Presenter::render(
     }),
   )
   Ok(Some(layers))
+}
+
+///|
+fn same_editor_state(left : @renderer.Item, right : @renderer.Item) -> Bool {
+  left.element == right.element &&
+  left.surface == right.surface &&
+  left.selection == right.selection &&
+  left.selection_ranges == right.selection_ranges &&
+  left.caret == right.caret &&
+  left.caret_after == right.caret_after
+}
+
+///|
+pub fn Presenter::reveal_input(
+  self : Presenter,
+  reference : @semantics.NodeRef,
+) -> Unit {
+  self.manual_scroll = self.manual_scroll.filter(item => {
+    item.element.reference != Some(reference)
+  })
+}
+
+///|
+pub fn Presenter::scroll_input(
+  self : Presenter,
+  reference : @semantics.NodeRef,
+  delta : Int,
+) -> Bool {
+  guard delta != 0 && self.previous is Some(items) else { return false }
+  guard items
+    .iter()
+    .find_first(item => item.element.reference == Some(reference))
+    is Some(item) else {
+    return false
+  }
+  guard @semantics.node(self.tree, reference) is Ok(node) && node.enabled else {
+    return false
+  }
+  guard self.layouts.scroll_vertical(reference, delta) else { return false }
+  // Redraws must not undo a wheel gesture by immediately revealing the caret.
+  // Editing or moving the selection invalidates this retained viewport policy.
+  self.manual_scroll = self.manual_scroll.filter(old => {
+    old.element.reference != Some(reference)
+  })
+  self.manual_scroll.push(copy_item(item))
+  true
 }
 
 ///|

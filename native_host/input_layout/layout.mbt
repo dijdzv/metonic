@@ -133,6 +133,22 @@ pub fn Registry::sync_vertical_scroll(
 }
 
 ///|
+pub fn Registry::scroll_vertical(
+  self : Registry,
+  reference : @semantics.NodeRef,
+  delta : Int,
+) -> Bool {
+  guard self.find(reference) is Some(input) && !input.single_line else {
+    return false
+  }
+  input.scroll_y = (input.scroll_y.to_int64() + delta.to_int64())
+    .max(0L)
+    .min(2147483647L)
+    .to_int()
+  true
+}
+
+///|
 pub fn Registry::remove(
   self : Registry,
   reference : @semantics.NodeRef,
