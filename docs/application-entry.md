@@ -150,9 +150,10 @@ For a native consumer, set `METONIC_NATIVE_BUILD` to `application` (debug) or
 artifact respectively. Run `moon run scripts/build-native.mbtx` with the pinned
 compiler in the mise environment. Output is under the consumer workspace's
 `.metonic-build/native/<profile>/build/<qualified-package>/`. AccessKit DLL and
-licenses are staged beside the executable. Set `METONIC_FONT_PATH` to the
-prepared `NotoSansJP.ttf` when launching; this build entry does not yet assemble
-a standalone Windows distribution.
+licenses are staged beside the executable, with the default font and its notice
+under `assets/`. No font environment override is needed when retaining that
+layout. The build output is not a complete distribution: the application must
+select its runtime files and include the remaining dependency notices.
 
 For a browser consumer, set `METONIC_BROWSER_WORKSPACE`,
 `METONIC_BROWSER_PACKAGE` and `METONIC_BROWSER_ARTIFACT` using the same path
@@ -167,9 +168,43 @@ the P0 application or development diagnostics.
 Package paths use slash-separated ASCII letters, digits, dots, underscores and
 hyphens; empty, `.` and `..` segments are rejected. These scripts currently
 assume Moon's workspace artifact layout and explicit workspace membership.
-Pinned consumer dependency installation and relocation verification are still
-being established; a successful build against a sibling checkout is not proof
-of a reproducible external installation.
+Consumers should pin the Metonic source revision and prepare dependencies through
+that checkout's scripts rather than relying on an arbitrary sibling checkout or
+editing downloaded sources. The source build entry is experimental; it is not a
+published, version-stable package installer.
+
+## Distribution
+
+Package an explicit inventory of runtime files rather than copying the build
+directory. For Windows, include the release executable, `accesskit.dll`, bundled
+assets and dependency notices. Keep the DLL beside the executable. The current
+Windows x64 AccessKit build requires the Visual C++ x64 runtime
+(`VCRUNTIME140.dll`); copying a development machine's system DLLs is not a runtime
+installation procedure. A GUI application can select the Windows subsystem in
+its own entry's native linker configuration; Metonic does not impose that choice
+on console applications or test executables.
+
+Run `moon run scripts/prepare-native-rust-notices.mbtx` with the pinned compiler
+in the mise environment after native dependency preparation. It produces
+`.work/native-rust-notices/distribution/inventory.json` and the referenced notice
+files for AccessKit and wgpu. Verify the inventory's sizes and SHA256 hashes when
+copying them. Include the separate Chromium notice as well as the generated
+reports. These Rust reports do not replace notices for MoonBit, the framework,
+fonts and other native dependencies. The generator's configuration and source
+clarifications are documented in [native notices](../scripts/native-notices/README.md).
+
+For browsers, include the JS and WasmGC artifacts, shared runtime, generated
+imports, application HTML/entry, font and applicable notices. Serve the bundle
+over HTTP with JavaScript and WebAssembly MIME types. Browser storage remains
+associated with the serving origin, not the directory containing the bundle.
+
+Keep development probes and control entries outside the distribution inventory.
+Verify the application's own release output, not just a framework example: use
+generated-code/link checks with a development positive control, then exercise
+the copied application from an unrelated working directory with isolated data.
+Check editing, saving, restart/restore and shutdown in addition to startup.
+Relocation on a development machine does not establish clean-machine runtime
+availability or physical IME behavior.
 
 ## Current limits and verification
 
