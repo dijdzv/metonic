@@ -41,6 +41,50 @@ and disposal use the existing surface and input ownership rules. Stop is
 idempotent; a stopped instance rejects another font request and returns failure
 for start, resize, rendering and activation. An instance is not restartable.
 
+## External workspace builds
+
+The experimental build scripts run from the Metonic source directory and reuse
+its pinned compiler, native assets and generated WebSys bindings. They accept an
+explicit consumer workspace; no Git repository is required for the consumer.
+The workspace must include the corresponding Metonic modules and prepared
+dependencies. Native and browser workspaces select different async adapters and
+must remain separate.
+
+WebSys and native dependency preparation flatten the archives' outer directories
+to keep staging and generator artifact paths short on Windows. WebSys child Git
+processes enable long paths without
+modifying global Git settings. This avoids the known nested-checkout failure;
+it does not guarantee that every tool supports arbitrarily long directory paths.
+
+For a native consumer, set `METONIC_NATIVE_BUILD` to `application` (debug) or
+`application-release`. Set `METONIC_NATIVE_WORKSPACE` to its workspace directory,
+`METONIC_NATIVE_PACKAGE` to the entry directory relative to that workspace, and
+`METONIC_NATIVE_ARTIFACT` to the fully qualified package name. For example,
+`native/main` and `local/my_app/main` identify the entry directory and compiler
+artifact respectively. Run `moon run scripts/build-native.mbtx` with the pinned
+compiler in the mise environment. Output is under the consumer workspace's
+`.metonic-build/native/<profile>/build/<qualified-package>/`. AccessKit DLL and
+licenses are staged beside the executable. Set `METONIC_FONT_PATH` to the
+prepared `NotoSansJP.ttf` when launching; this build entry does not yet assemble
+a standalone Windows distribution.
+
+For a browser consumer, set `METONIC_BROWSER_WORKSPACE`,
+`METONIC_BROWSER_PACKAGE` and `METONIC_BROWSER_ARTIFACT` using the same path
+conventions, then run `moon run scripts/build-browser-application.mbtx`.
+Both JS and WasmGC release artifacts are built. The consumer workspace's
+`.metonic-dist` contains `app.mjs`, `app.wasm`, the shared browser runtime,
+generated WebSys imports, font and license files. Add the application's HTML
+and small `runApplication` entry and serve that directory over HTTP. The
+artifact prefix in that entry is `./app`. This path does not build or stage
+the P0 application or development diagnostics.
+
+Package paths use slash-separated ASCII letters, digits, dots, underscores and
+hyphens; empty, `.` and `..` segments are rejected. These scripts currently
+assume Moon's workspace artifact layout and explicit workspace membership.
+Pinned consumer dependency installation and relocation verification are still
+being established; a successful build against a sibling checkout is not proof
+of a reproducible external installation.
+
 ## Current limits and verification
 
 Input is limited to 1024 UTF-16 code units and the existing raster layer limits

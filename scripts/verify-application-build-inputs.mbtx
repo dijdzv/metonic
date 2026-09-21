@@ -1,0 +1,42 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+}
+
+///|
+async fn main {
+  let moon = @fs.realpath(".tools/moonbit/bin/moon.exe")
+  for platform in ["NATIVE", "BROWSER"] {
+    let script = if platform == "NATIVE" {
+      "build-native"
+    } else {
+      "build-browser-application"
+    }
+    for entry in ["../outside", "/absolute", "app//main", "--help", ""] {
+      let settings = Map([
+        ("METONIC_NATIVE_BUILD", "application"),
+        ("METONIC_" + platform + "_WORKSPACE", @fs.realpath(".")),
+        ("METONIC_" + platform + "_PACKAGE", entry),
+        ("METONIC_" + platform + "_ARTIFACT", "local/app/main"),
+      ])
+      let (code, out, err) = @process.collect_output(
+        moon,
+        ["run", "scripts/" + script + ".mbtx"],
+        extra_env=settings,
+        no_console_window=true,
+      )
+      assert_true(code != 0, msg=platform + " accepted " + entry)
+      let diagnostic = out.text() + err.text()
+      assert_true(
+        diagnostic.contains("path") || diagnostic.contains("required"),
+        msg=diagnostic,
+      )
+      assert_false(
+        diagnostic.contains("TEXT_ASSETS_OK"),
+        msg="invalid input reached dependency preparation",
+      )
+    }
+  }
+  println("APPLICATION_BUILD_INVALID_INPUTS_OK cases=10")
+}

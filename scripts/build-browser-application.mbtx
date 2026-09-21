@@ -1,0 +1,116 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/env",
+}
+
+///|
+fn required(name : String) -> String raise {
+  let value = @env.get_env_var(name).unwrap_or("")
+  assert_true(value != "", msg=name + " is required")
+  value
+}
+
+///|
+fn package_path(value : String) -> Bool {
+  value != "" &&
+  !value.has_prefix("-") &&
+  value
+  .split("/")
+  .all(part => {
+    part != "" &&
+    part != "." &&
+    part != ".." &&
+    part
+    .iter()
+    .all(c => {
+      (c >= 'a' && c <= 'z') ||
+      (c >= 'A' && c <= 'Z') ||
+      (c >= '0' && c <= '9') ||
+      c == '_' ||
+      c == '-' ||
+      c == '.'
+    })
+  })
+}
+
+///|
+async fn main {
+  @async.with_timeout(300000, async fn() {
+    let workspace = @fs.realpath(required("METONIC_BROWSER_WORKSPACE"))
+    let entry = required("METONIC_BROWSER_PACKAGE")
+    let artifact = required("METONIC_BROWSER_ARTIFACT")
+    assert_true(package_path(entry), msg="invalid browser package path")
+    assert_true(package_path(artifact), msg="invalid browser artifact path")
+    assert_true(@fs.exists(workspace + "/moon.work"))
+    assert_true(@fs.exists(workspace + "/" + entry + "/moon.pkg"))
+    let moon = @fs.realpath(".tools/moonbit/bin/moon.exe")
+    for script in ["prepare-text-assets", "prepare-websys-input"] {
+      assert_eq(
+        @process.run(
+          moon,
+          ["run", "scripts/" + script + ".mbtx"],
+          no_console_window=true,
+        ),
+        0,
+      )
+    }
+    assert_eq(
+      @process.run(
+        moon,
+        [
+          "build", "tools/browser_buffer", "--target", "js", "--release", "--deny-warn",
+        ],
+        no_console_window=true,
+      ),
+      0,
+    )
+    let build = workspace + "/.metonic-build"
+    for target in ["js", "wasm-gc"] {
+      assert_eq(
+        @process.run(
+          moon,
+          [
+            "-C", workspace, "build", entry, "--target", target, "--target-dir",
+            build, "--release", "--deny-warn",
+          ],
+          no_console_window=true,
+        ),
+        0,
+      )
+    }
+    let destination = workspace + "/.metonic-dist"
+    if !@fs.exists(destination) {
+      @fs.mkdir(destination, recursive=true)
+    }
+    let name = artifact.split("/").to_array().last().unwrap().to_owned()
+    let files = [
+      (build + "/js/release/build/" + artifact + "/" + name + ".js", "app.mjs"),
+      (
+        build + "/wasm-gc/release/build/" + artifact + "/" + name + ".wasm",
+        "app.wasm",
+      ),
+      (
+        "_build/js/release/build/tools/browser_buffer/browser_buffer.js", "browser-buffer.mjs",
+      ),
+      (".work/websys-input/generated/runtime.mjs", "websys-input.mjs"),
+      (".work/websys-input/LICENSE", "LICENSE-websys"),
+      (".work/websys-input/async-dependency/LICENSE", "LICENSE-async"),
+      (".work/text-assets/NotoSansJP.ttf", "NotoSansJP.ttf"),
+      (".work/text-assets/OFL.txt", "OFL.txt"),
+      ("LICENSE-MIT", "LICENSE-MIT"),
+      ("LICENSE-APACHE", "LICENSE-APACHE"),
+    ]
+    for
+      file in [
+        "surface.mjs", "application.mjs", "layer-renderer.mjs", "wasm-imports.mjs",
+      ] {
+      files.push(("browser_host/runtime/" + file, file))
+    }
+    for (source, name) in files {
+      @fs.write_file(destination + "/" + name, @fs.read_file(source).binary())
+    }
+    println("BROWSER_APPLICATION_BUILD_OK output=" + destination)
+  })
+}

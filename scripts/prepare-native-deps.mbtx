@@ -337,11 +337,14 @@ async fn prepare(args : Array[String]) -> Unit raise Error {
   ignore(
     run_checked(
       "tar.exe",
-      ["-xf", cosmic_archive, "--exclude=*/README.md", "-C", cosmic_parent],
+      [
+        "-xf", cosmic_archive, "--strip-components", "1", "--exclude=*/README.md",
+        "-C", cosmic_parent,
+      ],
       repo_root,
     ),
   )
-  let cosmic_stage = cosmic_parent + "/moon_cosmic-" + cosmic_revision
+  let cosmic_stage = cosmic_parent
   @fs.write_file(
     cosmic_stage + "/README.md",
     @fs.read_file(cosmic_stage + "/README.mbt.md").text(),
@@ -363,16 +366,18 @@ async fn prepare(args : Array[String]) -> Unit raise Error {
   ignore(
     run_checked(
       "tar.exe",
-      ["-xf", window_archive, "--exclude=*/README.md", "-C", window_parent],
+      [
+        "-xf", window_archive, "--strip-components", "1", "--exclude=*/README.md",
+        "-C", window_parent,
+      ],
       repo_root,
     ),
   )
   ignore(
     run_checked("tar.exe", ["-xf", async_archive, "-C", async_stage], repo_root),
   )
-  let window_stage = window_parent +
-    "/window-b33c9f0ac85002bca4a9cceccbbcd512d13b7ceb"
-  if !@fs.exists(window_stage) {
+  let window_stage = window_parent
+  if !@fs.exists(window_stage + "/modules/window/moon.mod") {
     fail("window archive has unexpected root")
   }
   let window_readme = @fs.read_file(
@@ -388,8 +393,7 @@ async fn prepare(args : Array[String]) -> Unit raise Error {
     windowing_readme,
   )
 
-  let window_stage_relative = staging +
-    "/window/window-b33c9f0ac85002bca4a9cceccbbcd512d13b7ceb"
+  let window_stage_relative = window_parent
   let async_stage_relative = staging + "/async"
   ignore(
     run_checked(
