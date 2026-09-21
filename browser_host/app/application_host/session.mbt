@@ -179,6 +179,7 @@ fn Session::reconcile_editors(
     if editor.inputs is None {
       self.bind_editor(editor)
     }
+    editor.sync(self.application.editor)
   }
   self.sync_focus(view)
   true

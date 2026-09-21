@@ -35,6 +35,10 @@ export async function verifyDynamicControls(browser, baseUrl, outputDir) {
       await page.getByRole('button', { name: 'Add input', exact: true }).click();
       const first = page.getByRole('textbox', { name: 'Input 1', exact: true });
       assert.equal(await first.evaluate(element => document.activeElement === element), true);
+      await change(7);
+      assert.equal(await first.isDisabled(), true);
+      await change(8);
+      assert.equal(await first.isDisabled(), false);
       await page.locator('#stop').focus();
       await change(-1);
       assert.equal(await page.locator('#stop').evaluate(element => document.activeElement === element), true);

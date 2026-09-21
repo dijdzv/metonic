@@ -53,6 +53,11 @@ fn Model::change(self : Model, command : Int) -> Unit {
       }
       self.inputs.clear()
     }
+    7 | 8 => {
+      for reference in self.inputs {
+        ignore(@semantics.set_enabled(self.tree, reference, command == 8))
+      }
+    }
     _ => ()
   }
 }
