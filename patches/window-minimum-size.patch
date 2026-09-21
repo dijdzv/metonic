@@ -1,0 +1,352 @@
+diff --git a/modules/window/windows/app_state.mbt b/modules/window/windows/app_state.mbt
+index 2d4dee7..18401c0 100644
+--- a/modules/window/windows/app_state.mbt
++++ b/modules/window/windows/app_state.mbt
+@@ -12,6 +12,7 @@ priv enum DeferredCallback {
+ priv struct WindowHandleEntry {
+   raw_id : Int
+   hwnd : UInt64
++  mut minimum : @dpi.Size?
+ }
+
+ ///|
+@@ -63,14 +64,14 @@ fn app_state_register_window_handle(raw_id : Int, hwnd : UInt64) -> Unit {
+   let mut replaced = false
+   for entry in app_state_runtime.val.window_handles {
+     if entry.raw_id == raw_id {
+-      next_entries.push({ raw_id, hwnd, })
++      next_entries.push({ raw_id, hwnd, minimum: None, })
+       replaced = true
+     } else {
+       next_entries.push(entry)
+     }
+   }
+   if replaced == false {
+-    next_entries.push({ raw_id, hwnd, })
++    next_entries.push({ raw_id, hwnd, minimum: None, })
+   }
+   app_state_runtime.val.window_handles = next_entries
+ }
+diff --git a/modules/window/windows/event.mbt b/modules/window/windows/event.mbt
+index 9c8465d..7129daf 100644
+--- a/modules/window/windows/event.mbt
++++ b/modules/window/windows/event.mbt
+@@ -478,7 +478,17 @@ fn dispatch_native_sync_query(raw_id : Int, kind : Int, _arg0 : Int) -> Int {
+     return 0
+   }
+   match kind {
+-    1 => 0
++    1 => if window_minimum_track_size(raw_id) is Some(_) { 1 } else { 0 }
++    2 =>
++      match window_minimum_track_size(raw_id) {
++        Some(size) => size.width
++        None => 0
++      }
++    3 =>
++      match window_minimum_track_size(raw_id) {
++        Some(size) => size.height
++        None => 0
++      }
+     10 =>
+       match app_state_window_handle(raw_id) {
+         Some(_hwnd) => 1
+diff --git a/modules/window/windows/event_wbtest.mbt b/modules/window/windows/event_wbtest.mbt
+index 3b4a140..70e7bcf 100644
+--- a/modules/window/windows/event_wbtest.mbt
++++ b/modules/window/windows/event_wbtest.mbt
+@@ -23,7 +23,7 @@ fn reset_event_test_state() -> Unit {
+
+ ///|
+ fn test_active_loop() -> ActiveEventLoop {
+-  { inner: { msg_window: 0UL, thread_id: 0 } }
++  { inner: { msg_window: 0UL, thread_id: 0, closed: false } }
+ }
+
+ ///|
+diff --git a/modules/window/windows/minimum_size.mbt b/modules/window/windows/minimum_size.mbt
+new file mode 100644
+index 0000000..378c0fa
+--- /dev/null
++++ b/modules/window/windows/minimum_size.mbt
+@@ -0,0 +1,108 @@
++///|
++fn minimum_physical_size(
++  size : @dpi.Size,
++  scale : Double,
++) -> @dpi.PhysicalSize? {
++  let (width, height) = match size {
++    Physical(size) => (size.width.to_double(), size.height.to_double())
++    Logical(size) => (size.width * scale, size.height * scale)
++  }
++  if !@dpi.validate_scale_factor(scale) ||
++    !(width > 0.0 && width <= 2147483647.0) ||
++    !(height > 0.0 && height <= 2147483647.0) {
++    return None
++  }
++  let w = width.to_int()
++  let h = height.to_int()
++  Some(
++    @dpi.PhysicalSize(
++      if w.to_double() < width {
++        w + 1
++      } else {
++        w
++      },
++      if h.to_double() < height {
++        h + 1
++      } else {
++        h
++      },
++    ),
++  )
++}
++
++///|
++fn window_set_minimum(raw_id : Int, size : @dpi.Size?) -> Unit {
++  for entry in app_state_runtime.val.window_handles {
++    if entry.raw_id == raw_id {
++      let scale = native_get_dpi_for_window(entry.hwnd).to_double() / 96.0
++      match size {
++        None => entry.minimum = None
++        Some(value) =>
++          if minimum_physical_size(value, scale) is Some(physical) {
++            if minimum_outer_size(entry.hwnd, physical) is Some(_) {
++              entry.minimum = size
++            }
++          }
++      }
++      return
++    }
++  }
++}
++
++///|
++fn window_minimum_size(raw_id : Int) -> @dpi.PhysicalSize? {
++  for entry in app_state_runtime.val.window_handles {
++    if entry.raw_id == raw_id {
++      return match entry.minimum {
++        Some(value) =>
++          minimum_physical_size(
++            value,
++            native_get_dpi_for_window(entry.hwnd).to_double() / 96.0,
++          )
++        None => None
++      }
++    }
++  }
++  None
++}
++
++///|
++fn window_minimum_track_size(raw_id : Int) -> @dpi.PhysicalSize? {
++  guard app_state_window_handle(raw_id) is Some(hwnd) else { return None }
++  guard window_minimum_size(raw_id) is Some(size) else { return None }
++  minimum_outer_size(hwnd, size)
++}
++
++///|
++fn minimum_outer_size(
++  hwnd : UInt64,
++  size : @dpi.PhysicalSize,
++) -> @dpi.PhysicalSize? {
++  let rect : FixedArray[Int] = [0, 0, size.width, size.height]
++  let menu = if native_get_menu(hwnd) != 0UL { 1 } else { 0 }
++  if native_adjust_window_rect_ex_for_dpi(
++      rect,
++      native_get_window_long_style(hwnd).to_uint(),
++      menu,
++      native_get_window_long_ex_style(hwnd).to_uint(),
++      native_get_dpi_for_window(hwnd),
++    ) ==
++    0 {
++    return None
++  }
++  let width = rect[2].to_int64() - rect[0].to_int64()
++  let height = rect[3].to_int64() - rect[1].to_int64()
++  if width <= 0L || height <= 0L || width > 2147483647L || height > 2147483647L {
++    return None
++  }
++  Some(@dpi.PhysicalSize(width.to_int(), height.to_int()))
++}
++
++///|
++fn Window::enforce_minimum_size(self : Window) -> Unit {
++  guard self.min_inner_size() is Some(minimum) else { return }
++  let current = self.inner_size()
++  if current.width < minimum.width || current.height < minimum.height {
++    ignore(self.request_inner_size(current.into_size()))
++  }
++}
+diff --git a/modules/window/windows/minimum_size_wbtest.mbt b/modules/window/windows/minimum_size_wbtest.mbt
+new file mode 100644
+index 0000000..c12bfd0
+--- /dev/null
++++ b/modules/window/windows/minimum_size_wbtest.mbt
+@@ -0,0 +1,61 @@
++///|
++test "minimum conversion retains physical pixels and rounds logical constraints up" {
++  for scale in [1.0, 1.25, 1.5, 2.0] {
++    assert_eq(
++      minimum_physical_size(@dpi.PhysicalSize(320, 360).into_size(), scale),
++      Some(@dpi.PhysicalSize(320, 360)),
++    )
++    let result = minimum_physical_size(
++      @dpi.LogicalSize(320.5, 360.5).into_size(),
++      scale,
++    ).unwrap()
++    assert_true(result.width.to_double() >= 320.5 * scale)
++    assert_true(result.width.to_double() < 320.5 * scale + 1.0)
++    assert_true(result.height.to_double() >= 360.5 * scale)
++    assert_true(result.height.to_double() < 360.5 * scale + 1.0)
++  }
++  assert_eq(
++    minimum_physical_size(@dpi.LogicalSize(0.5, 0.5).into_size(), 1.0),
++    Some(@dpi.PhysicalSize(1, 1)),
++  )
++}
++
++///|
++test "minimum conversion rejects invalid dimensions and scales before integer conversion" {
++  for value in [0.0, -1.0, 1.0 / 0.0, 0.0 / 0.0, 2147483648.0] {
++    assert_eq(
++      minimum_physical_size(@dpi.LogicalSize(value, 100.0).into_size(), 1.0),
++      None,
++    )
++    assert_eq(
++      minimum_physical_size(@dpi.LogicalSize(100.0, value).into_size(), 1.0),
++      None,
++    )
++  }
++  for scale in [0.0, -1.0, 1.0 / 0.0, 0.0 / 0.0] {
++    assert_eq(
++      minimum_physical_size(@dpi.PhysicalSize(320, 360).into_size(), scale),
++      None,
++    )
++  }
++  assert_eq(
++    minimum_physical_size(
++      @dpi.LogicalSize(2147483647.0, 100.0).into_size(),
++      2.0,
++    ),
++    None,
++  )
++}
++
++///|
++test "minimum state disappears when a window is unregistered" {
++  let saved = app_state_runtime.val
++  defer { app_state_runtime.val = saved }
++  app_state_runtime.val = AppStateRuntime::new()
++  app_state_register_window_handle(10, 0UL)
++  app_state_runtime.val.window_handles[0].minimum = Some(@dpi.PhysicalSize(320, 360).into_size())
++  app_state_unregister_window_handle(10)
++  assert_eq(window_minimum_size(10), None)
++  app_state_register_window_handle(10, 0UL)
++  assert_eq(app_state_runtime.val.window_handles[0].minimum, None)
++}
+diff --git a/modules/window/windows/show.mbt b/modules/window/windows/show.mbt
+index 5185971..36af92b 100644
+--- a/modules/window/windows/show.mbt
++++ b/modules/window/windows/show.mbt
+@@ -10,7 +10,7 @@ pub impl Show for EventLoop with fn output(self, logger) {
+ ///|
+ pub impl Show for ActiveEventLoop with fn output(self, logger) {
+   logger.write_string("ActiveEventLoop(")
+-  logger.write_string(self.inner.to_string())
++  logger.write_string(Show::to_string(self.inner))
+   logger.write_string(")")
+ }
+
+diff --git a/modules/window/windows/window.mbt b/modules/window/windows/window.mbt
+index 524b46a..d484327 100644
+--- a/modules/window/windows/window.mbt
++++ b/modules/window/windows/window.mbt
+@@ -219,6 +219,7 @@ pub fn Window::new(
+   }
+   native_set_window_raw_id(hwnd, raw_id)
+   app_state_register_window_handle(raw_id, hwnd)
++  window_set_minimum(raw_id, attributes.min_surface_size())
+   match attributes.title() {
+     "" => ()
+     title => {
+@@ -229,7 +230,7 @@ pub fn Window::new(
+   if attributes.visible() {
+     ignore(native_show_window(hwnd, sw_shownormal))
+   }
+-  {
++  let window = {
+     id: window_id,
+     hwnd,
+     cursor_state: Icon(Default),
+@@ -255,6 +256,8 @@ pub fn Window::new(
+     saved_window_style: 0,
+     saved_window_ex_style: 0,
+   }
++  window.enforce_minimum_size()
++  window
+ }
+
+ ///|
+@@ -367,7 +370,18 @@ pub fn Window::request_inner_size(
+   self : Window,
+   size : @dpi.Size,
+ ) -> @dpi.PhysicalSize? {
+-  let physical = size.to_physical(self.scale_factor())
++  let requested = size.to_physical(self.scale_factor())
++  if requested.width <= 0 || requested.height <= 0 {
++    return None
++  }
++  let physical = match self.min_inner_size() {
++    Some(minimum) =>
++      @dpi.PhysicalSize(
++        requested.width.max(minimum.width),
++        requested.height.max(minimum.height),
++      )
++    None => requested
++  }
+   if physical.width <= 0 || physical.height <= 0 {
+     return None
+   }
+@@ -1136,8 +1150,9 @@ pub fn Window::set_window_icon(self : Window, _icon : @core.Icon?) -> Unit {
+ }
+
+ ///|
+-pub fn Window::set_min_inner_size(self : Window, _size : @dpi.Size?) -> Unit {
+-  let _ = self
++pub fn Window::set_min_inner_size(self : Window, size : @dpi.Size?) -> Unit {
++  window_set_minimum(self.id.into_raw(), size)
++  self.enforce_minimum_size()
+ }
+
+ ///|
+@@ -1146,8 +1161,8 @@ pub fn Window::set_max_inner_size(self : Window, _size : @dpi.Size?) -> Unit {
+ }
+
+ ///|
+-pub fn Window::set_min_surface_size(self : Window, _size : @dpi.Size?) -> Unit {
+-  let _ = self
++pub fn Window::set_min_surface_size(self : Window, size : @dpi.Size?) -> Unit {
++  self.set_min_inner_size(size)
+ }
+
+ ///|
+@@ -1157,8 +1172,7 @@ pub fn Window::set_max_surface_size(self : Window, _size : @dpi.Size?) -> Unit {
+
+ ///|
+ pub fn Window::min_inner_size(self : Window) -> @dpi.PhysicalSize? {
+-  let _ = self
+-  None
++  window_minimum_size(self.id.into_raw())
+ }
+
+ ///|
+@@ -1169,8 +1183,7 @@ pub fn Window::max_inner_size(self : Window) -> @dpi.PhysicalSize? {
+
+ ///|
+ pub fn Window::min_surface_size(self : Window) -> @dpi.PhysicalSize? {
+-  let _ = self
+-  None
++  self.min_inner_size()
+ }
+
+ ///|

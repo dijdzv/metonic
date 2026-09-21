@@ -1,6 +1,7 @@
 ///|
 fn main raise {
   let (editor, query) = create_fields()
+  check_resize_scroll(editor)
   editor.set_value("A😀日本")
   query.set_value("1")
   @host.initialize()

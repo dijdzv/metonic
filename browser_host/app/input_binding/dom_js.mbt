@@ -69,6 +69,35 @@ fn editor_scroll(value : @input_dom.HTMLTextAreaElement) -> Int {
 }
 
 ///|
+fn editor_scroll_limit(value : @input_dom.HTMLTextAreaElement) -> Int {
+  let element = value.to_element()
+  (element.get_scroll_height() - element.get_client_height()).max(0)
+}
+
+///|
+fn editor_restore_scroll(
+  value : @input_dom.HTMLTextAreaElement,
+  offset : Int,
+  at_end : Bool,
+) -> Int {
+  value
+  .to_element()
+  .set_scroll_top(
+    (if at_end { editor_scroll_limit(value) } else { offset }).to_double(),
+  )
+  editor_scroll(value)
+}
+
+///|
+fn input_restore_scroll(
+  value : @input_dom.HTMLInputElement,
+  offset : Int,
+) -> Int {
+  value.to_element().set_scroll_left(offset.to_double())
+  input_scroll(value)
+}
+
+///|
 fn input_document_target() -> @input_dom.EventTarget {
   input_document().to_event_target()
 }

@@ -18,6 +18,31 @@ pub fn Element::set_enabled(self : Element, enabled : Bool) -> Unit {
 }
 
 ///|
+pub fn Element::capture_scroll(self : Element) -> (Int, Bool) {
+  match self {
+    SingleLine(value) => (input_scroll(value), false)
+    Multiline(value) => {
+      let offset = editor_scroll(value)
+      let limit = editor_scroll_limit(value)
+      let caret_at_end = self.active() &&
+        (match self.selection() {
+          Some((start, end, _)) => start == end && end == self.value().length()
+          None => false
+        })
+      (offset, if limit > 0 { offset + 1 >= limit } else { caret_at_end })
+    }
+  }
+}
+
+///|
+pub fn Element::restore_scroll(self : Element, state : (Int, Bool)) -> Int {
+  match self {
+    SingleLine(value) => input_restore_scroll(value, state.0)
+    Multiline(value) => editor_restore_scroll(value, state.0, state.1)
+  }
+}
+
+///|
 pub(all) struct Binding {
   element : Element
   scroll : (Int) -> Unit

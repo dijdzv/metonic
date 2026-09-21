@@ -39,9 +39,10 @@ type DevelopmentRequest = Unit
 pub async fn run(
   application : @host_application.Application,
   hidden? : Bool = false,
+  minimum_size? : (Int, Int)? = None,
   report? : (String) -> Unit = println,
 ) -> Unit {
-  run_loop(application, Hooks::{ }, hidden, report)
+  run_loop(application, Hooks::{ }, hidden, minimum_size, report)
 }
 
 ///|

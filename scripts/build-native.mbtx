@@ -383,6 +383,22 @@ async fn main {
       if build_code != 0 {
         fail("MoonBit host " + mode + " build failed")
       }
+      if mode == "notes-probe" {
+        let test_args = [
+          "-C", workspace, "test", "../.work/native-deps/sources/window-ime-presentation/modules/window/windows",
+          "--filter", "minimum*", "--target", "native", "--target-dir", native_host_build_dir,
+          "--deny-warn",
+        ]
+        if @process.run(
+            moon,
+            test_args,
+            extra_env=envmap,
+            no_console_window=true,
+          ) !=
+          0 {
+          fail("Windows minimum constraint tests failed")
+        }
+      }
       for host_app in host_apps {
         let package_artifact = if external {
           artifact

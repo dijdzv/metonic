@@ -182,6 +182,7 @@ fn Session::resize(self : Session, width : Int, height : Int) -> Int {
     return 0
   }
   ignore((self.application.resize)(width, height))
+  let scroll = self.editors.map(editor => editor.element.capture_scroll())
   let placements : Array[@dom_view.Placement] = []
   for control in (self.application.view)() {
     if control.element.reference is Some(reference) &&
@@ -199,6 +200,9 @@ fn Session::resize(self : Session, width : Int, height : Int) -> Int {
     }
   }
   @dom_view.place(@dom_view.element(self.canvas_id), placements)
+  for i, editor in self.editors {
+    editor.scroll = editor.element.restore_scroll(scroll[i])
+  }
   1
 }
 
