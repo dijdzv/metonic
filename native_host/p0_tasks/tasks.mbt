@@ -1,23 +1,9 @@
 ///|
-priv struct SystemClock {}
-
-///|
-impl @clock.Clock for SystemClock with fn now(_) {
-  @async.now()
-}
-
-///|
-impl @clock.Clock for SystemClock with fn sleep(_, milliseconds) {
-  @clock.validate_delay(milliseconds)
-  @async.sleep(milliseconds)
-}
-
-///|
 pub using @sample {movement_result}
 
 ///|
 pub fn movement(model : @application.Model) -> @task.Request {
-  @sample.movement(model, SystemClock::{ })
+  @sample.movement(model, @production_clock.SystemClock::new())
 }
 
 ///|
@@ -30,7 +16,7 @@ pub fn user(model : @application.Model, value : String) -> @task.Request {
           "http://127.0.0.1:4174",
         ),
       },
-      clock: SystemClock::{ },
+      clock: @production_clock.SystemClock::new(),
       milliseconds: 3000,
     },
     value,

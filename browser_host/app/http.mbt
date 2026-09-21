@@ -49,7 +49,7 @@ pub fn http_start() -> Int {
         if !request.live {
           return
         }
-        let clock = @clock_driver.create()
+        let clock = @production_clock.SystemClock::new()
         let result = @user_load.load(
           @timed.TimedHttp::{
             transport: request.transport,

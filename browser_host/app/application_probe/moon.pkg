@@ -5,6 +5,8 @@ import {
   "local/browser_host/application_host" @host,
   "local/p0/examples/notes/operations_fixture" @operations,
   "moonbitlang/async",
+  "local/metonic_async/clock" @production_clock,
+  "local/p0/effects/clock",
 }
 
 pkgtype(kind: "foreign_library")

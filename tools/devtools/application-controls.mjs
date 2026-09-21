@@ -31,6 +31,13 @@ export async function verifyDynamicControls(browser, baseUrl, outputDir) {
       await page.goto(`${baseUrl}/notes/?target=${target}`);
       await page.waitForFunction(() => !document.querySelector('#status').textContent.startsWith('Loading'));
       assert.equal(await page.locator('#status').textContent(), `Ready: Notes (${target})`);
+      await page.evaluate(async target => {
+        const probe = target === 'js' ? await import('./notes.mjs') : globalThis.dynamicProbe;
+        probe.clock_start();
+        globalThis.productionClockProbe = probe;
+      }, target);
+      await page.waitForFunction(() => globalThis.productionClockProbe.clock_status() !== 0, null, { timeout: 5000 });
+      assert.equal(await page.evaluate(() => globalThis.productionClockProbe.clock_status()), 1);
       assert.equal(await page.locator('#controls textarea').count(), 0);
       const edits = () => page.evaluate(async target => {
         const probe = target === 'js' ? await import('./notes.mjs') : globalThis.dynamicProbe;

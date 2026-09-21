@@ -12,7 +12,6 @@ package names.
 | `input_binding` | Register supplied input elements and editing callbacks; own event listeners, composition state and pending animation frames |
 | `gpu_renderer` | Own scene/text resources and frame submission in an explicit `Session`; accept caller-supplied layer dimensions and counts |
 | `http_transport` | Implement the bounded POST `Http` contract; expose shared response/stream operations used by resource loading |
-| `clock_driver` | Implement the production `Clock` contract and explicit cancellation using browser timers and official async wakeups |
 | `font_loader` | Fetch and verify a font from a configured URL and SHA-256; own replacement and cancellation per loader |
 | `dom_view` | Position supplied HTML elements relative to an anchor using common view bounds |
 
@@ -20,6 +19,10 @@ The dependency guard in `scripts/verify-host-boundaries.mbtx` traverses these
 packages and rejects dependencies on `examples/p0`, its native adapters, or the
 P0 browser entry. The P0 adapter retains fixed element IDs, user-load
 orchestration, diagnostic exports and its view-to-element mapping.
+
+Production time uses `local/metonic_async/clock.SystemClock::new()`, shared with
+native. Each wait uses its async runtime's timer and cancellation cleanup; clock
+instances have no task ownership or browser-specific reset operation.
 
 `browser_host/runtime/surface.mjs` owns browser GPU acquisition, canvas backing
 size/DPR configuration, resize observation and requested animation frames. Its

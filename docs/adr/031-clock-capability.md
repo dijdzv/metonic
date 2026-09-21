@@ -52,12 +52,14 @@ runtime-independent trait in `effects/clock`. It is a workspace module so the
 native and browser workspaces resolve their own pinned async implementation.
 Its application task-scope dependency is confined to acceptance tests.
 
-The browser adapter retains its host timer ownership. Entering async from a host
-timer/reset callback is necessary to resume a condition-variable waiter; merely
-signaling it outside the scheduler can leave runnable work unprocessed. This
-uses the already-pinned experimental entry, not a second scheduler. The adapter
-retains rejection of superseded task results, and reset releases host timers and
-suspended waits.
+`async_runtime/clock.SystemClock::new()` supplies the production adapter on native
+and browser JS/WasmGC. It delegates time and sleep to the selected async runtime.
+Each sleep owns its timer and cancellation cleanup, so one instance can serve
+repeated or simultaneous waits. Canceling one task does not cancel another wait.
+The clock has no reset or application lifetime state. Browser reset cancels its
+owned tasks and retains epoch checks before applying results. The generated
+browser runtime supplies async's WasmGC timer imports; no separate host timer
+bridge or scheduler is required.
 
 ## Required evidence before acceptance
 
