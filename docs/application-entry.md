@@ -77,6 +77,34 @@ refused. Browser policy can suppress that prompt, and forced termination cannot
 be vetoed. Fatal host failures and an already-committed page exit still perform
 unconditional cleanup.
 
+### Native text clipboard
+
+Focused, enabled native inputs handle Ctrl+C, Ctrl+X and Ctrl+V. Copy and cut
+require a nonempty committed selection. During active IME preedit the host does
+not access the clipboard. Cut writes before deleting; a failed write preserves
+the text and selection. Paste reads once, leaves the selection unchanged when
+there is no text, normalizes CRLF/CR to LF and removes newlines in single-line
+inputs. Embedded NUL is rejected rather than silently truncating text.
+
+`Application.input_error` receives `Some(message)` on an editing operation
+failure and `None` after a successful clipboard operation. Applications should
+display this status without replacing their storage error state. No automatic
+retry waits for another clipboard owner; users can retry the operation.
+Application-specific content limits remain the application's responsibility.
+
+`window_host.run(clipboard=Some(backend))` overrides the synchronous
+`core/text_clipboard.Backend` for tests or embedding. Ordinary applications omit
+it and use the native platform backend. The Windows implementation reuses
+`moonbit-community/proton_clipboard` 0.3.3 with a
+[clipboard ownership correction](../patches/proton-clipboard-window-owner.md).
+Native writes use Windows CRLF line endings. The browser continues to use its
+DOM input editing path; this API does not grant browser clipboard permissions.
+
+`native:notes-test` checks copy, failed/successful cut, Unicode paste and error
+notification through synthetic key messages with an injected backend. These
+checks do not read or overwrite the user's clipboard, and do not establish the
+production OS clipboard roundtrip.
+
 ### Native pointer selection
 
 Text inputs use their retained layout for left-button drag selection. The press

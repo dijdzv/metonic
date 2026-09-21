@@ -10,4 +10,5 @@ patches/window-ime-cancel.patch whitespace=-blank-at-eol
 patches/window-ime-trace.patch whitespace=-blank-at-eol
 patches/window-system-keys.patch whitespace=-blank-at-eol
 patches/window-pointer-capture.patch whitespace=-blank-at-eol
+patches/proton-clipboard-window-owner.patch whitespace=-blank-at-eol
 patches/wgpu-native-display-feedback.patch whitespace=-blank-at-eol

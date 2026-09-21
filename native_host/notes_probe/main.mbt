@@ -12,8 +12,10 @@ async fn main {
   let disposed = Ref(0)
   let waiting = @async.CondVar::Cond()
   let activations = Ref(0)
+  let clipboard = ClipboardFixture::new()
   let app = {
     ..base,
+    input_error: error => clipboard.error = error,
     activate: reference => {
       activations.val += 1
       (base.activate)(reference)
@@ -54,6 +56,7 @@ async fn main {
     app,
     font_path=@env.args().get(1),
     hidden=true,
+    clipboard=Some(clipboard.backend()),
     minimum_size=Some((320, 240)),
     controller=Some(handle => {
       @async.with_timeout(15000, async fn() {
@@ -67,6 +70,7 @@ async fn main {
         }
         verify_disabled_pointer(model, handle, activations)
         verify_drag_selection(model, handle, activations)
+        verify_clipboard(model, handle, clipboard)
         let current = (handle.inspect)()
         assert_eq(current.controls.length(), 2)
         assert_eq(

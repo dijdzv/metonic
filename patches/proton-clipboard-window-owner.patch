@@ -1,0 +1,46 @@
+diff --git a/clipboard_native.c b/clipboard_native.c
+index 632e4ed..1d146a1 100644
+--- a/clipboard_native.c
++++ b/clipboard_native.c
+@@ -215,14 +215,25 @@ static int mb_win_write_clipboard(const char *utf8_text, size_t utf8_len) {
+   buffer[wide_len] = L'\0';
+   GlobalUnlock(handle);
+ 
+-  if (!OpenClipboard(NULL)) {
++  /* NULL ownership after EmptyClipboard is not a valid write contract. */
++  HWND owner = CreateWindowExW(0, L"STATIC", L"", 0, 0, 0, 0, 0,
++                               HWND_MESSAGE, NULL, GetModuleHandleW(NULL), NULL);
++  if (owner == NULL) {
++    DWORD err = GetLastError();
+     GlobalFree(handle);
+-    return mb_win32_error_to_status(GetLastError());
++    return mb_win32_error_to_status(err);
++  }
++  if (!OpenClipboard(owner)) {
++    DWORD err = GetLastError();
++    DestroyWindow(owner);
++    GlobalFree(handle);
++    return mb_win32_error_to_status(err);
+   }
+ 
+   if (!EmptyClipboard()) {
+     DWORD err = GetLastError();
+     CloseClipboard();
++    DestroyWindow(owner);
+     GlobalFree(handle);
+     return mb_win32_error_to_status(err);
+   }
+@@ -230,11 +241,13 @@ static int mb_win_write_clipboard(const char *utf8_text, size_t utf8_len) {
+   if (SetClipboardData(CF_UNICODETEXT, handle) == NULL) {
+     DWORD err = GetLastError();
+     CloseClipboard();
++    DestroyWindow(owner);
+     GlobalFree(handle);
+     return mb_win32_error_to_status(err);
+   }
+ 
+   CloseClipboard();
++  DestroyWindow(owner);
+   return MB_STATUS_OK;
+ }
+ #endif

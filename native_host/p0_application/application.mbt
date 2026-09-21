@@ -105,6 +105,11 @@ pub fn create(model : @application.Model) -> @host.Application {
     resize: (width, height) => @scene.resize(model.scene, width, height),
     stop: () => ignore(model.stop()),
     can_close: () => true,
+    input_error: message => {
+      if message is Some(error) {
+        println("Input failed: " + error)
+      }
+    },
     dispose: () => (),
   }
 }

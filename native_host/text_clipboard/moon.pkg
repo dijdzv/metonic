@@ -1,0 +1,6 @@
+import {
+  "local/p0/core/text_clipboard" @editing,
+  "moonbit-community/proton_clipboard" @platform,
+}
+
+supported_targets = "native"

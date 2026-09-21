@@ -20,6 +20,11 @@ pub fn Model::application(self : Model) -> @app.Application {
     resize: (width, height) => self.resize(width, height),
     stop: () => self.stop(),
     can_close: () => true,
+    input_error: message => {
+      if message is Some(error) {
+        println("Input failed: " + error)
+      }
+    },
     dispose: () => (),
   }
 }

@@ -1,4 +1,5 @@
 import {
+  "local/p0/core/text_clipboard" @clipboard,
   "moonbitlang/async",
   "moonbitlang/core/env",
   "wzzc-dev/window/windows",

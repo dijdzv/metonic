@@ -42,8 +42,17 @@ pub async fn run(
   minimum_size? : (Int, Int)? = None,
   font_path? : String? = None,
   report? : (String) -> Unit = println,
+  clipboard? : @text_clipboard.Backend? = None,
 ) -> Unit {
-  run_loop(application, Hooks::{ }, hidden, minimum_size, font_path, report)
+  run_loop(
+    application,
+    Hooks::{ },
+    hidden,
+    minimum_size,
+    font_path,
+    report,
+    clipboard,
+  )
 }
 
 ///|
