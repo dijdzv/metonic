@@ -1,0 +1,5 @@
+import {
+  "local/p0/core/application" @app,
+  "local/p0/core/application_task" @task,
+  "local/p0/core/semantics",
+}

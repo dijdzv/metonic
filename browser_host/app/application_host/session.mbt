@@ -64,6 +64,9 @@ fn Session::submit(self : Session, request : @task.Request) -> Bool {
     // DOM callbacks run outside the async scheduler; waking a queue alone does
     // not drain runnable coroutines until the host re-enters the event loop.
     @async.run_async_main(() => ())
+  } else if !self.stopped {
+    (self.application.input_error)(Some("Application task capacity is full."))
+    self.notify()
   }
   accepted
 }
@@ -282,16 +285,26 @@ fn Session::bind_editor(self : Session, editor : Editor) -> Unit {
 async fn Session::run_tasks(self : Session) -> Unit {
   defer @async.protect_from_cancel(self.application.dispose)
   defer self.stop()
-  self.tasks.run(completion => {
-    if !self.stopped {
-      if completion.apply() is Changed {
-        for editor in self.editors {
-          editor.sync(self.application.editor)
+  self.tasks.run(
+    completion => {
+      if !self.stopped {
+        match completion.apply() {
+          Changed => {
+            for editor in self.editors {
+              editor.sync(self.application.editor)
+            }
+            self.notify()
+          }
+          Failed(message) => {
+            (self.application.input_error)(Some(message))
+            self.notify()
+          }
+          Unchanged | Rejected => ()
         }
-        self.notify()
       }
-    }
-  })
+    },
+    on_state_change=() => self.notify(),
+  )
 }
 
 ///|

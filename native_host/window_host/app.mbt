@@ -606,7 +606,13 @@ async fn run_loop(
       }
       let mut initializing = true
       let mut may_present = true
-      let mut update : @async.Task[Unit]? = None
+      let tasks = @task_runner.driver()
+      defer tasks.close()
+      let tasks_running = group.spawn(() => {
+        tasks.run(result => app.queue(ApplicationResult(result)), on_state_change=() => {
+          app.queue(Redraw)
+        })
+      })
       let mut control_task : @async.Task[Unit]? = None
       if app.hooks.has_lifecycle() {
         @async.pause()
@@ -764,9 +770,11 @@ async fn run_loop(
             ApplicationTask(_, CommittedInput) if app.composition is Some(_) =>
               ()
             ApplicationTask(request, _) => {
-              update = @task_runner.dispatch(request, update, group, result => {
-                app.queue(ApplicationResult(result))
-              })
+              if !tasks.submit(request) {
+                (app.host.input_error)(
+                  Some("Application task capacity is full."),
+                )
+              }
               app.draw()
             }
             ApplicationResult(result) =>
@@ -774,6 +782,10 @@ async fn run_loop(
                 @task.Changed => app.draw()
                 @task.Rejected => app.diagnostics.rejected()
                 @task.Unchanged => ()
+                @task.Failed(message) => {
+                  (app.host.input_error)(Some(message))
+                  app.draw()
+                }
               }
             Close if app.composition is Some(_) || app.ime_pointer.pending() => {
               (app.host.input_error)(
@@ -991,7 +1003,8 @@ async fn run_loop(
           error => raise error
         }
       }
-      @task_runner.cancel_and_wait(update)
+      tasks.close()
+      tasks_running.wait()
       if initializing {
         init.cancel()
         init.wait() catch {

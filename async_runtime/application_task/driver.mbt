@@ -1,30 +1,49 @@
 ///|
+priv struct Lane {
+  operation : @task.Operation
+  mut generation : Int
+  mut running : @async.Task[Unit]?
+}
+
+///|
 pub struct Driver {
-  priv commands : @aqueue.Queue[(Int, @task.Request)]
+  priv commands : @aqueue.Queue[(Lane, Int, @task.Request)]
+  priv lanes : Map[@task.Operation, Lane]
   priv mut accepting : Bool
   priv mut started : Bool
-  priv mut generation : Int
+  priv mut pending_commands : Int
 }
 
 ///|
 pub fn driver() -> Driver {
   {
     commands: @aqueue.Queue(kind=@aqueue.Blocking(16)),
+    lanes: {},
     accepting: true,
     started: false,
-    generation: 0,
+    pending_commands: 0,
   }
 }
 
 ///|
 pub fn Driver::submit(self : Driver, request : @task.Request) -> Bool {
-  guard self.accepting else { return false }
-  let generation = self.generation + 1
-  let accepted = self.commands.try_put((generation, request)) catch {
+  guard self.accepting && self.pending_commands < 16 else { return false }
+  let operation = request.operation()
+  let lane = match self.lanes.get(operation) {
+    Some(lane) => lane
+    None => {
+      guard self.lanes.length() < 16 else { return false }
+      Lane::{ operation, generation: 0, running: None, }
+    }
+  }
+  let generation = lane.generation + 1
+  let accepted = self.commands.try_put((lane, generation, request)) catch {
     _ => false
   }
   if accepted {
-    self.generation = generation
+    self.pending_commands += 1
+    lane.generation = generation
+    self.lanes[operation] = lane
   }
   accepted
 }
@@ -34,41 +53,94 @@ pub fn Driver::close(self : Driver) -> Unit {
   guard self.accepting else { return }
   self.accepting = false
   self.commands.close(clear=true)
+  for _, lane in self.lanes {
+    if lane.running is Some(running) {
+      running.cancel()
+    }
+  }
+}
+
+///|
+fn Driver::deliver(
+  self : Driver,
+  lane : Lane,
+  generation : Int,
+  completion : @task.Completion,
+  post : (@task.Completion) -> Unit,
+) -> Unit {
+  if self.accepting && lane.generation == generation {
+    post(
+      @task.completion(() => {
+        if self.accepting && lane.generation == generation {
+          self.lanes.remove(lane.operation)
+          completion.apply()
+        } else {
+          @task.Rejected
+        }
+      }),
+    )
+  }
 }
 
 ///|
 pub async fn Driver::run(
   self : Driver,
   post : (@task.Completion) -> Unit,
+  on_state_change? : () -> Unit = () => (),
 ) -> Unit {
   guard !self.started else { return }
   self.started = true
-  defer self.close()
+  defer {
+    self.close()
+    self.lanes.clear()
+  }
   @async.with_task_group(group => {
-    let mut previous : @async.Task[Unit]? = None
     while self.accepting {
       let command = Some(self.commands.get()) catch {
         @aqueue.QueueAlreadyClosed => None
         other => raise other
       }
-      guard command is Some((generation, request)) else { break }
+      guard command is Some((lane, generation, request)) else { break }
       guard self.accepting else { break }
-      previous = dispatch(request, previous, group, completion => {
-        if self.accepting && self.generation == generation {
-          // Delivery can precede a later UI event; acceptance must be checked
-          // again when the host applies the result, not only when it is queued.
-          post(
-            @task.completion(() => {
-              if self.accepting && self.generation == generation {
-                completion.apply()
-              } else {
-                @task.Rejected
-              }
-            }),
-          )
-        }
-      })
+      request.invalidate()
+      let previous = lane.running
+      lane.running = Some(
+        group.spawn(() => {
+          let posted = Ref(false)
+          let preparing = Ref(true)
+          defer {
+            if preparing.val {
+              self.pending_commands -= 1
+            }
+            if !posted.val && lane.generation == generation {
+              self.lanes.remove(lane.operation)
+            }
+          }
+          cancel_and_wait(previous)
+          self.pending_commands -= 1
+          preparing.val = false
+          guard self.accepting && lane.generation == generation else { return }
+          guard request.prepare() is Some(work) else {
+            on_state_change()
+            return
+          }
+          on_state_change()
+          let completion = work.run() catch {
+            error if cancellation_error(error) => raise error
+            error => {
+              let message = error.to_string()
+              request.failure(message)
+            }
+          }
+          posted.val = true
+          self.deliver(lane, generation, completion, post)
+        }),
+      )
     }
-    cancel_and_wait(previous)
+    for _, lane in self.lanes {
+      if lane.running is Some(running) {
+        running.cancel()
+      }
+    }
   })
 }

@@ -48,21 +48,46 @@ do not replace the complete dependency/license inventory required for packaging.
 Initialization and activation return an optional `core/application_task.Request`.
 The host owns execution and cleanup; the application supplies the typed work and
 the completion that updates its model. Returning `None` permits synchronous
-changes without starting work. Requests share one replace/cancel lane per host;
-independent concurrent application operations are not provided by this entry.
+changes without starting work. Create and retain a `core/application_task.Operation`
+for each independently replaceable operation (for example, saving and searching),
+then pass it as `operation` to `replace` and `cancel`. Omitting it retains the
+legacy single operation. Allocate a new identity for a newly owned component;
+do not create a fresh identity for every replacement of the same operation.
 Expected failures should be returned as typed work results and displayed by the
 application. Rendering must not start storage or network operations.
 
-The browser driver rejects submissions after closure or when its bounded queue
-is full. Replacement invalidates earlier results and awaits active work cleanup
-before preparing new work. A completion delivered before replacement or closure
-is rejected if applied afterward. Stop prevents further application mutations
-and requests cancellation; the asynchronous driver returns after owned cleanup.
+Both hosts use the shared operation driver. Replacement invalidates earlier
+results for that identity and awaits its active cleanup before preparing new work.
+Other operations and the native event loop can continue during that wait.
+Cancellation keeps the identity reusable; removing a component must cancel its
+owned operations and invalidate its model references. Independent operation
+identities do not automatically infer semantic-node ownership.
+
+Submissions are rejected after closure or when capacity is exhausted: at most
+16 commands awaiting preparation and 16 operation slots are retained. Running
+work releases its command slot so a full set of active operations can still be
+canceled. A queued
+completion holds its operation slot until applied or superseded, so a host that
+stops consuming results cannot accumulate unlimited identities. Rejection does
+not invoke invalidation or prepare work. Both hosts report capacity exhaustion
+through `input_error`; browser activation also returns rejection.
+
+A completion delivered before same-operation replacement or host closure is
+rejected if applied afterward. Applying it consumes it once. An unexpected work
+exception is delivered as `Outcome::Failed(message)` without terminating unrelated
+operations. `replace` accepts `on_failure` to update application state on the host
+event loop; stale failures do not invoke this callback. Without a handler, both
+hosts report the message through `input_error`. Cancellation does not produce a
+failure notification. Unexpected failure messages are diagnostic text, not typed
+domain errors or a stable machine-readable error protocol.
+
+Stop prevents further application mutations and requests cancellation; the
+asynchronous driver returns after all owned cleanup, including superseded work.
 This does not promise that a browser page exit waits for pending storage writes.
 
 `stop` invalidates application state synchronously and must be idempotent.
 `dispose` is a separate asynchronous callback invoked once after host-owned
-application work has ended, including failed startup and task failure paths.
+application work has ended, including failed startup and host failure paths.
 Release stores and other resources that active work may still use in `dispose`,
 not `stop`. Hosts protect disposal from cancellation. Browser shutdown requests
 this cleanup asynchronously; navigation or process termination cannot guarantee
@@ -457,7 +482,8 @@ discarding unsaved text. The existing raster layer size limits also apply.
 The native default input is optional, allowing empty and button-only views.
 The managed browser entry creates DOM controls dynamically, but does not yet
 provide a general layout system.
-Application-visible unexpected task failure reporting remains under development.
+Unexpected task failures use the handler/outcome contract described above;
+there is no automatic retry or durable background job queue.
 The portable task entry alone does not establish durable saving or recovery;
 applications must connect a storage backend and handle its returned failures.
 
