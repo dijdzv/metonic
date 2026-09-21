@@ -36,6 +36,8 @@ pub(all) struct Application {
   resize : (Int, Int) -> Bool
   stop : () -> Unit
   can_close : () -> Bool
+  close_requested : () -> Unit
+  close_ready : () -> Bool
   input_error : (String?) -> Unit
   dispose : async () -> Unit
 }

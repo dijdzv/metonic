@@ -85,6 +85,26 @@ pub fn create(
     () => session.gpu.gpu_frame_submit(),
     () => session.gpu.gpu_frame_abort(),
     () => session.stop(),
-    () => if session.stopped || (application.can_close)() { 1 } else { 0 },
+    () => if session.stopped || (!session.editors.any(editor => editor.composing) && (application.can_close)()) { 1 } else { 0 },
+    () => {
+      if !session.stopped {
+        if session.editors.any(editor => editor.composing) {
+          (application.input_error)(Some("Finish or cancel text composition before closing."))
+          session.notify()
+          return
+        }
+        (application.input_error)(None)
+        (application.close_requested)()
+        for editor in session.editors { editor.sync(application.editor) }
+        for binding in session.bindings {
+          if @semantics.node(application.editor, binding.reference) is Ok(node) &&
+            node.enabled && node.focused {
+            @dom_view.element(binding.element_id).focus()
+          }
+        }
+        session.notify()
+      }
+    },
+    () => if !session.stopped && (application.close_ready)() { 1 } else { 0 },
   )
 }

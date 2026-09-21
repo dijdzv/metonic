@@ -93,9 +93,9 @@ fn Session::notify_result(self : Session, result : Int) -> Unit {
 }
 
 ///|
-fn Session::sync(self : Session, state : InputState) -> Unit {
+fn Session::sync(self : Session, state : InputState) -> Bool {
   if state.stopped {
-    return
+    return false
   }
   let binding = state.binding
   let element = binding.element
@@ -107,16 +107,21 @@ fn Session::sync(self : Session, state : InputState) -> Unit {
   )
   guard element.selection() is Some((start, end, backward)) else {
     self.notify_result(0)
-    return
+    return false
   }
   if state.composing {
     (binding.preedit)(state.preedit)
     if (binding.preview)(element.value(), if backward { start } else { end }) ==
       1 {
       self.notify_result(1)
+      true
+    } else {
+      false
     }
   } else {
-    self.notify_result((binding.commit)(element.value(), start, end))
+    let result = (binding.commit)(element.value(), start, end)
+    self.notify_result(result)
+    result == 1
   }
 }
 
@@ -138,25 +143,26 @@ fn Session::bind(self : Session, state : InputState) -> Unit {
     if state.stopped || (!state.composing && input_event_composing(event)) {
       return
     }
-    self.sync(state)
+    ignore(self.sync(state))
   }
   self.listen(target, "input", on_input)
   self.listen(target, "select", on_input)
   self.listen(target, "selectionchange", on_input)
-  self.listen(target, "scroll", _ => self.sync(state))
+  self.listen(target, "scroll", _ => ignore(self.sync(state)))
   self.listen(target, "focus", _ => {
     if state.stopped {
       return
     }
     (state.binding.focus)()
-    self.sync(state)
+    ignore(self.sync(state))
   })
   self.listen(target, "compositionstart", _ => {
     if state.stopped {
       return
     }
-    self.sync(state)
-    if state.stopped || self.error != 0 {
+    // A past rejected input is diagnostic history, not a permanent IME lock.
+    let accepted = self.sync(state)
+    if state.stopped || !accepted {
       return
     }
     state.composing = (state.binding.begin_composition)() == 1
@@ -173,7 +179,7 @@ fn Session::bind(self : Session, state : InputState) -> Unit {
         input_request_frame(_ => {
           state.frame = None
           if state.composing && !state.stopped {
-            self.sync(state)
+            ignore(self.sync(state))
           }
         }),
       )
@@ -190,7 +196,7 @@ fn Session::bind(self : Session, state : InputState) -> Unit {
     }
     state.preedit = ""
     (state.binding.end_composition)()
-    self.sync(state)
+    ignore(self.sync(state))
   })
 }
 
@@ -241,12 +247,12 @@ pub fn start(bindings : Array[Binding], notify : () -> Unit) -> Session {
   session.listen(input_document_target(), "selectionchange", _ => {
     for state in session.inputs {
       if state.binding.element.active() {
-        session.sync(state)
+        ignore(session.sync(state))
       }
     }
   })
   for state in session.inputs {
-    session.sync(state)
+    ignore(session.sync(state))
   }
   session
 }

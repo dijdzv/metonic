@@ -38,4 +38,6 @@ fn make_bridge(
   frame_abort : () -> Unit,
   stop : () -> Unit,
   can_close : () -> Int,
+  request_close : () -> Unit,
+  close_ready : () -> Int,
 ) -> Instance = "metonic:application" "create"
