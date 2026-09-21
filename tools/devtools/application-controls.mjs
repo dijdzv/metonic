@@ -36,7 +36,17 @@ export async function verifyDynamicControls(browser, baseUrl, outputDir) {
         const probe = target === 'js' ? await import('./notes.mjs') : globalThis.dynamicProbe;
         return [probe.edit_count(), probe.edit_completed(), probe.edit_text()];
       }, target);
-      assert.deepEqual(await edits(), [0, 0, '']);
+      const expectEdits = async (count, text) => {
+        const observed = await edits();
+        assert.equal(observed[0], count);
+        assert.equal(observed[2], text);
+        await page.waitForFunction(async ({ target, count }) => {
+          const probe = target === 'js' ? await import('./notes.mjs') : globalThis.dynamicProbe;
+          return probe.edit_completed() === count;
+        }, { target, count }, { timeout: 5000 });
+        assert.deepEqual(await edits(), [count, count, text]);
+      };
+      await expectEdits(0, '');
       await page.getByRole('button', { name: 'Add input', exact: true }).click();
       const first = page.getByRole('textbox', { name: 'Input 1', exact: true });
       assert.equal(await first.evaluate(element => document.activeElement === element), true);
@@ -48,7 +58,7 @@ export async function verifyDynamicControls(browser, baseUrl, outputDir) {
       await change(-1);
       assert.equal(await page.locator('#stop').evaluate(element => document.activeElement === element), true);
       await first.fill('abcdef\none\ntwo\nthree\nfour\nfive');
-      assert.deepEqual(await edits(), [1, 1, 'abcdef\none\ntwo\nthree\nfour\nfive']);
+      await expectEdits(1, 'abcdef\none\ntwo\nthree\nfour\nfive');
       const retained = await first.elementHandle();
       await retained.evaluate(element => {
         globalThis.retainedInput = element;
@@ -89,7 +99,7 @@ export async function verifyDynamicControls(browser, baseUrl, outputDir) {
       await retained.dispose();
       assert.equal((await edits())[0], 1);
       await replacement.fill('あいう');
-      assert.deepEqual(await edits(), [2, 2, 'あいう']);
+      await expectEdits(2, 'あいう');
       const compose = async (finish, value) => replacement.evaluate((element, { finish, value }) => {
         if (!finish) {
           element.setSelectionRange(0, 2);
@@ -108,11 +118,11 @@ export async function verifyDynamicControls(browser, baseUrl, outputDir) {
       assert.equal((await edits())[0], 2);
       await change(12);
       await compose(true, '青う');
-      assert.deepEqual(await edits(), [3, 3, '青う']);
+      await expectEdits(3, '青う');
       await compose(false, '');
       assert.equal((await edits())[0], 3);
       await compose(true, '');
-      assert.deepEqual(await edits(), [4, 4, '']);
+      await expectEdits(4, '');
       await replacement.evaluate(element => {
         element.dispatchEvent(new Event('select'));
         element.dispatchEvent(new Event('scroll'));
@@ -159,7 +169,7 @@ export async function verifyDynamicControls(browser, baseUrl, outputDir) {
       await page.getByRole('button', { name: 'Add input', exact: true }).click();
       const single = page.getByRole('textbox', { name: 'Input 1', exact: true });
       await single.fill('あいう');
-      assert.deepEqual(await edits(), [1, 1, 'あいう']);
+      await expectEdits(1, 'あいう');
       await single.evaluate(element => {
         element.setSelectionRange(0, 2);
         element.dispatchEvent(new Event('select'));
@@ -173,7 +183,7 @@ export async function verifyDynamicControls(browser, baseUrl, outputDir) {
         element.dispatchEvent(new CompositionEvent('compositionend', { data: '' }));
         element.dispatchEvent(new Event('input'));
       });
-      assert.deepEqual(await edits(), [2, 2, 'う']);
+      await expectEdits(2, 'う');
       const stoppedInput = await single.elementHandle();
       await page.locator('#stop').click();
       await stoppedInput.evaluate(element => {
