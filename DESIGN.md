@@ -1,6 +1,6 @@
 # metonic Architecture
 
-Design revision: 0.3 · Adoption notes updated 2026-09-08 · Status: technical validation
+Design revision: 0.3 · Boundary policy updated 2026-09-22 · Status: experimental application foundation
 
 This document defines the intended architecture. Implemented behavior and test
 results are recorded separately in [P0 verification](docs/verification/p0.md).
@@ -8,10 +8,10 @@ Examples of future APIs are design sketches, not supported interfaces.
 
 ## 1. Goals and boundaries
 
-metonic is a MoonBit-first GPU UI framework and an independently usable typed
-RPC library. The first integrated milestone is one MoonBit application running
-on Windows and in a WebGPU browser, accepting Japanese input and calling a
-MoonBit backend through a typed contract.
+metonic is a MoonBit-first GPU UI framework. Its application foundation targets
+Windows and WebGPU browsers, including Japanese input, persistent application
+state and explicit host/resource ownership. Contract/RPC packages support
+optional integrations; a backend or RPC service is not required by an application.
 
 | Area | Policy |
 | --- | --- |
@@ -22,7 +22,7 @@ MoonBit backend through a typed contract.
 | Rendering | GPU-rendered standard UI on both platforms |
 | State | Fine-grained reactive state and persistent UI nodes |
 | RPC | Independent of UI; contract-first with typed input, output, and domain errors |
-| gRPC | High-priority optional transport; validated before the component library is complete |
+| gRPC | Deferred optional transport; not a prerequisite for the application foundation |
 | Development tools | CLI/MCP automation is a first-class development capability |
 | Production | Excludes the development control endpoint and instrumentation; retains accessibility |
 
@@ -89,6 +89,12 @@ A scope owns subscriptions and tasks. Disposing it prevents subsequent writes.
 Async completions carry request identity/generation so superseded responses cannot
 overwrite newer state. Worker threads enqueue results; only the UI thread mutates
 UI state. Cancellation is an explicit outcome, not proof that external work stopped.
+
+Shared resource contracts and environment-specific APIs follow
+[ADR 033](docs/adr/033-capability-platform-boundaries.md). A shared capability
+requires shared meaning and guarantees; platform-only APIs need no dummy
+implementation on another host. Build targets, execution environments and runtime
+permissions are separate concerns.
 
 External dependencies can be expressed as small capability traits independently
 of reactive effects. Delayed operations use `effects/clock`; hosts supply real

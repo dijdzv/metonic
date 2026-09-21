@@ -10,7 +10,7 @@ pub fn scene_field(model : @application.Model, index : Int) -> Int {
 pub fn create(model : @application.Model) -> @host.Application {
   {
     editor: model.editor,
-    default_input: model.editor_input,
+    default_input: Some(model.editor_input),
     initialize: () => {
       ignore(
         @semantics.set_text(

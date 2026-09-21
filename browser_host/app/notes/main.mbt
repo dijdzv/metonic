@@ -4,10 +4,8 @@ pub fn create() -> @host.Instance {
   let model = @note_model.create()
   @host.create(
     model.application(),
-    [
-      { reference: model.note, element_id: "note", },
-      { reference: model.clear, element_id: "clear", },
-    ],
+    [],
+    root_id=Some("controls"),
     canvas_id="canvas",
     event_name="metonic-notes",
     font_url="./NotoSansJP.ttf",

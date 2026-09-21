@@ -4,8 +4,7 @@ fn App::navigate_vertical(
   down : Bool,
   extend_selection : Bool,
 ) -> Unit raise {
-  let node = app.input_node()
-  if !node.focused {
+  guard app.input_node() is Some(node) && node.focused else {
     ignore((app.host.navigate_unhandled)(0, if down { 10 } else { -10 }))
     app.draw()
     return

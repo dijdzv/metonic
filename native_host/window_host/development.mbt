@@ -53,8 +53,8 @@ async fn App::dispatch_development(
       } else if expected is Some(revision) &&
         revision != @semantics.revision(app.host.editor) {
         result.val = Some("stale_revision")
-      } else {
-        let reference = app.host.default_input
+      } else if app.default_node() is Some(node) {
+        let reference = node.reference
         let error = match text {
           Some(text) =>
             @semantics.replace_selection(app.host.editor, reference, text)
@@ -64,6 +64,8 @@ async fn App::dispatch_development(
           app.draw()
         }
         result.val = Some(error)
+      } else {
+        result.val = Some("no_default_input")
       }
     Select(start, end, expected, result) =>
       if app.composition is Some(_) || app.ime_pointer.pending() {
@@ -71,8 +73,8 @@ async fn App::dispatch_development(
       } else if expected is Some(revision) &&
         revision != @semantics.revision(app.host.editor) {
         result.val = Some("stale_revision")
-      } else {
-        let reference = app.host.default_input
+      } else if app.default_node() is Some(node) {
+        let reference = node.reference
         let error = @semantics.set_selection(
           app.host.editor,
           reference,
@@ -83,6 +85,8 @@ async fn App::dispatch_development(
           app.draw()
         }
         result.val = Some(error)
+      } else {
+        result.val = Some("no_default_input")
       }
   }
 }

@@ -160,10 +160,14 @@ fn Hooks::processed(_self : Hooks, event : Event, app : App) -> Unit {
     "sequence": diagnostics.ime_sequence,
     "tick_ms": native_tick_count(),
     "kind": kind,
-    "field": if node.reference != app.host.default_input {
-      "query"
-    } else {
-      "editor"
+    "field": match node {
+      None => Json::null()
+      Some(node) =>
+        if Some(node.reference) != app.host.default_input {
+          "query"
+        } else {
+          "editor"
+        }
     },
     "utf16_length": length,
     "attribute_count": app.preedit_attributes.length(),
@@ -189,8 +193,12 @@ fn Hooks::processed(_self : Hooks, event : Event, app : App) -> Unit {
     } else {
       Json::null()
     },
-    "selection_start": node.selection_start,
-    "selection_end": node.selection_end,
+    "selection_start": node
+    .map(node => node.selection_start.to_json())
+    .unwrap_or(Json::null()),
+    "selection_end": node
+    .map(node => node.selection_end.to_json())
+    .unwrap_or(Json::null()),
     "composing": app.composition is Some(_),
   })
 }

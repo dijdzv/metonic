@@ -6,7 +6,7 @@ fn App::edit_clipboard(
   if app.composition is Some(_) || app.ime_pointer.pending() {
     return
   }
-  let node = app.input_node()
+  guard app.input_node() is Some(node) else { return }
   if !node.focused || !node.enabled {
     return
   }

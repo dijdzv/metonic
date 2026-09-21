@@ -30,8 +30,14 @@ when an application changes only the optional rectangle. Pointer and vertical
 navigation resolve the relevant input's retained geometry rather than a primary
 editor's width. Do not mutate retained raster engines outside this host/presenter.
 
-The default input must remain a live TextInput during host operation. This first
-host API does not yet support input-free applications. View items have the current
+The default input is optional. Set it to `None` for input-free applications;
+focused live inputs in the current view remain editable without a default.
+An absent, removed or unpresented default does not create a placeholder input.
+Untargeted development Edit/Select operations return `no_default_input`, and
+Snapshot exposes `default_input: None`; explicitly targeted controls remain usable.
+Removing the active composition target retires its preedit and rejects late
+composition input until that session ends or a new composition starts.
+View items have the current
 raster limits (width at most 1024, height at most 96); viewport dimensions are at
 most 2048. The accessibility bridge currently exposes full text-run geometry for
 one declared text owner. These limits are not claims of a general widget toolkit.

@@ -1,5 +1,13 @@
 ///|
 async fn main {
+  if @env.args().contains("--empty-view") {
+    verify_empty_view()
+    return
+  }
+  if @env.args().contains("--no-input") {
+    verify_no_input()
+    return
+  }
   if @env.args().contains("--minimum") {
     verify_minimum_size()
     return
@@ -83,22 +91,33 @@ async fn main {
         let window = notes_window()
         assert_true(pointer_post(window, 0x10DU, 0UL, 0L) != 0)
         @async.with_timeout(2000, () => {
-          while !(handle.inspect)().composing { @async.sleep(5) }
+          while !(handle.inspect)().composing {
+            @async.sleep(5)
+          }
         })
         assert_true(pointer_post(window, 0x10U, 0UL, 0L) != 0)
         @async.with_timeout(2000, () => {
-          while clipboard.error is None { @async.sleep(5) }
+          while clipboard.error is None {
+            @async.sleep(5)
+          }
         })
-        assert_eq(clipboard.error, Some("Finish or cancel text composition before closing."))
+        assert_eq(
+          clipboard.error,
+          Some("Finish or cancel text composition before closing."),
+        )
         assert_eq(close_requests.val, 0)
         assert_true((handle.inspect)().composing)
         assert_true(pointer_post(window, 0x10EU, 0UL, 0L) != 0)
         @async.with_timeout(2000, () => {
-          while (handle.inspect)().composing { @async.sleep(5) }
+          while (handle.inspect)().composing {
+            @async.sleep(5)
+          }
         })
         assert_true(pointer_post(window, 0x10U, 0UL, 0L) != 0)
         @async.with_timeout(2000, () => {
-          while close_requests.val != 1 { @async.sleep(5) }
+          while close_requests.val != 1 {
+            @async.sleep(5)
+          }
         })
         assert_false((handle.inspect)().closed)
         assert_eq((handle.inspect)().text, state.text)
@@ -190,7 +209,9 @@ async fn main {
         completed.val = true
         assert_true(pointer_post(window, 0x10U, 0UL, 0L) != 0)
         @async.with_timeout(2000, () => {
-          while close_requests.val != 2 { @async.sleep(5) }
+          while close_requests.val != 2 {
+            @async.sleep(5)
+          }
         })
         close_allowed.val = true
         ignore((handle.select)(0, 0, None))

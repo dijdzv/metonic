@@ -1,4 +1,6 @@
 import {
+  "local/p0/core/application" @portable,
+  "local/native_host/application" @host_application,
   "local/p0/core/text_clipboard" @clipboard,
   "moonbitlang/async",
   "moonbitlang/core/env",

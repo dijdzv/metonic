@@ -10,16 +10,23 @@ pub fn create(
   event_name~ : String,
   font_url~ : String,
   font_sha256~ : String,
+  root_id? : String? = None,
 ) -> Instance {
   let session = Session::{
     application,
-    bindings,
+    bindings: bindings.map(binding => binding),
+    managed_root: root_id,
+    root_element: None,
+    owned: [],
+    next_control: 0,
     canvas_id,
     event_name,
     font: @font_loader.create(font_url, font_sha256).unwrap(),
     gpu: @gpu_renderer.create(),
     editors: [],
-    inputs: None,
+    started: false,
+    reconciling: false,
+    applied_focus: None,
     engine: None,
     layers: [],
     stopped: false,
@@ -85,20 +92,35 @@ pub fn create(
     () => session.gpu.gpu_frame_submit(),
     () => session.gpu.gpu_frame_abort(),
     () => session.stop(),
-    () => if session.stopped || (!session.editors.any(editor => editor.composing) && (application.can_close)()) { 1 } else { 0 },
+    () => {
+      if session.stopped ||
+        (
+          !session.editors.any(editor => editor.composing) &&
+          (application.can_close)()
+        ) {
+        1
+      } else {
+        0
+      }
+    },
     () => {
       if !session.stopped {
         if session.editors.any(editor => editor.composing) {
-          (application.input_error)(Some("Finish or cancel text composition before closing."))
+          (application.input_error)(
+            Some("Finish or cancel text composition before closing."),
+          )
           session.notify()
           return
         }
         (application.input_error)(None)
         (application.close_requested)()
-        for editor in session.editors { editor.sync(application.editor) }
+        for editor in session.editors {
+          editor.sync(application.editor)
+        }
         for binding in session.bindings {
           if @semantics.node(application.editor, binding.reference) is Ok(node) &&
-            node.enabled && node.focused {
+            node.enabled &&
+            node.focused {
             @dom_view.element(binding.element_id).focus()
           }
         }

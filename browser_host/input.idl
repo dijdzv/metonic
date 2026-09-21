@@ -18,10 +18,15 @@ interface Document : EventTarget {
 };
 interface Node : EventTarget {
   Node appendChild(Node child);
+  Node removeChild(Node child);
   attribute DOMString? textContent;
   boolean isSameNode(Node? otherNode);
 };
 interface Element : Node {
+  undefined moveBefore(Node movedNode, Node? referenceNode);
+  undefined setAttribute(DOMString qualifiedName, DOMString value);
+  boolean hasAttribute(DOMString qualifiedName);
+  undefined removeAttribute(DOMString qualifiedName);
   attribute DOMString id;
   attribute double scrollLeft;
   attribute double scrollTop;

@@ -41,7 +41,9 @@ pub fn from_application(app : @portable.Application) -> Application {
             })
           }),
           statuses: [],
-          text_owner: Some(app.default_input),
+          text_owner: app.default_input.filter(reference => {
+            inputs.any(input => input.reference == reference)
+          }),
           composing: false,
           text_scroll: 0,
         },
