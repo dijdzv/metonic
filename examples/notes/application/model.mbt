@@ -5,6 +5,7 @@ pub struct Model {
   clear : @semantics.NodeRef
   priv mut width : Int
   priv mut height : Int
+  priv mut input_error : String?
 }
 
 ///|
@@ -15,7 +16,7 @@ pub fn create() -> Model {
   ).unwrap()
   let clear = @semantics.add_button(editor, "Clear note").unwrap()
   ignore(@semantics.focus(editor, note))
-  { editor, note, clear, width: 480, height: 240, }
+  { editor, note, clear, width: 480, height: 240, input_error: None, }
 }
 
 ///|

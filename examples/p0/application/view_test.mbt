@@ -80,6 +80,18 @@ test "request focus preserves edited content and shares resized hit bounds" {
 }
 
 ///|
+test "input error visibility preserves task and RPC state" {
+  let app = create(1, 1)
+  let original = app.view().task_status.text
+  let result = app.result
+  app.set_input_error(Some("Clipboard: busy"))
+  assert_eq(app.view().task_status.text, original + " | Clipboard: busy")
+  assert_eq(app.result, result)
+  app.set_input_error(None)
+  assert_eq(app.view().task_status.text, original)
+}
+
+///|
 test "task status follows cancellation and reuse without replacing editor contents" {
   let app = create(1, 1)
   let input = @semantics.snapshot(app.editor)[1].reference

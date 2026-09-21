@@ -8,10 +8,27 @@ pub fn Model::application(self : Model) -> @app.Application {
     initialize: () => None,
     view: () => {
       let elements = self.elements()
-      [
+      let controls : Array[@app.Control] = [
         { element: elements[0], kind: @app.Input(single_line=false), },
         { element: elements[1], kind: @app.Button, },
       ]
+      if self.input_error is Some(error) {
+        controls.push({
+          element: {
+            bounds: {
+              x: 16,
+              y: 176,
+              width: (self.width - 32).max(32).min(1024),
+              height: 32,
+            },
+            text: error,
+            reference: None,
+            focused: false,
+          },
+          kind: @app.Text,
+        })
+      }
+      controls
     },
     activate: reference => {
       ignore(self.activate(reference))
@@ -20,11 +37,7 @@ pub fn Model::application(self : Model) -> @app.Application {
     resize: (width, height) => self.resize(width, height),
     stop: () => self.stop(),
     can_close: () => true,
-    input_error: message => {
-      if message is Some(error) {
-        println("Input failed: " + error)
-      }
-    },
+    input_error: message => self.input_error = message,
     dispose: () => (),
   }
 }

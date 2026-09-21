@@ -352,6 +352,27 @@ Check editing, saving, restart/restore and shutdown in addition to startup.
 Relocation on a development machine does not establish clean-machine runtime
 availability or physical IME behavior.
 
+## Resource responsibilities
+
+The application entry does not require an application-wide resource container.
+Compose resources at startup and retain their cleanup until host-owned work has
+ended. The following boundaries are deliberately different:
+
+| Resource | Shared contract and platform entry | Application responsibility and limits |
+| --- | --- | --- |
+| Time | `effects/clock.Clock`; browser `clock_driver.create`; `async_runtime/clock.VirtualClock` for tests | Select a clock when work needs one. Cancellation belongs to the async task. Native `SystemClock` implementations currently remain private to the RPC/sample packages; there is no public native clock factory. |
+| HTTP | Bounded POST through `effects/http.Http`, native `http.NativeHttp`, browser `http_transport.create`; `async_runtime/http.TimedHttp` adds a deadline | Select the endpoint, accepted content types and response limit. Browser CORS/permissions still apply. Create a browser transport per exchange; its controller/reader are cleaned up after use. |
+| Display and host | `core/application.Control`, native `application.from_application`/`window_host.run`, browser `application_host.create` | Define layout, state, semantic references and actions. Hosts own GPU objects, rasterization, input and shutdown. Ordinary applications need no GPU types. Browser element bindings are fixed at startup. |
+| Storage | Native `snapshot_store.Store` and browser `snapshot_store.load/save` | Adapt bytes or strings into the application's format and recovery policy. Native locking/async IO and browser synchronous origin-scoped storage have different lifetime and failure contracts, described below. |
+| Clipboard | `core/text_clipboard` editing policy and native backend; browser DOM editing | Display input-operation failures separately from storage failures. Native access does not grant browser clipboard permissions. Rich text, images and clipboard history are not provided. |
+| Fonts and packaged assets | Native executable-relative resource resolution/font override; browser font URL and digest | Select and distribute licensed resources. Host code loads and rasterizes the configured font. `resources.asset_path` resolves a file path; it does not decode an image. |
+| Images | No image control or image-loading API in the portable entry | The current control kinds are Text, Button and Input. Image widgets/decoders require a separate extension; access to low-level rendering internals is not a portable image API. |
+
+Storage serialization and memo CRUD belong to the consumer. GPU setup, OS input
+handling and resource teardown belong to the hosts. Task requests use the
+existing replacement/cancellation lane; resource interfaces do not own a second
+scheduler or hide platform permissions and persistence differences.
+
 ## Current limits and verification
 
 `native_host/snapshot_store` stores one opaque snapshot in an application-selected
@@ -385,8 +406,11 @@ This API does not coordinate competing tabs: the latest successful write wins.
 Applications requiring concurrent editing must add conflict detection or use a
 storage backend with the required transaction contract.
 
-Input is limited to 1024 UTF-16 code units and the existing raster layer limits
-apply. Native still requires a live default input. The browser configuration
+The browser application host accepts input up to 1024 UTF-16 code units. The
+semantic editor and native clipboard policy do not impose that same content cap;
+applications must enforce their own document limits and report rejection without
+discarding unsaved text. The existing raster layer size limits also apply.
+Native still requires a live default input. The browser configuration
 does not dynamically create DOM controls or provide a general layout system.
 Application-visible unexpected task failure reporting remains under development.
 The portable task entry alone does not establish durable saving or recovery;
