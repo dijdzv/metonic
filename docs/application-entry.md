@@ -50,8 +50,9 @@ The workspace must include the corresponding Metonic modules and prepared
 dependencies. Native and browser workspaces select different async adapters and
 must remain separate.
 
-WebSys preparation flattens the archive's outer directory to keep generator
-artifact paths short on Windows. Child Git processes enable long paths without
+WebSys and native dependency preparation flatten the archives' outer directories
+to keep staging and generator artifact paths short on Windows. WebSys child Git
+processes enable long paths without
 modifying global Git settings. This avoids the known nested-checkout failure;
 it does not guarantee that every tool supports arbitrarily long directory paths.
 
