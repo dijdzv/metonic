@@ -11,8 +11,13 @@ async fn main {
   let stopped = Ref(false)
   let disposed = Ref(0)
   let waiting = @async.CondVar::Cond()
+  let activations = Ref(0)
   let app = {
     ..base,
+    activate: reference => {
+      activations.val += 1
+      (base.activate)(reference)
+    },
     initialize: () => {
       Some({
         request: @task.replace(() => (), () => {
@@ -60,6 +65,7 @@ async fn main {
         while !started.val {
           @async.sleep(1)
         }
+        verify_disabled_pointer(model, handle, activations)
         assert_eq((handle.select)(0, state.text.length(), None), "")
         assert_eq((handle.edit)(Some("Notes 日本語\nsecond line"), None), "")
         assert_eq((handle.inspect)().text, "Notes 日本語\nsecond line")
