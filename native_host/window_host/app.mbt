@@ -543,8 +543,7 @@ async fn run_loop(
             | Backspace
             | Delete
             | CompositionStart
-            | CompositionUpdate(_, _, _)
-            | TextPointer(_, _, _) if !app.input_node().enabled => ()
+            | CompositionUpdate(_, _, _) if !app.input_node().enabled => ()
             ToggleFocus(_)
             | Navigate(_, _)
             | NavigateVertical(_, _)
