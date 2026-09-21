@@ -40,6 +40,7 @@ pub fn Model::application(self : Model) -> @app.Application {
     close_requested: () => (),
     close_ready: () => false,
     input_error: message => self.input_error = message,
+    edited: _ => None,
     dispose: () => (),
   }
 }

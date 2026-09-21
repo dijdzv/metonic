@@ -12,6 +12,13 @@ pub(all) struct Control {
 }
 
 ///|
+pub(all) struct TextEdit {
+  target : @semantics.NodeRef
+  text : String
+  revision : Int
+}
+
+///|
 pub(all) struct Application {
   title : String
   editor : @semantics.Tree
@@ -20,6 +27,7 @@ pub(all) struct Application {
   initialize : () -> @task.Request?
   view : () -> Array[Control]
   activate : (@semantics.NodeRef) -> @task.Request?
+  edited : (TextEdit) -> @task.Request?
   resize : (Int, Int) -> Bool
   stop : () -> Unit
   can_close : () -> Bool

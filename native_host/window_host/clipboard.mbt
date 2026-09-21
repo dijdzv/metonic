@@ -24,7 +24,10 @@ fn App::edit_clipboard(
       app.clipboard,
       single_line=input.single_line,
     ) {
-    Ok(_) => (app.host.input_error)(None)
+    Ok(_) => {
+      app.report_edit(node.reference, node.value)
+      (app.host.input_error)(None)
+    }
     Err(error) => (app.host.input_error)(Some("Clipboard: " + error))
   }
   app.input_navigation.reset()

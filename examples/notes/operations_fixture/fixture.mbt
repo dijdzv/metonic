@@ -142,6 +142,7 @@ pub fn Model::application(self : Model) -> @app.Application {
     close_requested: () => (),
     close_ready: () => false,
     input_error: _ => (),
+    edited: _ => None,
     dispose: () => self.disposed += 1,
   }
 }

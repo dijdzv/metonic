@@ -65,6 +65,9 @@ pub fn from_application(app : @portable.Application) -> Application {
       })
     },
     activate_unhandled: () => false,
+    edited: edit => {
+      (app.edited)(edit).map(request => { request, gate: Always, })
+    },
     shortcut: (_, _, _) => None,
     navigation_blocked: () => false,
     navigate_unhandled: (_, _) => false,

@@ -1,5 +1,9 @@
 ///|
 async fn main {
+  if @env.args().contains("--edits") {
+    verify_edits()
+    return
+  }
   if @env.args().contains("--operations") {
     verify_operations()
     return

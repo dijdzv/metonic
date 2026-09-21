@@ -6,6 +6,8 @@ priv struct Model {
   mut serial : Int
   mut invalid : Int
   operations : @operations.Model
+  edits : Array[@app.TextEdit]
+  mut edit_completed : Int
 }
 
 ///|
@@ -47,7 +49,11 @@ fn Model::change(self : Model, command : Int) -> Unit {
           )
         }
       }
-    4 | 5 | 9 => self.invalid = command
+    4 | 5 | 9 | 10 => self.invalid = command
+    11 =>
+      for reference in self.inputs {
+        ignore(@semantics.set_text(self.tree, reference, "programmatic"))
+      }
     6 => {
       for reference in self.inputs {
         ignore(@semantics.remove(self.tree, reference))
@@ -96,6 +102,8 @@ pub fn create() -> @host.Instance {
     serial: 0,
     invalid: 0,
     operations: @operations.create(() => @async.CondVar::Cond().wait(), tree~),
+    edits: [],
+    edit_completed: 0,
   }
   active.val = Some(model)
   let app : @app.Application = {
@@ -128,7 +136,7 @@ pub fn create() -> @host.Instance {
             focused: node.focused,
             bounds: { x: 16, y: 60 + index * 100, width: 400, height: 80, },
           },
-          kind: Input(single_line=model.invalid == 5),
+          kind: Input(single_line=model.invalid == 5 || model.invalid == 10),
         })
       }
       if model.invalid == 4 && controls.length() > 1 {
@@ -155,6 +163,23 @@ pub fn create() -> @host.Instance {
     close_requested: () => (),
     close_ready: () => false,
     input_error: _ => (),
+    edited: edit => {
+      model.edits.push(edit)
+      Some(
+        @task.replace(
+          () => (),
+          () => {
+            Some(
+              @task.work(() => (), _ => {
+                model.edit_completed += 1
+                @task.Unchanged
+              }),
+            )
+          },
+          operation=@task.Operation::new(),
+        ),
+      )
+    },
     dispose: () => (model.operations.application().dispose)(),
   }
   @host.create(
@@ -166,4 +191,23 @@ pub fn create() -> @host.Instance {
     font_url="./NotoSansJP.ttf",
     font_sha256="c2f3b4d463500a2ddcd3849cded1fceeb9fd6d1c32e6cbecd568453ba50fc68f",
   )
+}
+
+///|
+#export_name("edit_count")
+pub fn edit_count() -> Int {
+  active.val.map(model => model.edits.length()).unwrap_or(0)
+}
+
+///|
+#export_name("edit_completed")
+pub fn edit_completed() -> Int {
+  active.val.map(model => model.edit_completed).unwrap_or(0)
+}
+
+///|
+#export_name("edit_text")
+pub fn edit_text() -> String {
+  guard active.val is Some(model) && !model.edits.is_empty() else { return "" }
+  model.edits[model.edits.length() - 1].text
 }
