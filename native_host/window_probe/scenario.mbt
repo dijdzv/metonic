@@ -706,8 +706,10 @@ async fn Scenario::step(self : Scenario, view : @ui.Observation) -> Unit {
     }
     post(view.hwnd, 0x0100U, 0x74UL, 0L)
     post(view.hwnd, 0x0100U, 0x74UL, 0L)
+  } else if self.stage == 5 && (view.task)(0) == 1 {
+    self.stage = 51
     post(view.hwnd, 0x0102U, 0x41UL, 0L)
-  } else if self.stage == 5 && view.editor.value == "A" {
+  } else if self.stage == 51 && view.editor.value == "A" {
     require((view.task)(0) == 1, "text input did not precede delayed update")
     self.stage = 6
     (view.inject)(Updated((view.task)(1) - 1, 0))
