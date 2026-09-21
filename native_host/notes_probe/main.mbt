@@ -66,6 +66,7 @@ async fn main {
           @async.sleep(1)
         }
         verify_disabled_pointer(model, handle, activations)
+        verify_drag_selection(model, handle, activations)
         let current = (handle.inspect)()
         assert_eq(current.controls.length(), 2)
         assert_eq(

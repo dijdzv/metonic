@@ -266,10 +266,12 @@ pub fn Presenter::hit_input(
     }
     return @raster.hit_caret(
       engine,
-      (x - item.element.bounds.x - left).max(0) +
-      self.layouts.scroll_x(reference),
-      (y - item.element.bounds.y - top).max(0) +
-      self.layouts.scroll_y(reference),
+      (x - item.element.bounds.x - left + self.layouts.scroll_x(reference)).max(
+        0,
+      ),
+      (y - item.element.bounds.y - top + self.layouts.scroll_y(reference)).max(
+        0,
+      ),
     )
   }
   None

@@ -48,6 +48,9 @@ priv enum Event {
   NavigateVertical(Bool, Bool)
   ToggleFocus(Bool)
   TextPointer(Int, Int, Bool)
+  PointerMove(Int, Int)
+  PointerRelease(Int, Int)
+  PointerCancel
   Close
 }
 
@@ -60,6 +63,8 @@ struct App {
   diagnostics : Diagnostics
   mut composition : @semantics.Composition?
   ime_pointer : @ime_focus.Transfer
+  mut pointer_pressed : Bool
+  mut drag : PointerDrag?
   mut preedit : String
   mut preedit_cursor : Int
   mut preedit_attributes : Bytes
@@ -176,6 +181,18 @@ pub impl @windows.ApplicationHandler for App with fn window_event(
       self.shift_pressed = false
       self.queue(CompositionCancel)
     }
+    @core.WindowEvent::PointerCanceled(_) => self.queue(PointerCancel)
+    @core.WindowEvent::Destroyed => self.queue(PointerCancel)
+    @core.WindowEvent::PointerMoved(_, position, _, @core.PointerSource::Mouse) =>
+      self.queue(PointerMove(position.x().to_int(), position.y().to_int()))
+    @core.WindowEvent::PointerButton(
+      _,
+      @core.ElementState::Released,
+      position,
+      _,
+      @core.ButtonSource::Mouse(@core.MouseButton::Left)
+    ) =>
+      self.queue(PointerRelease(position.x().to_int(), position.y().to_int()))
     @core.WindowEvent::Ime(@core.Ime::Enabled) => self.queue(CompositionStart)
     @core.WindowEvent::Ime(@core.Ime::Preedit(value, range)) =>
       self.queue(
@@ -416,6 +433,8 @@ async fn run_loop(
     diagnostics: Diagnostics::new(),
     composition: None,
     ime_pointer: @ime_focus.Transfer::new(),
+    pointer_pressed: false,
+    drag: None,
     preedit: "",
     preedit_cursor: 0,
     preedit_attributes: b"",
@@ -515,6 +534,26 @@ async fn run_loop(
           }
         }
         while !app.closed && app.events.try_get() is Some(event) {
+          match event {
+            TextPointer(_, _, _) => {
+              app.pointer_pressed = true
+              app.drag = None
+            }
+            Commit(_) if app.ime_pointer.pending() => ()
+            Navigate(_, _)
+            | NavigateVertical(_, _)
+            | SelectBoundary(_, _)
+            | ToggleFocus(_)
+            | Commit(_)
+            | Backspace
+            | Delete
+            | CompositionStart
+            | Close => {
+              app.pointer_pressed = false
+              app.drag = None
+            }
+            _ => ()
+          }
           match event {
             Navigate(_, _)
             | SelectBoundary(_, _)
@@ -676,6 +715,7 @@ async fn run_loop(
               app.draw()
             }
             CompositionCancel => {
+              app.cancel_pointer()
               app.ime_pointer.cancel()
               if app.composition is Some(composition) {
                 composition.cancel()
@@ -749,6 +789,13 @@ async fn run_loop(
               })
             TextPointer(x, y, extend_selection) =>
               app.apply_pointer(x, y, extend_selection)
+            PointerMove(x, y) => app.move_drag(x, y)
+            PointerRelease(x, y) => {
+              app.move_drag(x, y)
+              app.pointer_pressed = false
+              app.drag = None
+            }
+            PointerCancel => app.cancel_pointer()
             Input(_) if app.composition is Some(_) => ()
             Input(Activate) => app.activate_focused()
             Input(Move(x, y)) if !app.input_node().focused =>
@@ -782,6 +829,7 @@ async fn run_loop(
           }
         }
         if !initializing {
+          app.scroll_drag()
           app.hooks.observe(app)
         }
         if initializing && !may_present && app.hooks.has_lifecycle() {

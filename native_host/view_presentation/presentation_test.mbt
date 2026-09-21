@@ -53,6 +53,10 @@ async test "independent input items retain layout and unchanged frames reuse the
   assert_eq(@semantics.set_selection_directed(tree, first, end, end), "")
   assert_true(presenter.render(items, inputs, None).unwrap() is Some(_))
   assert_true(layouts.scroll_x(first) > 0)
+  assert_true(
+    presenter.hit_input(first, 2, 12).unwrap().0 <
+    presenter.hit_input(first, 18, 12).unwrap().0,
+  )
   assert_eq(layouts.scroll_x(second), 0)
   assert_true(presenter.render(items, inputs, None).unwrap() is None)
   assert_eq(@semantics.focus(tree, second), "")
@@ -60,6 +64,10 @@ async test "independent input items retain layout and unchanged frames reuse the
   assert_eq(@semantics.set_selection_directed(tree, second, end, end), "")
   assert_true(presenter.render(items, inputs, None).unwrap() is Some(_))
   assert_true(layouts.scroll_y(second) > 0)
+  assert_true(
+    presenter.hit_input(second, 10, 48).unwrap().0 <
+    presenter.hit_input(second, 10, 80).unwrap().0,
+  )
   assert_true(presenter.render(items, inputs, None).unwrap() is None)
   assert_true(
     @raster.matches_layout(

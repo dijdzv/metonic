@@ -77,6 +77,24 @@ refused. Browser policy can suppress that prompt, and forced termination cannot
 be vetoed. Fatal host failures and an already-committed page exit still perform
 unconditional cleanup.
 
+### Native pointer selection
+
+Text inputs use their retained layout for left-button drag selection. The press
+chooses the input and selection anchor; movement and the final release update
+the caret without activating controls crossed by the gesture. Shift+press keeps
+the existing selection anchor. Dragging outside the input advances the viewport
+incrementally while the button remains held, including multiline content.
+
+Capture loss, cancellation, focus loss and shutdown end the gesture. A disabled,
+removed or unfocused input, or an externally changed text/selection, invalidates
+its ownership. An active IME composition keeps the existing completion-before-
+pointer contract: selection never extends through live preedit, and completion
+after button release may apply the deferred click but cannot restart dragging.
+
+`native:notes-test` covers selection, replacement, cancellation and scrolling
+with synthetic messages in an owned hidden window. These checks do not establish
+physical mouse or IME behavior.
+
 ## Browser entry
 
 Export one `create` function returning `application_host.Instance`. Pass the

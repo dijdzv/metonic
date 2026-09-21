@@ -283,8 +283,38 @@ async fn QueryScenario::step(
         "query Enter after cancel changed selection",
       )
       println("WINDOW_CANCEL_ENTER_QUERY_OK")
-      self.stage = 12
       println("WINDOW_QUERY_SCROLL_OK")
+      self.stage = 120
+      let text = "A😀BC"
+      for index in 0..<text.length() {
+        post(view.hwnd, 0x0102U, text[index].to_int().to_uint64(), 0L)
+      }
+    }
+    120 if view.query.value == "A😀BC" => {
+      self.stage = 121
+      post(view.hwnd, 0x0201U, 1UL, 115L * 65536L + 233L)
+      post(view.hwnd, 0x0200U, 1UL, 115L * 65536L + 380L)
+      post(view.hwnd, 0x0202U, 0UL, 115L * 65536L + 380L)
+    }
+    121 if view.query.selection_start == 0 && view.query.selection_end == 5 => {
+      require(
+        view.query.selection_anchor == 0,
+        "query forward drag anchor changed",
+      )
+      self.stage = 122
+      post(view.hwnd, 0x0201U, 1UL, 115L * 65536L + 380L)
+      post(view.hwnd, 0x0200U, 1UL, 115L * 65536L + 233L)
+      post(view.hwnd, 0x0202U, 0UL, 115L * 65536L + 233L)
+    }
+    122 if view.query.selection_start == 0 &&
+      view.query.selection_end == 5 &&
+      view.query.selection_anchor == 5 => {
+      self.stage = 123
+      post(view.hwnd, 0x0102U, 0x304BUL, 0L)
+    }
+    123 if view.query.value == "か" => {
+      self.stage = 12
+      println("WINDOW_QUERY_DRAG_OK forward backward utf16 replace")
       (view.inject)(@ui.Injected::Close)
     }
     _ => ()
