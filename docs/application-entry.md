@@ -531,3 +531,8 @@ activation, resize, stopped input, stopping during initialization and stopping
 an additional instance without affecting the running application. The artifact
 exports only `create`; P0/development-exclusion guards remain required. These
 checks do not establish physical IME acceptance.
+
+The separate local memo consumer exercises independent autosave and search
+operations with production storage and clocks. See the
+[memo operation verification record](verification/memo-operations.md) for the
+behavior, tested commands and limits of that local evidence.
