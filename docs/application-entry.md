@@ -68,10 +68,17 @@ not `stop`. Hosts protect disposal from cancellation. Browser shutdown requests
 this cleanup asynchronously; navigation or process termination cannot guarantee
 that it finishes. Storage must not rely on page-exit cleanup to save edits.
 
-`can_close` is the application's close policy. Native close requests and the
-browser Stop action consult it before stopping. Return false while unsaved edits
-or an in-flight save require attention; provide an explicit save/retry/discard
-operation so users can resolve that condition. Browser navigation also installs
+`can_close` is a side-effect-free query of the application's close policy.
+Native close requests and the browser Stop action consult it before stopping.
+When it returns false, the host calls `close_requested` and redraws the app so
+the application can present save/discard/cancel actions. Repeated requests must
+not restart a pending save. `close_ready` is a side-effect-free indication that
+the application has completed an explicit pending close decision; cancel must
+clear that intention. After an application event or task completion, the host
+closes only when both `close_ready` and `can_close` are true. Applications which
+never defer close can supply no-op `close_requested` and false `close_ready`.
+Saving failure must leave the decision pending and preserve the document.
+Browser navigation does not invoke the interactive close callback: it installs
 a `beforeunload` handler, requesting the browser's confirmation when close is
 refused. Browser policy can suppress that prompt, and forced termination cannot
 be vetoed. Fatal host failures and an already-committed page exit still perform

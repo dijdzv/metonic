@@ -52,6 +52,18 @@ async fn main {
     },
   }
   let completed = Ref(false)
+  let close_allowed = Ref(false)
+  let close_pending = Ref(false)
+  let close_requests = Ref(0)
+  let app = {
+    ..app,
+    can_close: () => close_allowed.val,
+    close_requested: () => {
+      close_requests.val += 1
+      close_pending.val = true
+    },
+    close_ready: () => close_pending.val && close_allowed.val,
+  }
   @window_host.run(
     app,
     font_path=@env.args().get(1),
@@ -68,6 +80,14 @@ async fn main {
         while !started.val {
           @async.sleep(1)
         }
+        let window = notes_window()
+        assert_true(pointer_post(window, 0x10U, 0UL, 0L) != 0)
+        @async.with_timeout(2000, () => {
+          while close_requests.val != 1 { @async.sleep(5) }
+        })
+        assert_false((handle.inspect)().closed)
+        assert_eq((handle.inspect)().text, state.text)
+        close_pending.val = false
         verify_disabled_pointer(model, handle, activations)
         verify_drag_selection(model, handle, activations)
         verify_clipboard(model, handle, clipboard)
@@ -153,12 +173,18 @@ async fn main {
         (handle.apply)(@window_host.Activate)
         assert_eq((handle.inspect)().text, "")
         completed.val = true
-        (handle.apply)(@window_host.Close)
+        assert_true(pointer_post(window, 0x10U, 0UL, 0L) != 0)
+        @async.with_timeout(2000, () => {
+          while close_requests.val != 2 { @async.sleep(5) }
+        })
+        close_allowed.val = true
+        ignore((handle.select)(0, 0, None))
       })
     }),
   )
   assert_true(completed.val)
   assert_eq(disposed.val, 1)
+  assert_eq(close_requests.val, 2)
   assert_eq(@semantics.set_text(model.editor, model.note, "late"), "closed")
   println("NOTES_HOST_OK")
 }

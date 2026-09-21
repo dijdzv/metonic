@@ -86,5 +86,12 @@ pub fn create(
     () => session.gpu.gpu_frame_abort(),
     () => session.stop(),
     () => if session.stopped || (application.can_close)() { 1 } else { 0 },
+    () => {
+      if !session.stopped {
+        (application.close_requested)()
+        session.notify()
+      }
+    },
+    () => if !session.stopped && (application.close_ready)() { 1 } else { 0 },
   )
 }

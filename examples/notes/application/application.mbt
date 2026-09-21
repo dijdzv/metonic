@@ -37,6 +37,8 @@ pub fn Model::application(self : Model) -> @app.Application {
     resize: (width, height) => self.resize(width, height),
     stop: () => self.stop(),
     can_close: () => true,
+    close_requested: () => (),
+    close_ready: () => false,
     input_error: message => self.input_error = message,
     dispose: () => (),
   }

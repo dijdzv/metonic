@@ -28,6 +28,7 @@ export function runApplication({ title, artifact, eventName, canvasId, statusId,
   });
   function refresh() {
     if (disposed || !renderer) return;
+    if (app.close_ready() === 1 && app.can_close() === 1) { stop(); return; }
     try { renderer.refresh(width); surface.schedule(); }
     catch (error) { stop(error?.message || String(error)); }
   }
@@ -49,6 +50,7 @@ export function runApplication({ title, artifact, eventName, canvasId, statusId,
   function stopPage() { stop(); }
   function requestStop() {
     if (app && app.can_close() !== 1) {
+      app.request_close();
       status.textContent = 'Save or discard changes before stopping.';
       return false;
     }

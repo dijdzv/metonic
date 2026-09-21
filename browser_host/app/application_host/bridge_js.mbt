@@ -35,5 +35,7 @@ extern "js" fn make_bridge(
   frame_abort : () -> Unit,
   stop : () -> Unit,
   can_close : () -> Int,
+  request_close : () -> Unit,
+  close_ready : () -> Int,
 ) -> Instance =
-  #| (load_font, install_font, start, resize, render, activate, layer_count, layer_field, layer_bytes, upload_begin, upload_layer, upload_commit, frame_begin, frame_text, frame_submit, frame_abort, stop, can_close) => ({load_font, install_font, start, resize, render, activate, layer_count, layer_field, layer_bytes, upload_begin, upload_layer, upload_commit, frame_begin, frame_text, frame_submit, frame_abort, stop, can_close})
+  #| (load_font, install_font, start, resize, render, activate, layer_count, layer_field, layer_bytes, upload_begin, upload_layer, upload_commit, frame_begin, frame_text, frame_submit, frame_abort, stop, can_close, request_close, close_ready) => ({load_font, install_font, start, resize, render, activate, layer_count, layer_field, layer_bytes, upload_begin, upload_layer, upload_commit, frame_begin, frame_text, frame_submit, frame_abort, stop, can_close, request_close, close_ready})

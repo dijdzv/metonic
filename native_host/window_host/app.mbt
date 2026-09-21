@@ -708,7 +708,10 @@ async fn run_loop(
                 @task.Rejected => app.diagnostics.rejected()
                 @task.Unchanged => ()
               }
-            Close if !(app.host.can_close)() => app.draw()
+            Close if !(app.host.can_close)() => {
+              (app.host.close_requested)()
+              app.draw()
+            }
             Close => {
               app.closed = true
               app.events.close(clear=true)
@@ -849,6 +852,9 @@ async fn run_loop(
             Input(_) => ()
           }
           app.hooks.processed(event, app)
+          if !app.closed && (app.host.close_ready)() && (app.host.can_close)() {
+            app.queue(Close)
+          }
           if initializing && app.hooks.has_lifecycle() {
             match event {
               Close => may_present = app.hooks.notify(Closing, app)

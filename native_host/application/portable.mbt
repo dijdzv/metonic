@@ -76,6 +76,8 @@ pub fn from_application(app : @portable.Application) -> Application {
     },
     stop: app.stop,
     can_close: app.can_close,
+    close_requested: app.close_requested,
+    close_ready: app.close_ready,
     input_error: app.input_error,
     dispose: app.dispose,
   }
