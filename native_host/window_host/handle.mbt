@@ -10,7 +10,16 @@ pub(all) enum Action {
 }
 
 ///|
+pub(all) enum ControlAction {
+  InsertText(String)
+  DeleteBackward
+  SelectRange(Int, Int)
+  ActivateControl
+}
+
+///|
 pub struct Snapshot {
+  controls : Array[@semantics.Node]
   ime_events : Array[Json]
   raw_ime_events : Array[Json]
   raw_ime_dropped : Int64
@@ -35,6 +44,7 @@ pub struct Snapshot {
 
 ///|
 pub struct Handle {
+  operate : async (@semantics.NodeRef, ControlAction, Int) -> String
   inspect : () -> Snapshot
   apply : async (Action) -> Unit
   edit : async (String?, Int?) -> String
@@ -58,6 +68,21 @@ pub struct Captured {
 ///|
 fn App::handle(self : App) -> Handle {
   {
+    operate: (target, action, revision) => {
+      if self.closed {
+        return "closed"
+      }
+      let result : Ref[String?] = Ref(None)
+      self.events.put(Development(Operate(target, action, revision, result)))
+      defer self.diagnostics.changed.broadcast()
+      while result.val is None && !self.closed {
+        self.diagnostics.changed.wait()
+        if @async.is_being_cancelled() {
+          @async.pause()
+        }
+      }
+      result.val.unwrap_or("closed")
+    },
     wait_display: (id, timeout_ms) => {
       if id <= 0L || timeout_ms < 1 || timeout_ms > 60000 {
         return "invalid_wait"
@@ -188,6 +213,7 @@ fn App::handle(self : App) -> Handle {
 fn App::snapshot(self : App) -> Snapshot {
   let node = @semantics.node(self.host.editor, self.host.default_input).unwrap()
   {
+    controls: @semantics.snapshot(self.host.editor),
     input: self.diagnostics.input,
     ime_events: self.diagnostics.ime_events.map(value => value),
     raw_ime_events: self.raw_ime_events(),

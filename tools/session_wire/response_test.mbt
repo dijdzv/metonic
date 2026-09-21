@@ -1,4 +1,29 @@
 ///|
+test "application snapshots use control identities without P0 task fields" {
+  let response =
+    #|{"id":1,"error":"","application_protocol":1,"semantic_revision":0,"frames":1,"width":480,"height":240,"composing":false,"closed":false,"controls":[{"target":{"session":1,"window":1,"id":1,"generation":1},"role":"text_input","name":"Note","value":"text","enabled":true,"focused":true,"selection_start":0,"selection_end":0}]}
+  assert_eq(validate_response(response, true, false), "")
+  for
+    invalid in [
+      response.replace(
+        old="\"application_protocol\":1",
+        new="\"application_protocol\":2",
+      ),
+      response.replace(old="\"generation\":1", new="\"generation\":-1"),
+      response.replace(
+        old="\"role\":\"text_input\"",
+        new="\"role\":\"unknown\"",
+      ),
+      response.replace(old="\"enabled\":true", new="\"enabled\":0"),
+    ] {
+    assert_eq(
+      validate_response(invalid, true, false),
+      "invalid native response",
+    )
+  }
+}
+
+///|
 test "ready identity is required only for the initial headless handshake" {
   let ready =
     #|{"id":0,"ok":true,"session_id":"session"}

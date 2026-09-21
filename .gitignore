@@ -8,3 +8,5 @@ _build/
 !.env.example
 node_modules/
 .mooncakes/
+# External-build fixture artifacts
+native_host/.metonic-build/
