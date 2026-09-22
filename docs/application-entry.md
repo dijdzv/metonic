@@ -373,6 +373,11 @@ Metonic to generate it. The generated workspaces have one top-level directory
 each. A browser build produces both JS and WasmGC release artifacts. A native
 build accepts `release` or `debug` and selects an entry defined by the consumer.
 The consumer may add its own HTML and distribution packaging after the build.
+When updating Metonic, check out the new commit and change `dependency.json` to
+that same full SHA. Rerun the checkout's bootstrap if `toolchain.json` changed,
+then build each required target again. The entry refuses to build while the
+checkout, lock, or installed compiler disagree; an earlier successful build
+does not bypass these checks.
 
 The manifest contains only the consumer's workspace paths and entries, for
 example:

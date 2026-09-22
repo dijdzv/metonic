@@ -198,14 +198,17 @@ async fn prepare(
   let ownership = workspace + "/.metonic-workspace-owner"
   if @fs.exists(output) {
     let previous = @fs.read_file(output).text()
-    assert_true(
-      previous == content ||
-      (
-        @fs.exists(ownership) &&
-        @fs.read_file(ownership).text() == "metonic-application-source-v1\n"
-      ),
-      msg="moon.work is not Metonic-generated; move its application members into metonic.application.json before replacing it",
-    )
+    if previous != content {
+      assert_true(
+        @fs.exists(ownership),
+        msg="moon.work is not Metonic-generated; move its application members into metonic.application.json before replacing it",
+      )
+      assert_eq(
+        @fs.read_file(ownership).text(),
+        "metonic-application-source-v1\n",
+        msg="moon.work is not Metonic-generated; move its application members into metonic.application.json before replacing it",
+      )
+    }
   }
   @fs.write_file(output, content)
   @fs.write_file(ownership, "metonic-application-source-v1\n")
