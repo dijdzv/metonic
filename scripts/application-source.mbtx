@@ -136,6 +136,11 @@ fn target_members(target : String) -> Array[String] {
 }
 
 ///|
+fn slash_path(path : String) -> String {
+  path.replace(old="\\", new="/")
+}
+
+///|
 async fn prepare(
   consumer : String,
   framework : String,
@@ -171,7 +176,7 @@ async fn prepare(
   for module_path in configuration.members {
     let directory = @fs.realpath(workspace + "/" + module_path)
     assert_true(
-      directory.has_prefix(consumer + "/"),
+      slash_path(directory).has_prefix(slash_path(consumer) + "/"),
       msg="application member escapes the consumer directory: " + module_path,
     )
     assert_true(
