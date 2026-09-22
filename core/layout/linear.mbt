@@ -5,6 +5,12 @@ pub(all) enum Axis {
 } derive(Eq, Debug)
 
 ///|
+pub(all) enum AreaKind {
+  Drawable
+  Container
+} derive(Eq, Debug)
+
+///|
 pub(all) enum Track {
   Fixed(Int)
   Fill(weight~ : Int, min~ : Int, max~ : Int)
@@ -25,6 +31,7 @@ pub fn layout_linear(
   tracks~ : Array[Track],
   gap? : Int = 0,
   padding? : Padding = { top: 0, right: 0, bottom: 0, left: 0, },
+  areas? : AreaKind = Drawable,
 ) -> Result[Array[@view.Bounds], String] {
   if bounds.x < 0 ||
     bounds.y < 0 ||
@@ -46,8 +53,9 @@ pub fn layout_linear(
     padding.left > 2048 {
     return Err("invalid_linear_bounds")
   }
+  let child_limit = if areas == Container { 2048 } else { 1024 }
   for track in tracks {
-    if !valid_track(track) {
+    if !valid_track(track, child_limit) {
       return Err("invalid_linear_track")
     }
   }
@@ -87,7 +95,9 @@ pub fn layout_linear(
     return Err("insufficient_linear_space")
   }
   let tree : @engine.ChicleTree[Unit] = @engine.ChicleTree()
-  let leaves = tracks.map(track => tree.new_leaf(linear_leaf_style(axis, track)))
+  let leaves = tracks.map(track => {
+    tree.new_leaf(linear_leaf_style(axis, track, child_limit))
+  })
   let root = tree.new_with_children(
     linear_root_style(bounds, axis, gap, padding),
     leaves,
@@ -111,7 +121,7 @@ pub fn layout_linear(
         width: right - left,
         height: bottom - top,
       }
-      if !valid_placement(bounds, child) ||
+      if !valid_placement(bounds, child, child_limit) ||
         !valid_track_size(tracks[index], axis, child) {
         return Err("linear_layout_failed")
       }
@@ -124,11 +134,11 @@ pub fn layout_linear(
 }
 
 ///|
-fn valid_track(track : Track) -> Bool {
+fn valid_track(track : Track, limit : Int) -> Bool {
   match track {
-    Fixed(pixels) => pixels > 0 && pixels <= 1024
+    Fixed(pixels) => pixels > 0 && pixels <= limit
     Fill(weight~, min~, max~) =>
-      weight > 0 && min > 0 && min <= max && max <= 1024
+      weight > 0 && min > 0 && min <= max && max <= limit
   }
 }
 
@@ -189,9 +199,9 @@ fn linear_root_style(
 }
 
 ///|
-fn linear_leaf_style(axis : Axis, track : Track) -> @style.Style {
+fn linear_leaf_style(axis : Axis, track : Track, limit : Int) -> @style.Style {
   let one = @style.DimLength(1.0)
-  let leaf_max = @style.DimLength(1024.0)
+  let leaf_max = @style.DimLength(limit.to_double())
   let (main_size, main_min, main_max, basis, grow) = match track {
     Fixed(pixels) => {
       let dimension = @style.DimLength(pixels.to_double())
@@ -233,11 +243,15 @@ fn pixel_edge(value : Double) -> Int {
 }
 
 ///|
-fn valid_placement(container : @view.Bounds, child : @view.Bounds) -> Bool {
+fn valid_placement(
+  container : @view.Bounds,
+  child : @view.Bounds,
+  limit : Int,
+) -> Bool {
   child.width > 0 &&
   child.height > 0 &&
-  child.width <= 1024 &&
-  child.height <= 1024 &&
+  child.width <= limit &&
+  child.height <= limit &&
   child.x >= container.x &&
   child.y >= container.y &&
   child.x.to_int64() + child.width.to_int64() <=

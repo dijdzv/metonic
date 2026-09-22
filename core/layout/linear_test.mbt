@@ -77,6 +77,44 @@ test "linear root accepts 2048 square while fill leaves stay at 1024 maximum" {
 }
 
 ///|
+test "linear container areas retain full width for nested drawable tracks" {
+  let outer = layout_linear(
+    axis=Vertical,
+    bounds={ x: 0, y: 0, width: 2048, height: 900, },
+    tracks=[Fixed(48), Fill(weight=1, min=200, max=804), Fixed(48)],
+    areas=Container,
+  ).unwrap()
+  assert_eq(outer[1], { x: 0, y: 48, width: 2048, height: 804, })
+  let body = layout_linear(
+    axis=Horizontal,
+    bounds=outer[1],
+    tracks=[Fixed(240), Fill(weight=1, min=320, max=1024)],
+    gap=16,
+  ).unwrap()
+  assert_eq(body[0], { x: 0, y: 48, width: 240, height: 804, })
+  assert_eq(body[1], { x: 256, y: 48, width: 1024, height: 804, })
+  assert_linear_bounds(body)
+}
+
+///|
+test "linear fill tracks redistribute space after minimum and maximum clamps" {
+  let minimum = layout_linear(
+    axis=Horizontal,
+    bounds={ x: 0, y: 0, width: 300, height: 80, },
+    tracks=[Fill(weight=1, min=200, max=300), Fill(weight=1, min=20, max=300)],
+  ).unwrap()
+  assert_eq(minimum[0].width, 200)
+  assert_eq(minimum[1].width, 100)
+  let maximum = layout_linear(
+    axis=Horizontal,
+    bounds={ x: 0, y: 0, width: 300, height: 80, },
+    tracks=[Fill(weight=1, min=10, max=50), Fill(weight=1, min=10, max=300)],
+  ).unwrap()
+  assert_eq(maximum[0].width, 50)
+  assert_eq(maximum[1].width, 250)
+}
+
+///|
 test "linear layout reports insufficient space instead of shrinking fixed or fill minima" {
   assert_eq(
     layout_linear(

@@ -222,8 +222,11 @@ then returns one `Bounds` per track. Applications can pass a returned area to
 another layout call, including `VerticalList.arrange`, to place an editor beside
 a scrolling list. The application chooses when to use a horizontal or vertical
 composition; this API does not infer breakpoints from content. The root may be
-up to 2048 pixels per axis, while each returned drawable area is at most 1024
-pixels per axis. Fixed tracks do not shrink; fill tracks declare positive
+up to 2048 pixels per axis. The default `areas=Drawable` limits each returned
+area to 1024 pixels per axis. Use `areas=Container` for intermediate,
+non-rendered areas when nesting calls across a wider window; those areas may
+reach 2048 pixels per axis and must be divided before drawing controls. Fixed
+tracks do not shrink; fill tracks declare positive
 weight, minimum and maximum sizes. Insufficient space returns an error rather
 than overlapping controls. This API has no scroll state.
 

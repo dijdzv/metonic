@@ -34,7 +34,10 @@ one horizontal or vertical arrangement. A caller may arrange an editor beside
 a list, or nest another call using a returned area. Fixed tracks never shrink;
 fill tracks carry explicit minimum and maximum sizes. The application chooses
 the composition for each window size. The primitive reports insufficient space
-instead of assigning overlapping bounds and owns no scrolling state.
+instead of assigning overlapping bounds and owns no scrolling state. The
+default `areas=Drawable` limits returned areas to 1024 pixels on each axis.
+`areas=Container` permits intermediate, non-rendered areas up to 2048 pixels
+for nesting across a wide window; callers subdivide them before drawing.
 
 This is not a general layout system: row height and gap are fixed pixels; rows
 are not measured from their content; arbitrary nesting, general measurement,
@@ -61,7 +64,7 @@ The current API enforces these limits:
 - At most 100,000 unique semantic references per arrangement.
 - Raster layer dimensions: 1–1024 pixels per axis on native and browser.
 - Linear layout root: 1–2048 pixels per axis; returned drawable areas: at most
-  1024 pixels per axis.
+  1024 pixels per axis; intermediate container areas: at most 2048 per axis.
 - Native surface: at most 64 raster layers in an installed layer set.
 
 The list API does not enforce the native surface's layer count, and a dense
@@ -94,8 +97,9 @@ duplicate references and rejection of invalid bounds while preserving the last
 valid layout. `native_host/notes_probe/viewport.mbt` contains an owned-window
 probe for clipped and hidden rows, wheel scrolling, focus reveal, resize,
 clipped accessibility bounds, and rendering of 20 simultaneously visible rows.
-`core/layout/linear_test.mbt` covers fixed/fill placement and rejection of
-insufficient space on JS, WasmGC and native. Consumer integration remains open.
+`core/layout/linear_test.mbt` covers fixed/fill placement, nested container
+areas, constrained redistribution and rejection of insufficient space on JS,
+WasmGC and native. Consumer integration remains open.
 
 The browser implementation is connected through
 `browser_host/app/application_host/viewport.mbt`, `controls.mbt`, `session.mbt`
