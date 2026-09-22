@@ -1,0 +1,306 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+}
+
+///|
+struct SourceLock {
+  directory : String
+  revision : String
+} derive(FromJson)
+
+///|
+struct ToolchainPin {
+  compiler : String
+  moon : String
+} derive(FromJson)
+
+///|
+struct ApplicationEntry {
+  entry_package : String
+  artifact : String
+} derive(FromJson)
+
+///|
+struct ApplicationTarget {
+  workspace : String
+  members : Array[String]
+  entries : Map[String, ApplicationEntry]
+} derive(FromJson)
+
+///|
+struct ApplicationManifest {
+  schema_version : Int
+  targets : Map[String, ApplicationTarget]
+} derive(FromJson)
+
+///|
+async fn source_command(
+  command : String,
+  args : Array[String],
+  framework : String,
+) -> String {
+  let (code, stdout, stderr) = @process.collect_output(
+    command,
+    args,
+    cwd=framework,
+    no_console_window=true,
+  )
+  assert_eq(code, 0, msg=command + " failed: " + stderr.text())
+  stdout.text().trim().to_owned()
+}
+
+///|
+async fn verify_source(
+  consumer : String,
+  framework : String,
+  moon : String,
+) -> Unit {
+  let lock : SourceLock = @json.from_json(
+    @json.parse(@fs.read_file(consumer + "/dependency.json").text()),
+  )
+  assert_eq(
+    lock.directory,
+    ".metonic/framework",
+    msg="dependency.json must select .metonic/framework",
+  )
+  assert_eq(
+    @fs.realpath(consumer + "/" + lock.directory),
+    framework,
+    msg="application source must run from its pinned framework checkout",
+  )
+  assert_eq(
+    @fs.realpath(
+      source_command("git", ["rev-parse", "--show-toplevel"], framework),
+    ),
+    framework,
+    msg="framework path is not the Git root",
+  )
+  let revision = source_command("git", ["rev-parse", "HEAD"], framework)
+  assert_eq(
+    revision,
+    lock.revision,
+    msg="framework revision differs from dependency.json; update the checkout and lock together",
+  )
+  let dirty = source_command(
+    "git",
+    ["status", "--porcelain=v1", "--untracked-files=all"],
+    framework,
+  )
+  assert_eq(
+    dirty,
+    "",
+    msg="framework source has tracked or untracked changes: " + dirty,
+  )
+  let pinned = @fs.read_file(framework + "/toolchain.json").text()
+  let marker = framework + "/.tools/moonbit/metonic-toolchain.json"
+  assert_true(
+    @fs.exists(marker),
+    msg="pinned MoonBit is missing; run the framework bootstrap",
+  )
+  assert_eq(
+    @fs.read_file(marker).text(),
+    pinned,
+    msg="MoonBit toolchain marker differs from toolchain.json; rerun framework bootstrap",
+  )
+  let toolchain : ToolchainPin = @json.from_json(@json.parse(pinned))
+  let versions = source_command(moon, ["version", "--all"], framework)
+  assert_true(
+    versions.contains("moon " + toolchain.moon),
+    msg="Moon version differs from toolchain.json",
+  )
+  assert_true(
+    versions.contains("moonc " + toolchain.compiler),
+    msg="compiler version differs from toolchain.json",
+  )
+}
+
+///|
+fn target_members(target : String) -> Array[String] {
+  let common = ["", "/async_runtime"]
+  if target == "browser" {
+    return common +
+      [
+        "/browser_host/app", "/.work/websys-input/generated", "/.work/websys-input/async-dependency",
+      ]
+  }
+  common +
+  [
+    "/native_host", "/experiments/window_gpu_async", "/.work/native-deps/sources/cosmic-wrap-affinity",
+    "/.work/native-deps/sources/proton-clipboard-window-owner", "/.work/native-deps/sources/window-pointer-capture/modules/window",
+    "/.work/native-deps/sources/window-pointer-capture/modules/windowing", "/.work/native-deps/sources/async-local-control",
+  ]
+}
+
+///|
+fn slash_path(path : String) -> String {
+  path.replace_all(old="\\", new="/").to_lower()
+}
+
+///|
+async fn prepare(
+  consumer : String,
+  framework : String,
+  moon : String,
+  target : String,
+  configuration : ApplicationTarget,
+) -> String {
+  assert_true(
+    configuration.workspace != "" &&
+    configuration.workspace != "." &&
+    configuration.workspace != ".." &&
+    !configuration.workspace.contains("/") &&
+    !configuration.workspace.contains("\\"),
+    msg="target workspace must be a top-level application directory",
+  )
+  let workspace = @fs.realpath(consumer + "/" + configuration.workspace)
+  let preparation = if target == "browser" {
+    "scripts/prepare-websys-input.mbtx"
+  } else {
+    "scripts/prepare-native-deps.mbtx"
+  }
+  assert_eq(
+    @process.run(
+      moon,
+      ["run", preparation],
+      cwd=framework,
+      no_console_window=true,
+    ),
+    0,
+    msg=target + " dependency preparation failed",
+  )
+  let members : Array[String] = configuration.members.iter().to_array()
+  for module_path in configuration.members {
+    let directory = @fs.realpath(workspace + "/" + module_path)
+    assert_true(
+      slash_path(directory).has_prefix(slash_path(consumer) + "/"),
+      msg="application member escapes the consumer directory: " + module_path,
+    )
+    assert_true(
+      @fs.exists(directory + "/moon.mod"),
+      msg="application member has no moon.mod: " + module_path,
+    )
+  }
+  for suffix in target_members(target) {
+    let module_path = "../.metonic/framework" + suffix
+    assert_true(
+      @fs.exists(workspace + "/" + module_path + "/moon.mod"),
+      msg="prepared " + target + " module is missing: " + module_path,
+    )
+    members.push(module_path)
+  }
+  let entries = members.map(module_path => module_path.to_json().stringify())
+  let content = "members = [\n  " + entries.join(",\n  ") + "\n]\n"
+  let output = workspace + "/moon.work"
+  let ownership = workspace + "/.metonic-workspace-owner"
+  if @fs.exists(output) {
+    let previous = @fs.read_file(output).text()
+    if previous != content {
+      assert_true(
+        @fs.exists(ownership),
+        msg="moon.work is not Metonic-generated; move its application members into metonic.application.json before replacing it",
+      )
+      assert_eq(
+        @fs.read_file(ownership).text(),
+        "metonic-application-source-v1\n",
+        msg="moon.work is not Metonic-generated; move its application members into metonic.application.json before replacing it",
+      )
+    }
+  }
+  @fs.write_file(output, content)
+  @fs.write_file(ownership, "metonic-application-source-v1\n")
+  println(
+    "APPLICATION_SOURCE_PREPARED target=" + target + " workspace=" + workspace,
+  )
+  workspace
+}
+
+///|
+async fn main {
+  @async.with_timeout(300000, async fn() {
+    let args = @env.args()
+    assert_true(
+      args.length() == 4 || args.length() == 6,
+      msg="usage: application-source.mbtx prepare|build <consumer-directory> browser|native [entry-name release|debug]",
+    )
+    let action = args[1]
+    let target = args[3]
+    assert_true(
+      target == "browser" || target == "native",
+      msg="target must be browser or native",
+    )
+    assert_true(
+      (action == "prepare" && args.length() == 4) ||
+      (action == "build" && args.length() == 6),
+      msg="prepare takes a target; build also takes entry-name and release|debug",
+    )
+    let framework = @fs.realpath(".")
+    let consumer = @fs.realpath(args[2])
+    let moon = framework + "/.tools/moonbit/bin/moon.exe"
+    verify_source(consumer, framework, moon)
+    let manifest : ApplicationManifest = @json.from_json(
+      @json.parse(@fs.read_file(consumer + "/metonic.application.json").text()),
+    )
+    assert_eq(
+      manifest.schema_version,
+      1,
+      msg="unsupported metonic.application.json schema",
+    )
+    let configuration = manifest.targets.get(target).unwrap()
+    let workspace = prepare(consumer, framework, moon, target, configuration)
+    if action == "prepare" {
+      return
+    }
+    let entry = configuration.entries.get(args[4]).unwrap()
+    let profile = args[5]
+    assert_true(
+      profile == "release" || profile == "debug",
+      msg="profile must be release or debug",
+    )
+    assert_true(
+      @fs.exists(workspace + "/" + entry.entry_package + "/moon.pkg"),
+      msg="entry package is missing",
+    )
+    let settings : Map[String, String] = Map([
+      ("MOON_HOME", framework + "/.tools/moonbit"),
+    ])
+    let script = if target == "browser" {
+      assert_eq(
+        profile,
+        "release",
+        msg="browser applications build both JS and WasmGC in release mode",
+      )
+      settings["METONIC_BROWSER_WORKSPACE"] = workspace
+      settings["METONIC_BROWSER_PACKAGE"] = entry.entry_package
+      settings["METONIC_BROWSER_ARTIFACT"] = entry.artifact
+      "scripts/build-browser-application.mbtx"
+    } else {
+      settings["METONIC_NATIVE_BUILD"] = if profile == "release" {
+        "application-release"
+      } else {
+        "application"
+      }
+      settings["METONIC_NATIVE_WORKSPACE"] = workspace
+      settings["METONIC_NATIVE_PACKAGE"] = entry.entry_package
+      settings["METONIC_NATIVE_ARTIFACT"] = entry.artifact
+      "scripts/build-native.mbtx"
+    }
+    assert_eq(
+      @process.run(
+        moon,
+        ["run", script],
+        cwd=framework,
+        extra_env=settings,
+        no_console_window=true,
+      ),
+      0,
+      msg="application build failed: " + target + "/" + args[4],
+    )
+    println(
+      "APPLICATION_SOURCE_BUILD_OK target=" + target + " entry=" + args[4],
+    )
+  })
+}
