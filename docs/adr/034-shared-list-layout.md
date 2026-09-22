@@ -84,22 +84,27 @@ each submitted layer and replaces its previous set. Raster area and layer count
 therefore drive CPU pixel generation, transfer volume and GPU resource churn;
 this record contains no performance benchmark.
 
-The independent Notes application has not migrated to `VerticalList`:
-`examples/notes/application/application.mbt` still supplies explicit bounds and
-sets `viewport: None`. Adopting this primitive does not mean that application
-migration is complete.
+The independent Notes application uses `VerticalList` for all memo rows and
+`layout_linear` for its list/editor composition. Its model owns the row order,
+while the shared list owns each row's placement, clipping, scrolling and reveal.
+The older in-repository `examples/notes/application/application.mbt` still uses
+explicit bounds and `viewport: None`; it is not the independent consumer.
 
 ## Verification scope
 
 The `core/layout/list_test.mbt` cases cover partial-row intersections,
 visible hit testing, scroll clamping, focus reveal, reorder/resize/removal,
 duplicate references and rejection of invalid bounds while preserving the last
-valid layout. `native_host/notes_probe/viewport.mbt` contains an owned-window
+valid layout. The independent Notes consumer verifies ten retained rows across
+scrolling, reorder, deletion and saved order on native and browser JS. Its
+headless JS/WasmGC suites also check wheel scrolling, retained DOM identity and
+restoration from a relocated browser package.
+`native_host/notes_probe/viewport.mbt` contains an owned-window
 probe for clipped and hidden rows, wheel scrolling, focus reveal, resize,
 clipped accessibility bounds, and rendering of 20 simultaneously visible rows.
 `core/layout/linear_test.mbt` covers fixed/fill placement, nested container
 areas, constrained redistribution and rejection of insufficient space on JS,
-WasmGC and native. Consumer integration remains open.
+WasmGC and native.
 
 The browser implementation is connected through
 `browser_host/app/application_host/viewport.mbt`, `controls.mbt`, `session.mbt`
