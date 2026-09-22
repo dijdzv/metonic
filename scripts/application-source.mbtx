@@ -73,7 +73,9 @@ async fn verify_source(
     msg="application source must run from its pinned framework checkout",
   )
   assert_eq(
-    source_command("git", ["rev-parse", "--show-toplevel"], framework),
+    @fs.realpath(
+      source_command("git", ["rev-parse", "--show-toplevel"], framework),
+    ),
     framework,
     msg="framework path is not the Git root",
   )
