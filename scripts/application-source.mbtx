@@ -137,7 +137,7 @@ fn target_members(target : String) -> Array[String] {
 
 ///|
 fn slash_path(path : String) -> String {
-  path.replace(old="\\", new="/")
+  path.replace_all(old="\\", new="/").to_lower()
 }
 
 ///|
