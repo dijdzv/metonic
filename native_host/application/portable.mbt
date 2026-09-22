@@ -1,6 +1,7 @@
 ///|
 pub fn from_application(app : @portable.Application) -> Application {
   let size = Ref(app.initial_size)
+  let revealed : Ref[@semantics.NodeRef?] = Ref(None)
   {
     editor: app.editor,
     default_input: app.default_input,
@@ -9,7 +10,19 @@ pub fn from_application(app : @portable.Application) -> Application {
       (app.initialize)().map(request => { request, gate: Always, })
     },
     view: () => {
-      let controls = (app.view)()
+      let mut controls = (app.view)()
+      let focused = @semantics.snapshot(app.editor)
+        .iter()
+        .find_first(node => node.focused && node.enabled)
+        .map(node => node.reference)
+      if focused != revealed.val {
+        revealed.val = focused
+        if focused is Some(reference) && app.viewport is Some(viewport) {
+          if (viewport.reveal)(reference) {
+            controls = (app.view)()
+          }
+        }
+      }
       let inputs : Array[@view_presentation.Input] = []
       for control in controls {
         if control.kind is @portable.Input(single_line~) &&
@@ -25,7 +38,7 @@ pub fn from_application(app : @portable.Application) -> Application {
           } else {
             @renderer.Text
           }
-          @renderer.item(control.element, surface~)
+          @renderer.item(control.element, surface~, clip=control.clip)
         }),
         inputs,
         rectangle: None,
@@ -36,7 +49,9 @@ pub fn from_application(app : @portable.Application) -> Application {
           controls: controls.filter_map(control => {
             control.element.reference.map(reference => {
               reference,
-              bounds: control.element.bounds,
+              bounds: control
+              .visible_bounds()
+              .unwrap_or({ ..control.element.bounds, width: 0, height: 0, }),
               toggled: None,
             })
           }),
@@ -72,10 +87,16 @@ pub fn from_application(app : @portable.Application) -> Application {
     navigation_blocked: () => false,
     navigate_unhandled: (_, _) => false,
     pointer_unhandled: (_, _) => false,
+    scroll_unhandled: (x, y, delta) => {
+      app.viewport
+      .map(viewport => (viewport.scroll)(x, y, delta))
+      .unwrap_or(false)
+    },
     resize: (width, height) => {
       let changed = (app.resize)(width, height)
       if changed {
         size.val = (width, height)
+        revealed.val = None
       }
       changed
     },

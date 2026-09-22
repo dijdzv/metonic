@@ -93,6 +93,7 @@ pub fn create(model : @application.Model) -> @host.Application {
         @scene.dispatch(model.scene, Move(x, y))
       }
     },
+    scroll_unhandled: (_, _, _) => false,
     pointer_unhandled: (x, y) => {
       ignore(
         @semantics.focus(

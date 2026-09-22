@@ -5,6 +5,9 @@ priv struct Model {
   mut inputs : Array[@semantics.NodeRef]
   mut serial : Int
   mut invalid : Int
+  mut clipped : Bool
+  list : @layout.VerticalList
+  rows : Array[@semantics.NodeRef]
   operations : @operations.Model
   edits : Array[@app.TextEdit]
   mut edit_completed : Int
@@ -55,6 +58,9 @@ fn Model::change(self : Model, command : Int) -> Unit {
         ignore(@semantics.set_text(self.tree, reference, "programmatic"))
       }
     12 => ignore(@semantics.set_button_value(self.tree, self.add, "updated"))
+    13 => self.clipped = true
+    14 => self.clipped = false
+    15 => self.invalid = 15
     6 => {
       for reference in self.inputs {
         ignore(@semantics.remove(self.tree, reference))
@@ -102,6 +108,11 @@ pub fn create() -> @host.Instance {
     inputs: [],
     serial: 0,
     invalid: 0,
+    clipped: false,
+    list: @layout.VerticalList::new(row_height=36, gap=4).unwrap(),
+    rows: Array::makei(8, index => {
+      @semantics.add_button(tree, "Row " + (index + 1).to_string()).unwrap()
+    }),
     operations: @operations.create(() => @async.CondVar::Cond().wait(), tree~),
     edits: [],
     edit_completed: 0,
@@ -112,8 +123,33 @@ pub fn create() -> @host.Instance {
     editor: tree,
     default_input: None,
     initial_size: (480, 400),
+    viewport: Some({
+      scroll: (x, y, delta) => {
+        model.invalid == 15 && model.list.scroll_at(x, y, delta)
+      },
+      reveal: reference => model.invalid == 15 && model.list.reveal(reference),
+    }),
     initialize: () => None,
     view: () => {
+      if model.invalid == 15 {
+        let clip : @view.Bounds = { x: 16, y: 60, width: 180, height: 100, }
+        model.list.arrange(clip, model.rows).unwrap()
+        return model.list
+          .items()
+          .map(placement => {
+            let node = @semantics.node(tree, placement.reference).unwrap()
+            @app.Control::{
+              element: {
+                bounds: placement.bounds,
+                text: node.name,
+                reference: Some(node.reference),
+                focused: node.focused,
+              },
+              kind: Button,
+              clip: Some(clip),
+            }
+          })
+      }
       if model.invalid == 9 {
         return (model.operations.application().view)()
       }
@@ -126,6 +162,11 @@ pub fn create() -> @host.Instance {
             bounds: { x: 16, y: 8, width: 180, height: 40, },
           },
           kind: Button,
+          clip: if model.clipped {
+            Some({ x: 106, y: 8, width: 90, height: 40, })
+          } else {
+            None
+          },
         },
       ]
       for index, reference in model.inputs {
@@ -138,6 +179,7 @@ pub fn create() -> @host.Instance {
             bounds: { x: 16, y: 60 + index * 100, width: 400, height: 80, },
           },
           kind: Input(single_line=model.invalid == 5 || model.invalid == 10),
+          clip: None,
         })
       }
       if model.invalid == 4 && controls.length() > 1 {

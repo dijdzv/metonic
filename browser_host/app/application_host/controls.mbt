@@ -68,6 +68,19 @@ fn Session::reconcile_controls(
         return false
       }
       self.root_element = Some(root)
+      if self.application.viewport is Some(_) {
+        let canvas = @dom_view.element(self.canvas_id)
+        let remove_root = @dom_view.on_wheel(root, canvas, (x, y, delta) => {
+          self.scroll_viewport(x, y, delta)
+        })
+        let remove_canvas = @dom_view.on_wheel(canvas, canvas, (x, y, delta) => {
+          self.scroll_viewport(x, y, delta)
+        })
+        self.remove_wheel = Some(() => {
+          remove_root()
+          remove_canvas()
+        })
+      }
       root
     }
   }
@@ -107,9 +120,20 @@ fn Session::reconcile_controls(
         let element = @dom_view.create_control(root, id, tag)
         let remove_listener = if control.kind == @app.Button &&
           control.element.reference is Some(reference) {
-          @dom_view.on_click(element, () => {
+          let remove_click = @dom_view.on_click(element, () => {
             ignore(self.activate_reference(reference))
           })
+          let remove_focus = @dom_view.on_focus(element, () => {
+            if !self.stopped &&
+              @semantics.focus(self.application.editor, reference) == "" {
+              self.applied_focus = Some(reference)
+              self.notify()
+            }
+          })
+          () => {
+            remove_click()
+            remove_focus()
+          }
         } else {
           () => ()
         }
@@ -137,6 +161,7 @@ fn Session::reconcile_controls(
     if control.kind == @app.Text {
       @dom_view.text(owned.element, control.element.text)
     }
+    @dom_view.clip(owned.element, control.element.bounds, control.clip)
     placements.push({
       element: owned.element,
       bounds: control.element.bounds,

@@ -55,6 +55,7 @@ pub fn Model::application(self : Model) -> @app.Application {
     editor: self.tree,
     default_input: None,
     initial_size: (480, 320),
+    viewport: None,
     initialize: () => None,
     view: () => {
       let controls : Array[@app.Control] = []
@@ -68,6 +69,7 @@ pub fn Model::application(self : Model) -> @app.Application {
             bounds: { x: 16, y: 16 + index * 50, width: 240, height: 40, },
           },
           kind: Button,
+          clip: None,
         })
       }
       controls

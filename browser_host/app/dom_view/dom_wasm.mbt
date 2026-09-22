@@ -107,3 +107,47 @@ pub fn claim_root(root : @input_dom.HTMLElement) -> Bool {
 pub fn release_root(root : @input_dom.HTMLElement) -> Unit {
   root.remove_attribute("data-metonic-owner")
 }
+
+///|
+pub fn on_focus(
+  child : @input_dom.HTMLElement,
+  callback : () -> Unit,
+) -> () -> Unit {
+  let target = child.as_event_target()
+  let listener = @input_dom.EventListener::new(_ => callback())
+  target.add_event_listener("focus", listener, false)
+  () => target.remove_event_listener("focus", listener, false)
+}
+
+///|
+pub fn on_wheel(
+  child : @input_dom.HTMLElement,
+  canvas : @input_dom.HTMLElement,
+  callback : (Int, Int, Int) -> Bool,
+) -> () -> Unit {
+  let target = child.as_event_target()
+  let listener = @input_dom.EventListener::new(event => {
+    guard @input_dom.WheelEvent::from_event_opt(event) is Some(wheel) else {
+      return
+    }
+    if wheel.ctrl_key() {
+      return
+    }
+    let rect = canvas.get_bounding_client_rect()
+    let delta = wheel_pixels(
+      wheel.delta_y(),
+      wheel.delta_mode().reinterpret_as_int(),
+      canvas.client_height(),
+    )
+    if callback(
+        wheel.client_x() - rect.left().to_int(),
+        wheel.client_y() - rect.top().to_int(),
+        delta,
+      ) {
+      event.prevent_default()
+      event.stop_propagation()
+    }
+  })
+  target.add_event_listener("wheel", listener, false)
+  () => target.remove_event_listener("wheel", listener, false)
+}

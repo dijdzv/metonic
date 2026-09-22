@@ -2,7 +2,7 @@
 fn render_item(engine : @raster.Engine, item : Item) -> Layer {
   let element = item.element
   let bounds = element.bounds
-  match item.surface {
+  let layer = match item.surface {
     Text => {
       let pixels = @raster.render(
         engine,
@@ -57,6 +57,26 @@ fn render_item(engine : @raster.Engine, item : Item) -> Layer {
       { bounds, pixels, }
     }
   }
+  clip_layer(layer, item.clip)
+}
+
+///|
+fn clip_layer(layer : Layer, clip : @view.Bounds?) -> Layer {
+  guard clip is Some(clip) else { return layer }
+  let bounds = layer.bounds
+  let visible = bounds.intersection(clip)
+  if visible == Some(bounds) {
+    return layer
+  }
+  guard visible is Some(visible) else {
+    return { bounds: { ..clip, width: 0, height: 0, }, pixels: b"", }
+  }
+  let pixels = Bytes::makei(visible.width * visible.height * 4, index => {
+    let x = visible.x - bounds.x + index / 4 % visible.width
+    let y = visible.y - bounds.y + index / 4 / visible.width
+    layer.pixels[(y * bounds.width + x) * 4 + index % 4]
+  })
+  { bounds: visible, pixels, }
 }
 
 ///|
@@ -90,5 +110,5 @@ pub fn render(
   if retain_layout is Some(index) {
     layers[index] = render_item(engine, items[index])
   }
-  Ok(layers)
+  Ok(layers.filter(layer => layer.bounds.width > 0 && layer.bounds.height > 0))
 }

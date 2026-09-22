@@ -19,14 +19,20 @@ fn App::scroll_pointer(app : App, delta : Int) -> Unit raise {
   let view = (app.host.view)()
   for index = view.items.length() - 1; index >= 0; index = index - 1 {
     let item = view.items[index]
-    if !item.element.bounds.contains(x, y) {
+    if !item.contains(x, y) {
       continue
     }
-    guard item.element.reference is Some(reference) else { return }
-    if presenter.scroll_input(reference, delta) {
-      app.draw()
+    if item.element.reference is Some(reference) &&
+      view.inputs.any(input => input.reference == reference) {
+      if presenter.scroll_input(reference, delta) {
+        app.draw()
+      }
+      return
     }
-    return
+    break
+  }
+  if (app.host.scroll_unhandled)(x, y, delta) {
+    app.draw()
   }
 }
 
@@ -128,7 +134,7 @@ fn App::apply_pointer(
   let view = (app.host.view)()
   for index = view.items.length() - 1; index >= 0; index = index - 1 {
     let item = view.items[index]
-    if !item.element.bounds.contains(x, y) {
+    if !item.contains(x, y) {
       continue
     }
     guard item.element.reference is Some(reference) else { continue }

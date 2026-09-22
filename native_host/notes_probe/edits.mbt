@@ -91,7 +91,10 @@ async fn verify_edits() -> Unit {
         (observe.inject)(CompositionStart)
         (observe.inject)(CompositionUpdate("青", Some(1)))
         barrier()
-        assert_eq(@semantics.set_name(model.editor, model.clear, "Updated action"), "")
+        assert_eq(
+          @semantics.set_name(model.editor, model.clear, "Updated action"),
+          "",
+        )
         (handle.apply)(Insert("青"))
         expect(7, "青う")
         (observe.inject)(CompositionEnd)

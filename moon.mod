@@ -7,6 +7,7 @@ version = "0.0.0"
 preferred_target = "wasm-gc"
 
 import {
+  "Milky2018/chicle@0.6.1",
   "Milky2018/moon_cosmic@0.3.3",
   "moonbitlang/async@0.21.2",
   "mizchi/image@0.4.3",

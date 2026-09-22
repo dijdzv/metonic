@@ -56,7 +56,7 @@ pub fn SurfaceRenderer::set_text_layers(
   if self.closed {
     raise SurfaceRendererClosed
   }
-  if layers.length() > 16 {
+  if layers.length() > 64 {
     raise InvalidTextPixels
   }
   for layer in layers {

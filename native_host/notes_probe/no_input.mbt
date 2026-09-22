@@ -13,6 +13,7 @@ async fn verify_no_input() -> Unit {
     editor: tree,
     default_input: None,
     initial_size: (480, 240),
+    viewport: None,
     initialize: () => None,
     view: () => {
       let controls : Array[@portable.Control] = [
@@ -24,6 +25,7 @@ async fn verify_no_input() -> Unit {
             bounds: { x: 16, y: 16, width: 160, height: 40, },
           },
           kind: Button,
+          clip: None,
         },
       ]
       if input.val is Some(reference) {
@@ -36,6 +38,7 @@ async fn verify_no_input() -> Unit {
             bounds: { x: 16, y: 70, width: 400, height: 80, },
           },
           kind: Input(single_line=false),
+          clip: None,
         })
       }
       controls
@@ -157,6 +160,7 @@ async fn verify_empty_view() -> Unit {
     editor: empty_tree,
     default_input: None,
     initial_size: (480, 240),
+    viewport: None,
     initialize: () => None,
     view: () => [],
     activate: _ => None,

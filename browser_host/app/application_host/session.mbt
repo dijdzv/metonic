@@ -33,6 +33,8 @@ priv struct Session {
   mut started : Bool
   mut reconciling : Bool
   mut applied_focus : @semantics.NodeRef?
+  mut revealed_focus : @semantics.NodeRef?
+  mut remove_wheel : (() -> Unit)?
   mut engine : @raster.Engine?
   mut layers : Array[@renderer.Layer]
   mut stopped : Bool
@@ -339,6 +341,7 @@ fn Session::resize(self : Session, width : Int, height : Int) -> Int {
     return 0
   }
   ignore((self.application.resize)(width, height))
+  self.revealed_focus = None
   let scroll = self.editors.map(editor => editor.element.capture_scroll())
   let placements : Array[@dom_view.Placement] = []
   for control in (self.application.view)() {
@@ -369,7 +372,19 @@ fn Session::render(self : Session) -> Int {
     return 0
   }
   guard self.engine is Some(engine) else { return 0 }
-  let view = (self.application.view)()
+  let mut view = (self.application.view)()
+  let focused = @semantics.snapshot(self.application.editor)
+    .iter()
+    .find_first(node => node.focused && node.enabled)
+    .map(node => node.reference)
+  if focused != self.revealed_focus {
+    self.revealed_focus = focused
+    if focused is Some(reference) && self.application.viewport is Some(viewport) {
+      if (viewport.reveal)(reference) {
+        view = (self.application.view)()
+      }
+    }
+  }
   if !self.reconcile_controls(view) {
     return 0
   }
@@ -413,6 +428,7 @@ fn Session::render(self : Session) -> Int {
       items.push(
         @renderer.item(
           { ..control.element, text, },
+          clip=control.clip,
           selection~,
           caret~,
           single_line_scroll=if editor.single_line {
@@ -427,6 +443,7 @@ fn Session::render(self : Session) -> Int {
       items.push(
         @renderer.item(
           control.element,
+          clip=control.clip,
           surface=if control.kind == @app.Button {
             @renderer.Control
           } else {
@@ -496,6 +513,10 @@ fn Session::stop(self : Session) -> Unit {
     return
   }
   self.stopped = true
+  if self.remove_wheel is Some(remove) {
+    remove()
+  }
+  self.remove_wheel = None
   self.tasks.close()
   @async.run_async_main(() => ())
   self.font.cancel()

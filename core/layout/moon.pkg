@@ -1,0 +1,12 @@
+import {
+  "local/p0/core/view",
+  "local/p0/core/semantics",
+  "Milky2018/chicle/tree" @engine,
+  "Milky2018/chicle/style",
+  "Milky2018/chicle/geometry",
+}
+
+import {
+  "local/p0/core/view",
+  "local/p0/core/semantics",
+} for "test"

@@ -27,6 +27,8 @@ pub fn create(
     started: false,
     reconciling: false,
     applied_focus: None,
+    revealed_focus: None,
+    remove_wheel: None,
     engine: None,
     layers: [],
     stopped: false,
