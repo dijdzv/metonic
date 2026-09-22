@@ -343,12 +343,62 @@ for start, resize, rendering and activation. An instance is not restartable.
 
 ## External workspace builds
 
-The experimental build scripts run from the Metonic source directory and reuse
-its pinned compiler, native assets and generated WebSys bindings. They accept an
-explicit consumer workspace; no Git repository is required for the consumer.
-The workspace must include the corresponding Metonic modules and prepared
-dependencies. Native and browser workspaces select different async adapters and
-must remain separate.
+The experimental source entry `scripts/application-source.mbtx` runs from the
+pinned Metonic checkout. It accepts a consumer directory without requiring that
+consumer to be a Git repository. The consumer supplies `dependency.json` with
+the exact Metonic commit and `metonic.application.json` with its own workspace
+members and entry packages. Metonic supplies its internal workspace members,
+prepares only the selected target's dependencies, and then delegates to its
+native or browser builder. Native and browser workspaces select different async
+adapters and remain separate. This is source consumption, not a published
+package or stable installer.
+
+The pinned compiler must be bootstrapped once before this MoonBit script can
+run. From the consumer, clone the exact `dependency.json` revision into
+`.metonic/framework`, run that checkout's mise bootstrap, then use its compiler
+under `mise -C .metonic/framework exec`. For example, from the checkout:
+
+```text
+moon run scripts/application-source.mbtx -- prepare <consumer-directory> browser
+moon run scripts/application-source.mbtx -- build <consumer-directory> browser main release
+moon run scripts/application-source.mbtx -- build <consumer-directory> native main release
+```
+
+`prepare` validates the full source revision, the clean non-ignored Git source,
+and the pinned compiler/core marker before preparing dependencies and generating
+the selected `moon.work`. `build` does the same preparation before building.
+It never resets or cleans the checkout. An existing handwritten `moon.work` is
+left alone; migrate its application members into the manifest before allowing
+Metonic to generate it. The generated workspaces have one top-level directory
+each. A browser build produces both JS and WasmGC release artifacts. A native
+build accepts `release` or `debug` and selects an entry defined by the consumer.
+The consumer may add its own HTML and distribution packaging after the build.
+
+The manifest contains only the consumer's workspace paths and entries, for
+example:
+
+```json
+{
+  "schema_version": 1,
+  "targets": {
+    "browser": {
+      "workspace": "browser",
+      "members": ["app", "../common"],
+      "entries": {
+        "main": {
+          "entry_package": "app/main",
+          "artifact": "local/my_app_browser/main"
+        }
+      }
+    }
+  }
+}
+```
+
+An application may declare only the target it uses. The workspace must be one
+top-level directory; application members must resolve within the consumer.
+The exact framework revision appears only in `dependency.json`, not a second
+manifest field.
 
 WebSys and native dependency preparation flatten the archives' outer directories
 to keep staging and generator artifact paths short on Windows. WebSys child Git
@@ -356,23 +406,19 @@ processes enable long paths without
 modifying global Git settings. This avoids the known nested-checkout failure;
 it does not guarantee that every tool supports arbitrarily long directory paths.
 
-For a native consumer, set `METONIC_NATIVE_BUILD` to `application` (debug) or
-`application-release`. Set `METONIC_NATIVE_WORKSPACE` to its workspace directory,
-`METONIC_NATIVE_PACKAGE` to the entry directory relative to that workspace, and
-`METONIC_NATIVE_ARTIFACT` to the fully qualified package name. For example,
-`native/main` and `local/my_app/main` identify the entry directory and compiler
-artifact respectively. Run `moon run scripts/build-native.mbtx` with the pinned
-compiler in the mise environment. Output is under the consumer workspace's
+For a native consumer, its manifest gives the entry directory relative to its
+workspace and the fully qualified artifact name. For example, `main` and
+`local/my_app/main` identify the entry directory and compiler artifact. Output
+is under the consumer workspace's
 `.metonic-build/native/<profile>/build/<qualified-package>/`. AccessKit DLL and
 licenses are staged beside the executable, with the default font and its notice
 under `assets/`. No font environment override is needed when retaining that
 layout. The build output is not a complete distribution: the application must
 select its runtime files and include the remaining dependency notices.
 
-For a browser consumer, set `METONIC_BROWSER_WORKSPACE`,
-`METONIC_BROWSER_PACKAGE` and `METONIC_BROWSER_ARTIFACT` using the same path
-conventions, then run `moon run scripts/build-browser-application.mbtx`.
-Both JS and WasmGC release artifacts are built. The consumer workspace's
+For a browser consumer, define the entry package and artifact in the same
+manifest, then select that entry with the public source build command. The
+consumer workspace's
 `.metonic-dist` contains `app.mjs`, `app.wasm`, the shared browser runtime,
 generated WebSys imports, font and license files. Add the application's HTML
 and small `runApplication` entry and serve that directory over HTTP. The
@@ -380,12 +426,11 @@ artifact prefix in that entry is `./app`. This path does not build or stage
 the P0 application or development diagnostics.
 
 Package paths use slash-separated ASCII letters, digits, dots, underscores and
-hyphens; empty, `.` and `..` segments are rejected. These scripts currently
-assume Moon's workspace artifact layout and explicit workspace membership.
-Consumers should pin the Metonic source revision and prepare dependencies through
-that checkout's scripts rather than relying on an arbitrary sibling checkout or
-editing downloaded sources. The source build entry is experimental; it is not a
-published, version-stable package installer.
+hyphens; empty, `.` and `..` segments are rejected. The builder assumes Moon's
+workspace artifact layout. The manifest's application members remain explicit;
+Metonic-internal prepared members and dependency preparation are not consumer
+configuration. The low-level builders' environment variables remain internal
+implementation inputs, not the source-consumer entry contract.
 
 ## Native development control
 
