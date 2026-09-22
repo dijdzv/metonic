@@ -203,6 +203,53 @@ reveals the caret again. Single-line inputs do not consume vertical scrolling.
 with synthetic messages in an owned hidden window. These checks do not establish
 physical mouse or IME behavior.
 
+### Shared list layout, clipping and viewport
+
+`core/layout.VerticalList` is the current shared layout primitive. It uses the
+pinned `Milky2018/chicle@0.6.1` dependency behind the `core/layout` package;
+application code consumes `VerticalList` and `Placement`, not Chicle tree or
+style types. `VerticalList::new(row_height~, gap?)` defines one fixed pixel
+height and an optional pixel gap. `arrange(viewport, references)` lays out a
+single column of equal-height rows that fill the viewport width and returns one
+placement per semantic reference, including its bounds and visible intersection.
+The list retains and clamps its scroll offset when arranged again. It lays out
+every supplied reference; it does not virtualize offscreen rows or provide
+general measurement, nesting, or responsive layout.
+
+`core/layout.layout_linear` arranges fixed and weighted fill tracks along a
+horizontal or vertical axis. It accepts a container `Bounds`, gap and padding,
+then returns one `Bounds` per track. Applications can pass a returned area to
+another layout call, including `VerticalList.arrange`, to place an editor beside
+a scrolling list. The application chooses when to use a horizontal or vertical
+composition; this API does not infer breakpoints from content. The root may be
+up to 2048 pixels per axis, while each returned drawable area is at most 1024
+pixels per axis. Fixed tracks do not shrink; fill tracks declare positive
+weight, minimum and maximum sizes. Insufficient space returns an error rather
+than overlapping controls. This API has no scroll state.
+
+Row height must be 1–1024 pixels and gap 0–1024. The viewport origin must be
+nonnegative and at most 1,000,000 on either axis, each viewport dimension must
+be 1–1024 pixels, and an arrangement accepts at most 100,000 unique semantic
+references. `scroll_at` consumes pixel deltas only when the pointer lies in the
+viewport; `scroll` clamps to the content extent. `reveal` scrolls a known row
+into view, and `hit` resolves only visible row bounds.
+
+`Control.clip` clips one control to a `Bounds`; `Control.visible_bounds` reports
+the intersection. Native rendering crops the raster layer, rejects hits outside
+the clip, and publishes clipped bounds to accessibility. The browser managed
+host applies the same intersection as a DOM `clip-path`. `Application.viewport`
+connects application layout to host input through `scroll(x, y, delta_pixels)`
+and `reveal(reference)` callbacks. Native sends unhandled wheel input to the
+callback; the browser normalizes wheel deltas to pixels and lets the callback
+handle scrolling outside text inputs. Both hosts call `reveal` when semantic
+focus changes and redraw the view when it moves the list. Coordinates are native
+client pixels on Windows and CSS pixels in the browser.
+
+This is a constrained shared list, not a general layout engine or an automatic
+application migration. `examples/notes/application/application.mbt` still emits
+explicit bounds and sets `viewport: None`; migration of the independent Notes
+application to the shared list remains incomplete.
+
 ## Browser entry
 
 Export one `create` function returning `application_host.Instance`. Pass the
@@ -226,7 +273,8 @@ is rejected; replace its semantic node instead. Anonymous display text has
 positional identity and carries no editing state. The host uses DOM `moveBefore`
 to preserve input state during moves; browsers must support that operation.
 Input and button styling uses the `gpu-input` and `gpu-button` classes shown in
-the Notes page. Placement remains explicit until shared layout APIs are available.
+the Notes page. The application supplies bounds to the browser host; it may
+derive those bounds from `core/layout.VerticalList` as described above.
 
 Removing an input revokes its listeners and pending composition before DOM
 detachment. Late callbacks cannot target a replacement generation. Stop removes
@@ -258,10 +306,20 @@ a newly selected item); the browser host reflects that focus after creating any
 new DOM binding. An unchanged semantic focus target does not reclaim browser
 focus during an unrelated redraw.
 
-Each raster layer supports dimensions from 1 to 1024 pixels on either axis.
-The native surface currently accepts at most 16 layers per frame. Applications
-must keep their visible controls within these bounds; these are resource limits,
-not a limit on how many records an application can store.
+Each raster layer supports dimensions from 1 to 1024 pixels on either axis. The
+native surface accepts at most 64 raster layers in an installed layer set. On
+each submitted native update, the host creates a texture, texture view, shader
+module, render pipeline and bind group for every layer, uploads its complete
+RGBA8 pixel buffer, then releases the prior set. This makes layer count and area
+direct GPU update costs; 64 is a hard ceiling, not a performance target.
+`VerticalList` does not enforce this surface limit, and a dense viewport can
+produce more than 64 visible rows. The application must keep each native layer
+set within the limit. Clipping removes fully hidden raster layers before GPU
+installation, but offscreen controls still participate in list layout and can
+incur CPU layout and raster work. The browser also uploads each submitted layer
+and replaces the old set, but this native 64-layer ceiling is not a browser
+limit. These per-layer bounds do not limit how many records an application can
+store.
 
 The small browser entry calls `runApplication` from `runtime/application.mjs`
 with the artifact prefix, element IDs, refresh event name and button actions.
@@ -517,9 +575,10 @@ The browser application host accepts input up to 1024 UTF-16 code units. The
 semantic editor and native clipboard policy do not impose that same content cap;
 applications must enforce their own document limits and report rejection without
 discarding unsaved text. The existing raster layer size limits also apply.
-The native default input is optional, allowing empty and button-only views.
-The managed browser entry creates DOM controls dynamically, but does not yet
-provide a general layout system.
+The native default input is optional, allowing empty and button-only views. The
+managed browser entry creates DOM controls dynamically and places them at the
+bounds supplied by the application. The shared fixed-height vertical list is
+available, but a general layout system and list virtualization are not.
 Unexpected task failures use the handler/outcome contract described above;
 there is no automatic retry or durable background job queue.
 The portable task entry alone does not establish durable saving or recovery;

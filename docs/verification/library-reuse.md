@@ -1,6 +1,6 @@
 # Library reuse evaluation
 
-Initial evaluation: 2026-09-06; current boundaries reconciled on 2026-09-20.
+Initial evaluation: 2026-09-06; current boundaries reconciled on 2026-09-23.
 This supplements dependency selection; it does not replace the
 architecture or authorize adoption of every candidate. Working implementations
 remain comparison baselines until equivalent requirements pass.
@@ -14,6 +14,7 @@ remain comparison baselines until equivalent requirements pass.
 | `tools/native_surface_probe/window.c` | Isolated device-replacement diagnostic HWND | Ordinary window migrated to `wzzc-dev/window/windows`; diagnostic retained for comparison |
 | `native_host/async_app`, `native_host/windows_loop` | Async jobs, cancellation, completion delivery and UI wakeup | Adopted `moonbitlang/async` structured tasks and external-loop API with the prepared window library; custom C workers replaced after [comparison](native-async.md); context-free C wake thunk retained |
 | `native_gpu`, `examples/p0/native_headless` | Persistent offscreen GPU resources, readback and capture | Adopted `Milky2018/wgpu_mbt@0.16.0`; headless C stub removed, stdio and file writing use MoonBit async |
+| `core/layout` | Fixed-height vertical rows, linear fixed/fill placement, pixel scrolling, visible intersections, hit testing and focus reveal | Adopted `Milky2018/chicle@0.6.1` behind `VerticalList` and `layout_linear`; this scoped API is not a general layout engine or virtualized list; see [ADR 034](../adr/034-shared-list-layout.md) |
 | `browser_host/app/input*.mbt` | Text-input listeners, DOM values, selection, composition, focus and scroll observation | Adopted generated WebSys bindings for JS/WasmGC through the pinned `local/websys-input` module; [input](browser-input.md) records generation, lifetime tests and bounded actual-IME acceptance |
 | Other `browser_host/app` operations | Scene/text GPU resources and frame submission, control placement, HTTP, timers and bounded font download | Generated WebSys bindings for JS/WasmGC; [HTTP](browser-http.md), [font transfer](browser-font-transfer.md) and [text GPU](browser-text-gpu.md) records describe the boundaries |
 | `examples/p0/browser/host/*.mjs` | Browser startup, adapter/device acquisition, canvas coordination, animation-frame scheduling, module loading and buffer transfer | Remaining JavaScript adapter; GPU drawing, text-input ownership, control placement and font hash validation have moved to MoonBit |
@@ -107,17 +108,23 @@ proof of incompatibility or silently disabled.
 
 ## Follow-up selection
 
-The initial table above is historical evidence, not the current task list.
-Native window/async adoption and interactive text integration have since landed;
-the current-boundary table and linked verification records describe that state.
-Open Issues own current priority and acceptance criteria.
+The initial table above is historical evidence, not the current task list. Its
+layout row records the 2026-09-06 comparison against Chicle 0.6.0, before the
+shared list was implemented. The current-boundary table and [ADR 034](../adr/034-shared-list-layout.md)
+record the scoped adoption of Chicle 0.6.1. Open Issues own current priority and
+acceptance criteria.
 
 - GPU: retain the adopted binding and integrated event loop. Track further
   surface-reuse and presentation coverage separately from completed host migration.
-- Layout/text: no general layout engine has been adopted. Evaluate typed chicle
-  behavior when the shared sample layout requires it, preserving the working UI.
-  Evaluate moon_swash/moon_zeno through text dependencies before creating separate
-  public APIs. Preserve UTF-16/UTF-8/scalar validity requirements.
+- Layout/text: Chicle 0.6.1 is adopted behind `core/layout.VerticalList` for
+  fixed-height vertical rows, clipping, pixel scrolling and focus reveal, and
+  behind `layout_linear` for fixed/fill composition. Content measurement,
+  automatic responsive rules and list virtualization remain unprovided.
+  The independent Notes application still uses explicit bounds and has not
+  migrated to this API. See [ADR 034](../adr/034-shared-list-layout.md) and the
+  [application entry](../application-entry.md). Evaluate moon_swash/moon_zeno
+  through text dependencies before creating separate public APIs. Preserve
+  UTF-16/UTF-8/scalar validity requirements.
 - Accessibility: the official AccessKit C adapter is adopted and production UIA
   behavior has automated evidence. `Milky2018/moon_accesskit` is not adopted;
   further data-model reuse must preserve that OS adapter and semantic contract.

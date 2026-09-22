@@ -15,6 +15,7 @@ pub struct Item {
   single_line_scroll : Int?
   vertical_scroll : Int
   follow_caret : Int?
+  clip : @view.Bounds?
 } derive(Eq)
 
 ///|
@@ -28,6 +29,7 @@ pub fn item(
   single_line_scroll? : Int? = None,
   vertical_scroll? : Int = 0,
   follow_caret? : Int? = None,
+  clip? : @view.Bounds? = None,
 ) -> Item {
   {
     element,
@@ -39,6 +41,7 @@ pub fn item(
     single_line_scroll,
     vertical_scroll,
     follow_caret,
+    clip,
   }
 }
 
@@ -46,4 +49,10 @@ pub fn item(
 pub struct Layer {
   bounds : @view.Bounds
   pixels : Bytes
+}
+
+///|
+pub fn Item::contains(self : Item, x : Int, y : Int) -> Bool {
+  self.element.bounds.contains(x, y) &&
+  self.clip.map(clip => clip.contains(x, y)).unwrap_or(true)
 }

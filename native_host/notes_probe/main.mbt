@@ -1,5 +1,9 @@
 ///|
 async fn main {
+  if @env.args().contains("--viewport") {
+    verify_viewport()
+    return
+  }
   if @env.args().contains("--edits") {
     verify_edits()
     return

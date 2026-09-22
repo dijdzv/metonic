@@ -9,6 +9,15 @@ pub(all) enum Kind {
 pub(all) struct Control {
   element : @view.Element
   kind : Kind
+  clip : @view.Bounds?
+}
+
+///|
+pub fn Control::visible_bounds(self : Control) -> @view.Bounds? {
+  match self.clip {
+    Some(clip) => self.element.bounds.intersection(clip)
+    None => Some(self.element.bounds)
+  }
 }
 
 ///|
@@ -19,11 +28,18 @@ pub(all) struct TextEdit {
 }
 
 ///|
+pub(all) struct Viewport {
+  scroll : (Int, Int, Int) -> Bool
+  reveal : (@semantics.NodeRef) -> Bool
+}
+
+///|
 pub(all) struct Application {
   title : String
   editor : @semantics.Tree
   default_input : @semantics.NodeRef?
   initial_size : (Int, Int)
+  viewport : Viewport?
   initialize : () -> @task.Request?
   view : () -> Array[Control]
   activate : (@semantics.NodeRef) -> @task.Request?

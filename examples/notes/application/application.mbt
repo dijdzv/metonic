@@ -5,12 +5,17 @@ pub fn Model::application(self : Model) -> @app.Application {
     editor: self.editor,
     default_input: Some(self.note),
     initial_size: self.size(),
+    viewport: None,
     initialize: () => None,
     view: () => {
       let elements = self.elements()
       let controls : Array[@app.Control] = [
-        { element: elements[0], kind: @app.Input(single_line=false), },
-        { element: elements[1], kind: @app.Button, },
+        {
+          element: elements[0],
+          kind: @app.Input(single_line=false),
+          clip: None,
+        },
+        { element: elements[1], kind: @app.Button, clip: None, },
       ]
       if self.input_error is Some(error) {
         controls.push({
@@ -26,6 +31,7 @@ pub fn Model::application(self : Model) -> @app.Application {
             focused: false,
           },
           kind: @app.Text,
+          clip: None,
         })
       }
       controls

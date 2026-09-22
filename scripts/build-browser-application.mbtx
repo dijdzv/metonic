@@ -97,6 +97,7 @@ async fn main {
       (".work/websys-input/generated/runtime.mjs", "websys-input.mjs"),
       (".work/websys-input/LICENSE", "LICENSE-websys"),
       (".work/websys-input/async-dependency/LICENSE", "LICENSE-async"),
+      (".mooncakes/Milky2018/chicle/LICENSE", "LICENSE-chicle"),
       (".work/text-assets/NotoSansJP.ttf", "NotoSansJP.ttf"),
       (".work/text-assets/OFL.txt", "OFL.txt"),
       ("LICENSE-MIT", "LICENSE-MIT"),

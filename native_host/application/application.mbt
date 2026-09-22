@@ -34,6 +34,7 @@ pub(all) struct Application {
   navigate_unhandled : (Int, Int) -> Bool
   navigation_blocked : () -> Bool
   pointer_unhandled : (Int, Int) -> Bool
+  scroll_unhandled : (Int, Int, Int) -> Bool
   resize : (Int, Int) -> Bool
   stop : () -> Unit
   can_close : () -> Bool

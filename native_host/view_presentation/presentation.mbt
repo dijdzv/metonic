@@ -63,6 +63,7 @@ fn copy_item(
   @renderer.item(
     item.element,
     surface=item.surface,
+    clip=item.clip,
     selection=item.selection,
     selection_ranges?=item.selection_ranges.map(ranges => ranges.copy()),
     caret=item.caret,
@@ -102,8 +103,7 @@ pub fn Presenter::render(
   }
   for item in items {
     let bounds = item.element.bounds
-    if bounds.x < 0 ||
-      bounds.y < 0 ||
+    if ((bounds.x < 0 || bounds.y < 0) && item.clip is None) ||
       bounds.width < 1 ||
       bounds.width > 1024 ||
       bounds.height < 1 ||
@@ -190,6 +190,7 @@ pub fn Presenter::render(
     let prepared = @renderer.item(
       { ..item.element, text, focused: node.focused, },
       surface=item.surface,
+      clip=item.clip,
       selection~,
       selection_ranges?=if composing {
         Some(preedit.unwrap().ranges.copy())

@@ -23,6 +23,7 @@ interface Node : EventTarget {
   boolean isSameNode(Node? otherNode);
 };
 interface Element : Node {
+  DOMRectReadOnly getBoundingClientRect();
   undefined moveBefore(Node movedNode, Node? referenceNode);
   undefined setAttribute(DOMString qualifiedName, DOMString value);
   boolean hasAttribute(DOMString qualifiedName);
@@ -66,6 +67,8 @@ interface HTMLTextAreaElement : HTMLElement {
 interface Event {
   constructor(DOMString type, EventInit init);
   readonly attribute DOMString type;
+  undefined preventDefault();
+  undefined stopPropagation();
 };
 dictionary EventInit {
   boolean bubbles = false;
@@ -73,6 +76,19 @@ dictionary EventInit {
   boolean composed = false;
 };
 interface UIEvent : Event {};
+interface MouseEvent : UIEvent {
+  readonly attribute long clientX;
+  readonly attribute long clientY;
+  readonly attribute boolean ctrlKey;
+};
+interface WheelEvent : MouseEvent {
+  readonly attribute double deltaY;
+  readonly attribute unsigned long deltaMode;
+};
+interface DOMRectReadOnly {
+  readonly attribute double left;
+  readonly attribute double top;
+};
 interface InputEvent : UIEvent {
   readonly attribute boolean isComposing;
 };

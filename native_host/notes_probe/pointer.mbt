@@ -2,18 +2,34 @@
 extern "C" fn current_pid() -> UInt = "GetCurrentProcessId"
 
 ///|
-extern "C" fn next_owned_window(parent : UInt64, after : UInt64, class_name : UInt64, title : UInt64) -> UInt64 = "FindWindowExW"
+extern "C" fn next_owned_window(
+  parent : UInt64,
+  after : UInt64,
+  class_name : UInt64,
+  title : UInt64,
+) -> UInt64 = "FindWindowExW"
 
 ///|
 #borrow(pid)
-extern "C" fn pointer_window_owner(window : UInt64, pid : FixedArray[UInt]) -> UInt = "GetWindowThreadProcessId"
+extern "C" fn pointer_window_owner(
+  window : UInt64,
+  pid : FixedArray[UInt],
+) -> UInt = "GetWindowThreadProcessId"
 
 ///|
 #borrow(rect)
-extern "C" fn pointer_client_rect(window : UInt64, rect : FixedArray[Int]) -> Int = "GetClientRect"
+extern "C" fn pointer_client_rect(
+  window : UInt64,
+  rect : FixedArray[Int],
+) -> Int = "GetClientRect"
 
 ///|
-extern "C" fn pointer_post(window : UInt64, message : UInt, key : UInt64, point : Int64) -> Int = "PostMessageW"
+extern "C" fn pointer_post(
+  window : UInt64,
+  message : UInt,
+  key : UInt64,
+  point : Int64,
+) -> Int = "PostMessageW"
 
 ///|
 fn notes_window() -> UInt64 raise {
@@ -27,7 +43,11 @@ fn notes_window() -> UInt64 raise {
       assert_true(found != 0UL, msg="Owned notes window missing")
       return found
     }
-    if pointer_window_owner(cursor, pid) != 0U && pid[0] == current_pid() && pointer_client_rect(cursor, rect) != 0 && rect[2] == 480 && rect[3] == 240 {
+    if pointer_window_owner(cursor, pid) != 0U &&
+      pid[0] == current_pid() &&
+      pointer_client_rect(cursor, rect) != 0 &&
+      rect[2] == 480 &&
+      rect[3] == 240 {
       assert_eq(found, 0UL, msg="Ambiguous owned notes window")
       found = cursor
     }
@@ -43,14 +63,20 @@ fn pointer_click(window : UInt64, x : Int, y : Int) -> Unit raise {
 }
 
 ///|
-async fn verify_disabled_pointer(model : @notes.Model, handle : @window_host.Handle, activations : Ref[Int]) -> Unit {
+async fn verify_disabled_pointer(
+  model : @notes.Model,
+  handle : @window_host.Handle,
+  activations : Ref[Int],
+) -> Unit {
   let window = notes_window()
   let original = @semantics.node(model.editor, model.note).unwrap()
   assert_eq(@semantics.set_enabled(model.editor, model.note, false), "")
   let previous = activations.val
   pointer_click(window, 64, 144)
   @async.with_timeout(2000, () => {
-    while activations.val == previous { @async.sleep(5) }
+    while activations.val == previous {
+      @async.sleep(5)
+    }
   })
   assert_eq(activations.val, previous + 1)
   assert_true(@semantics.node(model.editor, model.clear).unwrap().focused)
