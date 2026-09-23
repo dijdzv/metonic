@@ -6,7 +6,7 @@ pub struct Model {
   priv mut query : String
   priv mut generation : Int
   priv mut closed : Bool
-  priv mut matching : Array[Int]
+  priv mut matching : Array[@collection.Note]
 }
 
 ///|
@@ -23,12 +23,11 @@ pub fn create(wait : async (Int) -> Unit) -> Model {
 }
 
 ///|
-fn matching(document : @collection.Document, query : String) -> Array[Int] {
+fn matching(document : @collection.Document, query : String) -> Array[@collection.Note] {
   let query = query.to_lower()
   document
   .items()
   .filter(note => query == "" || note.text.to_lower().contains(query))
-  .map(note => note.id)
 }
 
 ///|
@@ -42,7 +41,7 @@ pub fn Model::refresh(self : Model, document : @collection.Document) -> Unit {
 
 ///|
 pub fn Model::items(self : Model) -> Array[@collection.Note] {
-  self.document.items().filter(note => self.matching.contains(note.id))
+  self.matching.copy()
 }
 
 ///|
