@@ -85,6 +85,10 @@ state updates invalidate the affected bindings and necessary rendering stages.
 Tests must cover dynamic dependency changes, diamond graphs, equality suppression,
 batching, untracked reads, cycles, conditional child removal, and cleanup exactly once.
 
+[ADR 035](docs/adr/035-reactive-graph-ownership.md) fixes the Phase 3 graph
+ownership and scheduling boundary for persistent UI nodes; the consumer and
+performance acceptance remain separate from the core package.
+
 A scope owns subscriptions and tasks. Disposing it prevents subsequent writes.
 Async completions carry request identity/generation so superseded responses cannot
 overwrite newer state. Worker threads enqueue results; only the UI thread mutates

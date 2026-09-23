@@ -1,0 +1,6 @@
+import {
+  "moonbitlang/core/env",
+  "local/p0/core/reactive",
+}
+
+pkgtype(kind: "executable")

@@ -20,6 +20,7 @@ remain comparison baselines until equivalent requirements pass.
 | `examples/p0/browser/host/*.mjs` | Browser startup, adapter/device acquisition, canvas coordination, animation-frame scheduling, module loading and buffer transfer | Remaining JavaScript adapter; GPU drawing, text-input ownership, control placement and font hash validation have moved to MoonBit |
 | `tools/devtools/*.mjs`, `scripts/*` | CLI/MCP transport and development verification | MoonBit orchestration first; external SDK adapters scoped separately |
 | `core/text_position`, `core/task_scope`, `core/semantics` | Position validity, task lifetime and semantic actions | Framework packages without sample dependencies; P0 initialization and legacy actions remain in its semantic adapter |
+| `core/reactive` | Phase 3 dependency graph and component lifetime | Metonic-owned implementation in progress after the bounded `mizchi/signals@0.6.5` and `bikallem/rsignal@0.3.0` comparison; [ADR 035](../adr/035-reactive-graph-ownership.md) records the decision |
 | `platform/windows/ime_presentation` | Interpretation of Windows IMM composition attributes | Pure Windows presentation policy; separate from platform-independent text offsets |
 
 `examples/p0` contains bounded architecture probes, not a supported public API.
@@ -75,6 +76,32 @@ implemented in MoonBit. The JavaScript host forwards canvas-relative pointer
 coordinates and key names, preserves focus and prevents default behavior for
 recognized keys, including clamped movement. MoonBit tests cover hit edges and
 ignored keys; the artifact verifier compares generated JS/WasmGC input results.
+
+## Phase 3 reactive graph candidates
+
+On 2026-09-23 an ignored standalone MoonBit fixture under `.work/reactive-eval`
+used the pinned compiler to run focused probes against the published
+`mizchi/signals@0.6.5` package on JS, WasmGC and native. In each target,
+dynamic dependency replacement, a nested-batch diamond, ordinary cleanup and
+upstream Memo subscription release passed. Two contracts failed identically:
+an unchanged parity Memo reran its observing `render_effect` (`2` runs rather
+than `1`), and a disposed Owner accepted a new live effect (`3` runs rather
+than `2` after a source update). A separate bounded writeback probe stopped
+with source value `1` rather than reaching `3` or rejecting the write. These
+results are from an ignored local fixture; they are not a reproducible test
+artifact shipped with the repository. Issue #499 retains the exact scenario.
+
+The package implements identity-based equality and a module-global tracking
+context. A watch-and-output-Signal adapter can suppress downstream publication
+for equal values in a narrow JS probe, but it does not resolve Owner reuse,
+reentry or Metonic's component/rendering lifetime contract. The current
+published `bikallem/rsignal@0.3.0` source was compared as well: it exposes
+explicit subscription and mapping operations rather than automatic dynamic
+dependency replacement and batched graph propagation. Neither candidate is a
+drop-in for the Phase 3 contract. [ADR 035](../adr/035-reactive-graph-ownership.md)
+records the self-owned core decision and its boundaries. This comparison does
+not assert defects outside Metonic's requirements or claim the new core has
+already passed consumer integration.
 
 ## Initial results
 
