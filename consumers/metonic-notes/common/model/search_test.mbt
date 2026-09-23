@@ -54,6 +54,7 @@ async test "search filters reconcile row lifetimes and selection by memo identit
     () => (),
     _ => (),
   )
+  (app.connect_tasks)(@task.task_control(_ => ()))
   finish((app.initialize)())
   let initial = listed_memo_refs(app)
   assert_eq(initial.length(), 3)
@@ -82,6 +83,7 @@ async test "search completion after disposal cannot recreate semantic rows" {
     () => (),
     _ => (),
   )
+  (app.connect_tasks)(@task.task_control(_ => ()))
   finish((app.initialize)())
   let row = listed_memo_refs(app)[0]
   let request = search_edit(app, "Alpha")
@@ -103,6 +105,7 @@ async test "search finishes while autosave remains pending and never cancels its
   let release_save = @cond_var.Cond()
   let search_finished = @cond_var.Cond()
   let save_finished = @cond_var.Cond()
+  let driver = @driver.driver()
   let app = create_collection(
     {
       load: () => Ok(stored.val),
@@ -119,8 +122,10 @@ async test "search finishes while autosave remains pending and never cancels its
       }
     },
   )
+  (app.connect_tasks)(
+    @task.task_control(operation => ignore(driver.cancel_operation(operation))),
+  )
   finish((app.initialize)())
-  let driver = @driver.driver()
   assert_true(driver.submit(edited(app, "Alpha latest")))
   @async.with_task_group(group => {
     let running = group.spawn(() => {

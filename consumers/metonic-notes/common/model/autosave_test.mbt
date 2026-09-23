@@ -25,7 +25,7 @@ async test "committed edits wait then autosave and manual retry bypasses debounc
     () => (),
     delay => delays.push(delay),
   )
-  finish((app.initialize)())
+  initialize(app)
   let request = edited(app, "autosaved")
   assert_eq(stored.val, Some("original"))
   finish(Some(request))
@@ -60,7 +60,7 @@ async test "replacement reconciles a written snapshot before its completion was 
     () => (),
     _ => (),
   )
-  finish((app.initialize)())
+  initialize(app)
   let first = edited(app, "first")
   first.invalidate()
   let stale = first.prepare().unwrap().run()
@@ -94,7 +94,7 @@ async test "close requested during debounce preserves the unsaved close decision
       release.wait()
     },
   )
-  finish((app.initialize)())
+  initialize(app)
   let request = edited(app, "draft")
   request.invalidate()
   let work = request.prepare().unwrap()
@@ -132,7 +132,7 @@ async test "discard cancels debounce before it can write the discarded draft" {
       blocked.wait()
     },
   )
-  finish((app.initialize)())
+  initialize(app)
   let driver = @driver.driver()
   assert_true(driver.submit(edited(app, "discard me")))
   @async.with_task_group(group => {
@@ -169,7 +169,7 @@ async test "queued autosave cannot silently retry a newly completed storage fail
     () => (),
     _ => (),
   )
-  finish((app.initialize)())
+  initialize(app)
   let first = edited(app, "first")
   first.invalidate()
   let stale = first.prepare().unwrap().run()

@@ -19,7 +19,7 @@ async test "close confirmation preserves edits through cancel and failed save re
     () => (),
     _ => (),
   )
-  finish((app.initialize)())
+  initialize(app)
   let activate = index => {
     (app.activate)((app.view)()[index].element.reference.unwrap())
   }
@@ -82,7 +82,7 @@ async test "close discard does not require an invalid draft to pass save validat
     () => (),
     _ => (),
   )
-  finish((app.initialize)())
+  initialize(app)
   assert_eq(
     @semantics.set_text(
       app.editor,
@@ -116,7 +116,7 @@ async test "cancel close during an existing save prevents later automatic exit" 
     () => (),
     _ => (),
   )
-  finish((app.initialize)())
+  initialize(app)
   assert_eq(
     @semantics.set_text(app.editor, app.default_input.unwrap(), "changed"),
     "",

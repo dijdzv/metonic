@@ -14,7 +14,7 @@ async test "canceled save cannot acknowledge a draft or complete pending close" 
     () => (),
     _ => (),
   )
-  finish((app.initialize)())
+  initialize(app)
   assert_eq(
     @semantics.set_text(app.editor, app.default_input.unwrap(), "draft"),
     "",

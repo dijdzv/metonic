@@ -1,4 +1,13 @@
 ///|
+fn connected_model(scope : @reactive.Scope) -> @search.Model {
+  let model = @search.create(scope, _ => ())
+  if !model.connect_tasks(@task.task_control(_ => ())) {
+    abort("search task control connection failed")
+  }
+  model
+}
+
+///|
 fn document() -> @collection.Document {
   let (first, id) = @collection.empty().create_note().unwrap()
   let first = first.edit(id, "Alpha 日本語").unwrap()
@@ -9,7 +18,7 @@ fn document() -> @collection.Document {
 ///|
 async test "reactive search publishes changed rows and suppresses equal results" {
   let scope = @reactive.Scope::root(@reactive.Graph::new())
-  let model = @search.create(scope, _ => ())
+  let model = connected_model(scope)
   let observed : Array[Array[Int]] = []
   let _ = @reactive.Binding::new(
     scope,
@@ -30,7 +39,7 @@ async test "reactive search publishes changed rows and suppresses equal results"
 ///|
 async test "Scope disposal rejects a prepared search completion" {
   let scope = @reactive.Scope::root(@reactive.Graph::new())
-  let model = @search.create(scope, _ => ())
+  let model = connected_model(scope)
   model.refresh(document())
   let request = model.request("alpha", () => ()).unwrap()
   request.invalidate()
@@ -42,7 +51,7 @@ async test "Scope disposal rejects a prepared search completion" {
 
 ///|
 async test "query replacement rejects earlier results and clear restores all notes" {
-  let model = @search.create(@reactive.Scope::root(@reactive.Graph::new()), _ => ())
+  let model = connected_model(@reactive.Scope::root(@reactive.Graph::new()))
   model.refresh(document())
   let first = model.request("alpha", () => ()).unwrap()
   first.invalidate()
@@ -58,7 +67,7 @@ async test "query replacement rejects earlier results and clear restores all not
 
 ///|
 async test "collection changes and close reject stale search results" {
-  let model = @search.create(@reactive.Scope::root(@reactive.Graph::new()), _ => ())
+  let model = connected_model(@reactive.Scope::root(@reactive.Graph::new()))
   let original = document()
   model.refresh(original)
   let request = model.request("日本語", () => ()).unwrap()
@@ -78,7 +87,7 @@ async test "collection changes and close reject stale search results" {
 
 ///|
 async test "search results follow reordered documents and remain owned by the model" {
-  let model = @search.create(@reactive.Scope::root(@reactive.Graph::new()), _ => ())
+  let model = connected_model(@reactive.Scope::root(@reactive.Graph::new()))
   let original = document()
   model.refresh(original)
   let returned = model.items()

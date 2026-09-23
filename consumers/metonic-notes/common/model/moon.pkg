@@ -4,6 +4,7 @@ import {
   "local/p0/core/layout",
   "local/p0/core/semantics",
   "local/p0/core/reactive",
+  "local/p0/core/reactive_task" @resource,
   "local/metonic_notes/persistence",
   "local/metonic_notes/collection",
   "local/metonic_notes/search",

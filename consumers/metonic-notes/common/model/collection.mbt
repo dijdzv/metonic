@@ -15,7 +15,7 @@ priv struct Collection {
   mut reveal_selected : Bool
   persistence : @persistence.Model
   store : @persistence.Store
-  save_operation : @task.Operation
+  save_resource : @resource.Resource
   wait : async (Int) -> Unit
   save_waiting : @reactive.Signal[Bool]
   workspace : @reactive.Signal[@collection.WorkspaceState]
@@ -146,8 +146,7 @@ fn Collection::replace_editor_text(self : Collection) -> Unit {
     @semantics.set_enabled(
       self.tree,
       self.input,
-      runtime.ready() && workspace.active() is Some(_) &&
-      !runtime.close_pending,
+      runtime.ready() && workspace.active() is Some(_) && !runtime.close_pending,
     ),
   )
 }
@@ -190,30 +189,24 @@ fn Collection::activate_inner(
   if reference == self.buttons[1] &&
     self.persistence.state() == @persistence.Saving {
     guard self.save_waiting.peek() else { return None }
-    return Some(
-      @task.replace(
-        () => (),
-        () => {
-          self.persistence.retire_save()
-          let mut workspace = self.workspace.peek()
-          if self.persistence.saved_text() is Some(saved) &&
-            @collection.decode(Some(saved)) is Ok(document) {
-            workspace = workspace.acknowledge_save(document)
-          }
-          self.set_workspace(workspace.discard())
-          ignore(self.persistence.discard())
-          self.save_waiting.set(false)
-          self.error = None
-          if self.close_pending.peek() {
-            self.close_confirmed = true
-          }
-          self.show_selected()
-          self.replace_editor_text()
-          None
-        },
-        operation=self.save_operation,
-      ),
-    )
+    return self.save_resource.replace_prepared(() => (), () => {
+      self.persistence.retire_save()
+      let mut workspace = self.workspace.peek()
+      if self.persistence.saved_text() is Some(saved) &&
+        @collection.decode(Some(saved)) is Ok(document) {
+        workspace = workspace.acknowledge_save(document)
+      }
+      self.set_workspace(workspace.discard())
+      ignore(self.persistence.discard())
+      self.save_waiting.set(false)
+      self.error = None
+      if self.close_pending.peek() {
+        self.close_confirmed = true
+      }
+      self.show_selected()
+      self.replace_editor_text()
+      None
+    })
   }
   if self.close_pending.peek() && reference == self.buttons[2] {
     self.close_pending.set(false)
@@ -231,7 +224,7 @@ fn Collection::activate_inner(
     self.close_confirmed = true
     self.show_selected()
     self.replace_editor_text()
-    return Some(@task.cancel(() => (), operation=self.save_operation))
+    return self.save_resource.cancel(() => ())
   }
   if reference == self.buttons[0] &&
     self.persistence.state() is @persistence.LoadFailed(_) {
@@ -312,7 +305,7 @@ fn Collection::activate_inner(
     )
   }
   if reference == self.buttons[1] {
-    Some(@task.cancel(() => (), operation=self.save_operation))
+    self.save_resource.cancel(() => ())
   } else if reference == self.buttons[2] ||
     (reference == self.buttons[3] && !self.workspace.peek().deletion_pending()) {
     self.save(500)
@@ -456,25 +449,24 @@ pub fn create_collection(
     @collection.workspace_state(@collection.empty()),
   )
   let search = @search.create(scope, wait)
-  let visible_rows : @reactive.Memo[Array[Int]] = @reactive.Memo::new(
-    scope,
-    () => search.items().map(note => note.id),
-  )
+  let visible_rows : @reactive.Memo[Array[Int]] = @reactive.Memo::new(scope, () => {
+    search.items().map(note => note.id)
+  })
   let selected_row : @reactive.Memo[Int?] = @reactive.Memo::new(scope, () => {
     workspace.get().active().map(note => note.id)
   })
-  let persistence = @persistence.create_scoped(scope, action => graph.batch(action))
+  let persistence = @persistence.create_scoped(scope, action => {
+    graph.batch(action)
+  })
   let close_pending = @reactive.Signal::new(scope, false)
   let save_waiting = @reactive.Signal::new(scope, false)
   let presentation : @reactive.Memo[PresentationRuntime] = @reactive.Memo::new(
     scope,
     () => {
-      {
-        persistence: persistence.state(),
-        close_pending: close_pending.get(),
-        save_waiting: save_waiting.get(),
-        filtered: search.filtered(),
-      }
+      persistence: persistence.state(),
+      close_pending: close_pending.get(),
+      save_waiting: save_waiting.get(),
+      filtered: search.filtered(),
     },
   )
   let tree = @semantics.empty(1, 1)
@@ -498,7 +490,7 @@ pub fn create_collection(
     row_ids: [],
     reveal_selected: false,
     persistence,
-    save_operation: @task.Operation::new(),
+    save_resource: @resource.Resource::new(scope),
     wait,
     save_waiting,
     store: {
@@ -546,7 +538,8 @@ pub fn create_collection(
       let runtime = model.presentation.get()
       let workspace = model.workspace.get()
       (
-        runtime.ready() && workspace.active() is Some(_) &&
+        runtime.ready() &&
+        workspace.active() is Some(_) &&
         !runtime.close_pending,
         runtime.ready() && !runtime.close_pending,
         action_presentation(workspace, runtime),
@@ -588,10 +581,10 @@ pub fn create_collection(
         abort("Notes task control connected twice")
       }
       tasks_connected.val = true
-      model.scope.on_dispose(() => {
-        model.search.cancel_running(control)
-        control.cancel(model.save_operation)
-      })
+      if !model.search.connect_tasks(control) ||
+        !model.save_resource.connect(control) {
+        abort("Notes task Resource connection failed")
+      }
     },
     initialize: () => model.load(),
     view: () => model.view(),
