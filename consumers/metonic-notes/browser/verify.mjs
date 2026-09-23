@@ -150,9 +150,18 @@ try {
     await overflowPage.mouse.move(lastBox.x + lastBox.width / 2, lastBox.y + lastBox.height / 2);
     await overflowPage.mouse.wheel(0, -4096);
     await first.waitFor();
+    const editorBox = await overflowPage.locator('[aria-label="Memo"]').boundingBox();
+    await overflowPage.mouse.move(editorBox.x + editorBox.width / 2,
+      editorBox.y + editorBox.height / 2);
+    await overflowPage.mouse.wheel(0, 36);
+    await overflowPage.waitForTimeout(100);
+    assert.equal(await first.count(), 1);
     const firstId = await first.getAttribute('id');
     const second = overflowPage.locator('[aria-label="Memo 2"]');
     const secondId = await second.getAttribute('id');
+    const firstBox = await first.boundingBox();
+    await overflowPage.mouse.move(firstBox.x + firstBox.width / 2,
+      firstBox.y + firstBox.height / 2);
     await overflowPage.mouse.wheel(0, 36);
     await overflowPage.locator('[aria-label="Memo 3"]').waitFor();
     assert.equal(await first.count(), 0);
