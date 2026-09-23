@@ -380,35 +380,37 @@ fn Collection::view(self : Collection) -> Array[@application.Control] {
     },
   ]
   for i, reference in self.buttons {
-    let node = @semantics.node(self.tree, reference).unwrap()
-    let label = if self.close_pending {
-      node.name
-    } else if compact && i == 1 {
-      "Discard all"
-    } else if compact && i == 3 {
-      if self.workspace.peek().deletion_pending() {
-        "Confirm"
+    if i < 6 || rows[i - 6].visible is Some(_) {
+      let node = @semantics.node(self.tree, reference).unwrap()
+      let label = if self.close_pending {
+        node.name
+      } else if compact && i == 1 {
+        "Discard all"
+      } else if compact && i == 3 {
+        if self.workspace.peek().deletion_pending() {
+          "Confirm"
+        } else {
+          "Delete"
+        }
       } else {
-        "Delete"
+        node.name
       }
-    } else {
-      node.name
+      let bounds = if i < 6 { layout.actions[i] } else { rows[i - 6].bounds }
+      controls.push({
+        element: {
+          bounds,
+          text: label,
+          reference: Some(reference),
+          focused: node.focused,
+        },
+        kind: @application.Button,
+        clip: if i < 6 {
+          None
+        } else {
+          Some(layout.list)
+        },
+      })
     }
-    let bounds = if i < 6 { layout.actions[i] } else { rows[i - 6].bounds }
-    controls.push({
-      element: {
-        bounds,
-        text: label,
-        reference: Some(reference),
-        focused: node.focused,
-      },
-      kind: @application.Button,
-      clip: if i < 6 {
-        None
-      } else {
-        Some(layout.list)
-      },
-    })
   }
   let query = @semantics.node(self.tree, self.search_input).unwrap()
   controls.push({
@@ -578,6 +580,7 @@ pub fn create_collection(
       scroll: (x, y, pixels) => model.list.scroll_at(x, y, pixels),
       reveal: reference => model.list.reveal(reference),
     }),
+    connect_tasks: _ => (),
     initialize: () => model.load(),
     view: () => model.view(),
     activate: reference => model.activate(reference),

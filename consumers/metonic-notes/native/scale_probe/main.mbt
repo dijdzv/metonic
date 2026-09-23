@@ -49,7 +49,13 @@ async fn main {
         while (application.view)().last().unwrap().element.text == "Loading..." {
           @async.sleep(5)
         }
-        assert_eq((application.view)().length(), 1010)
+        let row_count = () => {
+          @semantics.snapshot(application.editor)
+          .filter(node => node.name.contains("Memo "))
+          .length()
+        }
+        assert_eq(row_count(), 1000)
+        assert_true((application.view)().length() <= 42)
         ignore((handle.capture)(_ => ()))
         let startup = (@async.now() - start).to_int()
         let (initial_working_set, _) = process_working_set()
@@ -69,7 +75,6 @@ async fn main {
             "",
           )
         }
-        let row_count = () => (application.view)().length() - 10
         let wait_rows = count => {
           @async.with_timeout(30000, () => {
             while row_count() != count {
@@ -114,7 +119,7 @@ async fn main {
         wait_rows(1000)
         let initial = (handle.capture)(_ => ())
         let clear_ms = (@async.now() - clear_start).to_int()
-        let first_y = (application.view)()[7].element.bounds.y
+        let first_row = target("Memo 1")
         let before = (handle.inspect)().frames
         let window = observed.val.unwrap().hwnd
         let scroll_start = @async.now()
@@ -130,7 +135,12 @@ async fn main {
         assert_true(post_window_message(window, 0x20AU, 0xFF880000UL, 0L) != 0)
         @async.with_timeout(30000, () => {
           while (handle.inspect)().frames <= before ||
-                (application.view)()[7].element.bounds.y >= first_y {
+                (application.view)()
+                .iter()
+                .find_first(control => {
+                  control.element.reference == Some(first_row)
+                })
+                is Some(_) {
             @async.sleep(5)
           }
         })
@@ -139,7 +149,12 @@ async fn main {
         let scroll_ms = (@async.now() - scroll_start).to_int()
         let reorder_start = @async.now()
         operate(target("Move up"), @window_host.ActivateControl)
-        assert_true((application.view)()[15].element.text.contains("Memo 10"))
+        assert_true(
+          (application.view)()
+          .iter()
+          .find_first(control => control.element.text == "* Memo 10")
+          is Some(_),
+        )
         ignore((handle.capture)(_ => ()))
         let reorder_ms = (@async.now() - reorder_start).to_int()
         let edit_start = @async.now()
