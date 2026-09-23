@@ -518,6 +518,7 @@ pub fn create_collection(
     close_pending: false,
     close_confirmed: false,
   }
+  let tasks_connected = Ref(false)
   let _ = @reactive.Binding::new(
     scope,
     () => {
@@ -580,7 +581,16 @@ pub fn create_collection(
       scroll: (x, y, pixels) => model.list.scroll_at(x, y, pixels),
       reveal: reference => model.list.reveal(reference),
     }),
-    connect_tasks: _ => (),
+    connect_tasks: control => {
+      if tasks_connected.val {
+        abort("Notes task control connected twice")
+      }
+      tasks_connected.val = true
+      model.scope.on_dispose(() => {
+        model.search.cancel_running(control)
+        control.cancel(model.save_operation)
+      })
+    },
     initialize: () => model.load(),
     view: () => model.view(),
     activate: reference => model.activate(reference),
