@@ -1,0 +1,39 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/encoding/utf8",
+}
+
+///|
+async fn main {
+  let cases = [
+    ("cycle", "Graph::ensure_current"),
+    ("untracked-write", "Graph::assert_can_write"),
+    ("cross-graph", "Graph::track"),
+    ("short-scope", "Graph::track"),
+    ("disposed-owner", "Scope::assert_alive"),
+    ("scope-cleanup-write", "Graph::assert_can_write"),
+    ("update-reentry", "Graph::assert_can_write"),
+  ]
+  for target in ["js", "wasm-gc", "native"] {
+    for (scenario, rejecting_frame) in cases {
+      let (code, _stdout, stderr) = @process.collect_output(
+        ".tools/moonbit/bin/moon.exe",
+        ["run", "--target", target, "tools/reactive_negative", scenario],
+        no_console_window=true,
+      )
+      let diagnostic = @utf8.decode_lossy(stderr.binary())
+      if code == 0 || !diagnostic.contains(rejecting_frame) {
+        abort(
+          "reactive negative case did not reject as expected: " +
+          target +
+          "/" +
+          scenario +
+          ": " +
+          diagnostic,
+        )
+      }
+    }
+  }
+  println("reactive negative contracts: 7 scenarios x 3 targets passed")
+}
