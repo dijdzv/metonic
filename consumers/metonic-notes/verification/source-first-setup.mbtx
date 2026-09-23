@@ -76,7 +76,8 @@ async fn main {
     copy_source(original + "/native/moon.mod", consumer + "/native/moon.mod")
     for
       module_path in [
-        "main", "dev", "probe", "persistence_probe", "release_acceptance", "storage",
+        "main", "dev", "probe", "persistence_probe", "scale_probe", "release_acceptance",
+        "storage",
       ] {
       copy_source(
         original + "/native/" + module_path,

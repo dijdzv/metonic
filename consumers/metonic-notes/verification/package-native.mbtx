@@ -78,7 +78,7 @@ async fn main {
       name in [
         "window_dev", "window_control", "window_probe", "native_session", "native_control",
         "named_pipe", "development_transport", "application_control", "release_acceptance",
-        "persistence_probe", "metonic_notes_native/dev",
+        "persistence_probe", "scale_probe", "metonic_notes_native/dev",
       ] {
       assert_false(
         link.contains(name),
