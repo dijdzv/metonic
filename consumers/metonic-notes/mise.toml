@@ -61,6 +61,18 @@ run = '.\.metonic\framework\.tools\moonbit\bin\moon.exe run verification/model.m
 description = "Create the deterministic 1,000-memo snapshot under .work/scale"
 run = '.\.metonic\framework\.tools\moonbit\bin\moon.exe run verification/scale-fixture.mbtx'
 
+[tasks."build:native-scale-probe"]
+description = "Build the Windows 1,000-memo operation probe"
+run = '.\.metonic\framework\.tools\moonbit\bin\moon.exe run build.mbtx -- native-scale-probe'
+
+[tasks."scale:baseline-native"]
+description = "Measure the fixed 1,000-memo sequence on Windows native"
+run = [
+  'mise run scale:fixture',
+  'mise run build:native-scale-probe',
+  '.\.metonic\framework\.tools\moonbit\bin\moon.exe run verification/scale-native.mbtx',
+]
+
 [tasks."scale:baseline-browser"]
 description = "Measure the fixed 1,000-memo sequence in browser JS and WasmGC"
 run = [

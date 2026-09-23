@@ -31,6 +31,10 @@
           "entry_package": "persistence_probe",
           "artifact": "local/metonic_notes_native/persistence_probe"
         },
+        "scale_probe": {
+          "entry_package": "scale_probe",
+          "artifact": "local/metonic_notes_native/scale_probe"
+        },
         "release_acceptance": {
           "entry_package": "release_acceptance",
           "artifact": "local/metonic_notes_native/release_acceptance"

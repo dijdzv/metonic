@@ -10,13 +10,13 @@ async fn main {
   let args = @env.args()
   assert_true(
     args.length() == 2,
-    msg="usage: build.mbtx native|native-dev|native-probe|native-persistence-probe|native-release-acceptance|browser",
+    msg="usage: build.mbtx native|native-dev|native-probe|native-persistence-probe|native-scale-probe|native-release-acceptance|browser",
   )
   let target = args[1]
   assert_true(
     [
       "native", "native-dev", "native-probe", "native-persistence-probe", "native-release-acceptance",
-      "browser",
+      "native-scale-probe", "browser",
     ].contains(target),
   )
   let root = @fs.realpath(".")
@@ -27,6 +27,7 @@ async fn main {
     "native-dev" => "dev"
     "native-probe" => "probe"
     "native-persistence-probe" => "persistence_probe"
+    "native-scale-probe" => "scale_probe"
     "native-release-acceptance" => "release_acceptance"
     _ => "main"
   }
