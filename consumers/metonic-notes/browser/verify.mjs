@@ -56,7 +56,7 @@ try {
     assert.equal(await memo.inputValue(), '取消した削除', 'editing must cancel the earlier deletion request');
     await page.locator(':is([aria-label="Delete memo"],[aria-label="Confirm delete"])').click();
     assert.equal(await memo.inputValue(), '日本語メモ1\n編集を維持');
-    assert.equal(await page.locator('[aria-label="Memo 5"]').count(), 0);
+    assert.equal(await page.locator(':is([aria-label="Memo 5"],[aria-label="* Memo 5"])').count(), 0);
     await page.locator(':is([aria-label="Discard all changes"],[aria-label="Discard"])').click();
     await page.locator('[aria-label="Memo 5"]').click();
     assert.equal(await memo.inputValue(), '日本語メモ5\n編集を維持');
@@ -73,6 +73,16 @@ try {
     await page.evaluate(() => { Storage.prototype.setItem = window.originalSetItem; });
     await page.locator(':is([aria-label="Save all"],[aria-label="Save"],[aria-label="Retry load"])').click();
     await page.waitForFunction(key => localStorage.getItem(key).includes('再試行する編集'), key);
+    const search = page.locator('[aria-label="Search memos"]');
+    await search.fill('日本語メモ1');
+    await page.locator('[aria-label="Memo 1"]').waitFor();
+    await page.locator(':is([aria-label="Memo 5"],[aria-label="* Memo 5"])').waitFor({ state: 'hidden' });
+    await page.locator('[aria-label="Memo 1"]').click();
+    assert.equal(await memo.inputValue(), '日本語メモ1\n編集を維持');
+    await search.fill('');
+    await page.locator('[aria-label="Memo 5"]').waitFor();
+    await page.locator('[aria-label="Memo 5"]').click();
+    assert.equal(await memo.inputValue(), '再試行する編集');
     const updated = await saved();
     await page.evaluate(key => localStorage.setItem(key, 'METONIC_NOTES\n{"version":99}'), key);
     await page.reload();
@@ -116,9 +126,11 @@ try {
     assert.equal(await memo.isDisabled(), true);
     await page.locator('#stop').click();
     assert.equal(await page.locator('#status').textContent(), 'Stopped.');
+    await page.waitForTimeout(150);
+    assert.equal(await page.locator('#status').textContent(), 'Stopped.');
     assert.deepEqual(errors, []);
     await context.close();
-    console.log(`NOTES_COLLECTION_OK target=${target} create select edit retained-list delete discard restart quota retry schema retry migration empty`);
+    console.log(`NOTES_COLLECTION_OK target=${target} create select edit retained-list delete discard restart quota retry search select schema retry migration empty stop`);
 
     const overflowContext = await browser.newContext({ viewport: { width: 480, height: 420 } });
     const overflowPage = await overflowContext.newPage();
