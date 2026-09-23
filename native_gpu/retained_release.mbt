@@ -2,6 +2,11 @@
 struct FrameRetention {}
 
 ///|
+fn FrameRetention::resource_footprint(_self : FrameRetention) -> (Int, UInt64) {
+  (0, 0UL)
+}
+
+///|
 priv struct PendingFrame {}
 
 ///|

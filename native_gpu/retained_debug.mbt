@@ -24,6 +24,15 @@ struct FrameRetention {
 }
 
 ///|
+fn FrameRetention::resource_footprint(self : FrameRetention) -> (Int, UInt64) {
+  let mut bytes = 0UL
+  for pair in self.images {
+    bytes += pair.1.width.to_uint64() * pair.1.height.to_uint64() * 4UL
+  }
+  (self.images.length(), bytes)
+}
+
+///|
 priv struct PendingFrame {
   mut image : RetainedImage?
 }

@@ -3,6 +3,7 @@ pub struct SurfaceText {
   pool : @wgpu.AutoReleasePool
   pipeline : @wgpu.RenderPipeline
   bind_group : @wgpu.BindGroup
+  texture_bytes : UInt64
 }
 
 ///|
@@ -73,6 +74,18 @@ pub fn SurfaceRenderer::set_text_layers(
     }
   }
   let next = layers.map(layer => self.make_text_layer(layer))
+  let (replacing_count, replacing_bytes) = replacement_footprint(
+    self.text_layers.length(),
+    text_texture_bytes(self.text_layers),
+    next.length(),
+    text_texture_bytes(next),
+  )
+  self.peak_text_texture_count = self.peak_text_texture_count.max(
+    replacing_count,
+  )
+  if replacing_bytes > self.peak_text_texture_bytes {
+    self.peak_text_texture_bytes = replacing_bytes
+  }
   for old in self.text_layers {
     old.pool.release()
   }
@@ -111,5 +124,10 @@ fn SurfaceRenderer::make_text_layer(
   let bind_group = pool.track_bind_group(
     self.device.create_bind_group_texture_2d(layout, view),
   )
-  { pool, pipeline, bind_group, }
+  {
+    pool,
+    pipeline,
+    bind_group,
+    texture_bytes: text_layer_bytes(layer.width, layer.height),
+  }
 }
