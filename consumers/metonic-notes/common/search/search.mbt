@@ -50,6 +50,11 @@ pub fn Model::filtered(self : Model) -> Bool {
 }
 
 ///|
+pub fn Model::cancel_running(self : Model, control : @task.TaskControl) -> Unit {
+  control.cancel(self.operation)
+}
+
+///|
 pub fn Model::request(
   self : Model,
   query : String,
