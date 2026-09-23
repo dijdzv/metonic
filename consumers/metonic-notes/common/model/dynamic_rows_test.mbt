@@ -56,15 +56,25 @@ async test "overflow, real reorder and deletion preserve the right memo identiti
   let rows = () => {
     (app.view)().filter(control => control.element.text.contains("Memo "))
   }
-  let original = rows().map(control => control.element.reference.unwrap())
-  assert_eq(original.length(), 10)
-  assert_eq(rows()[0].visible_bounds(), None)
   let list_bounds = rows()[0].clip.unwrap()
   assert_true(
     (app.viewport.unwrap().scroll)(list_bounds.x + 1, list_bounds.y + 1, -10000),
   )
-  assert_eq(rows().map(control => control.element.reference.unwrap()), original)
+  let original = rows().map(control => control.element.reference.unwrap())
+  assert_true(original.length() > 6 && original.length() < 10)
   assert_eq(rows()[0].visible_bounds(), Some(rows()[0].element.bounds))
+  assert_true(
+    (app.viewport.unwrap().scroll)(list_bounds.x + 1, list_bounds.y + 1, 10000),
+  )
+  assert_false(
+    rows()
+    .map(control => control.element.reference.unwrap())
+    .contains(original[0]),
+  )
+  assert_true(
+    (app.viewport.unwrap().scroll)(list_bounds.x + 1, list_bounds.y + 1, -10000),
+  )
+  assert_eq(rows().map(control => control.element.reference.unwrap()), original)
   ignore((app.activate)(original[5]))
   ignore((app.activate)(action(5)))
   let reordered = rows().map(control => control.element.reference.unwrap())
@@ -78,7 +88,7 @@ async test "overflow, real reorder and deletion preserve the right memo identiti
   )
   ignore((app.activate)(action(4)))
   ignore((app.activate)(action(4)))
-  assert_eq(rows().length(), 9)
+  assert_true(rows().length() < 9)
   assert_true(@semantics.node(app.editor, original[5]) is Err(_))
   assert_true(@semantics.node(app.editor, original[4]) is Ok(_))
   (app.stop)()

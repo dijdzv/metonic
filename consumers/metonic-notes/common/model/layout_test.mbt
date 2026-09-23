@@ -35,3 +35,36 @@ test "supported compact and expanded sizes keep every control inside and separat
   }
   (app.stop)()
 }
+
+///|
+async test "view keeps only viewport rows while scrolling preserves logical identity" {
+  let mut document = @collection.empty()
+  for _ in 0..<60 {
+    let (next, id) = document.create_note().unwrap()
+    document = next.edit(id, "Memo text").unwrap()
+  }
+  let app = create_collection(
+    { load: () => Ok(Some(document.encode())), save: _ => Ok(()), },
+    () => (),
+    _ => (),
+  )
+  finish((app.initialize)())
+  let row_refs = () => {
+    (app.view)()
+    .filter(control => {
+      control.kind == @application.Button &&
+      control.element.text.contains("Memo ")
+    })
+    .map(control => control.element.reference.unwrap())
+  }
+  let first = row_refs()
+  assert_true(first.length() > 0 && first.length() < 32)
+  assert_true((app.viewport.unwrap().scroll)(40, 200, 720))
+  let later = row_refs()
+  assert_true(later.length() > 0 && later.length() < 32)
+  assert_false(later.contains(first[0]))
+  assert_true(@semantics.node(app.editor, first[0]) is Ok(_))
+  assert_true((app.viewport.unwrap().scroll)(40, 200, -720))
+  assert_eq(row_refs()[0], first[0])
+  (app.stop)()
+}

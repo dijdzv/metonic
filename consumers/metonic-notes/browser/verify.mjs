@@ -132,20 +132,26 @@ try {
     }
     const first = overflowPage.locator('[aria-label="Memo 1"]');
     const last = overflowPage.locator('[aria-label="* Memo 12"]');
-    assert.equal(await overflowPage.locator('#controls > button').count(), 18);
-    const firstId = await first.getAttribute('id');
-    assert.equal(await first.evaluate(el => getComputedStyle(el).clipPath), 'inset(50%)');
+    assert.equal(await overflowPage.locator('#controls > button').count(), 8);
+    assert.equal(await first.count(), 0);
     const lastBox = await last.boundingBox();
     await overflowPage.mouse.move(lastBox.x + lastBox.width / 2, lastBox.y + lastBox.height / 2);
     await overflowPage.mouse.wheel(0, -4096);
-    await overflowPage.waitForFunction(() => {
-      const first = document.querySelector('[aria-label="Memo 1"]');
-      return first && getComputedStyle(first).clipPath !== 'inset(50%)';
-    });
-    assert.equal(await first.getAttribute('id'), firstId);
+    await first.waitFor();
+    const firstId = await first.getAttribute('id');
+    const second = overflowPage.locator('[aria-label="Memo 2"]');
+    const secondId = await second.getAttribute('id');
+    await overflowPage.mouse.wheel(0, 36);
+    await overflowPage.locator('[aria-label="Memo 3"]').waitFor();
+    assert.equal(await first.count(), 0);
+    assert.equal(await second.getAttribute('id'), secondId);
+    await overflowPage.mouse.wheel(0, -36);
+    await first.waitFor();
+    const firstIdAfterReturn = await first.getAttribute('id');
+    assert.notEqual(firstIdAfterReturn, firstId);
     await first.click();
     await overflowPage.locator('[aria-label="Move down"]').click();
-    assert.equal(await overflowPage.locator('[aria-label="* Memo 1"]').getAttribute('id'), firstId);
+    assert.equal(await overflowPage.locator('[aria-label="* Memo 1"]').getAttribute('id'), firstIdAfterReturn);
     await overflowPage.locator('[aria-label="Save all"]').click();
     await overflowPage.waitForFunction(key => {
       const raw = localStorage.getItem(key);
@@ -155,7 +161,7 @@ try {
     }, key);
     await overflowPage.reload();
     await overflowPage.waitForFunction(() => document.querySelector('[aria-label="New memo"]')?.disabled === false);
-    assert.equal(await overflowPage.locator('#controls > button').count(), 18);
+    assert.equal(await overflowPage.locator('#controls > button').count(), 8);
     const restoredOrder = await overflowPage.locator('#controls > button').evaluateAll(buttons =>
       buttons.map(button => button.getAttribute('aria-label')).filter(label => /^\*? ?Memo \d+$/.test(label)).map(label => label.replace(/^\* /, '')));
     assert.deepEqual(restoredOrder.slice(0, 2), ['Memo 2', 'Memo 1']);
