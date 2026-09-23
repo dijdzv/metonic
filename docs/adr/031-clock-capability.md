@@ -48,7 +48,7 @@ advancing a clock does not grant a stale task permission to update application
 state.
 
 `async_runtime/clock` provides reusable virtual-time support, separate from the
-runtime-independent trait in `effects/clock`. It is a workspace module so the
+runtime-independent trait in `capabilities/clock`. It is a workspace module so the
 native and browser workspaces resolve their own pinned async implementation.
 Its application task-scope dependency is confined to acceptance tests.
 

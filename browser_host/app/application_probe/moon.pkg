@@ -8,7 +8,7 @@ import {
   "local/p0/examples/notes/operations_fixture" @operations,
   "moonbitlang/async",
   "local/metonic_async/clock" @production_clock,
-  "local/p0/effects/clock",
+  "local/p0/capabilities/clock",
 }
 
 pkgtype(kind: "foreign_library")

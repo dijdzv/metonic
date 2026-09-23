@@ -2,6 +2,6 @@ import {
   "local/p0/core/application_task" @task,
   "local/p0/examples/p0/application",
   "local/p0/examples/p0/user_load",
-  "local/p0/effects/clock",
-  "local/p0/effects/http",
+  "local/p0/capabilities/clock",
+  "local/p0/capabilities/http",
 }
