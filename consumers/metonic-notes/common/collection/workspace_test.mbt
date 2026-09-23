@@ -89,3 +89,42 @@ test "moving the selected memo keeps its ID, clears delete, and discard restores
   assert_eq(model.active().unwrap().id, third)
   assert_false(model.dirty())
 }
+
+///|
+test "workspace value transitions preserve earlier snapshots" {
+  let initial = workspace_state(empty())
+  let (created, first) = initial.create_note().unwrap()
+  let edited = created.edit("first edit").unwrap()
+  let saved = edited.acknowledge_save(edited.snapshot())
+  let (later, second) = saved.create_note().unwrap()
+  let later = later.edit("second edit").unwrap()
+  assert_eq(initial.items(), [])
+  assert_eq(created.active().unwrap().text, "")
+  assert_eq(saved.items(), [{ id: first, text: "first edit", }])
+  assert_false(saved.dirty())
+  assert_true(later.dirty())
+  assert_eq(later.active().unwrap().id, second)
+  let restored = later.discard()
+  assert_eq(restored.items(), saved.items())
+  assert_eq(restored.active().unwrap().id, first)
+  assert_eq(later.items().length(), 2)
+}
+
+///|
+test "workspace value deletion and reorder clear only their own confirmation" {
+  let (one, first) = workspace_state(empty()).create_note().unwrap()
+  let (two, second) = one.create_note().unwrap()
+  let (pending, requested) = two.request_delete()
+  assert_true(requested)
+  assert_false(two.deletion_pending())
+  assert_true(pending.deletion_pending())
+  let (boundary, moved) = pending.reorder_selected(MoveDirection::Down)
+  assert_false(moved)
+  assert_false(boundary.deletion_pending())
+  let (pending_again, _) = pending.request_delete()
+  let (deleted, removed) = pending_again.confirm_delete()
+  assert_true(removed)
+  assert_eq(deleted.items().map(note => note.id), [first])
+  assert_eq(deleted.active().unwrap().id, first)
+  assert_eq(pending_again.items().map(note => note.id), [first, second])
+}
