@@ -30,6 +30,83 @@ try {
         localStorage: [{ name: 'metonic-notes.snapshot.v1', value: snapshot }],
       }] },
     });
+    await context.addInitScript(() => {
+      // WhyNot: CDP's JS heap omits app-created WebGPU resources.
+      const stats = {
+        textureCreates: 0, textureDestroys: 0, liveTextures: 0, peakTextures: 0,
+        liveTextureBytes: 0, peakTextureBytes: 0,
+        bufferCreates: 0, bufferDestroys: 0, liveBuffers: 0, peakBuffers: 0,
+        liveBufferBytes: 0, peakBufferBytes: 0, unknownTextureFormats: [],
+      };
+      const textures = new WeakMap();
+      const buffers = new WeakMap();
+      window.__metonicGpuResourceStats = () => ({ ...stats });
+      if (!window.GPUDevice || !window.GPUTexture || !window.GPUBuffer) {
+        stats.error = 'WebGPU interface prototypes unavailable at document initialization';
+        return;
+      }
+      const textureBytes = descriptor => {
+        if (descriptor.format !== 'rgba8unorm') {
+          stats.unknownTextureFormats.push(descriptor.format);
+          return 0;
+        }
+        const size = descriptor.size;
+        const width = Array.isArray(size) ? size[0] : size.width;
+        const height = Array.isArray(size) ? size[1] : size.height ?? 1;
+        const layers = Array.isArray(size) ? size[2] ?? 1 : size.depthOrArrayLayers ?? 1;
+        const mips = descriptor.mipLevelCount ?? 1;
+        const samples = descriptor.sampleCount ?? 1;
+        let bytes = 0;
+        for (let level = 0; level < mips; level++) {
+          bytes += Math.max(1, width >> level) * Math.max(1, height >> level) * layers * 4 * samples;
+        }
+        return bytes;
+      };
+      const createTexture = GPUDevice.prototype.createTexture;
+      GPUDevice.prototype.createTexture = function (descriptor) {
+        const texture = createTexture.call(this, descriptor);
+        const bytes = textureBytes(descriptor);
+        textures.set(texture, bytes);
+        stats.textureCreates++;
+        stats.liveTextures++;
+        stats.liveTextureBytes += bytes;
+        stats.peakTextures = Math.max(stats.peakTextures, stats.liveTextures);
+        stats.peakTextureBytes = Math.max(stats.peakTextureBytes, stats.liveTextureBytes);
+        return texture;
+      };
+      const destroyTexture = GPUTexture.prototype.destroy;
+      GPUTexture.prototype.destroy = function () {
+        if (textures.has(this)) {
+          stats.liveTextureBytes -= textures.get(this);
+          stats.liveTextures--;
+          stats.textureDestroys++;
+          textures.delete(this);
+        }
+        return destroyTexture.call(this);
+      };
+      const createBuffer = GPUDevice.prototype.createBuffer;
+      GPUDevice.prototype.createBuffer = function (descriptor) {
+        const buffer = createBuffer.call(this, descriptor);
+        const bytes = Number(descriptor.size);
+        buffers.set(buffer, bytes);
+        stats.bufferCreates++;
+        stats.liveBuffers++;
+        stats.liveBufferBytes += bytes;
+        stats.peakBuffers = Math.max(stats.peakBuffers, stats.liveBuffers);
+        stats.peakBufferBytes = Math.max(stats.peakBufferBytes, stats.liveBufferBytes);
+        return buffer;
+      };
+      const destroyBuffer = GPUBuffer.prototype.destroy;
+      GPUBuffer.prototype.destroy = function () {
+        if (buffers.has(this)) {
+          stats.liveBufferBytes -= buffers.get(this);
+          stats.liveBuffers--;
+          stats.bufferDestroys++;
+          buffers.delete(this);
+        }
+        return destroyBuffer.call(this);
+      };
+    });
     const page = await context.newPage();
     const pageErrors = [];
     page.on('pageerror', error => pageErrors.push(error.message));
@@ -52,6 +129,8 @@ try {
       await page.waitForFunction(target => document.querySelector('#status')?.textContent ===
         `Ready: Memo (${target})`, target, { timeout: 30000 });
       observation.steps.startup = Math.round(performance.now() - started);
+      observation.gpuResourcesAtReady = await page.evaluate(() =>
+        window.__metonicGpuResourceStats?.());
       observation.initialButtons = await page.getByRole('button').count();
       const memoRows = page.getByRole('button', { name: /^\*? ?Memo \d+$/ });
       observation.initialMemoButtons = await memoRows.count();
@@ -81,6 +160,8 @@ try {
         () => localStorage.getItem('metonic-notes.snapshot.v1')?.includes('Memo 10 alpha edited'));
       await measure('autosave', () => editor.fill('Memo 10 alpha autosaved'), () =>
         localStorage.getItem('metonic-notes.snapshot.v1')?.includes('Memo 10 alpha autosaved'));
+      observation.gpuResourcesBeforeReload = await page.evaluate(() =>
+        window.__metonicGpuResourceStats?.());
       await measure('reopen', () => page.reload(), target =>
         document.querySelector('#status')?.textContent === `Ready: Memo (${target})`, target);
       await measure('restoreSelection', async () => {
@@ -101,6 +182,22 @@ try {
       observation.jsHeapUsedBytes = metrics.find(metric => metric.name === 'JSHeapUsedSize')?.value;
       observation.domNodes = (await cdp.send('Memory.getDOMCounters')).nodes;
       await cdp.detach();
+      observation.gpuResourcesAfterReload = await page.evaluate(() =>
+        window.__metonicGpuResourceStats?.());
+      for (const stats of [observation.gpuResourcesAtReady,
+        observation.gpuResourcesBeforeReload,
+        observation.gpuResourcesAfterReload]) {
+        assert.ok(stats && !stats.error, stats?.error || 'missing WebGPU resource ledger');
+        assert.ok(stats.textureCreates > 0 && stats.bufferCreates > 0);
+        assert.deepEqual(stats.unknownTextureFormats, []);
+        assert.equal(stats.textureCreates - stats.textureDestroys, stats.liveTextures);
+        assert.equal(stats.bufferCreates - stats.bufferDestroys, stats.liveBuffers);
+        assert.ok(stats.liveTextures <= 16 && stats.peakTextures <= 32);
+        assert.ok(stats.liveBuffers <= 16 && stats.peakBuffers <= 32);
+        assert.ok(stats.liveTextureBytes <= 2 * 1024 * 1024);
+        assert.ok(stats.peakTextureBytes <= 4 * 1024 * 1024);
+        assert.ok(stats.liveBufferBytes <= 1024 && stats.peakBufferBytes <= 2048);
+      }
       assert.deepEqual(pageErrors, [], 'page errors during scale sequence');
     } catch (error) {
       observation.error = String(error);
