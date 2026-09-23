@@ -41,3 +41,19 @@ async test "collection changes and close reject stale search results" {
   assert_eq(model.items().length(), 0)
   assert_true(model.request("", () => ()) is None)
 }
+
+///|
+async test "search results follow reordered documents and remain owned by the model" {
+  let model = @search.create(_ => ())
+  let original = document()
+  model.refresh(original)
+  let returned = model.items()
+  returned.clear()
+  assert_eq(model.items().map(note => note.id), [1, 2])
+  model.refresh(original.reorder(2, @collection.MoveDirection::Up).unwrap())
+  assert_eq(model.items().map(note => note.id), [2, 1])
+  let request = model.request("alpha", () => ()).unwrap()
+  request.invalidate()
+  assert_eq(request.prepare().unwrap().run().apply(), @task.Changed)
+  assert_eq(model.items().map(note => note.id), [1])
+}
