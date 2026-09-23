@@ -4,7 +4,7 @@ priv struct Collection {
   scope : @reactive.Scope
   visible_rows : @reactive.Memo[Array[Int]]
   selected_row : @reactive.Memo[Int?]
-  presentation : @reactive.Signal[PresentationRuntime]
+  presentation : @reactive.Memo[PresentationRuntime]
   tree : @semantics.Tree
   input : @semantics.NodeRef
   search_input : @semantics.NodeRef
@@ -17,12 +17,12 @@ priv struct Collection {
   store : @persistence.Store
   save_operation : @task.Operation
   wait : async (Int) -> Unit
-  mut save_waiting : Bool
+  save_waiting : @reactive.Signal[Bool]
   workspace : @reactive.Signal[@collection.WorkspaceState]
   mut size : (Int, Int)
   mut error : String?
   mut input_error : String?
-  mut close_pending : Bool
+  close_pending : @reactive.Signal[Bool]
   mut close_confirmed : Bool
 }
 
@@ -131,33 +131,25 @@ fn Collection::show_selected(self : Collection) -> Unit {
 }
 
 ///|
-fn Collection::sync(self : Collection, replace_input? : Bool = false) -> Unit {
+fn Collection::replace_editor_text(self : Collection) -> Unit {
   let workspace = self.workspace.peek()
-  let runtime : PresentationRuntime = {
-    persistence: self.persistence.state(),
-    close_pending: self.close_pending,
-    save_waiting: self.save_waiting,
-    filtered: self.search.filtered(),
-  }
-  if replace_input {
-    ignore(@semantics.set_enabled(self.tree, self.input, true))
-    ignore(
-      @semantics.set_text(
-        self.tree,
-        self.input,
-        workspace.active().map(n => n.text).unwrap_or(""),
-      ),
-    )
-    ignore(
-      @semantics.set_enabled(
-        self.tree,
-        self.input,
-        runtime.ready() && workspace.active() is Some(_) &&
-        !runtime.close_pending,
-      ),
-    )
-  }
-  self.presentation.set(runtime)
+  let runtime = self.presentation.peek()
+  ignore(@semantics.set_enabled(self.tree, self.input, true))
+  ignore(
+    @semantics.set_text(
+      self.tree,
+      self.input,
+      workspace.active().map(n => n.text).unwrap_or(""),
+    ),
+  )
+  ignore(
+    @semantics.set_enabled(
+      self.tree,
+      self.input,
+      runtime.ready() && workspace.active() is Some(_) &&
+      !runtime.close_pending,
+    ),
+  )
 }
 
 ///|
@@ -171,9 +163,8 @@ fn Collection::load(self : Collection) -> @task.Request? {
       )
       self.show_selected()
     }
-    self.sync(replace_input=true)
+    self.replace_editor_text()
   })
-  self.sync()
   request
 }
 
@@ -198,7 +189,7 @@ fn Collection::activate_inner(
   }
   if reference == self.buttons[1] &&
     self.persistence.state() == @persistence.Saving {
-    guard self.save_waiting else { return None }
+    guard self.save_waiting.peek() else { return None }
     return Some(
       @task.replace(
         () => (),
@@ -211,36 +202,35 @@ fn Collection::activate_inner(
           }
           self.set_workspace(workspace.discard())
           ignore(self.persistence.discard())
-          self.save_waiting = false
+          self.save_waiting.set(false)
           self.error = None
-          if self.close_pending {
+          if self.close_pending.peek() {
             self.close_confirmed = true
           }
           self.show_selected()
-          self.sync(replace_input=true)
+          self.replace_editor_text()
           None
         },
         operation=self.save_operation,
       ),
     )
   }
-  if self.close_pending && reference == self.buttons[2] {
-    self.close_pending = false
+  if self.close_pending.peek() && reference == self.buttons[2] {
+    self.close_pending.set(false)
     self.close_confirmed = false
-    self.sync()
     if self.workspace.peek().active() is Some(_) {
       ignore(@semantics.focus(self.tree, self.input))
     }
     return None
   }
-  if self.close_pending && reference == self.buttons[1] {
+  if self.close_pending.peek() && reference == self.buttons[1] {
     // Discard must remain possible even when the draft fails save validation.
     self.set_workspace(self.workspace.peek().discard())
     ignore(self.persistence.discard())
     self.error = None
     self.close_confirmed = true
     self.show_selected()
-    self.sync(replace_input=true)
+    self.replace_editor_text()
     return Some(@task.cancel(() => (), operation=self.save_operation))
   }
   if reference == self.buttons[0] &&
@@ -251,14 +241,13 @@ fn Collection::activate_inner(
   self.error = None
   let previous_active = self.workspace.peek().active().map(note => note.id)
   if reference == self.buttons[0] {
-    if self.close_pending {
+    if self.close_pending.peek() {
       self.close_confirmed = true
     }
     return self.save(0)
   }
   if reference == self.buttons[4] || reference == self.buttons[5] {
     if self.search.filtered() {
-      self.sync()
       return None
     }
     let (next, changed) = self.workspace
@@ -272,7 +261,6 @@ fn Collection::activate_inner(
       )
     self.set_workspace(next)
     self.show_selected()
-    self.sync()
     return if changed { self.save(500) } else { None }
   }
   if reference == self.buttons[1] {
@@ -304,10 +292,10 @@ fn Collection::activate_inner(
       }
     }
   }
-  self.sync(
-    replace_input=reference == self.buttons[1] ||
-    self.workspace.peek().active().map(note => note.id) != previous_active,
-  )
+  if reference == self.buttons[1] ||
+    self.workspace.peek().active().map(note => note.id) != previous_active {
+    self.replace_editor_text()
+  }
   if reference == self.buttons[1] ||
     reference == self.buttons[2] ||
     (reference == self.buttons[3] && !self.workspace.peek().deletion_pending()) ||
@@ -347,7 +335,11 @@ fn Collection::status(self : Collection) -> String {
       Ready => if self.dirty() { "Unsaved changes" } else { "Saved" }
     }
   }
-  let primary = if self.close_pending { "Close? " + primary } else { primary }
+  let primary = if self.close_pending.peek() {
+    "Close? " + primary
+  } else {
+    primary
+  }
   match self.input_error {
     Some(error) => primary + " | " + error
     None => primary
@@ -387,7 +379,7 @@ fn Collection::view(self : Collection) -> Array[@application.Control] {
   for i, reference in self.buttons {
     if i < 6 || rows[i - 6].visible is Some(_) {
       let node = @semantics.node(self.tree, reference).unwrap()
-      let label = if self.close_pending {
+      let label = if self.close_pending.peek() {
         node.name
       } else if compact && i == 1 {
         "Discard all"
@@ -471,13 +463,18 @@ pub fn create_collection(
   let selected_row : @reactive.Memo[Int?] = @reactive.Memo::new(scope, () => {
     workspace.get().active().map(note => note.id)
   })
-  let presentation = @reactive.Signal::new(
+  let persistence = @persistence.create_scoped(scope, action => graph.batch(action))
+  let close_pending = @reactive.Signal::new(scope, false)
+  let save_waiting = @reactive.Signal::new(scope, false)
+  let presentation : @reactive.Memo[PresentationRuntime] = @reactive.Memo::new(
     scope,
-    {
-      persistence: @persistence.Unloaded,
-      close_pending: false,
-      save_waiting: false,
-      filtered: false,
+    () => {
+      {
+        persistence: persistence.state(),
+        close_pending: close_pending.get(),
+        save_waiting: save_waiting.get(),
+        filtered: search.filtered(),
+      }
     },
   )
   let tree = @semantics.empty(1, 1)
@@ -500,10 +497,10 @@ pub fn create_collection(
     buttons,
     row_ids: [],
     reveal_selected: false,
-    persistence: @persistence.create(),
+    persistence,
     save_operation: @task.Operation::new(),
     wait,
-    save_waiting: false,
+    save_waiting,
     store: {
       load: () => {
         match (store.load)() {
@@ -521,7 +518,7 @@ pub fn create_collection(
     size: (760, 520),
     error: None,
     input_error: None,
-    close_pending: false,
+    close_pending,
     close_confirmed: false,
   }
   let tasks_connected = Ref(false)
@@ -577,7 +574,6 @@ pub fn create_collection(
       }
     },
   )
-  model.sync()
   {
     title: "Memo",
     editor: tree,
@@ -612,16 +608,15 @@ pub fn create_collection(
       model.persistence.state() != @persistence.Saving && !model.dirty()
     },
     close_requested: () => {
-      if !model.close_pending {
-        model.close_pending = true
+      if !model.close_pending.peek() {
+        model.close_pending.set(true)
         model.close_confirmed = model.persistence.state() == @persistence.Saving &&
-          !model.save_waiting
-        model.sync()
+          !model.save_waiting.peek()
         ignore(@semantics.focus(tree, model.buttons[2]))
       }
     },
     close_ready: () => {
-      model.close_pending &&
+      model.close_pending.peek() &&
       model.close_confirmed &&
       model.persistence.state() == @persistence.Ready &&
       !model.dirty()
@@ -630,21 +625,18 @@ pub fn create_collection(
     edited: edit => {
       if edit.target == model.search_input &&
         model.ready() &&
-        !model.close_pending {
+        !model.close_pending.peek() {
         let request = model.search.request(edit.text, () => {
           ignore(model.list.scroll(-2147483647))
-          model.sync()
         })
-        model.sync()
         return request
       }
       if edit.target != model.input ||
         !model.ready() ||
-        model.close_pending ||
+        model.close_pending.peek() ||
         !model.flush() {
         return None
       }
-      model.sync()
       model.save(500)
     },
     stop: () => {

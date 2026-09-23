@@ -15,12 +15,14 @@ pub fn Model::load_request(
     @task.replace(() => (), () => {
       Some(
         @task.work(() => (store.load)(), result => {
-          if self.finish_load(ticket, result) {
-            changed()
-            @task.Changed
-          } else {
-            @task.Rejected
-          }
+          let outcome = Ref(@task.Outcome::Rejected)
+          (self.batch)(() => {
+            if self.finish_load(ticket, result) {
+              changed()
+              outcome.val = @task.Changed
+            }
+          })
+          outcome.val
         }),
       )
     }),
@@ -44,8 +46,10 @@ pub fn Model::save_request(
           @task.work(
             () => {
               let completed = Ref(false)
-              defer (if !completed.val && self.cancel_save(ticket) {
-                changed()
+              defer (self.batch)(() => {
+                if !completed.val && self.cancel_save(ticket) {
+                  changed()
+                }
               })
               if !before_save() {
                 return None
@@ -57,12 +61,14 @@ pub fn Model::save_request(
             },
             result => {
               guard result is Some(result) else { return @task.Unchanged }
-              if self.finish_save(ticket, result) {
-                changed()
-                @task.Changed
-              } else {
-                @task.Rejected
-              }
+              let outcome = Ref(@task.Outcome::Rejected)
+              (self.batch)(() => {
+                if self.finish_save(ticket, result) {
+                  changed()
+                  outcome.val = @task.Changed
+                }
+              })
+              outcome.val
             },
           ),
         )

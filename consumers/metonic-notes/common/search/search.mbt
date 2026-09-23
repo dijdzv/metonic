@@ -14,7 +14,7 @@ pub fn create(
   scope : @reactive.Scope,
   wait : async (Int) -> Unit,
 ) -> Model {
-  {
+  let model : Model = {
     operation: @task.Operation::new(),
     wait,
     document: @collection.empty(),
@@ -23,6 +23,11 @@ pub fn create(
     closed: false,
     matching: @reactive.Signal::new(scope, []),
   }
+  scope.on_dispose(() => {
+    model.closed = true
+    model.generation += 1
+  })
+  model
 }
 
 ///|

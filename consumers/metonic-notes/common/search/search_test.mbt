@@ -28,6 +28,19 @@ async test "reactive search publishes changed rows and suppresses equal results"
 }
 
 ///|
+async test "Scope disposal rejects a prepared search completion" {
+  let scope = @reactive.Scope::root(@reactive.Graph::new())
+  let model = @search.create(scope, _ => ())
+  model.refresh(document())
+  let request = model.request("alpha", () => ()).unwrap()
+  request.invalidate()
+  let completion = request.prepare().unwrap().run()
+  scope.dispose()
+  assert_eq(completion.apply(), @task.Rejected)
+  model.close()
+}
+
+///|
 async test "query replacement rejects earlier results and clear restores all notes" {
   let model = @search.create(@reactive.Scope::root(@reactive.Graph::new()), _ => ())
   model.refresh(document())
