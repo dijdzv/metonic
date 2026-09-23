@@ -37,6 +37,7 @@ priv struct Session {
   mut remove_wheel : (() -> Unit)?
   mut engine : @raster.Engine?
   mut layers : Array[@renderer.Layer]
+  mut presented : Array[@app.Control]
   mut stopped : Bool
   tasks : @task_driver.Driver
 }
@@ -351,7 +352,8 @@ fn Session::resize(self : Session, width : Int, height : Int) -> Int {
   self.revealed_focus = None
   let scroll = self.editors.map(editor => editor.element.capture_scroll())
   let placements : Array[@dom_view.Placement] = []
-  for control in (self.application.view)() {
+  let view = (self.application.view)()
+  for control in view {
     if control.element.reference is Some(reference) &&
       self.bindings.iter().find_first(binding => binding.reference == reference)
       is Some(binding) {
@@ -367,6 +369,7 @@ fn Session::resize(self : Session, width : Int, height : Int) -> Int {
     }
   }
   @dom_view.place(@dom_view.element(self.canvas_id), placements)
+  self.presented = view
   for i, editor in self.editors {
     editor.scroll = editor.element.restore_scroll(scroll[i])
   }
@@ -463,6 +466,7 @@ fn Session::render(self : Session) -> Int {
   match @renderer.render(engine, items) {
     Ok(layers) => {
       self.layers = layers
+      self.presented = view
       1
     }
     Err(_) => 0
@@ -535,6 +539,7 @@ fn Session::stop(self : Session) -> Unit {
   self.gpu.gpu_frame_abort()
   self.gpu.text_gpu_dispose()
   self.layers = []
+  self.presented = []
   self.engine = None
   (self.application.stop)()
 }

@@ -10,7 +10,7 @@ fn Session::scroll_viewport(
     self.application.viewport is Some(viewport) else {
     return false
   }
-  let controls = (self.application.view)()
+  let controls = self.presented
   for index = controls.length() - 1; index >= 0; index = index - 1 {
     let control = controls[index]
     if control.element.bounds.contains(x, y) &&

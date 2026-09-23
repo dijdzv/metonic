@@ -31,6 +31,7 @@ pub fn create(
     remove_wheel: None,
     engine: None,
     layers: [],
+    presented: [],
     stopped: false,
     tasks: @task_driver.driver(),
   }
