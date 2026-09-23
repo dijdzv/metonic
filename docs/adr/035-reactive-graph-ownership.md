@@ -55,15 +55,16 @@ a programming error is not promised. The graph is confined to the UI thread
 and never tracks reads across an async suspension.
 
 `capabilities/clock` and `capabilities/http` remain external capability ports.
-The Driver now has an operation-scoped cancellation control that does not use
-the normal Request queue. It rejects a posted result immediately but retains
-the lane until running cleanup exits; a replacement of that Operation waits
-for the cleanup. Resource adapters will request, replace and cancel work
-through this existing `application_task` Driver, then apply results at the UI
-event boundary only while the owning Scope and request generation remain
-valid. A cancellation request is not proof that asynchronous cleanup has
-joined. No second runtime or
-frame loop is introduced.
+The Driver has an operation-scoped cancellation control that does not use the
+normal Request queue. It rejects a posted result immediately but retains the
+lane until running cleanup exits; a replacement of that Operation waits for
+the cleanup. `core/reactive_task.Resource` owns one Operation under a Scope,
+builds normal replace/cancel Requests, and asks that cancellation control to
+retire its lane on disposal. Request admission advances the Resource generation;
+constructing a Request alone does not. Completion and failure callbacks apply
+at the UI event boundary only while the Scope and generation remain valid.
+A cancellation request is not proof that asynchronous cleanup has joined.
+No second runtime or frame loop is introduced.
 
 ## Consequences and next evidence
 
