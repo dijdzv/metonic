@@ -10,6 +10,8 @@ pub struct Model {
   mut failures : Int
   mut cleaned : Int
   mut disposed : Int
+  mut cancellations : Int
+  mut starts : Int
 }
 
 ///|
@@ -30,6 +32,8 @@ pub fn create(
     failures: 0,
     cleaned: 0,
     disposed: 0,
+    cancellations: 0,
+    starts: 0,
   }
 }
 
@@ -41,8 +45,15 @@ pub fn Model::state(self : Model, index : Int) -> Int {
     2 => self.failures
     3 => self.cleaned
     4 => self.disposed
+    5 => self.cancellations
+    6 => self.starts
     _ => -1
   }
+}
+
+///|
+pub fn Model::slow_operation(self : Model) -> @task.Operation {
+  self.slow
 }
 
 ///|
@@ -56,6 +67,7 @@ pub fn Model::application(self : Model) -> @app.Application {
     default_input: None,
     initial_size: (480, 320),
     viewport: None,
+    connect_tasks: _ => (),
     initialize: () => None,
     view: () => {
       let controls : Array[@app.Control] = []
@@ -80,6 +92,7 @@ pub fn Model::application(self : Model) -> @app.Application {
           @task.replace(
             () => (),
             () => {
+              self.starts += 1
               self.status = 1
               Some(
                 @task.work(
@@ -115,7 +128,15 @@ pub fn Model::application(self : Model) -> @app.Application {
           ),
         )
       } else if reference == self.buttons[2] {
-        Some(@task.cancel(() => self.status = 3, operation=self.slow))
+        Some(
+          @task.cancel(
+            () => {
+              self.cancellations += 1
+              self.status = 3
+            },
+            operation=self.slow,
+          ),
+        )
       } else if reference == self.buttons[3] {
         Some(
           @task.replace(

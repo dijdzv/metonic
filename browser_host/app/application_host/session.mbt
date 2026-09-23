@@ -97,6 +97,13 @@ fn Session::start(
     return 0
   }
   self.started = true
+  (self.application.connect_tasks)(
+    @task.task_control(operation => {
+      if self.tasks.cancel_operation(operation) {
+        @async.run_async_main(() => ())
+      }
+    }),
+  )
   if (self.application.initialize)() is Some(request) {
     ignore(self.submit(request))
   }

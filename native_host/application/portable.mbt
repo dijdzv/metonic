@@ -5,6 +5,7 @@ pub fn from_application(app : @portable.Application) -> Application {
   {
     editor: app.editor,
     default_input: app.default_input,
+    connect_tasks: app.connect_tasks,
     initial_size: app.initial_size,
     initialize: () => {
       (app.initialize)().map(request => { request, gate: Always, })

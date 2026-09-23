@@ -553,6 +553,8 @@ async fn run_loop(
   )
   @async.set_external_event_loop(driver)
   event_loop.set_control_flow(@core.ControlFlow::Wait)
+  let tasks = @task_runner.driver()
+  defer tasks.close()
   try {
     if minimum_size is Some((width, height)) {
       require(width > 0 && height > 0, "minimum client size must be positive")
@@ -579,6 +581,9 @@ async fn run_loop(
       font,
     )
     require(app.presenter is Some(_), "presentation font could not be loaded")
+    (host.connect_tasks)(
+      @task.task_control(operation => ignore(tasks.cancel_operation(operation))),
+    )
     if (host.initialize)() is Some(action) {
       app.queue(ApplicationTask(action.request, action.gate, () => ()))
     }
@@ -609,7 +614,6 @@ async fn run_loop(
       }
       let mut initializing = true
       let mut may_present = true
-      let tasks = @task_runner.driver()
       defer tasks.close()
       let tasks_running = group.spawn(() => {
         tasks.run(result => app.queue(ApplicationResult(result)), on_state_change=() => {

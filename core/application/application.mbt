@@ -40,6 +40,7 @@ pub(all) struct Application {
   default_input : @semantics.NodeRef?
   initial_size : (Int, Int)
   viewport : Viewport?
+  connect_tasks : (@task.TaskControl) -> Unit
   initialize : () -> @task.Request?
   view : () -> Array[Control]
   activate : (@semantics.NodeRef) -> @task.Request?

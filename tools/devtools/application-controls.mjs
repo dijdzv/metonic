@@ -235,15 +235,14 @@ export async function verifyDynamicControls(browser, baseUrl, outputDir) {
       await page.reload();
       await page.waitForFunction(() => document.querySelector('#status').textContent.startsWith('Ready:'));
       await change(9);
-      const state = index => page.evaluate(async ({ target, index }) => {
-        const probe = target === 'js' ? await import('./notes.mjs') : globalThis.dynamicProbe;
-        return probe.operation_state(index);
-      }, { target, index });
+      await page.evaluate(async target => {
+        globalThis.operationProbe = target === 'js' ? await import('./notes.mjs') : globalThis.dynamicProbe;
+      }, target);
+      const state = index => page.evaluate(index => globalThis.operationProbe.operation_state(index), index);
       const waitState = async (index, expected) => {
-        await page.waitForFunction(async ({ target, index, expected }) => {
-          const probe = target === 'js' ? await import('./notes.mjs') : globalThis.dynamicProbe;
-          return probe.operation_state(index) === expected;
-        }, { target, index, expected });
+        await page.waitForFunction(({ index, expected }) =>
+          globalThis.operationProbe.operation_state(index) === expected,
+        { index, expected });
       };
       await page.getByRole('button', { name: 'Start slow', exact: true }).click();
       await waitState(0, 1);
@@ -261,6 +260,11 @@ export async function verifyDynamicControls(browser, baseUrl, outputDir) {
       await waitState(1, 2);
       await page.getByRole('button', { name: 'Start slow', exact: true }).click();
       await waitState(0, 1);
+      assert.equal(await page.evaluate(() => Boolean(globalThis.operationProbe.operation_cancel())), true);
+      await waitState(3, 2);
+      assert.equal(await state(0), 1);
+      assert.equal(await state(5), 1);
+      assert.equal(await state(6), 2);
       await page.locator('#stop').click();
       await waitState(4, 1);
       assert.equal(await state(3), 2);

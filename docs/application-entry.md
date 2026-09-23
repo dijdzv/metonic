@@ -57,6 +57,16 @@ do not create a fresh identity for every replacement of the same operation.
 Expected failures should be returned as typed work results and displayed by the
 application. Rendering must not start storage or network operations.
 
+`Application.connect_tasks` receives a host-owned `TaskControl` exactly once
+before `initialize`. An application with no scoped asynchronous resources may
+use `connect_tasks: _ => ()`. The control exposes only
+`cancel(operation)`: it can invalidate one existing Driver lane without
+submitting a Request, including when the Request queue is full. It is safe to
+call during shutdown, when the lane may already be gone. The application must
+invalidate its own model state separately, and may release resources requiring
+joined cleanup only in its later async `dispose` callback. Browser and native
+hosts keep normal Request admission, result delivery and input gates.
+
 Both hosts use the shared operation driver. Replacement invalidates earlier
 results for that identity synchronously when admission succeeds, then awaits its
 active cleanup before preparing new work. The canceled model state is visible

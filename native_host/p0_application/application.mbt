@@ -11,6 +11,7 @@ pub fn create(model : @application.Model) -> @host.Application {
   {
     editor: model.editor,
     default_input: Some(model.editor_input),
+    connect_tasks: _ => (),
     initialize: () => {
       ignore(
         @semantics.set_text(
