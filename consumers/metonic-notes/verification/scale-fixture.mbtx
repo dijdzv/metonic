@@ -1,0 +1,36 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+}
+
+///|
+async fn main {
+  let args = @env.args()
+  assert_true(
+    args.length() == 1,
+    msg="usage: moon run verification/scale-fixture.mbtx",
+  )
+  let notes : Array[Json] = []
+  for id in 1..<=1000 {
+    let text = "Memo " +
+      id.to_string() +
+      (if id % 10 == 0 { " alpha" } else { " beta" })
+    notes.push({ "id": id, "text": text })
+  }
+  let document : Json = { "version": 1, "next_id": 1001, "notes": notes }
+  let snapshot = "METONIC_NOTES\n" + document.stringify()
+  let parsed = @json.parse(snapshot.strip_prefix("METONIC_NOTES\n").unwrap())
+  guard parsed is Json::Object(fields) &&
+    fields.get("notes") is Some(Json::Array(loaded)) else {
+    abort("scale fixture is malformed")
+  }
+  assert_eq(loaded.length(), 1000)
+  let output = @fs.realpath(".") + "/.work/scale"
+  if !@fs.exists(output) {
+    @fs.mkdir(output, recursive=true)
+  }
+  @fs.write_file(output + "/fixture.snapshot", snapshot)
+  println("NOTES_SCALE_FIXTURE_OK count=1000 alpha=100 beta=900")
+}
