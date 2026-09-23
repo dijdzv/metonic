@@ -27,6 +27,21 @@ pub fn Operation::new() -> Operation {
 }
 
 ///|
+pub struct TaskControl {
+  priv cancel_value : (Operation) -> Unit
+}
+
+///|
+pub fn task_control(cancel : (Operation) -> Unit) -> TaskControl {
+  { cancel_value: cancel, }
+}
+
+///|
+pub fn TaskControl::cancel(self : TaskControl, operation : Operation) -> Unit {
+  (self.cancel_value)(operation)
+}
+
+///|
 pub struct Completion {
   priv mut apply_value : (() -> Outcome)?
 }

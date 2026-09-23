@@ -17,6 +17,9 @@ priv struct Model {
 let active : Ref[Model?] = Ref(None)
 
 ///|
+let task_control : Ref[@task.TaskControl?] = Ref(None)
+
+///|
 fn Model::change(self : Model, command : Int) -> Unit {
   match command {
     0 => {
@@ -99,6 +102,16 @@ pub fn operation_state(index : Int) -> Int {
 }
 
 ///|
+#export_name("operation_cancel")
+pub fn operation_cancel() -> Bool {
+  guard active.val is Some(model) && task_control.val is Some(control) else {
+    return false
+  }
+  control.cancel(model.operations.slow_operation())
+  true
+}
+
+///|
 #export_name("create")
 pub fn create() -> @host.Instance {
   let tree = @semantics.empty(901, 1)
@@ -129,7 +142,18 @@ pub fn create() -> @host.Instance {
       },
       reveal: reference => model.invalid == 15 && model.list.reveal(reference),
     }),
-    initialize: () => None,
+    connect_tasks: control => {
+      if task_control.val is Some(_) {
+        abort("task control connected twice")
+      }
+      task_control.val = Some(control)
+    },
+    initialize: () => {
+      if task_control.val is None {
+        abort("task control was not connected before initialize")
+      }
+      None
+    },
     view: () => {
       if model.invalid == 15 {
         let clip : @view.Bounds = { x: 16, y: 60, width: 180, height: 100, }

@@ -6,6 +6,7 @@ pub fn Model::application(self : Model) -> @app.Application {
     default_input: Some(self.note),
     initial_size: self.size(),
     viewport: None,
+    connect_tasks: _ => (),
     initialize: () => None,
     view: () => {
       let elements = self.elements()

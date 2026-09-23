@@ -14,6 +14,7 @@ async fn verify_viewport() -> Unit {
     editor: tree,
     default_input: None,
     initial_size: (480, 240),
+    connect_tasks: _ => (),
     initialize: () => None,
     viewport: Some({
       scroll: (x, y, delta) => list.scroll_at(x, y, delta),
@@ -119,8 +120,7 @@ async fn verify_viewport() -> Unit {
         assert_true(resized.bounds.y + resized.bounds.height <= 90)
         for index in 8..<20 {
           rows.push(
-            @semantics.add_button(tree, "Row " + (index + 1).to_string())
-            .unwrap(),
+            @semantics.add_button(tree, "Row " + (index + 1).to_string()).unwrap(),
           )
         }
         (observe.resize)(480, 900)

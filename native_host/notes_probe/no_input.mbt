@@ -14,6 +14,7 @@ async fn verify_no_input() -> Unit {
     default_input: None,
     initial_size: (480, 240),
     viewport: None,
+    connect_tasks: _ => (),
     initialize: () => None,
     view: () => {
       let controls : Array[@portable.Control] = [
@@ -161,6 +162,7 @@ async fn verify_empty_view() -> Unit {
     default_input: None,
     initial_size: (480, 240),
     viewport: None,
+    connect_tasks: _ => (),
     initialize: () => None,
     view: () => [],
     activate: _ => None,

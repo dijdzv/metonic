@@ -23,6 +23,7 @@ pub(all) struct TaskAction {
 pub(all) struct Application {
   editor : @semantics.Tree
   default_input : @semantics.NodeRef?
+  connect_tasks : (@task.TaskControl) -> Unit
   initialize : () -> TaskAction?
   initial_size : (Int, Int)
   view : () -> View
