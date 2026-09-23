@@ -1,0 +1,80 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/json",
+  "moonbitlang/x@0.5.1/crypto",
+}
+
+///|
+struct FileRecord {
+  path : String
+  bytes : Int
+  sha256 : String
+} derive(FromJson)
+
+///|
+struct Inventory {
+  files : Array[FileRecord]
+} derive(FromJson)
+
+///|
+async fn main {
+  @async.with_timeout(240000, async fn() {
+    let root = @fs.realpath(".")
+    let temporary = @fs.tmpdir(prefix="metonic-notes-browser-package-")
+    let resolved = @fs.realpath(temporary)
+    defer {
+      assert_eq(@fs.realpath(temporary), resolved)
+      @fs.rmdir(temporary, recursive=true)
+    }
+    let destination = temporary + "/配信 app 📝"
+    let moon = root + "/.metonic/framework/.tools/moonbit/bin/moon.exe"
+    assert_eq(
+      @process.run(
+        moon,
+        ["run", root + "/package-browser.mbtx", "--", destination],
+        cwd=root,
+        no_console_window=true,
+      ),
+      0,
+    )
+    let original = @fs.read_file(destination + "/package.json").text()
+    let inventory : Inventory = @json.from_json(@json.parse(original))
+    assert_eq(inventory.files.length(), 20)
+    assert_true(
+      inventory.files.iter().any(file => file.path == "LICENSE-chicle"),
+    )
+    for file in inventory.files {
+      let bytes = @fs.read_file(destination + "/" + file.path).binary()
+      assert_eq(bytes.length(), file.bytes)
+      assert_eq(@crypto.bytes_to_hex_string(@crypto.sha256(bytes)), file.sha256)
+    }
+    let (code, _, _) = @process.collect_output(
+      moon,
+      ["run", root + "/package-browser.mbtx", "--", destination],
+      cwd=root,
+      no_console_window=true,
+    )
+    assert_true(code != 0, msg="Existing package must not be overwritten")
+    assert_eq(@fs.read_file(destination + "/package.json").text(), original)
+    for
+      script in [
+        "verification/browser.mjs", "browser/verify.mjs", "verification/autosave.mjs",
+        "verification/search.mjs",
+      ] {
+      assert_eq(
+        @process.run(
+          "node",
+          [root + "/" + script, destination],
+          cwd=temporary,
+          no_console_window=true,
+        ),
+        0,
+      )
+    }
+    println(
+      "BROWSER_PACKAGE_RELOCATION_OK allowlisted_existing_output_protected unicode_path unrelated_cwd js_wasmgc layout collection_persistence_recovery",
+    )
+  })
+}

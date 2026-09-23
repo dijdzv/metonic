@@ -1,0 +1,8 @@
+import {
+  "local/metonic_async/clock" @production_clock,
+  "local/metonic_async/application_task" @driver,
+  "local/p0/capabilities/clock",
+  "local/p0/core/application_task" @task,
+  "moonbitlang/async",
+  "moonbitlang/async/cond_var",
+}

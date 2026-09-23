@@ -1,14 +1,15 @@
 # Independent memo application operations
 
-An independent local consumer, `metonic-notes`, exercises the public application
-entry. The checks below were recorded against framework revision
+The [independent consumer source](../../consumers/metonic-notes/README.md),
+`metonic-notes`, exercises the public application entry from separate MoonBit
+modules. The operational checks below were recorded against framework revision
 `8ee85dba6899341e040531de274e2c5761e819a1`; the consumer's
 `dependency.json` selects its current pinned revision.
 It is separate from the repository's in-memory Notes example and is not a
-published package or a checked-in example. The commands below run from that
-consumer's root; they are not framework tasks. The consumer's source and raw
-results remain local, so this record alone does not provide a downloadable,
-reproducible consumer fixture.
+published package. The commands below run from that consumer's root; they are
+not framework tasks. The historical raw results remain local. The source is
+now checked in; the setup and builds at the newer pinned revision are recorded
+below rather than attributed to those older operational runs.
 
 ## Application behavior
 
@@ -65,5 +66,20 @@ focus reveal instead of application-owned four-row pagination. Its target
 manifest supplies application members; the Metonic source entry owns internal
 dependency preparation and workspace generation. The final source setup and
 revision-update checks above establish that path for this local consumer, but
-the consumer source and raw results remain local rather than a downloadable
-fixture.
+the historical raw results remain local. The consumer source can now be copied
+from this repository and prepared independently.
+
+## Reproducible source check at the current pin
+
+At framework revision `2be1ddcbcb4e5e944b311d809322910d67e3fc6b`, the
+checked-in consumer fetched the exact source revision and bootstrapped its
+pinned MoonBit compiler without reusing the earlier local consumer's dependency
+checkout. `mise run build:browser` built both JS and WasmGC; `mise run
+build:native` built the Windows application. `mise run verify:source-contract`
+rejected a wrong revision, a dirty dependency checkout and a missing bootstrap
+without replacing a handwritten workspace. `mise run verify:source-first-setup`
+created a separate clean consumer under a path containing a space, bootstrapped
+the dependency there, built JS/WasmGC before native preparation, changed to a
+new pinned source revision and rebuilt, then prepared and built Windows native.
+These checks establish source preparation and builds, not a fresh repetition of
+the historical autosave, search, physical IME or package-operation evidence.

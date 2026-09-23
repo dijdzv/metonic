@@ -1,0 +1,16 @@
+import {
+  "local/p0/core/application",
+  "local/p0/core/view",
+  "local/p0/core/layout",
+  "local/p0/core/semantics",
+  "local/metonic_notes/persistence",
+  "local/metonic_notes/collection",
+  "local/metonic_notes/search",
+  "local/p0/core/application_task" @task,
+}
+
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/cond_var",
+  "local/metonic_async/application_task" @driver,
+} for "test"

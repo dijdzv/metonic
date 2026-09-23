@@ -1,0 +1,7 @@
+import {
+  "local/metonic_notes/model",
+  "local/metonic_notes/persistence",
+  "local/p0/core/application",
+  "local/p0/capabilities/clock",
+  "local/metonic_async/clock" @production_clock,
+}

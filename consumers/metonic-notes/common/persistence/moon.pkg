@@ -1,0 +1,8 @@
+import {
+  "local/p0/core/application_task" @task,
+}
+
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/cond_var",
+} for "test"

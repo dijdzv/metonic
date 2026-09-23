@@ -1,0 +1,177 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/json",
+}
+
+///|
+async fn main {
+  @async.with_timeout(240000, () => {
+    let root = @fs.realpath(".")
+    let framework = root + "/.metonic/framework"
+    let moon = framework + "/.tools/moonbit/bin/moon.exe"
+    assert_eq(
+      @process.run(
+        moon,
+        ["run", "build.mbtx", "--", "native-dev"],
+        no_console_window=true,
+      ),
+      0,
+    )
+    assert_eq(
+      @process.run(
+        moon,
+        ["run", "build.mbtx", "--", "native-release-acceptance"],
+        no_console_window=true,
+      ),
+      0,
+    )
+    assert_eq(
+      @process.run(
+        "mise",
+        ["-C", framework, "run", "devtools:wire-build"],
+        no_console_window=true,
+      ),
+      0,
+    )
+    assert_eq(
+      @process.run(
+        "mise",
+        [
+          "-C", framework, "exec", "--", moon, "build", "tools/native_cli", "--target",
+          "wasm", "--release", "--deny-warn",
+        ],
+        no_console_window=true,
+      ),
+      0,
+    )
+    let data = @fs.tmpdir(prefix="memo-control-")
+    let resolved = @fs.realpath(data)
+    defer {
+      assert_eq(@fs.realpath(data), resolved)
+      @fs.rmdir(data, recursive=true)
+    }
+    @async.with_task_group() <| group => {
+      let log_path = data + "/app.log"
+      let log = @process.redirect_to_file(log_path)
+      defer log.close()
+      let child = @process.spawn(
+        group,
+        root +
+        "/native/.metonic-build/native/debug/build/local/metonic_notes_native/dev/dev.exe",
+        [],
+        extra_env=Map([
+          ("METONIC_DEV_PIPE", "memo_control_" + @async.now().to_string()),
+          ("METONIC_DEV_HIDDEN", "1"),
+          ("METONIC_NOTES_DATA", data),
+        ]),
+        stdout=log,
+        stderr=log,
+        no_console_window=true,
+        cancel_handler=@process.hard_cancel(),
+      )
+      defer child.cancel()
+      let mut discovery = ""
+      @async.with_timeout(15000, () => {
+        while discovery == "" {
+          assert_true(child.try_wait() is None)
+          for line in @fs.read_file(log_path).text().split("\n") {
+            if line.strip_prefix("METONIC_DEV_SESSION ") is Some(path) {
+              discovery = path.trim().to_owned()
+            }
+          }
+          if discovery == "" {
+            @async.sleep(20)
+          }
+        }
+      })
+      assert_eq(
+        @process.run(
+          "node",
+          ["verification/native-mcp.mjs", discovery],
+          no_console_window=true,
+        ),
+        0,
+      )
+      @async.with_timeout(5000, () => {
+        while !@fs.exists(data + "/snapshot") {
+          @async.sleep(20)
+        }
+      })
+      let saved = @fs.read_file(data + "/snapshot").text()
+      guard saved.strip_prefix("METONIC_NOTES\n") is Some(payload) else {
+        abort("collection snapshot missing")
+      }
+      let parsed = @json.parse(payload.to_owned())
+      guard parsed is Json::Object(document) &&
+        document.get("notes") is Some(Json::Array(notes)) else {
+        abort("notes missing")
+      }
+      assert_eq(notes.length(), 1)
+      guard notes[0] is Json::Object(note) else { abort("note missing") }
+      assert_eq(
+        note.get("text"),
+        Some(Json::string("独立アプリから保存\nMCPの確認")),
+      )
+      assert_true(child.try_wait() is None)
+      @async.with_timeout(5000, () => {
+        let record = @json.parse(@fs.read_file(discovery).text())
+        guard record is Json::Object(fields) &&
+          fields.get("pipe") is Some(Json::String(pipe)) else {
+          abort("pipe missing")
+        }
+        let connection = @fs.open(pipe, mode=ReadWrite)
+        defer connection.close()
+        connection.write("{\"id\":1,\"op\":\"capabilities\"}\n")
+        let ready = @json.parse(connection.read_until("\n").unwrap())
+        guard ready is Json::Object(before) &&
+          before.get("controls") is Some(Json::Array(controls)) else {
+          abort("controls missing")
+        }
+        let input = controls
+          .iter()
+          .find_first(item => {
+            item is Json::Object(control) &&
+            control.get("role") == Some(Json::string("text_input"))
+          })
+          .unwrap()
+        guard input is Json::Object(input) else { abort("input missing") }
+        let stale : Json = {
+          "id": 2,
+          "op": "insert",
+          "session_id": "stale-session",
+          "target": input.get("target").unwrap(),
+          "expected_semantic_revision": before.get("semantic_revision").unwrap(),
+          "text": "must-not-apply",
+        }
+        connection.write(stale.stringify() + "\n")
+        let reply = @json.parse(connection.read_until("\n").unwrap())
+        guard reply is Json::Object(after) else { abort("stale reply missing") }
+        assert_eq(after.get("error"), Some(Json::string("stale_session")))
+        assert_eq(after.get("controls"), before.get("controls"))
+        assert_eq(
+          after.get("semantic_revision"),
+          before.get("semantic_revision"),
+        )
+      })
+      assert_eq(
+        @process.run(
+          root +
+          "/native/.metonic-build/native/debug/build/local/metonic_notes_native/release_acceptance/release_acceptance.exe",
+          ["--close-owned-window", child.pid.to_string()],
+          no_console_window=true,
+        ),
+        0,
+      )
+      assert_eq(@async.with_timeout(5000, () => child.wait()), 0)
+      assert_false(
+        @fs.exists(discovery),
+        msg="Normal exit must remove discovery metadata",
+      )
+      println(
+        "MEMO_CONTROL_PERSISTED_OK isolated_storage actual_snapshot app_survives_disconnect",
+      )
+    }
+  })
+}

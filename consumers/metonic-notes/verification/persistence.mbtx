@@ -1,0 +1,38 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+}
+
+///|
+async fn main {
+  let root = @fs.realpath(".")
+  let moon = root + "/.metonic/framework/.tools/moonbit/bin/moon.exe"
+  assert_eq(
+    @process.run(
+      moon,
+      ["run", "build.mbtx", "--", "native-persistence-probe"],
+      no_console_window=true,
+    ),
+    0,
+  )
+  let data = @fs.tmpdir(prefix="metonic-notes-persistence-")
+  let resolved = @fs.realpath(data)
+  defer {
+    assert_eq(@fs.realpath(data), resolved)
+    @fs.rmdir(data, recursive=true)
+  }
+  @fs.write_file(data + "/snapshot", b"\xff")
+  let env = Map([("METONIC_NOTES_DATA", data)])
+  let executable = root +
+    "/native/.metonic-build/native/debug/build/local/metonic_notes_native/persistence_probe/persistence_probe.exe"
+  assert_eq(
+    @process.run(executable, [], extra_env=env, no_console_window=true),
+    0,
+  )
+  env["METONIC_NOTES_RESTORE"] = "1"
+  assert_eq(
+    @process.run(executable, [], extra_env=env, no_console_window=true),
+    0,
+  )
+}

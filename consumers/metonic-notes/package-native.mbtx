@@ -1,0 +1,156 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+  "moonbitlang/x@0.5.1/crypto",
+}
+
+///|
+struct NoticeFile {
+  path : String
+  bytes : Int
+  sha256 : String
+} derive(FromJson)
+
+///|
+struct NoticeInventory {
+  files : Array[NoticeFile]
+} derive(FromJson)
+
+///|
+async fn main {
+  let args = @env.args()
+  assert_true(
+    args.length() == 2,
+    msg="usage: package-native.mbtx <new-output-directory>",
+  )
+  let output = args[1]
+  assert_true(
+    !@fs.exists(output),
+    msg="Package destination already exists; choose a new directory",
+  )
+  let framework = ".metonic/framework"
+  let framework_root = @fs.realpath(framework)
+  let moon = framework_root + "/.tools/moonbit/bin/moon.exe"
+  assert_true(
+    @fs.exists(framework_root + "/scripts/prepare-native-rust-notices.mbtx"),
+    msg="The pinned framework does not yet provide native notice preparation",
+  )
+  assert_eq(
+    @process.run(
+      "mise",
+      [
+        "-C", framework_root, "exec", "--", moon, "run", "scripts/prepare-native-rust-notices.mbtx",
+      ],
+      cwd=framework_root,
+      no_console_window=true,
+    ),
+    0,
+  )
+  let source = "native/.metonic-build/native/release/build/local/metonic_notes_native/main"
+  let files = [
+    (source + "/main.exe", "Memo.exe"),
+    (source + "/accesskit.dll", "accesskit.dll"),
+    (source + "/assets/NotoSansJP.ttf", "assets/NotoSansJP.ttf"),
+    (source + "/assets/OFL.txt", "assets/OFL.txt"),
+    (framework + "/LICENSE-MIT", "licenses/LICENSE-MIT"),
+    (framework + "/LICENSE-APACHE", "licenses/LICENSE-APACHE"),
+    (
+      framework + "/.tools/moonbit/lib/core/LICENSE",
+      "licenses/LICENSE-moonbit-core",
+    ),
+    (
+      framework + "/.tools/moonbit/lib/core/NOTICE",
+      "licenses/NOTICE-moonbit-core",
+    ),
+    (
+      framework + "/.work/native-deps/sources/async-local-control/LICENSE",
+      "licenses/LICENSE-async",
+    ),
+    ("native/.mooncakes/Milky2018/chicle/LICENSE", "licenses/LICENSE-chicle"),
+    (
+      framework + "/.work/native-deps/sources/cosmic-wrap-affinity/LICENSE",
+      "licenses/LICENSE-moon-cosmic",
+    ),
+    (
+      framework +
+      "/.work/native-deps/sources/proton-clipboard-window-owner/LICENSE",
+      "licenses/LICENSE-proton-clipboard",
+    ),
+    (
+      framework +
+      "/.work/native-deps/sources/window-pointer-capture/modules/window/LICENSE",
+      "licenses/LICENSE-window",
+    ),
+    (
+      framework +
+      "/.work/native-deps/sources/window-pointer-capture/modules/windowing/LICENSE",
+      "licenses/LICENSE-windowing",
+    ),
+    (
+      "native/.mooncakes/moonbit-community/harfbuzz/LICENSE", "licenses/LICENSE-harfbuzz",
+    ),
+    (
+      "native/.mooncakes/moonbit-community/harfbuzz/NOTICE", "licenses/NOTICE-harfbuzz",
+    ),
+    ("native/DISTRIBUTION.md", "DISTRIBUTION.md"),
+  ]
+  for
+    name in ["moon_swash", "moon_skrifa", "moon_yazi", "moon_zeno", "wgpu_mbt"] {
+    files.push(
+      (
+        "native/.mooncakes/Milky2018/" + name + "/LICENSE",
+        "licenses/LICENSE-" + name,
+      ),
+    )
+  }
+  let notices = framework + "/.work/native-rust-notices/distribution"
+  let raw = @fs.read_file(notices + "/inventory.json").text()
+  let rust : NoticeInventory = @json.from_json(@json.parse(raw))
+  let expected = [
+    "LICENSES-accesskit.txt", "LICENSES-wgpu.txt", "LICENSE-accesskit-chromium.txt",
+  ]
+  assert_eq(rust.files.length(), expected.length())
+  for name in expected {
+    let record = rust.files
+      .iter()
+      .find_first(file => file.path == name)
+      .unwrap()
+    let bytes = @fs.read_file(notices + "/" + name).binary()
+    assert_eq(bytes.length(), record.bytes)
+    assert_eq(@crypto.bytes_to_hex_string(@crypto.sha256(bytes)), record.sha256)
+    files.push((notices + "/" + name, "licenses/" + name))
+  }
+  files.push((notices + "/inventory.json", "licenses/rust-inventory.json"))
+  let dependency = @json.parse(@fs.read_file("dependency.json").text())
+  let contents : Array[(String, Bytes)] = []
+  for (path, name) in files {
+    contents.push((name, @fs.read_file(path).binary()))
+  }
+  @fs.mkdir(output, recursive=true)
+  @fs.mkdir(output + "/assets")
+  @fs.mkdir(output + "/licenses")
+  let inventory : Array[Json] = []
+  for (name, bytes) in contents {
+    @fs.write_file(output + "/" + name, bytes)
+    inventory.push({
+      "path": name,
+      "bytes": bytes.length(),
+      "sha256": @crypto.bytes_to_hex_string(@crypto.sha256(bytes)),
+    })
+  }
+  let manifest : Json = {
+    "schema_version": 1,
+    "application": "Metonic Notes",
+    "target": "windows-x86_64",
+    "framework": dependency,
+    "files": inventory,
+  }
+  @fs.write_file(output + "/package.json", manifest.stringify(indent=2))
+  println(
+    "NATIVE_PACKAGE_OK files=\{inventory.length()} output=" +
+    @fs.realpath(output),
+  )
+}

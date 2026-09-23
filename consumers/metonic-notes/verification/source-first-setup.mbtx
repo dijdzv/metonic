@@ -1,0 +1,199 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/env",
+}
+
+///|
+async fn copy_source(from : String, to : String) -> Unit {
+  match @fs.kind(from, follow_symlink=false) {
+    Directory => {
+      @fs.mkdir(to, recursive=true)
+      for name in @fs.readdir(from) {
+        copy_source(from + "/" + name, to + "/" + name)
+      }
+    }
+    Regular => @fs.write_file(to, @fs.read_file(from).binary())
+    _ => fail("Unexpected link or special file in consumer source: " + from)
+  }
+}
+
+///|
+async fn checked(program : String, args : Array[String], cwd : String) -> Unit {
+  assert_eq(@process.run(program, args, cwd~, no_console_window=true), 0)
+}
+
+///|
+async fn git_revision(source : String, revision : String) -> String {
+  let (code, stdout, stderr) = @process.collect_output(
+    "git",
+    ["rev-parse", revision],
+    cwd=source,
+    no_console_window=true,
+  )
+  assert_eq(code, 0, msg=stderr.text())
+  stdout.text().trim().to_owned()
+}
+
+///|
+async fn main {
+  @async.with_timeout(900000, async fn() {
+    let original = @fs.realpath(".")
+    let source = @fs.realpath(".metonic/framework")
+    let current = git_revision(source, "HEAD")
+    let home = @fs.realpath(@env.get_env_var("USERPROFILE").unwrap())
+    let temporary = home + "/metonic-first-" + @async.now().to_string()
+    assert_false(@fs.exists(temporary))
+    @fs.mkdir(temporary)
+    let owned = @fs.realpath(temporary)
+    defer {
+      assert_eq(@fs.realpath(temporary), owned)
+      assert_true(
+        owned
+        .replace_all(old="\\", new="/")
+        .to_lower()
+        .has_prefix(
+          home.replace_all(old="\\", new="/").to_lower() + "/metonic-first-",
+        ),
+      )
+      let system = @env.get_env_var("SystemRoot").unwrap_or("C:/Windows")
+      ignore(
+        @process.run(
+          system + "/System32/attrib.exe",
+          ["-R", owned.replace_all(old="/", new="\\") + "\\*", "/S", "/D", "/L"],
+          no_console_window=true,
+        ),
+      )
+      @fs.rmdir(temporary, recursive=true)
+    }
+    let consumer = temporary + "/first app"
+    let framework = consumer + "/.metonic/framework"
+    @fs.mkdir(framework, recursive=true)
+    copy_source(original + "/common", consumer + "/common")
+    copy_source(original + "/browser/app", consumer + "/browser/app")
+    @fs.mkdir(consumer + "/native")
+    copy_source(original + "/native/moon.mod", consumer + "/native/moon.mod")
+    for
+      module_path in [
+        "main", "dev", "probe", "persistence_probe", "release_acceptance", "storage",
+      ] {
+      copy_source(
+        original + "/native/" + module_path,
+        consumer + "/native/" + module_path,
+      )
+    }
+    for file in ["dependency.json", "metonic.application.json"] {
+      copy_source(original + "/" + file, consumer + "/" + file)
+    }
+    let current_lock = @fs.read_file(consumer + "/dependency.json").text()
+    assert_true(current_lock.contains(current))
+    checked("git", ["init", framework], temporary)
+    checked(
+      "git",
+      ["-C", framework, "fetch", "--no-tags", source, "HEAD"],
+      temporary,
+    )
+    checked(
+      "git",
+      ["-C", framework, "checkout", "--detach", "FETCH_HEAD"],
+      temporary,
+    )
+    assert_false(@fs.exists(framework + "/.tools/moonbit"))
+    assert_false(@fs.exists(consumer + "/browser/moon.work"))
+    checked("mise", ["-C", framework, "trust"], temporary)
+    checked("mise", ["-C", framework, "run", "bootstrap"], temporary)
+    let moon = framework + "/.tools/moonbit/bin/moon.exe"
+    checked(
+      "mise",
+      [
+        "-C", framework, "exec", "--", moon, "run", "scripts/application-source.mbtx",
+        "--", "build", consumer, "browser", "main", "release",
+      ],
+      temporary,
+    )
+    assert_true(@fs.exists(consumer + "/browser/moon.work"))
+    assert_true(@fs.exists(consumer + "/browser/.metonic-workspace-owner"))
+    assert_true(@fs.exists(consumer + "/browser/.metonic-dist/app.mjs"))
+    assert_true(@fs.exists(consumer + "/browser/.metonic-dist/app.wasm"))
+    assert_false(@fs.exists(consumer + "/native/moon.work"))
+    assert_false(@fs.exists(framework + "/.work/native-deps/sources"))
+    @fs.write_file(
+      framework + "/source-revision-probe.txt",
+      "verification revision\n",
+    )
+    checked(
+      "git",
+      ["-C", framework, "add", "source-revision-probe.txt"],
+      temporary,
+    )
+    checked(
+      "git",
+      [
+        "-C", framework, "-c", "user.name=Metonic Verification", "-c", "user.email=verification@invalid.example",
+        "commit", "-m", "test: update source revision in isolated consumer",
+      ],
+      temporary,
+    )
+    let updated = git_revision(framework, "HEAD")
+    assert_true(updated != current)
+    @fs.write_file(
+      consumer + "/dependency.json",
+      current_lock.replace_all(old=current, new=updated),
+    )
+    checked(
+      "mise",
+      [
+        "-C", framework, "exec", "--", moon, "run", "scripts/application-source.mbtx",
+        "--", "build", consumer, "browser", "main", "release",
+      ],
+      temporary,
+    )
+    assert_true(@fs.exists(consumer + "/browser/.metonic-dist/app.mjs"))
+    assert_true(@fs.exists(consumer + "/browser/.metonic-dist/app.wasm"))
+    @fs.remove(consumer + "/browser/.metonic-workspace-owner")
+    @fs.write_file(consumer + "/browser/moon.work", "members = []\n")
+    let (code, stdout, stderr) = @process.collect_output(
+      moon,
+      [
+        "run", "scripts/application-source.mbtx", "--", "prepare", consumer, "browser",
+      ],
+      cwd=framework,
+      extra_env={ "MOON_HOME": framework + "/.tools/moonbit" },
+      no_console_window=true,
+    )
+    assert_true(code != 0, msg="handwritten moon.work was overwritten")
+    assert_true(
+      (stdout.text() + stderr.text()).contains(
+        "moon.work is not Metonic-generated",
+      ),
+      msg="unexpected handwritten-workspace diagnostic: " +
+        stdout.text() +
+        stderr.text(),
+    )
+    assert_eq(
+      @fs.read_file(consumer + "/browser/moon.work").text(),
+      "members = []\n",
+    )
+    checked(
+      "mise",
+      [
+        "-C", framework, "exec", "--", moon, "run", "scripts/application-source.mbtx",
+        "--", "build", consumer, "native", "main", "release",
+      ],
+      temporary,
+    )
+    assert_true(@fs.exists(consumer + "/native/moon.work"))
+    assert_true(@fs.exists(consumer + "/native/.metonic-workspace-owner"))
+    assert_true(@fs.exists(framework + "/.work/native-deps/sources"))
+    assert_true(
+      @fs.exists(
+        consumer +
+        "/native/.metonic-build/native/release/build/local/metonic_notes_native/main/main.exe",
+      ),
+    )
+    println(
+      "APPLICATION_SOURCE_FIRST_SETUP_OK browser_only clean_checkout bootstrap revision_update js_wasmgc native space_path handmade_workspace",
+    )
+  })
+}

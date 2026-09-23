@@ -1,0 +1,103 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/env",
+}
+
+///|
+async fn command(program : String, args : Array[String], cwd : String) -> Unit {
+  assert_eq(@process.run(program, args, cwd~, no_console_window=true), 0)
+}
+
+///|
+async fn rejected(
+  moon : String,
+  framework : String,
+  consumer : String,
+  moon_home : String,
+  expected : String,
+) -> Unit {
+  let (code, stdout, stderr) = @process.collect_output(
+    moon,
+    [
+      "run", "scripts/application-source.mbtx", "--", "prepare", consumer, "browser",
+    ],
+    cwd=framework,
+    extra_env={ "MOON_HOME": moon_home },
+    no_console_window=true,
+  )
+  assert_true(code != 0, msg="invalid source unexpectedly prepared")
+  assert_true(
+    (stdout.text() + stderr.text()).contains(expected),
+    msg="missing source diagnostic: " + expected,
+  )
+  assert_eq(
+    @fs.read_file(consumer + "/browser/moon.work").text(),
+    "members = []\n",
+    msg="failed preparation replaced a handwritten workspace",
+  )
+}
+
+///|
+async fn main {
+  let source = @fs.realpath(".metonic/framework")
+  let moon_home = source + "/.tools/moonbit"
+  let moon = moon_home + "/bin/moon.exe"
+  let revision = @process.collect_output(
+      "git",
+      ["rev-parse", "HEAD"],
+      cwd=source,
+      no_console_window=true,
+    ).1
+    .text()
+    .trim()
+    .to_owned()
+  let temporary = @fs.tmpdir(prefix="metonic-application-source-contract-")
+  let owned = @fs.realpath(temporary)
+  defer {
+    assert_eq(@fs.realpath(temporary), owned)
+    let system = @env.get_env_var("SystemRoot").unwrap_or("C:/Windows")
+    ignore(
+      @process.run(
+        system + "/System32/attrib.exe",
+        ["-R", owned.replace_all(old="/", new="\\") + "\\*", "/S", "/D", "/L"],
+        no_console_window=true,
+      ),
+    )
+    @fs.rmdir(temporary, recursive=true)
+  }
+  let consumer = temporary + "/consumer"
+  let framework = consumer + "/.metonic/framework"
+  @fs.mkdir(framework, recursive=true)
+  @fs.mkdir(consumer + "/browser")
+  @fs.write_file(consumer + "/browser/moon.work", "members = []\n")
+  command("git", ["init", framework], temporary)
+  command(
+    "git",
+    ["-C", framework, "fetch", "--no-tags", source, "HEAD"],
+    temporary,
+  )
+  command(
+    "git",
+    ["-C", framework, "checkout", "--detach", "FETCH_HEAD"],
+    temporary,
+  )
+  let lock = "{\"directory\":\".metonic/framework\",\"revision\":\"" +
+    revision +
+    "\"}\n"
+  @fs.write_file(
+    consumer + "/dependency.json",
+    lock.replace(old=revision, new="0000000000000000000000000000000000000000"),
+  )
+  rejected(moon, framework, consumer, moon_home, "framework revision differs")
+  @fs.write_file(consumer + "/dependency.json", lock)
+  let untracked = framework + "/untracked-source-probe.mbt"
+  @fs.write_file(untracked, "///|\n")
+  rejected(moon, framework, consumer, moon_home, "tracked or untracked changes")
+  @fs.remove(untracked)
+  rejected(moon, framework, consumer, moon_home, "pinned MoonBit is missing")
+  println(
+    "APPLICATION_SOURCE_CONTRACT_OK revision dirty missing_bootstrap workspace_preserved",
+  )
+}

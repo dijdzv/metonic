@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ja">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Memo</title>
+<style>
+body { margin: 8px; font: 16px system-ui; }
+.view { position: relative; width: min(1200px, 100%); min-width: 320px; }
+canvas { display: block; width: 100%; height: clamp(360px, calc(100vh - 180px), 900px); }
+.gpu-button { position: absolute; color: transparent; background: transparent; border: 0; }
+.gpu-button:focus-visible { outline: 2px solid Highlight; }
+textarea { position: absolute; box-sizing: border-box; margin: 0; border: 0; padding: 0; background: transparent; color: transparent; caret-color: transparent; font: 24px/32px sans-serif; resize: none; overflow: auto; outline: none; }
+textarea::selection { color: transparent; background: transparent; }
+</style>
+<h1>Memo</h1>
+<div class="view" id="controls">
+  <canvas id="canvas" aria-hidden="true"></canvas>
+</div>
+<p id="status" role="status">Loading…</p>
+<button id="stop">Stop</button>
+<script type="module" src="./main.mjs"></script>
+</html>
