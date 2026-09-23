@@ -12,7 +12,8 @@ pub fn from_application(app : @portable.Application) -> Application {
     },
     view: () => {
       let mut controls = (app.view)()
-      let focused = @semantics.snapshot(app.editor)
+      let nodes = @semantics.snapshot(app.editor)
+      let focused = nodes
         .iter()
         .find_first(node => node.focused && node.enabled)
         .map(node => node.reference)
@@ -32,6 +33,27 @@ pub fn from_application(app : @portable.Application) -> Application {
         }
       }
       let (width, height) = size.val
+      let accessibility_controls : Array[@accessibility.Control] = controls.filter_map(control => {
+          control.element.reference.map(reference => {
+            reference,
+            bounds: control
+            .visible_bounds()
+            .unwrap_or({ ..control.element.bounds, width: 0, height: 0, }),
+            toggled: None,
+          })
+        },
+      )
+      for node in nodes {
+        if !accessibility_controls.any(control => {
+            control.reference == node.reference
+          }) {
+          accessibility_controls.push({
+            reference: node.reference,
+            bounds: { x: 0, y: 0, width: 0, height: 0, },
+            toggled: None,
+          })
+        }
+      }
       {
         items: controls.map(control => {
           let surface = if control.kind == @portable.Button {
@@ -47,15 +69,7 @@ pub fn from_application(app : @portable.Application) -> Application {
           title: app.title,
           width,
           height,
-          controls: controls.filter_map(control => {
-            control.element.reference.map(reference => {
-              reference,
-              bounds: control
-              .visible_bounds()
-              .unwrap_or({ ..control.element.bounds, width: 0, height: 0, }),
-              toggled: None,
-            })
-          }),
+          controls: accessibility_controls,
           statuses: [],
           text_owner: app.default_input.filter(reference => {
             inputs.any(input => input.reference == reference)
