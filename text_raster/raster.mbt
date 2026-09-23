@@ -139,23 +139,27 @@ pub fn render(
         }
       }
     }
-    Bytes::makei(width * height * 4, i => {
-      if i % 4 == 3 {
-        b'\xff'
-      } else {
-        let background = if selected[i / 4] {
-          match i % 4 {
-            0 => 180
-            1 => 210
-            _ => 255
-          }
-        } else {
-          255
-        }
-        (pixels[i / 4] * background / 255).to_byte()
-      }
-    })
+    pack_rgba(pixels, selected)
   }
+}
+
+///|
+fn pack_rgba(pixels : Array[Int], selected : Array[Bool]) -> Bytes {
+  let rgba = FixedArray::make(pixels.length() * 4, b'\xff')
+  for index, gray in pixels {
+    let offset = index * 4
+    if selected[index] {
+      rgba[offset] = (gray * 180 / 255).to_byte()
+      rgba[offset + 1] = (gray * 210 / 255).to_byte()
+      rgba[offset + 2] = gray.to_byte()
+    } else {
+      let ink = gray.to_byte()
+      rgba[offset] = ink
+      rgba[offset + 1] = ink
+      rgba[offset + 2] = ink
+    }
+  }
+  rgba.unsafe_reinterpret_as_bytes()
 }
 
 ///|

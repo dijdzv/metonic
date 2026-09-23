@@ -36,3 +36,26 @@ test "hit testing rejects hidden pixels and excludes the right and bottom edge" 
   assert_false(control.contains(30, 35))
   assert_false(control.contains(25, 40))
 }
+
+///|
+test "control pixels retain border, label and blank interior" {
+  let bounds : @view.Bounds = { x: 0, y: 0, width: 24, height: 40, }
+  let label = Bytes::make(8 * 32 * 4, b'\x80')
+  let pixels = control_pixels(bounds, label, 4, false)
+  assert_eq(pixels.length(), 24 * 40 * 4)
+  assert_eq(pixels[0:4], b"\x35\x50\x6d\xff")
+  assert_eq(
+    pixels[(3 * 24 + 12) * 4:(3 * 24 + 12) * 4 + 4],
+    b"\xff\xff\xff\xff",
+  )
+  assert_eq(
+    pixels[(4 * 24 + 12) * 4:(4 * 24 + 12) * 4 + 4],
+    b"\x80\x80\x80\x80",
+  )
+  assert_eq(
+    pixels[(37 * 24 + 12) * 4:(37 * 24 + 12) * 4 + 4],
+    b"\xff\xff\xff\xff",
+  )
+  let focused = control_pixels(bounds, label, 4, true)
+  assert_eq(focused[0:4], b"\xf5\xa1\x5c\xff")
+}

@@ -35,29 +35,47 @@ fn render_item(engine : @raster.Engine, item : Item) -> Layer {
         vertical_scroll=item.vertical_scroll,
         follow_caret=item.follow_caret,
       )
-      let pixels = Bytes::makei(bounds.width * bounds.height * 4, i => {
-        let x = i / 4 % bounds.width
-        let y = i / 4 / bounds.width
-        if x < 2 || x >= bounds.width - 2 || y < 2 || y >= bounds.height - 2 {
-          match i % 4 {
-            0 => if element.focused { b'\xF5' } else { b'\x35' }
-            1 => if element.focused { b'\xA1' } else { b'\x50' }
-            2 => if element.focused { b'\x5C' } else { b'\x6D' }
-            _ => b'\xFF'
-          }
-        } else if x >= 8 &&
-          x < bounds.width - 8 &&
-          y >= label_top &&
-          y < label_top + 32 {
-          label[((y - label_top) * label_width + x - 8) * 4 + i % 4]
-        } else {
-          b'\xFF'
-        }
-      })
+      let pixels = control_pixels(bounds, label, label_top, element.focused)
       { bounds, pixels, }
     }
   }
   clip_layer(layer, item.clip)
+}
+
+///|
+fn control_pixels(
+  bounds : @view.Bounds,
+  label : Bytes,
+  label_top : Int,
+  focused : Bool,
+) -> Bytes {
+  let width = bounds.width
+  let height = bounds.height
+  let label_width = (width - 16).max(1)
+  let rgba = FixedArray::make(width * height * 4, b'\xff')
+  let border_r = if focused { b'\xF5' } else { b'\x35' }
+  let border_g = if focused { b'\xA1' } else { b'\x50' }
+  let border_b = if focused { b'\x5C' } else { b'\x6D' }
+  for y in 0..<height {
+    for x in 0..<width {
+      if x < 2 || x >= width - 2 || y < 2 || y >= height - 2 {
+        let offset = (y * width + x) * 4
+        rgba[offset] = border_r
+        rgba[offset + 1] = border_g
+        rgba[offset + 2] = border_b
+      }
+    }
+  }
+  for y in label_top.max(2)..<(label_top + 32).min(height - 2) {
+    for x in 8..<(width - 8) {
+      let dest = (y * width + x) * 4
+      let source = ((y - label_top) * label_width + x - 8) * 4
+      for channel in 0..<4 {
+        rgba[dest + channel] = label[source + channel]
+      }
+    }
+  }
+  rgba.unsafe_reinterpret_as_bytes()
 }
 
 ///|
