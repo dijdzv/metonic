@@ -3,6 +3,9 @@ priv struct Lane {
   operation : @task.Operation
   mut generation : Int
   mut running : @async.Task[Unit]?
+  mut running_generation : Int
+  mut running_active : Bool
+  mut retiring : Bool
 }
 
 ///|
@@ -37,7 +40,14 @@ pub fn Driver::submit(
     Some(lane) => lane
     None => {
       guard self.lanes.length() < 16 else { return false }
-      Lane::{ operation, generation: 0, running: None, }
+      Lane::{
+        operation,
+        generation: 0,
+        running: None,
+        running_generation: 0,
+        running_active: false,
+        retiring: false,
+      }
     }
   }
   let generation = lane.generation + 1
@@ -47,10 +57,37 @@ pub fn Driver::submit(
   if accepted {
     self.pending_commands += 1
     lane.generation = generation
+    lane.retiring = false
     self.lanes[operation] = lane
     request.invalidate()
   }
   accepted
+}
+
+///|
+fn Driver::remove_current_lane(self : Driver, lane : Lane) -> Unit {
+  if self.lanes.get(lane.operation) is Some(current) &&
+    physical_equal(current, lane) {
+    self.lanes.remove(lane.operation)
+  }
+}
+
+///|
+pub fn Driver::cancel_operation(
+  self : Driver,
+  operation : @task.Operation,
+) -> Bool {
+  guard self.accepting && self.lanes.get(operation) is Some(lane) else {
+    return false
+  }
+  lane.generation += 1
+  lane.retiring = true
+  if lane.running_active && lane.running is Some(running) {
+    running.cancel()
+  } else {
+    self.remove_current_lane(lane)
+  }
+  true
 }
 
 ///|
@@ -82,7 +119,7 @@ fn Driver::deliver(
     post(
       @task.completion(() => {
         if self.accepting && lane.generation == generation {
-          self.lanes.remove(lane.operation)
+          self.remove_current_lane(lane)
           completion.apply()
         } else {
           @task.Rejected
@@ -119,6 +156,8 @@ pub async fn Driver::run(
         break
       }
       let previous = lane.running
+      lane.running_generation = generation
+      lane.running_active = true
       lane.running = Some(
         group.spawn(() => {
           let posted = Ref(false)
@@ -131,8 +170,12 @@ pub async fn Driver::run(
             if preparing.val {
               self.pending_commands -= 1
             }
-            if !posted.val && lane.generation == generation {
-              self.lanes.remove(lane.operation)
+            if lane.running_generation == generation {
+              lane.running_active = false
+            }
+            if (lane.retiring && lane.running_generation == generation) ||
+              (!posted.val && lane.generation == generation) {
+              self.remove_current_lane(lane)
             }
           }
           cancel_and_wait(previous)
