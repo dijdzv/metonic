@@ -73,6 +73,173 @@ async test "a delivered result cannot mutate state after replacement or close" {
 }
 
 ///|
+async test "progress keeps its lane and queued progress rejects after cancellation" {
+  @async.with_timeout(5000, () => {
+    let driver = @application_task.driver()
+    let operation = @task.Operation::new()
+    let ready = @async.CondVar::Cond()
+    let blocked = @async.CondVar::Cond()
+    let delivered : Array[@task.Completion] = []
+    let applied = Ref(0)
+    assert_true(
+      driver.submit(
+        @task.replace(
+          () => (),
+          () => {
+            Some(
+              @task.work_with_progress(
+                post => {
+                  for _ in 0..<2 {
+                    post(
+                      @task.completion(() => {
+                        applied.val += 1
+                        @task.Changed
+                      }),
+                    )
+                  }
+                  blocked.wait()
+                },
+                _ => @task.Changed,
+              ),
+            )
+          },
+          operation~,
+        ),
+      ),
+    )
+    @async.with_task_group(group => {
+      let running = group.spawn(() => {
+        driver.run(progress => {
+          delivered.push(progress)
+          ready.signal()
+        })
+      })
+      while delivered.length() < 2 {
+        ready.wait()
+      }
+      assert_eq(delivered[0].apply(), @task.Changed)
+      assert_eq(applied.val, 1)
+      assert_true(driver.cancel_operation(operation))
+      assert_eq(delivered[1].apply(), @task.Rejected)
+      assert_eq(applied.val, 1)
+      driver.close()
+      running.wait()
+    })
+  })
+}
+
+///|
+async test "queued progress rejects after replacement or Driver close" {
+  for close in [false, true] {
+    @async.with_timeout(5000, () => {
+      let driver = @application_task.driver()
+      let operation = @task.Operation::new()
+      let ready = @async.CondVar::Cond()
+      let blocked = @async.CondVar::Cond()
+      let delivered : Array[@task.Completion] = []
+      let applied = Ref(0)
+      assert_true(
+        driver.submit(
+          @task.replace(
+            () => (),
+            () => {
+              Some(
+                @task.work_with_progress(
+                  post => {
+                    post(
+                      @task.completion(() => {
+                        applied.val += 1
+                        @task.Changed
+                      }),
+                    )
+                    blocked.wait()
+                  },
+                  _ => @task.Changed,
+                ),
+              )
+            },
+            operation~,
+          ),
+        ),
+      )
+      @async.with_task_group(group => {
+        let running = group.spawn(() => {
+          driver.run(progress => {
+            delivered.push(progress)
+            ready.signal()
+          })
+        })
+        while delivered.is_empty() {
+          ready.wait()
+        }
+        if close {
+          driver.close()
+        } else {
+          assert_true(
+            driver.submit(
+              @task.replace(
+                () => (),
+                () => Some(@task.work(() => (), _ => @task.Changed)),
+                operation~,
+              ),
+            ),
+          )
+        }
+        assert_eq(delivered[0].apply(), @task.Rejected)
+        assert_eq(applied.val, 0)
+        driver.close()
+        running.wait()
+      })
+    })
+  }
+}
+
+///|
+async test "progress applied after final completion cannot revive its lane" {
+  @async.with_timeout(5000, () => {
+    let driver = @application_task.driver()
+    let ready = @async.CondVar::Cond()
+    let delivered : Array[@task.Completion] = []
+    let progress_applied = Ref(false)
+    assert_true(
+      driver.submit(
+        @task.replace(() => (), () => {
+          Some(
+            @task.work_with_progress(
+              post => {
+                post(
+                  @task.completion(() => {
+                    progress_applied.val = true
+                    @task.Changed
+                  }),
+                )
+              },
+              _ => @task.Changed,
+            ),
+          )
+        }),
+      ),
+    )
+    @async.with_task_group(group => {
+      let running = group.spawn(() => {
+        driver.run(result => {
+          delivered.push(result)
+          ready.signal()
+        })
+      })
+      while delivered.length() < 2 {
+        ready.wait()
+      }
+      assert_eq(delivered[1].apply(), @task.Changed)
+      assert_eq(delivered[0].apply(), @task.Rejected)
+      assert_false(progress_applied.val)
+      driver.close()
+      running.wait()
+    })
+  })
+}
+
+///|
 async test "closing before startup never prepares queued work" {
   let driver = @application_task.driver()
   let prepared = Ref(false)

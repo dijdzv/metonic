@@ -121,6 +121,79 @@ async test "cancel and scope disposal reject pending results and failures" {
 }
 
 ///|
+async test "resource checks Scope before applying delivered progress" {
+  let root = @reactive.Scope::root(@reactive.Graph::new())
+  let resource = Resource::new(root)
+  assert_true(resource.connect(@task.task_control(_ => ())))
+  let applied = Ref(0)
+  let request = resource
+    .replace_prepared(() => (), () => {
+      Some(
+        @task.work_with_progress(
+          post => {
+            post(
+              @task.completion(() => {
+                applied.val += 1
+                @task.Changed
+              }),
+            )
+          },
+          _ => @task.Unchanged,
+        ),
+      )
+    })
+    .unwrap()
+  request.invalidate()
+  let delivered : Array[@task.Completion] = []
+  let result = request
+    .prepare()
+    .unwrap()
+    .run(post_progress=progress => delivered.push(progress))
+  assert_eq(delivered.length(), 1)
+  root.dispose()
+  assert_eq(delivered[0].apply(), @task.Rejected)
+  assert_eq(result.apply(), @task.Rejected)
+  assert_eq(applied.val, 0)
+}
+
+///|
+async test "resource rejects progress from an admitted replaced request" {
+  let root = @reactive.Scope::root(@reactive.Graph::new())
+  let resource = Resource::new(root)
+  assert_true(resource.connect(@task.task_control(_ => ())))
+  let applied = Ref(0)
+  let request = resource
+    .replace_prepared(() => (), () => {
+      Some(
+        @task.work_with_progress(
+          post => {
+            post(
+              @task.completion(() => {
+                applied.val += 1
+                @task.Changed
+              }),
+            )
+          },
+          _ => @task.Unchanged,
+        ),
+      )
+    })
+    .unwrap()
+  request.invalidate()
+  let delivered : Array[@task.Completion] = []
+  let result = request
+    .prepare()
+    .unwrap()
+    .run(post_progress=progress => delivered.push(progress))
+  let replacement = resource.cancel(() => ()).unwrap()
+  replacement.invalidate()
+  assert_eq(delivered[0].apply(), @task.Rejected)
+  assert_eq(result.apply(), @task.Rejected)
+  assert_eq(applied.val, 0)
+  root.dispose()
+}
+
+///|
 async test "independent resources do not invalidate one another" {
   let root = @reactive.Scope::root(@reactive.Graph::new())
   let left = Resource::new(root)

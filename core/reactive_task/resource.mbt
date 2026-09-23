@@ -71,13 +71,28 @@ pub fn Resource::replace_prepared(
         }
         guard prepare() is Some(work) else { return None }
         Some(
-          @task.work(() => work.run(), completion => {
-            if self.scope.is_disposed() || self.generation != generation {
-              @task.Rejected
-            } else {
-              completion.apply()
-            }
-          }),
+          @task.work_with_progress(
+            post_progress => {
+              work.run(post_progress=progress => {
+                post_progress(
+                  @task.completion(() => {
+                    if self.scope.is_disposed() || self.generation != generation {
+                      @task.Rejected
+                    } else {
+                      progress.apply()
+                    }
+                  }),
+                )
+              })
+            },
+            completion => {
+              if self.scope.is_disposed() || self.generation != generation {
+                @task.Rejected
+              } else {
+                completion.apply()
+              }
+            },
+          ),
         )
       },
       operation=self.operation,
