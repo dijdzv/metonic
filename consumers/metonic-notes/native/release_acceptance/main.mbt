@@ -126,6 +126,10 @@ async fn expect_snapshot(path : String, expected : String) -> Unit {
 ///|
 async fn main {
   let args = @env.args()
+  if args.length() == 4 && args[1] == "--resource-scale" {
+    release_resource_sample(@fs.realpath(args[2]), @fs.realpath(args[3]))
+    return
+  }
   if args.length() == 3 && args[1] == "--close-owned-window" {
     let pid = @string.parse_int(args[2])
     assert_true(pid > 0)
@@ -184,7 +188,10 @@ async fn main {
           select_editor_by_drag(window, false)
           type_text(window, "ドラッグ保存\n復元確認")
           click(window, 80, 40)
-          expect_snapshot(temporary + "/data/snapshot", "ドラッグ保存\n復元確認")
+          expect_snapshot(
+            temporary + "/data/snapshot",
+            "ドラッグ保存\n復元確認",
+          )
           select_editor_by_drag(window, true)
           type_text(window, "配布メモ\n復元確認")
         }
