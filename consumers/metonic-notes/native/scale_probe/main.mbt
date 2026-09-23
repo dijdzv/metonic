@@ -27,6 +27,35 @@ fn process_working_set() -> (UInt64, UInt64) raise {
 }
 
 ///|
+fn gpu_resource_json(value : @gpu.SurfaceGpuResources) -> Json {
+  {
+    "text_texture_count": value.text_texture_count,
+    "text_texture_bytes": value.text_texture_bytes.to_string(),
+    "peak_text_texture_count": value.peak_text_texture_count,
+    "peak_text_texture_bytes": value.peak_text_texture_bytes.to_string(),
+    "retained_frame_count": value.retained_frame_count,
+    "retained_frame_bytes": value.retained_frame_bytes.to_string(),
+    "uniform_buffer_bytes": value.uniform_buffer_bytes.to_string(),
+    "closed": value.closed,
+  }
+}
+
+///|
+fn assert_gpu_resources(value : @gpu.SurfaceGpuResources) -> Unit raise {
+  assert_false(value.closed)
+  assert_true(value.text_texture_count > 0)
+  assert_true(value.text_texture_count <= 24)
+  assert_true(value.peak_text_texture_count <= 48)
+  assert_true(value.text_texture_bytes <= 2UL * 1024UL * 1024UL)
+  assert_true(value.peak_text_texture_bytes <= 4UL * 1024UL * 1024UL)
+  assert_true(value.peak_text_texture_count >= value.text_texture_count)
+  assert_true(value.peak_text_texture_bytes >= value.text_texture_bytes)
+  // WhyNot: debug frame retention is not part of the release renderer's GPU footprint.
+  assert_true(value.retained_frame_count <= 2)
+  assert_eq(value.uniform_buffer_bytes, 32UL)
+}
+
+///|
 async fn main {
   let directory = @env.get_env_var("METONIC_NOTES_DATA").unwrap()
   let storage = @storage.create(directory)
@@ -57,6 +86,8 @@ async fn main {
         assert_eq(row_count(), 1000)
         assert_true((application.view)().length() <= 42)
         ignore((handle.capture)(_ => ()))
+        let gpu_ready = (handle.gpu_resources)().unwrap()
+        assert_gpu_resources(gpu_ready)
         let startup = (@async.now() - start).to_int()
         let (initial_working_set, _) = process_working_set()
         let target = name => {
@@ -90,10 +121,14 @@ async fn main {
           operate(target("Memo 10"), @window_host.ActivateControl)
           assert_eq((handle.inspect)().text, "Memo 10 alpha autosaved")
           ignore((handle.capture)(_ => ()))
+          let gpu_reopened = (handle.gpu_resources)().unwrap()
+          assert_gpu_resources(gpu_reopened)
           measurements.val = Some({
             "reopen_ms": startup,
             "restore_selection_ms": (@async.now() - restore_start).to_int(),
             "working_set_bytes": process_working_set().0.to_string(),
+            "gpu_ready": gpu_resource_json(gpu_ready),
+            "gpu_reopened": gpu_resource_json(gpu_reopened),
           })
           println(
             "NOTES_SCALE_NATIVE_REOPEN_OK " +
@@ -193,6 +228,8 @@ async fn main {
         })
         let autosave_ms = (@async.now() - autosave_start).to_int()
         let (working_set, peak_working_set) = process_working_set()
+        let gpu_final = (handle.gpu_resources)().unwrap()
+        assert_gpu_resources(gpu_final)
         measurements.val = Some({
           "startup_ms": startup,
           "search100_ms": search_ms,
@@ -207,6 +244,8 @@ async fn main {
           "initial_working_set_bytes": initial_working_set.to_string(),
           "working_set_bytes": working_set.to_string(),
           "peak_working_set_bytes": peak_working_set.to_string(),
+          "gpu_ready": gpu_resource_json(gpu_ready),
+          "gpu_final": gpu_resource_json(gpu_final),
         })
         println(
           "NOTES_SCALE_NATIVE_OK " + measurements.val.unwrap().stringify(),
