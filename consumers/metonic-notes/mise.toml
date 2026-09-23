@@ -57,6 +57,18 @@ run = '.\.metonic\framework\.tools\moonbit\bin\moon.exe run verification/package
 [tasks."verify:model"]
 run = '.\.metonic\framework\.tools\moonbit\bin\moon.exe run verification/model.mbtx'
 
+[tasks."scale:fixture"]
+description = "Create the deterministic 1,000-memo snapshot under .work/scale"
+run = '.\.metonic\framework\.tools\moonbit\bin\moon.exe run verification/scale-fixture.mbtx'
+
+[tasks."scale:baseline-browser"]
+description = "Measure the fixed 1,000-memo sequence in browser JS and WasmGC"
+run = [
+  'mise run scale:fixture',
+  'mise run build:browser',
+  'node verification/scale-browser.mjs',
+]
+
 [tasks."verify:source-contract"]
 description = "Check source pin, dirty checkout and missing bootstrap without modifying the application"
 run = '.\.metonic\framework\.tools\moonbit\bin\moon.exe run verification/source-contract.mbtx'
