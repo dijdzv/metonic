@@ -1,7 +1,9 @@
 # Independent memo application operations
 
 An independent local consumer, `metonic-notes`, exercises the public application
-entry against framework revision `9d5eaa4b2b3e7724c85bb640b1cdc35566795e9d`.
+entry. The checks below were recorded against framework revision
+`8ee85dba6899341e040531de274e2c5761e819a1`; the consumer's
+`dependency.json` selects its current pinned revision.
 It is separate from the repository's in-memory Notes example and is not a
 published package or a checked-in example. The commands below run from that
 consumer's root; they are not framework tasks. The consumer's source and raw
@@ -37,12 +39,14 @@ and selection movement do not themselves schedule saves.
 
 | Consumer command | Evidence and scope |
 | --- | --- |
-| `mise run verify:model` | 32 JS and 14 WasmGC tests passed. Async model cases run on JS. Controlled waits cover search/save coexistence, stale results, save receipts, failure before replacement preparation, discard/close during debounce and explicit retry. |
+| `mise run verify:model` | 36 JS and 17 WasmGC tests passed after the shared list migration. Async model cases run on JS. Controlled waits cover search/save coexistence, stale results, save receipts, failure before replacement preparation, discard/close during debounce and explicit retry. |
 | `mise run verify:browser` | Browser JS/WasmGC editing, collection operations, storage recovery, CLI/MCP, autosave and search passed. This combined run preceded the final filter refresh on committed edits; the later package check exercises that revision. |
 | `mise run verify:browser-package` | Both backends passed from a relocated Unicode path and unrelated working directory. File inventory/hash and overwrite protection checks accompany editing, collection persistence/recovery, autosave reload and search/save coexistence. The run took 40.25 seconds. |
 | `mise run verify:native` | The owned-window probe passed search filtering/clearing while a distinct edit was saved, then saving a later close draft and cleanup. |
 | `mise run verify:native-control` | CLI/MCP editing, save requests, rendering, disconnect/reconnect and actual snapshots passed against isolated real storage. |
 | `mise run verify:native-package` | Copied Windows release passed forward/backward drag replacement, saving, restart/restore and exit from a Unicode path and unrelated working directory. Inventory/hash, overwrite protection and development-code/link exclusion checks passed. |
+| `mise run verify:source-contract` | At the final pinned revision, rejected a mismatched or dirty checkout and missing bootstrap without replacing a handwritten workspace. |
+| `mise run verify:source-first-setup` | From a disposable clean checkout, bootstrapped the pinned compiler, built JS and WasmGC before native preparation, updated the source revision and rebuilt, refused to replace a handwritten workspace, then prepared and built Windows native. |
 
 The browser package check runs the same autosave/search assertions against the
 copied distribution rather than a development build path. Native semantic
@@ -56,6 +60,10 @@ moved the editor. It posts messages only to its owned process window. Its
 replacement assertions remain intact; this is automated message-path evidence,
 not physical mouse or OS IME acceptance.
 
-The consumer still has application-specific placement and four-row pagination.
-Shared layout/overflow and simpler external dependency preparation remain
-separate phase-2 work; successful autosave/search does not complete those tasks.
+The consumer now uses the shared list layout for scrolling, reordering and
+focus reveal instead of application-owned four-row pagination. Its target
+manifest supplies application members; the Metonic source entry owns internal
+dependency preparation and workspace generation. The final source setup and
+revision-update checks above establish that path for this local consumer, but
+the consumer source and raw results remain local rather than a downloadable
+fixture.
