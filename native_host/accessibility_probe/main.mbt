@@ -81,12 +81,6 @@ extern "C" fn node_from_handle(
 ) -> Int = "UiaNodeFromHandle"
 
 ///|
-extern "C" fn navigate(node : UInt64, direction : Int) -> UInt64 = "metonic_uia_navigate"
-
-///|
-extern "C" fn focused_node() -> UInt64 = "metonic_uia_focused_node"
-
-///|
 #borrow(result)
 extern "C" fn pattern(
   node : UInt64,
@@ -148,12 +142,12 @@ fn owned_window(pid : Int, hidden? : Bool = false) -> UInt64 raise {
       return selected
     }
     if window_pid(cursor, owner) != 0U &&
-      owner[0] == pid && (hidden || visible(cursor) != 0) &&
+      owner[0] == pid &&
+      (hidden || visible(cursor) != 0) &&
       window_title_length(cursor) == 7 &&
-      window_title(cursor, title, 8) == 7 && title == utf16z("Metonic") {
-      guard selected == 0UL else {
-        fail("multiple owned Metonic windows")
-      }
+      window_title(cursor, title, 8) == 7 &&
+      title == utf16z("Metonic") {
+      guard selected == 0UL else { fail("multiple owned Metonic windows") }
       selected = cursor
     }
   }
@@ -295,7 +289,7 @@ async fn expect_text(node : UInt64, expected : String) -> Unit {
 
 ///|
 fn child_named(parent : UInt64, name : String) -> UInt64 {
-  let mut node = navigate(parent, 3)
+  let mut node = @uia.navigate(parent, 3)
   for _ in 0..<16 {
     if node == 0UL {
       return 0UL
@@ -303,7 +297,7 @@ fn child_named(parent : UInt64, name : String) -> UInt64 {
     if text_is(node, 30005, name) {
       return node
     }
-    let next = navigate(node, 1)
+    let next = @uia.navigate(node, 1)
     ignore(release_node(node))
     node = next
   }
@@ -358,7 +352,7 @@ async fn main {
     }
     defer ignore(release_node(root[0]))
     if @env.args().length() == 3 && @env.args()[2] == "observe-focus" {
-      let current = focused_node()
+      let current = @uia.focused_node()
       guard current != 0UL else { fail("global UIA focus unavailable") }
       defer ignore(release_node(current))
       let owned = integer(current, 30002) == pid

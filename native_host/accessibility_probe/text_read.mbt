@@ -33,9 +33,6 @@ extern "C" fn move_endpoint(
 extern "C" fn select_range(range : UInt64) -> Int = "TextRange_Select"
 
 ///|
-extern "C" fn selected_range(provider : UInt64) -> UInt64 = "metonic_uia_selected_range"
-
-///|
 fn range_matches(range : UInt64, expected : String) -> Bool {
   let text = FixedArray::make(1, 0UL)
   if range_text(range, -1, text) != 0 {
@@ -53,7 +50,7 @@ fn range_matches(range : UInt64, expected : String) -> Bool {
 ///|
 async fn expect_selection(provider : UInt64, expected : String) -> Unit {
   for _ in 0..<200 {
-    let range = selected_range(provider)
+    let range = @uia.selected_range(provider)
     if range != 0UL {
       let matches = range_matches(range, expected)
       ignore(release_range(range))
