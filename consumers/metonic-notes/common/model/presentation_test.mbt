@@ -5,7 +5,7 @@ async test "editing a memo does not reset its selection or rewrite unrelated con
     () => (),
     _ => (),
   )
-  finish((app.initialize)())
+  initialize(app)
   let input = app.default_input.unwrap()
   let row = (app.view)()[7].element.reference.unwrap()
   let action = (app.view)()[4].element.reference.unwrap()

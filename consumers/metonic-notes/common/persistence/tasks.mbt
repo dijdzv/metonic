@@ -37,43 +37,48 @@ pub fn Model::save_request(
   operation : @task.Operation,
   before_save? : async () -> Bool = () => true,
 ) -> @task.Request? {
+  guard self.save_work(store, changed, before_save~) is Some(work) else {
+    return None
+  }
+  Some(@task.replace(() => (), () => Some(work), operation~))
+}
+
+///|
+pub fn Model::save_work(
+  self : Model,
+  store : Store,
+  changed : () -> Unit,
+  before_save? : async () -> Bool = () => true,
+) -> @task.Work? {
   guard self.begin_save() is Some((ticket, snapshot)) else { return None }
   Some(
-    @task.replace(
-      () => (),
+    @task.work(
       () => {
-        Some(
-          @task.work(
-            () => {
-              let completed = Ref(false)
-              defer (self.batch)(() => {
-                if !completed.val && self.cancel_save(ticket) {
-                  changed()
-                }
-              })
-              if !before_save() {
-                return None
-              }
-              let result = (store.save)(snapshot)
-              self.record_save(ticket, result)
-              completed.val = true
-              Some(result)
-            },
-            result => {
-              guard result is Some(result) else { return @task.Unchanged }
-              let outcome = Ref(@task.Outcome::Rejected)
-              (self.batch)(() => {
-                if self.finish_save(ticket, result) {
-                  changed()
-                  outcome.val = @task.Changed
-                }
-              })
-              outcome.val
-            },
-          ),
-        )
+        let completed = Ref(false)
+        defer (self.batch)(() => {
+          if !completed.val && self.cancel_save(ticket) {
+            changed()
+          }
+        })
+        if !before_save() {
+          return None
+        }
+        let result = (store.save)(snapshot)
+        self.record_save(ticket, result)
+        completed.val = true
+        Some(result)
       },
-      operation~,
+      result => {
+        guard result is Some(result) else { return @task.Unchanged }
+        let outcome = Ref(@task.Outcome::Rejected)
+        (self.batch)(() => {
+          if self.finish_save(ticket, result) {
+            changed()
+            outcome.val = @task.Changed
+          }
+        })
+        outcome.val
+      },
     ),
   )
 }

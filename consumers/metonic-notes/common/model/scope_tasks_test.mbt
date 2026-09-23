@@ -27,11 +27,12 @@ async test "prepared autosave does not touch disposed presentation state" {
     () => (),
     _ => (),
   )
+  (app.connect_tasks)(@task.task_control(_ => ()))
   finish((app.initialize)())
   let new_memo = (app.view)()[3].element.reference.unwrap()
   let request = (app.activate)(new_memo).unwrap()
   request.invalidate()
   let work = request.prepare().unwrap()
   (app.stop)()
-  assert_eq(work.run().apply(), @task.Unchanged)
+  assert_eq(work.run().apply(), @task.Rejected)
 }

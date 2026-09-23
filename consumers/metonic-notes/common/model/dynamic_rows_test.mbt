@@ -5,7 +5,7 @@ async test "memo rows exist only for visible records and retain surviving identi
     () => (),
     _ => (),
   )
-  finish((app.initialize)())
+  initialize(app)
   assert_eq((app.view)().length(), 10)
   let activate = index => {
     ignore((app.activate)((app.view)()[index].element.reference.unwrap()))
@@ -47,7 +47,7 @@ async test "overflow, real reorder and deletion preserve the right memo identiti
     () => (),
     _ => (),
   )
-  finish((app.initialize)())
+  initialize(app)
   let action = index => (app.view)()[index].element.reference.unwrap()
   let new_memo = action(3)
   for _ in 0..<10 {

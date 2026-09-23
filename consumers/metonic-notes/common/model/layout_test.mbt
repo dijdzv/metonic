@@ -48,7 +48,7 @@ async test "view keeps only viewport rows while scrolling preserves logical iden
     () => (),
     _ => (),
   )
-  finish((app.initialize)())
+  initialize(app)
   let row_refs = () => {
     (app.view)()
     .filter(control => {

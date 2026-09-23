@@ -1,21 +1,19 @@
 ///|
 pub struct Model {
-  priv operation : @task.Operation
+  priv resource : @resource.Resource
   priv wait : async (Int) -> Unit
   priv mut document : @collection.Document
   priv query : @reactive.Signal[String]
+  // Resource generations advance on admission; query/document edits must invalidate even without admission.
   priv mut generation : Int
   priv mut closed : Bool
   priv matching : @reactive.Signal[Array[@collection.Note]]
 }
 
 ///|
-pub fn create(
-  scope : @reactive.Scope,
-  wait : async (Int) -> Unit,
-) -> Model {
+pub fn create(scope : @reactive.Scope, wait : async (Int) -> Unit) -> Model {
   let model : Model = {
-    operation: @task.Operation::new(),
+    resource: @resource.Resource::new(scope),
     wait,
     document: @collection.empty(),
     query: @reactive.Signal::new(scope, ""),
@@ -31,7 +29,10 @@ pub fn create(
 }
 
 ///|
-fn matching(document : @collection.Document, query : String) -> Array[@collection.Note] {
+fn matching(
+  document : @collection.Document,
+  query : String,
+) -> Array[@collection.Note] {
   let query = query.to_lower()
   document
   .items()
@@ -58,8 +59,8 @@ pub fn Model::filtered(self : Model) -> Bool {
 }
 
 ///|
-pub fn Model::cancel_running(self : Model, control : @task.TaskControl) -> Unit {
-  control.cancel(self.operation)
+pub fn Model::connect_tasks(self : Model, control : @task.TaskControl) -> Bool {
+  self.resource.connect(control)
 }
 
 ///|
@@ -76,33 +77,24 @@ pub fn Model::request(
   if query == "" {
     self.matching.set(matching(document, query))
     changed()
-    return Some(@task.cancel(() => (), operation=self.operation))
+    return self.resource.cancel(() => ())
   }
-  Some(
-    @task.replace(
-      () => (),
-      () => {
-        Some(
-          @task.work(
-            () => {
-              (self.wait)(100)
-              matching(document, query)
-            },
-            ids => {
-              if self.closed ||
-                self.generation != generation ||
-                self.document != document {
-                return @task.Rejected
-              }
-              self.matching.set(ids)
-              changed()
-              @task.Changed
-            },
-          ),
-        )
-      },
-      operation=self.operation,
-    ),
+  self.resource.replace(
+    () => (),
+    () => {
+      (self.wait)(100)
+      matching(document, query)
+    },
+    ids => {
+      if self.closed ||
+        self.generation != generation ||
+        self.document != document {
+        return @task.Rejected
+      }
+      self.matching.set(ids)
+      changed()
+      @task.Changed
+    },
   )
 }
 
@@ -114,4 +106,5 @@ pub fn Model::close(self : Model) -> Unit {
   self.closed = true
   self.generation += 1
   self.matching.set([])
+  self.resource.dispose()
 }

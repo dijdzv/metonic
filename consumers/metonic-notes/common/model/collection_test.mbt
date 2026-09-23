@@ -7,6 +7,12 @@ async fn finish(request : @task.Request?) -> Unit {
 }
 
 ///|
+async fn initialize(app : @application.Application) -> Unit {
+  (app.connect_tasks)(@task.task_control(_ => ()))
+  finish((app.initialize)())
+}
+
+///|
 async test "saving a collection snapshot does not erase edits made before completion" {
   let stored : Ref[String?] = Ref(None)
   let app = create_collection(
@@ -20,7 +26,7 @@ async test "saving a collection snapshot does not erase edits made before comple
     () => (),
     _ => (),
   )
-  finish((app.initialize)())
+  initialize(app)
   let activate = index => {
     (app.activate)((app.view)()[index].element.reference.unwrap())
   }
@@ -79,7 +85,7 @@ async test "invalid stored collections cannot be overwritten through disabled co
     () => (),
     _ => (),
   )
-  finish((app.initialize)())
+  initialize(app)
   assert_true(
     (app.view)().last().unwrap().element.text.has_prefix("Load failed:"),
   )
@@ -110,7 +116,7 @@ async test "input errors do not erase save failures or unsaved text" {
     () => (),
     _ => (),
   )
-  finish((app.initialize)())
+  initialize(app)
   assert_eq(
     @semantics.set_text(
       app.editor,
