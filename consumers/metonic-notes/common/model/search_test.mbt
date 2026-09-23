@@ -30,6 +30,69 @@ fn listed_memos(app : @application.Application) -> Array[String] {
 }
 
 ///|
+fn listed_memo_refs(
+  app : @application.Application,
+) -> Array[@semantics.NodeRef] {
+  (app.view)()
+  .filter(control => {
+    control.kind == @application.Button &&
+    control.element.text.contains("Memo ")
+  })
+  .map(control => control.element.reference.unwrap())
+}
+
+///|
+async test "search filters reconcile row lifetimes and selection by memo identity" {
+  let (document, alpha) = @collection.empty().create_note().unwrap()
+  let document = document.edit(alpha, "Alpha").unwrap()
+  let (document, beta) = document.create_note().unwrap()
+  let document = document.edit(beta, "Beta").unwrap()
+  let (document, alpine) = document.create_note().unwrap()
+  let document = document.edit(alpine, "Alpine").unwrap()
+  let app = create_collection(
+    { load: () => Ok(Some(document.encode())), save: _ => Ok(()), },
+    () => (),
+    _ => (),
+  )
+  finish((app.initialize)())
+  let initial = listed_memo_refs(app)
+  assert_eq(initial.length(), 3)
+  finish(Some(search_edit(app, "Al")))
+  assert_eq(listed_memos(app), ["* Memo 1", "Memo 3"])
+  assert_eq(listed_memo_refs(app), [initial[0], initial[2]])
+  assert_true(@semantics.node(app.editor, initial[1]) is Err(_))
+  finish(Some(search_edit(app, "Be")))
+  assert_eq(listed_memos(app), ["Memo 2"])
+  let beta_ref = listed_memo_refs(app)[0]
+  ignore((app.activate)(beta_ref))
+  assert_eq(listed_memos(app), ["* Memo 2"])
+  ignore(search_edit(app, ""))
+  assert_eq(listed_memos(app), ["Memo 1", "* Memo 2", "Memo 3"])
+  assert_eq(listed_memo_refs(app)[1], beta_ref)
+  assert_true(listed_memo_refs(app)[0] != initial[0])
+  (app.stop)()
+}
+
+///|
+async test "search completion after disposal cannot recreate semantic rows" {
+  let (document, id) = @collection.empty().create_note().unwrap()
+  let document = document.edit(id, "Alpha").unwrap()
+  let app = create_collection(
+    { load: () => Ok(Some(document.encode())), save: _ => Ok(()), },
+    () => (),
+    _ => (),
+  )
+  finish((app.initialize)())
+  let row = listed_memo_refs(app)[0]
+  let request = search_edit(app, "Alpha")
+  request.invalidate()
+  let completion = request.prepare().unwrap().run()
+  (app.stop)()
+  assert_eq(completion.apply(), @task.Rejected)
+  assert_true(@semantics.node(app.editor, row) is Err(_))
+}
+
+///|
 async test "search finishes while autosave remains pending and never cancels its write" {
   let (document, alpha) = @collection.empty().create_note().unwrap()
   let document = document.edit(alpha, "Alpha").unwrap()

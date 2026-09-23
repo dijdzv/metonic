@@ -1,5 +1,10 @@
 ///|
 priv struct Collection {
+  graph : @reactive.Graph
+  scope : @reactive.Scope
+  visible_rows : @reactive.Signal[Array[Int]]
+  selected_row : @reactive.Signal[Int?]
+  rows_enabled : @reactive.Signal[Bool]
   tree : @semantics.Tree
   input : @semantics.NodeRef
   search_input : @semantics.NodeRef
@@ -19,6 +24,55 @@ priv struct Collection {
   mut input_error : String?
   mut close_pending : Bool
   mut close_confirmed : Bool
+}
+
+///|
+fn Collection::reconcile_rows(self : Collection, ids : Array[Int]) -> Unit {
+  let next_buttons = self.buttons.iter().take(6).to_array()
+  for id in ids {
+    let mut retained : @semantics.NodeRef? = None
+    for index, old_id in self.row_ids {
+      if old_id == id {
+        retained = Some(self.buttons[index + 6])
+        break
+      }
+    }
+    let reference = match retained {
+      Some(reference) => reference
+      None =>
+        @semantics.add_button(self.tree, "Memo " + id.to_string()).unwrap()
+    }
+    next_buttons.push(reference)
+  }
+  for index, id in self.row_ids {
+    if !ids.contains(id) {
+      ignore(@semantics.remove(self.tree, self.buttons[index + 6]))
+    }
+  }
+  self.buttons = next_buttons
+  self.row_ids = ids.copy()
+}
+
+///|
+fn Collection::present_rows(
+  self : Collection,
+  ids : Array[Int],
+  selected : Int?,
+  enabled : Bool,
+) -> Unit {
+  for index, id in ids {
+    let reference = self.buttons[index + 6]
+    let name = (if selected == Some(id) { "* " } else { "" }) +
+      "Memo " +
+      id.to_string()
+    let node = @semantics.node(self.tree, reference).unwrap()
+    if node.name != name {
+      ignore(@semantics.set_name(self.tree, reference, name))
+    }
+    if node.enabled != enabled {
+      ignore(@semantics.set_enabled(self.tree, reference, enabled))
+    }
+  }
 }
 
 ///|
@@ -91,31 +145,12 @@ fn Collection::sync(self : Collection, replace_input? : Bool = false) -> Unit {
       ready && !self.close_pending,
     ),
   )
-  let items = self.search.items()
-  let next_buttons = self.buttons.iter().take(6).to_array()
-  let next_ids : Array[Int] = []
-  for note in items {
-    let mut retained : @semantics.NodeRef? = None
-    for index, id in self.row_ids {
-      if id == note.id {
-        retained = Some(self.buttons[index + 6])
-      }
-    }
-    let reference = match retained {
-      Some(reference) => reference
-      None =>
-        @semantics.add_button(self.tree, "Memo " + note.id.to_string()).unwrap()
-    }
-    next_buttons.push(reference)
-    next_ids.push(note.id)
-  }
-  for index, id in self.row_ids {
-    if !next_ids.contains(id) {
-      ignore(@semantics.remove(self.tree, self.buttons[index + 6]))
-    }
-  }
-  self.buttons = next_buttons
-  self.row_ids = next_ids
+  let ids = self.search.items().map(note => note.id)
+  self.graph.batch(fn() {
+    self.visible_rows.set(ids)
+    self.selected_row.set(active.map(note => note.id))
+    self.rows_enabled.set(ready && !self.close_pending)
+  })
   let ordered = self.workspace.items()
   let mut move_up = false
   let mut move_down = false
@@ -162,23 +197,9 @@ fn Collection::sync(self : Collection, replace_input? : Bool = false) -> Unit {
       enabled[i] = false
     }
   }
-  for i in 0..<self.buttons.length() {
-    let (name, available) = if i < 6 {
-      (names[i], enabled[i])
-    } else {
-      match items.get(i - 6) {
-        Some(note) =>
-          (
-            (if active.map(n => n.id) == Some(note.id) { "* " } else { "" }) +
-            "Memo " +
-            note.id.to_string(),
-            ready && !self.close_pending,
-          )
-        None => ("Empty slot", false)
-      }
-    }
-    ignore(@semantics.set_name(self.tree, self.buttons[i], name))
-    ignore(@semantics.set_enabled(self.tree, self.buttons[i], available))
+  for i in 0..<6 {
+    ignore(@semantics.set_name(self.tree, self.buttons[i], names[i]))
+    ignore(@semantics.set_enabled(self.tree, self.buttons[i], enabled[i]))
   }
 }
 
@@ -455,6 +476,14 @@ pub fn create_collection(
   dispose : async () -> Unit,
   wait : async (Int) -> Unit,
 ) -> @application.Application {
+  let graph = @reactive.Graph::new()
+  let scope = @reactive.Scope::root(graph)
+  let visible_rows : @reactive.Signal[Array[Int]] = @reactive.Signal::new(
+    scope,
+    [],
+  )
+  let selected_row : @reactive.Signal[Int?] = @reactive.Signal::new(scope, None)
+  let rows_enabled = @reactive.Signal::new(scope, false)
   let tree = @semantics.empty(1, 1)
   let input = @semantics.add_input(tree, "Memo", "").unwrap()
   let search_input = @semantics.add_input(tree, "Search memos", "").unwrap()
@@ -462,6 +491,11 @@ pub fn create_collection(
     @semantics.add_button(tree, "Loading").unwrap()
   })
   let model : Collection = {
+    graph,
+    scope,
+    visible_rows,
+    selected_row,
+    rows_enabled,
     tree,
     input,
     search_input,
@@ -494,6 +528,23 @@ pub fn create_collection(
     close_pending: false,
     close_confirmed: false,
   }
+  let _ = @reactive.Binding::new(scope, () => model.visible_rows.get(), ids => {
+    model.reconcile_rows(ids)
+  })
+  let _ = @reactive.Binding::new(
+    scope,
+    () => {
+      (
+        model.visible_rows.get(),
+        model.selected_row.get(),
+        model.rows_enabled.get(),
+      )
+    },
+    state => {
+      let (ids, selected, enabled) = state
+      model.present_rows(ids, selected, enabled)
+    },
+  )
   model.sync()
   {
     title: "Memo",
@@ -558,6 +609,7 @@ pub fn create_collection(
     stop: () => {
       model.search.close()
       model.persistence.close()
+      model.scope.dispose()
       ignore(@semantics.dispose(tree))
     },
     dispose,

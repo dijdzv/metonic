@@ -7,5 +7,6 @@ moon.work
 .mooncakes/
 _build/
 node_modules/
+.playwright-cli/
 verification-output/
 *.log
