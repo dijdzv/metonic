@@ -61,6 +61,19 @@ pub fn VerticalList::arrange(
     references.length() > 100000 {
     return Err("invalid_list_bounds")
   }
+  if viewport == self.viewport &&
+    references.length() == self.placements.length() {
+    let mut unchanged = true
+    for index, reference in references {
+      if self.placements[index].reference != reference {
+        unchanged = false
+        break
+      }
+    }
+    if unchanged {
+      return Ok(())
+    }
+  }
   let seen : Map[(Int, Int, Int, Int), Bool] = Map([])
   for reference in references {
     let key = (
