@@ -16,6 +16,8 @@ pub struct SurfaceRenderer {
   mut closed : Bool
   mut poisoned : Bool
   mut text_layers : Array[SurfaceText]
+  mut peak_text_texture_count : Int
+  mut peak_text_texture_bytes : UInt64
   readbacks : Map[Int, ReadbackTicket]
   retention : FrameRetention
 }
@@ -107,6 +109,8 @@ pub async fn SurfaceRenderer::new(
     closed: false,
     poisoned: false,
     text_layers: [],
+    peak_text_texture_count: 0,
+    peak_text_texture_bytes: 0UL,
     readbacks: Map([]),
     retention,
   }

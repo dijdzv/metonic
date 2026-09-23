@@ -53,6 +53,7 @@ pub struct Handle {
   capture : async ((Snapshot) -> Unit) -> Captured
   retained_frame_id : () -> Int64
   capture_retained : async (Int64) -> @gpu.RetainedCapture
+  gpu_resources : () -> @gpu.SurfaceGpuResources?
   wait_display : async (Int64, Int) -> String
   wait_semantic : async (Int, Int) -> String
 }
@@ -122,6 +123,7 @@ fn App::handle(self : App) -> Handle {
     retained_frame_id: () => {
       self.renderer.map(renderer => renderer.retained_frame_id()).unwrap_or(0L)
     },
+    gpu_resources: () => self.renderer.map(renderer => renderer.gpu_resources()),
     capture_retained: id => {
       require(!self.closed, "window closed")
       let result : Ref[Result[@gpu.RetainedCapture, Error]?] = Ref(None)

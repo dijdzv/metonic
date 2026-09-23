@@ -97,6 +97,14 @@ async fn main {
         let state = (handle.inspect)()
         assert_eq(state.text, "A small independent application")
         assert_true(state.frames > 0)
+        let gpu = (handle.gpu_resources)().unwrap()
+        assert_false(gpu.closed)
+        assert_true(gpu.text_texture_count > 0)
+        assert_true(gpu.text_texture_bytes > 0UL)
+        assert_true(gpu.peak_text_texture_count >= gpu.text_texture_count)
+        assert_true(gpu.peak_text_texture_bytes >= gpu.text_texture_bytes)
+        assert_eq(gpu.uniform_buffer_bytes, 32UL)
+        assert_true(gpu.retained_frame_count <= 2)
         while !started.val {
           @async.sleep(1)
         }
