@@ -1,5 +1,5 @@
 ///|
-async test "canceling suspended storage releases saving state without acknowledging it" {
+async test "host retirement releases canceled storage without acknowledging it" {
   let model = @persistence.create()
   assert_true(model.finish_load(model.begin_load().unwrap(), Ok(Some("saved"))))
   assert_true(model.edit("draft"))
@@ -29,7 +29,9 @@ async test "canceling suspended storage releases saving state without acknowledg
     assert_true(model.edit("newer"))
     group.return_immediately(())
   })
-  assert_eq(changes.val, 1)
+  assert_eq(changes.val, 0)
+  assert_eq(model.state(), @persistence.Saving)
+  model.retire_save()
   assert_eq(model.state(), @persistence.Ready)
   assert_eq(model.text(), "newer")
   assert_true(model.is_saved("saved"))

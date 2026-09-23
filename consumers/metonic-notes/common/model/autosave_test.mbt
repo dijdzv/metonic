@@ -103,7 +103,7 @@ async test "close requested during debounce preserves the unsaved close decision
     entered.wait()
     (app.close_requested)()
     release.signal()
-    assert_eq(running.wait().apply(), @task.Unchanged)
+    assert_eq(running.wait().apply(), @task.Changed)
   })
   assert_eq(writes.val, 0)
   assert_false((app.can_close)())
@@ -180,5 +180,95 @@ async test "queued autosave cannot silently retry a newly completed storage fail
   assert_eq(writes.val, 1)
   assert_false((app.can_close)())
   assert_true((app.view)().last().unwrap().element.text.contains("disk full"))
+  (app.stop)()
+}
+
+///|
+async test "debounce progress redraws while the save lane remains active" {
+  let stored = Ref(Some("original"))
+  let save_started = @cond_var.Cond()
+  let release_save = @cond_var.Cond()
+  let progress_delivered = @cond_var.Cond()
+  let save_delivered = @cond_var.Cond()
+  let changes = Ref(0)
+  let driver = @driver.driver()
+  let app = create_collection(
+    {
+      load: () => Ok(stored.val),
+      save: value => {
+        save_started.signal()
+        release_save.wait()
+        stored.val = Some(value)
+        Ok(())
+      },
+    },
+    () => (),
+    _ => (),
+  )
+  (app.connect_tasks)(
+    @task.task_control(operation => ignore(driver.cancel_operation(operation))),
+  )
+  finish((app.initialize)())
+  let discard_enabled = () => {
+    let reference = (app.view)()[2].element.reference.unwrap()
+    @semantics.node(app.editor, reference).unwrap().enabled
+  }
+  assert_true(driver.submit(edited(app, "draft")))
+  @async.with_task_group(group => {
+    let running = group.spawn(() => {
+      driver.run(completion => {
+        if completion.apply() == @task.Changed {
+          changes.val += 1
+          if (app.can_close)() {
+            save_delivered.signal()
+          } else if !discard_enabled() {
+            progress_delivered.signal()
+          }
+        }
+      })
+    })
+    save_started.wait()
+    while changes.val < 1 {
+      progress_delivered.wait()
+    }
+    assert_eq(changes.val, 1)
+    assert_false(discard_enabled())
+    assert_false((app.can_close)())
+    assert_eq(stored.val, Some("original"))
+    release_save.signal()
+    while changes.val < 2 {
+      save_delivered.wait()
+    }
+    assert_eq(changes.val, 2)
+    assert_eq(@collection.decode(stored.val).unwrap().items()[0].text, "draft")
+    driver.close()
+    running.wait()
+  })
+  (app.stop)()
+}
+
+///|
+async test "rejected autosave admission keeps the draft available for explicit retry" {
+  let driver = @driver.driver()
+  let app = create_collection(
+    { load: () => Ok(Some("original")), save: _ => Ok(()), },
+    () => (),
+    _ => (),
+  )
+  (app.connect_tasks)(
+    @task.task_control(operation => ignore(driver.cancel_operation(operation))),
+  )
+  finish((app.initialize)())
+  for _ in 0..<16 {
+    assert_true(driver.submit(@task.cancel(() => ())))
+  }
+  assert_false(driver.submit(edited(app, "draft")))
+  assert_false((app.can_close)())
+  assert_true(
+    (app.view)().last().unwrap().element.text.contains("Unsaved changes"),
+  )
+  let save = (app.view)()[1].element.reference.unwrap()
+  assert_true(@semantics.node(app.editor, save).unwrap().enabled)
+  driver.close()
   (app.stop)()
 }

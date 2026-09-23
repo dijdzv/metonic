@@ -12,7 +12,7 @@ pub(all) enum State {
 ///|
 pub struct Model {
   priv state_value : @reactive.Signal[State]
-  priv batch : ((() -> Unit) -> Unit)
+  priv batch : (() -> Unit) -> Unit
   priv mut text_value : String
   priv mut saved : String?
   priv mut generation : Int
@@ -23,13 +23,15 @@ pub struct Model {
 
 ///|
 pub fn create() -> Model {
-  create_scoped(@reactive.Scope::root(@reactive.Graph::new()), action => action())
+  create_scoped(@reactive.Scope::root(@reactive.Graph::new()), action => {
+    action()
+  })
 }
 
 ///|
 pub fn create_scoped(
   scope : @reactive.Scope,
-  batch : ((() -> Unit) -> Unit),
+  batch : (() -> Unit) -> Unit,
 ) -> Model {
   let model : Model = {
     state_value: @reactive.Signal::new(scope, Unloaded),
@@ -165,12 +167,15 @@ pub fn Model::finish_save(
 fn Model::record_save(
   self : Model,
   ticket : Int,
+  snapshot : String,
   result : Result[Unit, String],
 ) -> Unit {
-  if self.closed {
-    return
+  if result is Ok(_) {
+    self.saved = Some(snapshot)
   }
-  if self.state_value.peek() == Saving && self.generation == ticket {
+  if !self.closed &&
+    self.state_value.peek() == Saving &&
+    self.generation == ticket {
     self.receipt = Some(result)
   }
 }

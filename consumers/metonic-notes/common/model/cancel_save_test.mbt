@@ -28,14 +28,12 @@ async test "canceled save cannot acknowledge a draft or complete pending close" 
     (app.close_requested)()
     group.return_immediately(())
   })
-  assert_false((app.can_close)())
+  assert_true((app.view)().last().unwrap().element.text.contains("Saving..."))
   assert_false((app.close_ready)())
   assert_eq(
     @semantics.node(app.editor, app.default_input.unwrap()).unwrap().value,
     "draft",
   )
-  assert_true(
-    (app.view)().last().unwrap().element.text.contains("Unsaved changes"),
-  )
+  assert_false((app.can_close)())
   (app.stop)()
 }
