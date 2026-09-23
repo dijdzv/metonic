@@ -86,6 +86,25 @@ async test "collection changes and close reject stale search results" {
 }
 
 ///|
+async test "document refresh rejects stale search failures without replacement" {
+  let model = connected_model(@reactive.Scope::root(@reactive.Graph::new()))
+  let original = document()
+  model.refresh(original)
+  let request = model.request("Alpha", () => ()).unwrap()
+  request.invalidate()
+  let failure = request.failure("old document failed")
+  model.refresh(original.remove(1).unwrap())
+  assert_eq(failure.apply(), @task.Rejected)
+  assert_eq(model.items().map(note => note.id), [])
+  let current = model.request("Beta", () => ()).unwrap()
+  current.invalidate()
+  assert_eq(
+    current.failure("current failed").apply(),
+    @task.Failed("current failed"),
+  )
+}
+
+///|
 async test "search results follow reordered documents and remain owned by the model" {
   let model = connected_model(@reactive.Scope::root(@reactive.Graph::new()))
   let original = document()

@@ -95,6 +95,15 @@ pub fn Model::request(
       changed()
       @task.Changed
     },
+    on_failure=message => {
+      if self.closed ||
+        self.generation != generation ||
+        self.document != document {
+        @task.Rejected
+      } else {
+        @task.Failed(message)
+      }
+    },
   )
 }
 
