@@ -4,7 +4,7 @@ priv struct Collection {
   scope : @reactive.Scope
   visible_rows : @reactive.Signal[Array[Int]]
   selected_row : @reactive.Memo[Int?]
-  rows_enabled : @reactive.Signal[Bool]
+  presentation : @reactive.Signal[PresentationRuntime]
   tree : @semantics.Tree
   input : @semantics.NodeRef
   search_input : @semantics.NodeRef
@@ -124,88 +124,35 @@ fn Collection::show_selected(self : Collection) -> Unit {
 fn Collection::sync(self : Collection, replace_input? : Bool = false) -> Unit {
   let workspace = self.workspace.peek()
   self.search.refresh(workspace.snapshot())
-  let ready = self.ready()
-  let active = workspace.active()
+  let runtime : PresentationRuntime = {
+    persistence: self.persistence.state(),
+    close_pending: self.close_pending,
+    save_waiting: self.save_waiting,
+    filtered: self.search.filtered(),
+  }
   if replace_input {
     ignore(@semantics.set_enabled(self.tree, self.input, true))
     ignore(
       @semantics.set_text(
         self.tree,
         self.input,
-        active.map(n => n.text).unwrap_or(""),
+        workspace.active().map(n => n.text).unwrap_or(""),
+      ),
+    )
+    ignore(
+      @semantics.set_enabled(
+        self.tree,
+        self.input,
+        runtime.ready() && workspace.active() is Some(_) &&
+        !runtime.close_pending,
       ),
     )
   }
-  ignore(
-    @semantics.set_enabled(
-      self.tree,
-      self.input,
-      ready && active is Some(_) && !self.close_pending,
-    ),
-  )
-  let saving = self.persistence.state() == @persistence.Saving
-  ignore(
-    @semantics.set_enabled(
-      self.tree,
-      self.search_input,
-      ready && !self.close_pending,
-    ),
-  )
   let ids = self.search.items().map(note => note.id)
   self.graph.batch(fn() {
     self.visible_rows.set(ids)
-    self.rows_enabled.set(ready && !self.close_pending)
+    self.presentation.set(runtime)
   })
-  let ordered = workspace.items()
-  let mut move_up = false
-  let mut move_down = false
-  if !self.search.filtered() && active is Some(selected) {
-    for index, note in ordered {
-      if note.id == selected.id {
-        move_up = index > 0
-        move_down = index + 1 < ordered.length()
-      }
-    }
-  }
-  let names = [
-    if self.persistence.state() is @persistence.LoadFailed(_) {
-      "Retry load"
-    } else {
-      "Save all"
-    },
-    "Discard all changes",
-    "New memo",
-    if workspace.deletion_pending() {
-      "Confirm delete"
-    } else {
-      "Delete memo"
-    },
-    "Move up",
-    "Move down",
-  ]
-  let enabled = [
-    self.persistence.state() is @persistence.LoadFailed(_) || ready,
-    ready && (!saving || self.save_waiting),
-    ready,
-    ready && active is Some(_),
-    ready && move_up,
-    ready && move_down,
-  ]
-  if self.close_pending {
-    names[0] = "Save"
-    names[1] = "Discard"
-    names[2] = "Cancel"
-    enabled[0] = ready
-    enabled[1] = ready && (!saving || self.save_waiting)
-    enabled[2] = true
-    for i in 3..<enabled.length() {
-      enabled[i] = false
-    }
-  }
-  for i in 0..<6 {
-    ignore(@semantics.set_name(self.tree, self.buttons[i], names[i]))
-    ignore(@semantics.set_enabled(self.tree, self.buttons[i], enabled[i]))
-  }
 }
 
 ///|
@@ -297,6 +244,7 @@ fn Collection::activate_inner(
   }
   guard self.ready() && self.flush() else { return None }
   self.error = None
+  let previous_active = self.workspace.peek().active().map(note => note.id)
   if reference == self.buttons[0] {
     if self.close_pending {
       self.close_confirmed = true
@@ -351,7 +299,10 @@ fn Collection::activate_inner(
       }
     }
   }
-  self.sync(replace_input=true)
+  self.sync(
+    replace_input=reference == self.buttons[1] ||
+    self.workspace.peek().active().map(note => note.id) != previous_active,
+  )
   if reference == self.buttons[1] ||
     reference == self.buttons[2] ||
     (reference == self.buttons[3] && !self.workspace.peek().deletion_pending()) ||
@@ -512,7 +463,15 @@ pub fn create_collection(
   let selected_row : @reactive.Memo[Int?] = @reactive.Memo::new(scope, () => {
     workspace.get().active().map(note => note.id)
   })
-  let rows_enabled = @reactive.Signal::new(scope, false)
+  let presentation = @reactive.Signal::new(
+    scope,
+    {
+      persistence: @persistence.Unloaded,
+      close_pending: false,
+      save_waiting: false,
+      filtered: false,
+    },
+  )
   let tree = @semantics.empty(1, 1)
   let input = @semantics.add_input(tree, "Memo", "").unwrap()
   let search_input = @semantics.add_input(tree, "Search memos", "").unwrap()
@@ -524,7 +483,7 @@ pub fn create_collection(
     scope,
     visible_rows,
     selected_row,
-    rows_enabled,
+    presentation,
     tree,
     input,
     search_input,
@@ -563,7 +522,8 @@ pub fn create_collection(
       (
         model.visible_rows.get(),
         model.selected_row.get(),
-        model.rows_enabled.get(),
+        model.presentation.get().ready() &&
+        !model.presentation.get().close_pending,
       )
     },
     state => {
@@ -572,6 +532,40 @@ pub fn create_collection(
         model.reconcile_rows(ids)
       }
       model.present_rows(ids, selected, enabled)
+    },
+  )
+  let _ = @reactive.Binding::new(
+    scope,
+    () => {
+      let runtime = model.presentation.get()
+      let workspace = model.workspace.get()
+      (
+        runtime.ready() && workspace.active() is Some(_) &&
+        !runtime.close_pending,
+        runtime.ready() && !runtime.close_pending,
+        action_presentation(workspace, runtime),
+      )
+    },
+    state => {
+      let (editor_enabled, search_enabled, actions) = state
+      let editor = @semantics.node(tree, input).unwrap()
+      if editor.enabled != editor_enabled {
+        ignore(@semantics.set_enabled(tree, input, editor_enabled))
+      }
+      let search = @semantics.node(tree, search_input).unwrap()
+      if search.enabled != search_enabled {
+        ignore(@semantics.set_enabled(tree, search_input, search_enabled))
+      }
+      for index, action in actions {
+        let reference = model.buttons[index]
+        let node = @semantics.node(tree, reference).unwrap()
+        if node.name != action.name {
+          ignore(@semantics.set_name(tree, reference, action.name))
+        }
+        if node.enabled != action.enabled {
+          ignore(@semantics.set_enabled(tree, reference, action.enabled))
+        }
+      }
     },
   )
   model.sync()
