@@ -97,12 +97,15 @@ test "save cancellation cannot reopen a closed model" {
   assert_false(model.cancel_save(ticket))
   assert_eq(model.state(), Closed)
 }
+
 ///|
 test "reactive persistence state reports transitions once and close is idempotent" {
   let scope = @reactive.Scope::root(@reactive.Graph::new())
   let model = create_scoped(scope, action => action())
   let seen : Array[State] = []
-  let _ = @reactive.Binding::new(scope, () => model.state(), state => seen.push(state))
+  let _ = @reactive.Binding::new(scope, () => model.state(), state => {
+    seen.push(state)
+  })
   let load = model.begin_load().unwrap()
   assert_true(model.finish_load(load, Ok(Some("seed"))))
   assert_false(model.finish_load(load, Ok(Some("ignored"))))
@@ -113,10 +116,16 @@ test "reactive persistence state reports transitions once and close is idempoten
   assert_true(model.finish_save(retry, Err("disk")))
   model.close()
   model.close()
-  assert_eq(
-    seen,
-    [Unloaded, Loading, Ready, Saving, Ready, Saving, SaveFailed("disk"), Closed],
-  )
+  assert_eq(seen, [
+    Unloaded,
+    Loading,
+    Ready,
+    Saving,
+    Ready,
+    Saving,
+    SaveFailed("disk"),
+    Closed,
+  ])
   scope.dispose()
 }
 
@@ -132,10 +141,11 @@ async test "load publishes ready state with its document update atomically" {
     () => (model.state(), document_version.get()),
     state => seen.push(state),
   )
-  let request = model.load_request(
-    { load: () => Ok(Some("saved")), save: _ => Ok(()), },
-    () => document_version.set(1),
-  ).unwrap()
+  let request = model
+    .load_request({ load: () => Ok(Some("saved")), save: _ => Ok(()), }, () => {
+      document_version.set(1)
+    })
+    .unwrap()
   request.invalidate()
   assert_eq(request.prepare().unwrap().run().apply(), @task.Changed)
   assert_eq(seen, [(Unloaded, 0), (Loading, 0), (Ready, 1)])
@@ -149,12 +159,14 @@ async test "late save work and completion are inert after Scope disposal" {
   let load = model.begin_load().unwrap()
   assert_true(model.finish_load(load, Ok(Some("saved"))))
   assert_true(model.edit("new"))
-  let request = model.save_request(
-    { load: () => Ok(None), save: _ => Ok(()), },
-    () => (),
-    @task.Operation::new(),
-    before_save=() => false,
-  ).unwrap()
+  let request = model
+    .save_request(
+      { load: () => Ok(None), save: _ => Ok(()), },
+      () => (),
+      @task.Operation::new(),
+      before_save=_ => false,
+    )
+    .unwrap()
   request.invalidate()
   let work = request.prepare().unwrap()
   scope.dispose()
@@ -166,14 +178,73 @@ async test "late save work and completion are inert after Scope disposal" {
   let load = model.begin_load().unwrap()
   assert_true(model.finish_load(load, Ok(Some("saved"))))
   assert_true(model.edit("new"))
-  let request = model.save_request(
-    { load: () => Ok(None), save: _ => Ok(()), },
-    () => (),
-    @task.Operation::new(),
-  ).unwrap()
+  let request = model
+    .save_request(
+      { load: () => Ok(None), save: _ => Ok(()), },
+      () => (),
+      @task.Operation::new(),
+    )
+    .unwrap()
   request.invalidate()
   let completion = request.prepare().unwrap().run()
   model.close()
   scope.dispose()
   assert_eq(completion.apply(), @task.Rejected)
+}
+
+///|
+async test "a written snapshot survives retirement before its UI completion" {
+  let model = create()
+  assert_true(model.finish_load(model.begin_load().unwrap(), Ok(Some("saved"))))
+  assert_true(model.edit("draft"))
+  let request = model
+    .save_request(
+      { load: () => Ok(None), save: _ => Ok(()), },
+      () => (),
+      @task.Operation::new(),
+    )
+    .unwrap()
+  request.invalidate()
+  let completion = request.prepare().unwrap().run()
+  assert_eq(model.saved_text(), Some("draft"))
+  assert_eq(model.state(), Saving)
+  model.retire_save()
+  assert_eq(model.state(), Ready)
+  assert_false(model.dirty())
+  assert_eq(completion.apply(), @task.Rejected)
+}
+
+///|
+async test "a completed disk write is recorded after Scope disposal" {
+  let scope = @reactive.Scope::root(@reactive.Graph::new())
+  let model = create_scoped(scope, action => action())
+  assert_true(model.finish_load(model.begin_load().unwrap(), Ok(Some("saved"))))
+  assert_true(model.edit("draft"))
+  let entered = @cond_var.Cond()
+  let release = @cond_var.Cond()
+  let request = model
+    .save_request(
+      {
+        load: () => Ok(None),
+        save: _ => {
+          entered.signal()
+          release.wait()
+          Ok(())
+        },
+      },
+      () => (),
+      @task.Operation::new(),
+    )
+    .unwrap()
+  request.invalidate()
+  let work = request.prepare().unwrap()
+  @async.with_task_group(group => {
+    let running = group.spawn(() => work.run())
+    entered.wait()
+    scope.dispose()
+    release.signal()
+    assert_eq(running.wait().apply(), @task.Rejected)
+  })
+  assert_eq(model.state(), Closed)
+  assert_eq(model.saved_text(), Some("draft"))
 }

@@ -43,10 +43,7 @@ fn action_presentation(
   if runtime.close_pending {
     return [
       { name: "Save", enabled: ready, },
-      {
-        name: "Discard",
-        enabled: ready && (!saving || runtime.save_waiting),
-      },
+      { name: "Discard", enabled: ready && (!saving || runtime.save_waiting), },
       { name: "Cancel", enabled: true, },
       {
         name: if workspace.deletion_pending() {

@@ -12,6 +12,7 @@ fn Collection::save(self : Collection, delay : Int) -> @task.Request? {
       return None
     }
     self.persistence.retire_save()
+    self.save_waiting.set(false)
     if self.persistence.saved_text() is Some(saved) &&
       @collection.decode(Some(saved)) is Ok(document) {
       self.workspace.set(self.workspace.peek().acknowledge_save(document))
@@ -32,15 +33,29 @@ fn Collection::save(self : Collection, delay : Int) -> @task.Request? {
           self.workspace.set(self.workspace.peek().acknowledge_save(snapshot))
         }
       },
-      before_save=() => {
+      before_save=post_progress => {
         if delay > 0 {
           (self.wait)(delay)
         }
         if self.scope.is_disposed() {
           return false
         }
-        self.save_waiting.set(false)
-        !self.close_pending.peek() || delay == 0
+        let should_save = !self.close_pending.peek() || delay == 0
+        if should_save && delay > 0 {
+          post_progress(
+            @task.completion(() => {
+              if self.scope.is_disposed() ||
+                self.persistence.state() != @persistence.Saving ||
+                !self.save_waiting.peek() {
+                @task.Rejected
+              } else {
+                self.save_waiting.set(false)
+                @task.Changed
+              }
+            }),
+          )
+        }
+        should_save
       },
     )
   })

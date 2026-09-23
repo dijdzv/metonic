@@ -6,6 +6,13 @@ operation with a `(T) -> Outcome` completion. The result retains its concrete
 type inside the closure; the host does not need a union of every application's
 HTTP responses and other result types.
 
+`work_with_progress` adds non-terminal completions from a running operation.
+The Driver posts them through the same host result callback without retiring its
+operation lane. It checks the current lane before delivery and again when the
+host applies a queued progress result. The Scope-owned Resource adds its own
+lifetime and admitted-generation check. A worker may record an external write
+fact, but updates to reactive UI state belong in the delivered completion.
+
 Running work produces a `Completion` without invoking the state update. The host
 queues that completion and calls `apply` on its event-processing path. Applying
 the same completion twice invokes the application only once. `Changed` requests
@@ -45,8 +52,8 @@ workspace configuration and must be reviewed when those dependencies change.
 Clock/Http implementations and the existing application task scope. The native
 adapter supplies the real clock and bounded, timed HTTP transport. The native
 event loop handles generic requests/completions; P0 shortcuts and action routing
-remain in its adapter. The browser's task routing has not yet migrated to this
-boundary.
+remain in its adapter. The current browser application host also uses the shared
+Driver for requests and completions.
 
 Tests exercise deferred single application, queued stale results, replacement
 cleanup order, failure propagation, virtual-time movement and controlled HTTP
