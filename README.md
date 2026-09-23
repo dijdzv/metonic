@@ -39,6 +39,9 @@ measured tradeoff and the separate browser package.
 
 The [Notes example](docs/notes-example.md) uses the shared editing and rendering
 host without the P0 user-lookup flow. It has native, JS and WasmGC entry points.
+The [independent Notes consumer](consumers/metonic-notes/README.md) is a separate
+application source with a pinned Metonic dependency and its own build and
+verification commands.
 
 On Windows x64, install [mise](https://mise.jdx.dev/) 2026.9.4 or newer,
 Git for Windows, GitHub CLI (`gh`), and

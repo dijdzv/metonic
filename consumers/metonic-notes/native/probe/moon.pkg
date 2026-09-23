@@ -1,0 +1,13 @@
+import {
+  "local/metonic_notes/clock_probe",
+  "local/metonic_notes/production" @model,
+  "local/metonic_notes/collection",
+  "local/native_host/application" @host,
+  "local/native_host/window_host",
+  "local/p0/core/semantics",
+  "moonbitlang/async",
+}
+
+pkgtype(kind: "executable")
+
+supported_targets = "native"

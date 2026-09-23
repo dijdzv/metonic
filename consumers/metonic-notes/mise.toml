@@ -1,0 +1,79 @@
+[env]
+MOON_HOME = "{{config_root}}/.metonic/framework/.tools/moonbit"
+MBT_WGPU_NATIVE_ROOT = "{{config_root}}/.metonic/framework/.work/wgpu-assets"
+_.path = ["{{config_root}}/.metonic/framework/.tools/moonbit/bin"]
+
+[tasks."build:browser"]
+run = '.\.metonic\framework\.tools\moonbit\bin\moon.exe run build.mbtx -- browser'
+
+[tasks."build:native"]
+run = '.\.metonic\framework\.tools\moonbit\bin\moon.exe run build.mbtx -- native'
+
+[tasks."build:native-dev"]
+run = '.\.metonic\framework\.tools\moonbit\bin\moon.exe run build.mbtx -- native-dev'
+
+[tasks."run:native-dev"]
+depends = ["build:native-dev"]
+run = '.\native\.metonic-build\native\debug\build\local\metonic_notes_native\dev\dev.exe'
+
+[tasks."package:native"]
+description = "Package Windows release files and notices into a new directory"
+depends = ["build:native"]
+run = '.\.metonic\framework\.tools\moonbit\bin\moon.exe run package-native.mbtx --'
+
+[tasks."run:native"]
+depends = ["build:native"]
+run = '.\native\.metonic-build\native\release\build\local\metonic_notes_native\main\main.exe'
+
+[tasks."verify:native"]
+run = '.\.metonic\framework\.tools\moonbit\bin\moon.exe run build.mbtx -- native-probe'
+
+[tasks."verify:native-control"]
+run = '.\.metonic\framework\.tools\moonbit\bin\moon.exe run verification/native-control.mbtx'
+
+[tasks."verify:browser"]
+depends = ["build:browser"]
+run = ['node verification/browser.mjs', 'node browser/verify.mjs', 'node verification/browser-control.mjs', 'node verification/autosave.mjs', 'node verification/search.mjs']
+
+[tasks."verify:browser-control"]
+depends = ["build:browser"]
+run = 'node verification/browser-control.mjs'
+
+[tasks."package:browser"]
+description = "Package browser assets into a new directory (pass its path)"
+depends = ["build:browser"]
+run = '.\.metonic\framework\.tools\moonbit\bin\moon.exe run package-browser.mbtx --'
+
+[tasks."verify:browser-package"]
+depends = ["build:browser"]
+run = '.\.metonic\framework\.tools\moonbit\bin\moon.exe run verification/package-browser.mbtx'
+
+[tasks."verify:persistence"]
+run = '.\.metonic\framework\.tools\moonbit\bin\moon.exe run verification/persistence.mbtx'
+
+[tasks."verify:native-package"]
+run = '.\.metonic\framework\.tools\moonbit\bin\moon.exe run verification/package-native.mbtx'
+
+[tasks."verify:model"]
+run = '.\.metonic\framework\.tools\moonbit\bin\moon.exe run verification/model.mbtx'
+
+[tasks."verify:source-contract"]
+description = "Check source pin, dirty checkout and missing bootstrap without modifying the application"
+run = '.\.metonic\framework\.tools\moonbit\bin\moon.exe run verification/source-contract.mbtx'
+
+[tasks."verify:source-first-setup"]
+description = "Build JS and WasmGC from a clean source consumer without native preparation"
+run = '.\.metonic\framework\.tools\moonbit\bin\moon.exe run verification/source-first-setup.mbtx'
+[tools]
+node = "26.8.1"
+pnpm = "12.3.4"
+
+[vars]
+_.file = "dependency.json"
+
+[tasks."deps:fetch"]
+description = "Fetch the pinned framework source during first setup"
+run = [
+  'git clone --no-checkout "{{vars.repository}}" "{{vars.directory}}"',
+  'git -C "{{vars.directory}}" checkout --detach "{{vars.revision}}"',
+]

@@ -1,0 +1,142 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/json",
+  "moonbitlang/x@0.5.1/crypto",
+}
+
+///|
+struct FileRecord {
+  path : String
+  bytes : Int
+  sha256 : String
+} derive(FromJson)
+
+///|
+struct Inventory {
+  files : Array[FileRecord]
+} derive(FromJson)
+
+///|
+fn word(bytes : Bytes, offset : Int) -> Int {
+  bytes[offset].to_int() + (bytes[offset + 1].to_int() << 8)
+}
+
+///|
+fn verify_gui_executable(bytes : Bytes) -> Unit raise {
+  assert_true(bytes.length() >= 64)
+  assert_eq(word(bytes, 0), 0x5a4d)
+  let pe = word(bytes, 60) + (word(bytes, 62) << 16)
+  assert_true(pe >= 64 && pe < bytes.length() - 94)
+  assert_eq(word(bytes, pe), 0x4550)
+  assert_eq(word(bytes, pe + 2), 0)
+  assert_eq(word(bytes, pe + 4), 0x8664)
+  assert_eq(word(bytes, pe + 24), 0x20b)
+  assert_eq(
+    word(bytes, pe + 92),
+    2,
+    msg="Memo must be a GUI executable, without an extra console window",
+  )
+}
+
+///|
+async fn main {
+  @async.with_timeout(300000, async fn() {
+    let root = @fs.realpath(".")
+    let moon = root + "/.metonic/framework/.tools/moonbit/bin/moon.exe"
+    for target in ["native", "native-probe", "native-release-acceptance"] {
+      assert_eq(
+        @process.run(
+          moon,
+          ["run", "build.mbtx", "--", target],
+          cwd=root,
+          no_console_window=true,
+        ),
+        0,
+      )
+    }
+    let native = root + "/native/.metonic-build/native/"
+    let release = native + "release/build/local/metonic_notes_native/main/main"
+    verify_gui_executable(@fs.read_file(release + ".exe").binary())
+    let generated = @fs.read_file(release + ".c").text()
+    let debug = @fs.read_file(
+      native + "debug/build/local/metonic_notes_native/probe/probe.c",
+    ).text()
+    for marker in ["App_3a_3ahandle", "InputObservation", "capture__frame"] {
+      assert_true(
+        debug.contains(marker),
+        msg="Missing development positive control: " + marker,
+      )
+      assert_false(
+        generated.contains(marker),
+        msg="Release retains development implementation: " + marker,
+      )
+    }
+    let link = @fs.read_file(release + ".c.rsp").text()
+    for
+      name in [
+        "window_dev", "window_control", "window_probe", "native_session", "native_control",
+        "named_pipe", "development_transport", "application_control", "release_acceptance",
+        "persistence_probe", "metonic_notes_native/dev",
+      ] {
+      assert_false(
+        link.contains(name),
+        msg="Release links development package: " + name,
+      )
+    }
+    let temporary = @fs.tmpdir(prefix="metonic-notes-native-package-")
+    let resolved = @fs.realpath(temporary)
+    defer {
+      assert_eq(@fs.realpath(temporary), resolved)
+      @fs.rmdir(temporary, recursive=true)
+    }
+    let destination = temporary + "/配布 app 📝"
+    assert_eq(
+      @process.run(
+        moon,
+        ["run", "package-native.mbtx", "--", destination],
+        cwd=root,
+        no_console_window=true,
+      ),
+      0,
+    )
+    let original = @fs.read_file(destination + "/package.json").text()
+    let inventory : Inventory = @json.from_json(@json.parse(original))
+    assert_eq(inventory.files.length(), 26)
+    assert_true(
+      inventory.files.iter().any(file => file.path == "licenses/LICENSE-chicle"),
+    )
+    assert_true(
+      inventory.files
+      .iter()
+      .any(file => file.path == "licenses/LICENSE-proton-clipboard"),
+    )
+    for file in inventory.files {
+      let bytes = @fs.read_file(destination + "/" + file.path).binary()
+      assert_eq(bytes.length(), file.bytes)
+      assert_eq(@crypto.bytes_to_hex_string(@crypto.sha256(bytes)), file.sha256)
+    }
+    let (code, _, _) = @process.collect_output(
+      moon,
+      ["run", "package-native.mbtx", "--", destination],
+      cwd=root,
+      no_console_window=true,
+    )
+    assert_true(code != 0)
+    assert_eq(@fs.read_file(destination + "/package.json").text(), original)
+    assert_eq(
+      @process.run(
+        native +
+        "debug/build/local/metonic_notes_native/release_acceptance/release_acceptance.exe",
+        [destination + "/Memo.exe"],
+        cwd=temporary,
+        no_console_window=true,
+      ),
+      0,
+    )
+    println(
+      "NATIVE_PACKAGE_RELOCATION_OK inventory overwrite_protection production_exclusion edit_save_restore unicode_path unrelated_cwd",
+    )
+  })
+}

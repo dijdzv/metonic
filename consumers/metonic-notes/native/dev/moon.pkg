@@ -1,0 +1,12 @@
+import {
+  "local/metonic_notes/production" @model,
+  "local/native_host/application" @host,
+  "local/native_host/window_host",
+  "local/native_host/application_control",
+  "moonbitlang/async",
+  "local/metonic_notes_native/storage",
+  "moonbitlang/core/env",
+}
+
+pkgtype(kind: "executable")
+supported_targets = "native"

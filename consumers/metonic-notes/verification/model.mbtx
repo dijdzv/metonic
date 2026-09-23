@@ -1,0 +1,44 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+}
+
+///|
+async fn main {
+  let root = @fs.realpath(".")
+  let framework = root + "/.metonic/framework"
+  let moon = framework + "/.tools/moonbit/bin/moon.exe"
+  assert_eq(
+    @process.run(
+      "mise",
+      [
+        "-C", framework, "exec", "--", moon, "run", "scripts/application-source.mbtx",
+        "--", "prepare", root, "browser",
+      ],
+      no_console_window=true,
+    ),
+    0,
+  )
+  for target in ["js", "wasm-gc"] {
+    let arguments = [
+      "-C",
+      framework,
+      "exec",
+      "--",
+      moon,
+      "-C",
+      root + "/browser",
+      "test",
+      "../common/model",
+      "../common/collection",
+      "../common/persistence",
+      "../common/search",
+    ]
+    if target == "js" {
+      arguments.push("../common/clock_probe")
+    }
+    arguments.append(["--target", target, "--deny-warn"])
+    assert_eq(@process.run("mise", arguments, no_console_window=true), 0)
+  }
+}

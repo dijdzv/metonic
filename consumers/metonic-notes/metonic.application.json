@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "targets": {
+    "browser": {
+      "workspace": "browser",
+      "members": ["app", "../common"],
+      "entries": {
+        "main": {
+          "entry_package": "app/main",
+          "artifact": "local/metonic_notes_browser/main"
+        }
+      }
+    },
+    "native": {
+      "workspace": "native",
+      "members": ["../common", "."],
+      "entries": {
+        "main": {
+          "entry_package": "main",
+          "artifact": "local/metonic_notes_native/main"
+        },
+        "dev": {
+          "entry_package": "dev",
+          "artifact": "local/metonic_notes_native/dev"
+        },
+        "probe": {
+          "entry_package": "probe",
+          "artifact": "local/metonic_notes_native/probe"
+        },
+        "persistence_probe": {
+          "entry_package": "persistence_probe",
+          "artifact": "local/metonic_notes_native/persistence_probe"
+        },
+        "release_acceptance": {
+          "entry_package": "release_acceptance",
+          "artifact": "local/metonic_notes_native/release_acceptance"
+        }
+      }
+    }
+  }
+}

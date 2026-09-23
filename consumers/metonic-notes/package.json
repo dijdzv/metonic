@@ -1,0 +1,8 @@
+{
+  "private": true,
+  "packageManager": "pnpm@12.3.4",
+  "devDependencies": {
+    "@modelcontextprotocol/client": "2.0.0",
+    "playwright": "1.63.0"
+  }
+}

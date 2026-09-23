@@ -1,0 +1,16 @@
+import {
+  "moonbitlang/core/string",
+  "moonbitlang/async",
+  "moonbitlang/async/process",
+  "moonbitlang/async/fs",
+  "moonbitlang/core/env",
+  "local/metonic_notes/collection",
+}
+
+pkgtype(kind: "executable")
+
+supported_targets = "native"
+
+options(
+  link: { "native": { "cc-link-flags": "user32.lib" } },
+)
