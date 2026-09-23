@@ -7,8 +7,29 @@ fn document() -> @collection.Document {
 }
 
 ///|
+async test "reactive search publishes changed rows and suppresses equal results" {
+  let scope = @reactive.Scope::root(@reactive.Graph::new())
+  let model = @search.create(scope, _ => ())
+  let observed : Array[Array[Int]] = []
+  let _ = @reactive.Binding::new(
+    scope,
+    () => model.items().map(note => note.id),
+    ids => observed.push(ids.copy()),
+  )
+  model.refresh(document())
+  let first = model.request("alpha", () => ()).unwrap()
+  first.invalidate()
+  assert_eq(first.prepare().unwrap().run().apply(), @task.Changed)
+  let same = model.request("alpha", () => ()).unwrap()
+  same.invalidate()
+  assert_eq(same.prepare().unwrap().run().apply(), @task.Changed)
+  assert_eq(observed, [[], [1, 2], [1]])
+  scope.dispose()
+}
+
+///|
 async test "query replacement rejects earlier results and clear restores all notes" {
-  let model = @search.create(_ => ())
+  let model = @search.create(@reactive.Scope::root(@reactive.Graph::new()), _ => ())
   model.refresh(document())
   let first = model.request("alpha", () => ()).unwrap()
   first.invalidate()
@@ -24,7 +45,7 @@ async test "query replacement rejects earlier results and clear restores all not
 
 ///|
 async test "collection changes and close reject stale search results" {
-  let model = @search.create(_ => ())
+  let model = @search.create(@reactive.Scope::root(@reactive.Graph::new()), _ => ())
   let original = document()
   model.refresh(original)
   let request = model.request("日本語", () => ()).unwrap()
@@ -44,7 +65,7 @@ async test "collection changes and close reject stale search results" {
 
 ///|
 async test "search results follow reordered documents and remain owned by the model" {
-  let model = @search.create(_ => ())
+  let model = @search.create(@reactive.Scope::root(@reactive.Graph::new()), _ => ())
   let original = document()
   model.refresh(original)
   let returned = model.items()

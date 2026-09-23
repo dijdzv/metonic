@@ -1,6 +1,7 @@
 import {
   "local/metonic_notes/collection",
   "local/p0/core/application_task" @task,
+  "local/p0/core/reactive",
 }
 
 import {
