@@ -115,12 +115,45 @@ fn Driver::deliver(
   completion : @task.Completion,
   post : (@task.Completion) -> Unit,
 ) -> Unit {
-  if self.accepting && lane.generation == generation {
+  if self.accepting &&
+    lane.generation == generation &&
+    self.lanes.get(lane.operation) is Some(current) &&
+    physical_equal(current, lane) {
     post(
       @task.completion(() => {
-        if self.accepting && lane.generation == generation {
+        if self.accepting &&
+          lane.generation == generation &&
+          self.lanes.get(lane.operation) is Some(current) &&
+          physical_equal(current, lane) {
           self.remove_current_lane(lane)
           completion.apply()
+        } else {
+          @task.Rejected
+        }
+      }),
+    )
+  }
+}
+
+///|
+fn Driver::deliver_progress(
+  self : Driver,
+  lane : Lane,
+  generation : Int,
+  progress : @task.Completion,
+  post : (@task.Completion) -> Unit,
+) -> Unit {
+  if self.accepting &&
+    lane.generation == generation &&
+    self.lanes.get(lane.operation) is Some(current) &&
+    physical_equal(current, lane) {
+    post(
+      @task.completion(() => {
+        if self.accepting &&
+          lane.generation == generation &&
+          self.lanes.get(lane.operation) is Some(current) &&
+          physical_equal(current, lane) {
+          progress.apply()
         } else {
           @task.Rejected
         }
@@ -187,7 +220,9 @@ pub async fn Driver::run(
           acknowledged.val = true
           on_prepared()
           guard work is Some(work) else { return }
-          let completion = work.run() catch {
+          let completion = work.run(post_progress=progress => {
+            self.deliver_progress(lane, generation, progress, post)
+          }) catch {
             error if cancellation_error(error) => raise error
             error => {
               let message = error.to_string()

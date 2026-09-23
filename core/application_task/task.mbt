@@ -60,14 +60,27 @@ pub fn Completion::apply(self : Completion) -> Outcome {
 
 ///|
 pub struct Work {
-  priv run : async () -> Completion
+  priv run : async ((Completion) -> Unit) -> Completion
 }
 
 ///|
 pub fn[T] work(run : async () -> T, apply : (T) -> Outcome) -> Work {
   {
-    run: () => {
+    run: _ => {
       let value = run()
+      completion(() => apply(value))
+    },
+  }
+}
+
+///|
+pub fn[T] work_with_progress(
+  run : async ((Completion) -> Unit) -> T,
+  apply : (T) -> Outcome,
+) -> Work {
+  {
+    run: post_progress => {
+      let value = run(post_progress)
       completion(() => apply(value))
     },
   }
@@ -125,6 +138,9 @@ pub fn Request::prepare(self : Request) -> Work? {
 }
 
 ///|
-pub async fn Work::run(self : Work) -> Completion {
-  (self.run)()
+pub async fn Work::run(
+  self : Work,
+  post_progress? : (Completion) -> Unit = _ => (),
+) -> Completion {
+  (self.run)(post_progress)
 }

@@ -8,5 +8,5 @@ pub async fn[G] dispatch(
   request.invalidate()
   cancel_and_wait(previous)
   guard request.prepare() is Some(work) else { return None }
-  Some(group.spawn(() => post(work.run())))
+  Some(group.spawn(() => post(work.run(post_progress=post))))
 }

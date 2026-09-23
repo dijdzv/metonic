@@ -30,6 +30,42 @@ async test "typed results are delivered without mutating application state until
 }
 
 ///|
+async test "direct dispatch forwards progress before the final result" {
+  let values : Array[String] = []
+  let delivered : Array[@task.Completion] = []
+  @async.with_task_group(group => {
+    let request = @task.replace(() => (), () => {
+      Some(
+        @task.work_with_progress(
+          post => {
+            post(
+              @task.completion(() => {
+                values.push("progress")
+                @task.Changed
+              }),
+            )
+            "done"
+          },
+          result => {
+            values.push(result)
+            @task.Changed
+          },
+        ),
+      )
+    })
+    let task = @application_task.dispatch(request, None, group, completion => {
+      delivered.push(completion)
+    })
+    task.unwrap().wait()
+  })
+  assert_eq(values, [])
+  assert_eq(delivered.length(), 2)
+  assert_eq(delivered[0].apply(), @task.Changed)
+  assert_eq(delivered[1].apply(), @task.Changed)
+  assert_eq(values, ["progress", "done"])
+}
+
+///|
 async test "queued results are rejected after cancellation replacement or disposal" {
   for operation in ["cancel", "replace", "dispose"] {
     let scope = @task_scope.create()

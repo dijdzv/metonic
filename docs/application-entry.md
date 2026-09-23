@@ -118,6 +118,13 @@ hosts report the message through `input_error`. Cancellation does not produce a
 failure notification. Unexpected failure messages are diagnostic text, not typed
 domain errors or a stable machine-readable error protocol.
 
+`work_with_progress` may post non-terminal completions through the same Driver
+result callback while work remains active. A posted progress completion keeps its
+operation lane; its application checks the current Driver generation and, when
+wrapped by a Resource, the owning Scope. The host decides when to apply and draw.
+Use this for a state transition between asynchronous stages, not for direct
+Signal writes inside the worker or cancellation cleanup.
+
 Stop prevents further application mutations and requests cancellation; the
 asynchronous driver returns after all owned cleanup, including superseded work.
 This does not promise that a browser page exit waits for pending storage writes.
