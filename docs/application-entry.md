@@ -69,15 +69,20 @@ after preparation or retirement by replacement/closure. Rejected submissions
 do not invoke it. Acknowledgement alone does not mean that work succeeded.
 Cancellation keeps the identity reusable; removing a component must cancel its
 owned operations and invalidate its model references. Independent operation
-identities do not automatically infer semantic-node ownership.
+identities do not automatically infer semantic-node ownership. The host-owned
+`Driver.cancel_operation(operation)` invalidates that lane immediately and
+requests cancellation of running work without occupying a Request slot. It
+returns false when the lane is absent or the driver is closed. It does not run a
+Request's model-invalidation callback: the owner must invalidate component
+state separately. The call does not wait for cleanup; the lane retires only
+after cleanup, and a new request for the same Operation waits for it.
 
 Submissions are rejected after closure or when capacity is exhausted: at most
 16 commands awaiting preparation and 16 operation slots are retained. Running
-work releases its command slot so a full set of active operations can still be
-canceled. A queued
-completion holds its operation slot until applied or superseded, so a host that
-stops consuming results cannot accumulate unlimited identities. Rejection does
-not invoke invalidation or prepare work. Both hosts report capacity exhaustion
+work releases its command slot. A queued completion holds its operation slot
+until applied, superseded or explicitly canceled through the driver, so a host
+that stops consuming results cannot accumulate unlimited identities. Rejection
+does not invoke invalidation or prepare work. Both hosts report capacity exhaustion
 through `input_error`; browser activation also returns rejection.
 
 A completion delivered before same-operation replacement or host closure is
