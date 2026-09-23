@@ -83,7 +83,7 @@ async fn main {
           operate(search, @window_host.InsertText("alpha"))
           wait_rows(100)
           operate(target("Memo 10"), @window_host.ActivateControl)
-          assert_eq((handle.inspect)().text, "Memo 10 alpha edited")
+          assert_eq((handle.inspect)().text, "Memo 10 alpha autosaved")
           ignore((handle.capture)(_ => ()))
           measurements.val = Some({
             "reopen_ms": startup,
@@ -161,6 +161,22 @@ async fn main {
         })
         ignore((handle.capture)(_ => ()))
         let save_ms = (@async.now() - save_start).to_int()
+        let autosave_start = @async.now()
+        operate(
+          editor,
+          @window_host.SelectRange(0, "Memo 10 alpha edited".length()),
+        )
+        operate(editor, @window_host.InsertText("Memo 10 alpha autosaved"))
+        assert_eq((handle.inspect)().text, "Memo 10 alpha autosaved")
+        @async.with_timeout(30000, () => {
+          while !@fs.read_file(directory + "/snapshot")
+                .text()
+                .contains("Memo 10 alpha autosaved") ||
+                !(application.can_close)() {
+            @async.sleep(5)
+          }
+        })
+        let autosave_ms = (@async.now() - autosave_start).to_int()
         let (working_set, peak_working_set) = process_working_set()
         measurements.val = Some({
           "startup_ms": startup,
@@ -171,6 +187,7 @@ async fn main {
           "reorder_ms": reorder_ms,
           "edit_ms": edit_ms,
           "save_ms": save_ms,
+          "autosave_ms": autosave_ms,
           "rows": 1000,
           "initial_working_set_bytes": initial_working_set.to_string(),
           "working_set_bytes": working_set.to_string(),

@@ -71,7 +71,7 @@ async fn run_sample(
   assert_true(
     @fs.read_file(directory + "/snapshot")
     .text()
-    .contains("Memo 10 alpha edited"),
+    .contains("Memo 10 alpha autosaved"),
   )
   let reopened = run_probe(sample, executable, directory, output, true)
   println(
