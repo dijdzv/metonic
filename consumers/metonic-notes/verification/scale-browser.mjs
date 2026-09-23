@@ -75,6 +75,8 @@ try {
         document.querySelector('[aria-label="Memo"]')?.value === 'Memo 10 alpha edited');
       await measure('save', () => page.getByRole('button', { name: 'Save all', exact: true }).click(),
         () => localStorage.getItem('metonic-notes.snapshot.v1')?.includes('Memo 10 alpha edited'));
+      await measure('autosave', () => editor.fill('Memo 10 alpha autosaved'), () =>
+        localStorage.getItem('metonic-notes.snapshot.v1')?.includes('Memo 10 alpha autosaved'));
       await measure('reopen', () => page.reload(), target =>
         document.querySelector('#status')?.textContent === `Ready: Memo (${target})`, target);
       await measure('restoreSelection', async () => {
@@ -84,7 +86,7 @@ try {
             /^\*? ?Memo \d+$/.test(button.getAttribute('aria-label') || '')).length === 100);
         await page.getByRole('button', { name: 'Memo 10', exact: true }).click();
       },
-        () => document.querySelector('[aria-label="Memo"]')?.value === 'Memo 10 alpha edited');
+        () => document.querySelector('[aria-label="Memo"]')?.value === 'Memo 10 alpha autosaved');
       observation.finalButtons = await page.getByRole('button').count();
       const cdp = await context.newCDPSession(page);
       await cdp.send('Performance.enable');
@@ -118,7 +120,7 @@ for (const target of ['js', 'wasm-gc']) {
     startupMs: median('startup'), search100Ms: median('search100'),
     selectMs: median('select'), clearSearchMs: median('clearSearch'),
     scrollMs: median('scroll'), reorderMs: median('reorder'),
-    editMs: median('edit'), saveMs: median('save'),
+    editMs: median('edit'), saveMs: median('save'), autosaveMs: median('autosave'),
     reopenMs: median('reopen'), restoreSelectionMs: median('restoreSelection'),
     initialButtons: samples[0].initialButtons,
   }));
