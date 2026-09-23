@@ -1,5 +1,5 @@
 import {
-  "local/p0/effects/clock" @capability,
+  "local/p0/capabilities/clock" @capability,
   "moonbitlang/async/cond_var",
   "moonbitlang/async",
 }

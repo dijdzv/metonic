@@ -1,5 +1,5 @@
 import {
-  "local/p0/effects/http" @capability,
+  "local/p0/capabilities/http" @capability,
   "moonbitlang/async",
   "moonbitlang/async/http" @wire_http,
 }

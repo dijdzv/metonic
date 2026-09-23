@@ -7,7 +7,7 @@ evidence is recorded in [Issue 429](https://github.com/dijdzv/metonic/issues/429
 
 ## Boundary
 
-`effects/http` defines a bounded POST exchange without a scheduler, UI types,
+`capabilities/http` defines a bounded POST exchange without a scheduler, UI types,
 RPC envelopes or a global runtime. A request carries owned bytes, a relative
 path, content type, response byte limit and acceptable response content types.
 An empty acceptance list permits any content type. Adapters reject an unacceptable

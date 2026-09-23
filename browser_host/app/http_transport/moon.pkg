@@ -1,5 +1,5 @@
 import {
-  "local/p0/effects/http",
+  "local/p0/capabilities/http",
   "local/browser_host/input_binding",
   "local/websys-input" @input_dom,
   "moonbitlang/async/js_async",

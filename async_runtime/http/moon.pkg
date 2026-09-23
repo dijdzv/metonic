@@ -1,6 +1,6 @@
 import {
-  "local/p0/effects/http" @capability,
-  "local/p0/effects/clock",
+  "local/p0/capabilities/http" @capability,
+  "local/p0/capabilities/clock",
   "moonbitlang/async",
 }
 

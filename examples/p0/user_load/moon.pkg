@@ -1,5 +1,5 @@
 import {
-  "local/p0/effects/http",
+  "local/p0/capabilities/http",
   "local/p0/examples/p0/backend/api",
   "local/p0/rpc/json" @wire,
   "moonbitlang/core/encoding/utf8",

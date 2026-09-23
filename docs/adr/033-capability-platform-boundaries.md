@@ -70,11 +70,12 @@ contracts and may depend on lower-level platform packages. Put substantial
 Windows-specific mechanisms below the native host when that separation serves
 an actual dependency boundary; do not move every file merely to mirror a diagram.
 
-The existing `effects/clock` and `effects/http` are capabilities/ports, distinct
-from reactive effects and the language's async/raise effects. Prefer the term
-capability for this boundary. A future public-path rename must update consumers,
-build configuration and documentation together; this ADR does not rename those
-existing imports or add parallel alias packages.
+The `capabilities/clock` and `capabilities/http` packages are capabilities/ports,
+distinct from reactive effects and the language's async/raise effects. Their
+public paths use the capability terminology; no parallel alias packages are
+provided. Source consumers updating from the former `effects/clock` and
+`effects/http` paths must update their imports with the framework revision.
+The contracts and task ownership are unchanged by this rename.
 
 ## Ownership and composition
 

@@ -5,7 +5,7 @@ import {
   "local/browser_host/http_transport",
   "local/browser_host/gpu_renderer",
   "local/browser_host/input_binding",
-  "local/p0/effects/clock",
+  "local/p0/capabilities/clock",
   "local/p0/examples/p0/user_load",
   "local/metonic_async/http" @timed,
   "local/p0/examples/p0/browser" @app,

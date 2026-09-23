@@ -9,7 +9,7 @@ import {
   "local/p0/examples/p0/application",
   "local/p0/examples/p0/tasks" @sample,
   "local/p0/examples/p0/scene",
-  "local/p0/effects/http",
+  "local/p0/capabilities/http",
   "local/metonic_async/clock" @virtual,
 } for "test"
 
