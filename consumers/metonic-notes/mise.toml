@@ -65,12 +65,25 @@ run = '.\.metonic\framework\.tools\moonbit\bin\moon.exe run verification/scale-f
 description = "Build the Windows 1,000-memo operation probe"
 run = '.\.metonic\framework\.tools\moonbit\bin\moon.exe run build.mbtx -- native-scale-probe'
 
+[tasks."build:native-release-acceptance"]
+description = "Build the external Windows release observer"
+run = '.\.metonic\framework\.tools\moonbit\bin\moon.exe run build.mbtx -- native-release-acceptance'
+
 [tasks."scale:baseline-native"]
 description = "Measure the fixed 1,000-memo sequence on Windows native"
 run = [
   'mise run scale:fixture',
   'mise run build:native-scale-probe',
   '.\.metonic\framework\.tools\moonbit\bin\moon.exe run verification/scale-native.mbtx',
+]
+
+[tasks."scale:resources-native"]
+description = "Measure the production Notes process without diagnostic frame retention"
+run = [
+  'mise run scale:fixture',
+  'mise run build:native',
+  'mise run build:native-release-acceptance',
+  '.\.metonic\framework\.tools\moonbit\bin\moon.exe run verification/scale-release-resources.mbtx',
 ]
 
 [tasks."scale:baseline-browser"]

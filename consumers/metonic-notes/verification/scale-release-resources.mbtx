@@ -1,0 +1,51 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/json",
+}
+
+///|
+async fn main {
+  let root = @fs.realpath(".")
+  let output = root + "/.work/scale"
+  let observer = root +
+    "/native/.metonic-build/native/debug/build/local/metonic_notes_native/release_acceptance/release_acceptance.exe"
+  let application = root +
+    "/native/.metonic-build/native/release/build/local/metonic_notes_native/main/main.exe"
+  let fixture = output + "/fixture.snapshot"
+  let results : Array[Json] = []
+  for sample in 0..<4 {
+    let log_path = output + "/release-resource-" + sample.to_string() + ".log"
+    let log = @process.redirect_to_file(log_path)
+    let code = @process.run(
+      observer,
+      ["--resource-scale", application, fixture],
+      stdout=log,
+      stderr=log,
+      no_console_window=true,
+    )
+    log.close()
+    assert_eq(code, 0, msg="release resource probe failed: " + log_path)
+    let prefix = "NOTES_RELEASE_RESOURCE_SAMPLE_OK "
+    let line = @fs.read_file(log_path)
+      .text()
+      .split("\n")
+      .find_first(line => line.has_prefix(prefix))
+      .unwrap()
+    let result : Json = @json.parse(
+      line.strip_prefix(prefix).unwrap().to_owned(),
+    )
+    results.push({ "sample": sample, "resource": result })
+    println(
+      "NOTES_RELEASE_RESOURCE_SAMPLE sample=" +
+      sample.to_string() +
+      " result=ok",
+    )
+  }
+  @fs.write_file(
+    output + "/native-release-resources.json",
+    Json::array(results).stringify(),
+  )
+  println("NOTES_RELEASE_RESOURCE_BASELINE_OK warmup=1 measured=3")
+}
