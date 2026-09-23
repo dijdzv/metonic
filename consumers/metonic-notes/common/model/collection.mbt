@@ -2,7 +2,7 @@
 priv struct Collection {
   graph : @reactive.Graph
   scope : @reactive.Scope
-  visible_rows : @reactive.Signal[Array[Int]]
+  visible_rows : @reactive.Memo[Array[Int]]
   selected_row : @reactive.Memo[Int?]
   presentation : @reactive.Signal[PresentationRuntime]
   tree : @semantics.Tree
@@ -93,7 +93,7 @@ fn Collection::flush(self : Collection) -> Bool {
   }
   match workspace.edit(value) {
     Ok(next) => {
-      self.workspace.set(next)
+      self.set_workspace(next)
       true
     }
     Err(message) => {
@@ -115,15 +115,24 @@ fn Collection::dirty(self : Collection) -> Bool {
 }
 
 ///|
+fn Collection::set_workspace(
+  self : Collection,
+  workspace : @collection.WorkspaceState,
+) -> Unit {
+  self.graph.batch(() => {
+    self.workspace.set(workspace)
+    self.search.refresh(workspace.snapshot())
+  })
+}
+
+///|
 fn Collection::show_selected(self : Collection) -> Unit {
-  self.search.refresh(self.workspace.peek().snapshot())
   self.reveal_selected = true
 }
 
 ///|
 fn Collection::sync(self : Collection, replace_input? : Bool = false) -> Unit {
   let workspace = self.workspace.peek()
-  self.search.refresh(workspace.snapshot())
   let runtime : PresentationRuntime = {
     persistence: self.persistence.state(),
     close_pending: self.close_pending,
@@ -148,18 +157,14 @@ fn Collection::sync(self : Collection, replace_input? : Bool = false) -> Unit {
       ),
     )
   }
-  let ids = self.search.items().map(note => note.id)
-  self.graph.batch(fn() {
-    self.visible_rows.set(ids)
-    self.presentation.set(runtime)
-  })
+  self.presentation.set(runtime)
 }
 
 ///|
 fn Collection::load(self : Collection) -> @task.Request? {
   let request = self.persistence.load_request(self.store, () => {
     if self.persistence.state() == @persistence.Ready {
-      self.workspace.set(
+      self.set_workspace(
         @collection.workspace_state(
           @collection.decode(Some(self.persistence.text())).unwrap(),
         ),
@@ -204,7 +209,7 @@ fn Collection::activate_inner(
             @collection.decode(Some(saved)) is Ok(document) {
             workspace = workspace.acknowledge_save(document)
           }
-          self.workspace.set(workspace.discard())
+          self.set_workspace(workspace.discard())
           ignore(self.persistence.discard())
           self.save_waiting = false
           self.error = None
@@ -230,7 +235,7 @@ fn Collection::activate_inner(
   }
   if self.close_pending && reference == self.buttons[1] {
     // Discard must remain possible even when the draft fails save validation.
-    self.workspace.set(self.workspace.peek().discard())
+    self.set_workspace(self.workspace.peek().discard())
     ignore(self.persistence.discard())
     self.error = None
     self.close_confirmed = true
@@ -265,35 +270,35 @@ fn Collection::activate_inner(
           @collection.MoveDirection::Down
         },
       )
-    self.workspace.set(next)
+    self.set_workspace(next)
     self.show_selected()
     self.sync()
     return if changed { self.save(500) } else { None }
   }
   if reference == self.buttons[1] {
-    self.workspace.set(self.workspace.peek().discard())
+    self.set_workspace(self.workspace.peek().discard())
     ignore(self.persistence.discard())
     self.show_selected()
   } else if reference == self.buttons[2] {
     match self.workspace.peek().create_note() {
-      Ok((next, _)) => self.workspace.set(next)
+      Ok((next, _)) => self.set_workspace(next)
       Err(message) => self.error = Some(message)
     }
     self.show_selected()
   } else if reference == self.buttons[3] {
     if self.workspace.peek().deletion_pending() {
       let (next, _) = self.workspace.peek().confirm_delete()
-      self.workspace.set(next)
+      self.set_workspace(next)
       self.show_selected()
     } else {
       let (next, _) = self.workspace.peek().request_delete()
-      self.workspace.set(next)
+      self.set_workspace(next)
     }
   } else {
     for i in 6..<self.buttons.length() {
       if reference == self.buttons[i] && self.row_ids.get(i - 6) is Some(id) {
         if self.workspace.peek().select(id) is Some(next) {
-          self.workspace.set(next)
+          self.set_workspace(next)
           self.show_selected()
         }
       }
@@ -454,13 +459,14 @@ pub fn create_collection(
 ) -> @application.Application {
   let graph = @reactive.Graph::new()
   let scope = @reactive.Scope::root(graph)
-  let visible_rows : @reactive.Signal[Array[Int]] = @reactive.Signal::new(
-    scope,
-    [],
-  )
   let workspace = @reactive.Signal::new(
     scope,
     @collection.workspace_state(@collection.empty()),
+  )
+  let search = @search.create(scope, wait)
+  let visible_rows : @reactive.Memo[Array[Int]] = @reactive.Memo::new(
+    scope,
+    () => search.items().map(note => note.id),
   )
   let selected_row : @reactive.Memo[Int?] = @reactive.Memo::new(scope, () => {
     workspace.get().active().map(note => note.id)
@@ -489,7 +495,7 @@ pub fn create_collection(
     tree,
     input,
     search_input,
-    search: @search.create(wait),
+    search,
     list: @layout.VerticalList::new(row_height=32, gap=4).unwrap(),
     buttons,
     row_ids: [],
@@ -625,7 +631,6 @@ pub fn create_collection(
       if edit.target == model.search_input &&
         model.ready() &&
         !model.close_pending {
-        model.search.refresh(model.workspace.peek().snapshot())
         let request = model.search.request(edit.text, () => {
           ignore(model.list.scroll(-2147483647))
           model.sync()

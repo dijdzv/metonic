@@ -3,22 +3,25 @@ pub struct Model {
   priv operation : @task.Operation
   priv wait : async (Int) -> Unit
   priv mut document : @collection.Document
-  priv mut query : String
+  priv query : @reactive.Signal[String]
   priv mut generation : Int
   priv mut closed : Bool
-  priv mut matching : Array[@collection.Note]
+  priv matching : @reactive.Signal[Array[@collection.Note]]
 }
 
 ///|
-pub fn create(wait : async (Int) -> Unit) -> Model {
+pub fn create(
+  scope : @reactive.Scope,
+  wait : async (Int) -> Unit,
+) -> Model {
   {
     operation: @task.Operation::new(),
     wait,
     document: @collection.empty(),
-    query: "",
+    query: @reactive.Signal::new(scope, ""),
     generation: 0,
     closed: false,
-    matching: [],
+    matching: @reactive.Signal::new(scope, []),
   }
 }
 
@@ -35,18 +38,18 @@ pub fn Model::refresh(self : Model, document : @collection.Document) -> Unit {
   if !self.closed && self.document != document {
     self.document = document
     self.generation += 1
-    self.matching = matching(document, self.query)
+    self.matching.set(matching(document, self.query.peek()))
   }
 }
 
 ///|
 pub fn Model::items(self : Model) -> Array[@collection.Note] {
-  self.matching.copy()
+  self.matching.get().copy()
 }
 
 ///|
 pub fn Model::filtered(self : Model) -> Bool {
-  self.query != ""
+  self.query.get() != ""
 }
 
 ///|
@@ -63,10 +66,10 @@ pub fn Model::request(
   guard !self.closed else { return None }
   self.generation += 1
   let generation = self.generation
-  self.query = query
+  self.query.set(query)
   let document = self.document
   if query == "" {
-    self.matching = matching(document, query)
+    self.matching.set(matching(document, query))
     changed()
     return Some(@task.cancel(() => (), operation=self.operation))
   }
@@ -86,7 +89,7 @@ pub fn Model::request(
                 self.document != document {
                 return @task.Rejected
               }
-              self.matching = ids
+              self.matching.set(ids)
               changed()
               @task.Changed
             },
@@ -100,7 +103,10 @@ pub fn Model::request(
 
 ///|
 pub fn Model::close(self : Model) -> Unit {
+  if self.closed {
+    return
+  }
   self.closed = true
   self.generation += 1
-  self.matching.clear()
+  self.matching.set([])
 }
