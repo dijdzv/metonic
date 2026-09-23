@@ -19,3 +19,19 @@ async test "Notes Scope cancels independent search and save tasks once" {
   (app.stop)()
   assert_eq(canceled.length(), 2)
 }
+
+///|
+async test "prepared autosave does not touch disposed presentation state" {
+  let app = create_collection(
+    { load: () => Ok(None), save: _ => Ok(()), },
+    () => (),
+    _ => (),
+  )
+  finish((app.initialize)())
+  let new_memo = (app.view)()[3].element.reference.unwrap()
+  let request = (app.activate)(new_memo).unwrap()
+  request.invalidate()
+  let work = request.prepare().unwrap()
+  (app.stop)()
+  assert_eq(work.run().apply(), @task.Unchanged)
+}
