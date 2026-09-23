@@ -67,6 +67,20 @@ invalidate its own model state separately, and may release resources requiring
 joined cleanup only in its later async `dispose` callback. Browser and native
 hosts keep normal Request admission, result delivery and input gates.
 
+`core/reactive_task.Resource` is an optional, Scope-owned adapter for one
+replaceable operation. Create it under the component's `core/reactive.Scope`,
+connect the host control once in `connect_tasks`, and return its `replace`,
+`replace_prepared` or `cancel` Request from an application action. The adapter
+does not submit or run work. `replace_prepared` accepts a Work-producing
+callback when the application must prepare typed work after earlier cleanup;
+`replace` covers the common async result-and-apply case. A proposed Request
+does not invalidate current results until the host admits it. Accepted
+replacement or cancel, and Scope disposal, reject stale results and failures.
+On disposal the adapter asks the host to cancel its Operation immediately;
+the Driver still owns asynchronous cleanup and joining. Keep separate Resource
+instances for independent lanes such as search and save. A Resource does not
+substitute for capability ports, which describe external services.
+
 Both hosts use the shared operation driver. Replacement invalidates earlier
 results for that identity synchronously when admission succeeds, then awaits its
 active cleanup before preparing new work. The canceled model state is visible
