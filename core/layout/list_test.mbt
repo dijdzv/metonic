@@ -25,6 +25,9 @@ test "scroll clips partial rows and reveals retained offscreen identities" {
     Some({ x: 20, y: 70, width: 200, height: 40, }),
   )
   assert_eq(list.items()[0].visible, None)
+  let scrolled = list.items()
+  list.arrange(viewport, [a, b, c]).unwrap()
+  assert_eq(list.items(), scrolled)
   assert_false(list.scroll(2147483647))
   assert_true(list.scroll(-2147483647))
   assert_eq(list.items()[0].bounds.y, 30)
