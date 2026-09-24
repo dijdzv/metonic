@@ -438,6 +438,8 @@ as ESM. Metonic does not edit the downloaded dependency package. An existing
 workspace marker must already specify `"type":"commonjs"`; conflicting
 settings fail preparation instead of being overwritten. Remove this temporary
 scope marker when a pinned upstream release uses explicit `.cjs` scripts.
+The [external ESM consumer verification](verification/external-esm-consumer.md)
+records the tested build path and its limits.
 
 The pinned compiler must be bootstrapped once before this MoonBit script can
 run. From the consumer, clone the exact `dependency.json` revision into
