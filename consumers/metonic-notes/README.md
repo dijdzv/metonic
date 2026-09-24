@@ -81,9 +81,10 @@ source entry, which verifies the pin and prepares the selected target's internal
 dependencies before generating its workspace. A browser-only build does not
 require native dependency preparation.
 
-Windows requires mise, Git and the prerequisites listed in
-[Metonic's development guide](.metonic/framework/docs/development.md), including
-the Visual Studio C++ build tools and Rust for AccessKit preparation.
+Windows requires mise, Git and the prerequisites in the fetched framework's
+`docs/development.md` (at `.metonic/framework/docs/development.md` after
+`mise run deps:fetch`), including the Visual Studio C++ build tools and Rust
+for AccessKit preparation.
 
 ```text
 mise trust

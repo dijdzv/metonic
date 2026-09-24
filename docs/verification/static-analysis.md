@@ -31,7 +31,7 @@ receiver is a Signal, trace helper calls or establish evaluation lifetime.
 MoonBit's type checks and runtime tests remain responsible for those contracts.
 
 The parser, rule and fixtures were validated locally on Windows x64 against
-527 current source files. Manual CI dispatch supplies a second Windows
-environment check; until that run passes, hosted reproducibility is not yet
-established. The isolated parser patch is not an upstream release or a posted
-pull request.
+527 source files at the time of introduction. Manual CI dispatch supplies a
+second Windows environment check for the selected revision; its workflow result
+must be checked separately. The isolated parser patch is not an upstream
+release or a posted pull request.
