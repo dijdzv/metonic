@@ -102,10 +102,11 @@ separate; a workspace at the application root would also capture the framework's
 own standalone tool builds. The generated `moon.work` files are owned by
 Metonic; the app's member declarations live in `metonic.application.json`.
 
-Keep this directory's `package.json` without `"type": "module"`; browser scripts
-use `.mjs` explicitly. The pinned native GPU dependency has a CommonJS prebuild
-script which can inherit the consumer's Node module scope. Declaring the whole
-consumer as an ES module currently breaks that dependency's prebuild.
+This consumer declares `"type": "module"` to exercise the external ESM source
+entry. The public entry creates a CommonJS boundary in each generated
+workspace's `.mooncakes` for the pinned native GPU dependency's prebuild script.
+That boundary is temporary until a corrected GPU dependency is published. The
+source entry rejects a conflicting marker and does not edit the dependency.
 
 Update the pinned revision and dependency checkout together, then run the
 platform and package verification commands below. The public build prepares its
