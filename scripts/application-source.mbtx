@@ -141,6 +141,43 @@ fn slash_path(path : String) -> String {
 }
 
 ///|
+async fn prepare_wgpu_package_scope(workspace : String) -> Unit {
+  let mooncakes = workspace + "/.mooncakes"
+  if !@fs.exists(mooncakes) {
+    @fs.mkdir(mooncakes)
+  }
+  assert_eq(
+    slash_path(@fs.realpath(mooncakes)),
+    slash_path(mooncakes),
+    msg="application dependency cache escapes its workspace",
+  )
+  let marker = mooncakes + "/package.json"
+  if @fs.exists(marker) {
+    assert_eq(
+      slash_path(@fs.realpath(marker)),
+      slash_path(marker),
+      msg="application dependency package scope escapes its workspace",
+    )
+    let fields : Map[String, Json] = @json.from_json(
+      @json.parse(@fs.read_file(marker).text()),
+    )
+    let scope : String = match fields.get("type") {
+      Some(value) => @json.from_json(value)
+      None => abort("application dependency cache package scope has no type")
+    }
+    assert_eq(
+      scope,
+      "commonjs",
+      msg="application dependency cache requires CommonJS for pinned wgpu_mbt prebuild",
+    )
+    return
+  }
+  // The pinned wgpu_mbt prebuild is CommonJS .js; the consumer's ESM scope
+  // must not change how Node interprets the cached dependency scripts.
+  @fs.write_file(marker, "{\"type\":\"commonjs\"}\n")
+}
+
+///|
 async fn prepare(
   consumer : String,
   framework : String,
@@ -157,6 +194,10 @@ async fn prepare(
     msg="target workspace must be a top-level application directory",
   )
   let workspace = @fs.realpath(consumer + "/" + configuration.workspace)
+  assert_true(
+    slash_path(workspace).has_prefix(slash_path(consumer) + "/"),
+    msg="application workspace escapes the consumer directory",
+  )
   let preparation = if target == "browser" {
     "scripts/prepare-websys-input.mbtx"
   } else {
@@ -210,6 +251,7 @@ async fn prepare(
       )
     }
   }
+  prepare_wgpu_package_scope(workspace)
   @fs.write_file(output, content)
   @fs.write_file(ownership, "metonic-application-source-v1\n")
   println(

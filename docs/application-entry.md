@@ -430,6 +430,15 @@ native or browser builder. Native and browser workspaces select different async
 adapters and remain separate. This is source consumption, not a published
 package or stable installer.
 
+The source entry also gives each generated consumer workspace a CommonJS
+package-scope marker at `.mooncakes/package.json`. The pinned `wgpu_mbt`
+dependency runs a CommonJS `.js` prebuild; without the marker, an ESM
+application's root `package.json` makes Node interpret that dependency script
+as ESM. Metonic does not edit the downloaded dependency package. An existing
+workspace marker must already specify `"type":"commonjs"`; conflicting
+settings fail preparation instead of being overwritten. Remove this temporary
+scope marker when a pinned upstream release uses explicit `.cjs` scripts.
+
 The pinned compiler must be bootstrapped once before this MoonBit script can
 run. From the consumer, clone the exact `dependency.json` revision into
 `.metonic/framework`, run that checkout's mise bootstrap, then use its compiler
