@@ -90,6 +90,19 @@ async fn wait_saved(directory : String, text : String, position : Int) -> Unit {
 }
 
 ///|
+async fn verify_release_shutdown_log(path : String) -> Unit {
+  let output = @fs.read_file(path).text()
+  assert_true(
+    output.contains("GPU_OWNERSHIP_RELEASED"),
+    msg="Release renderer ownership was not cleared during shutdown",
+  )
+  assert_true(
+    output.contains("WINDOW_CLEANUP_OK"),
+    msg="Release window cleanup was not reported",
+  )
+}
+
+///|
 async fn sample_release_resources(
   executable : String,
   directory : String,
@@ -97,6 +110,12 @@ async fn sample_release_resources(
 ) -> Json {
   @async.with_timeout(120000, async fn() {
     @async.with_task_group() <| group => {
+      let log_path = if reopen {
+        directory + "/reopen-release.log"
+      } else {
+        directory + "/initial-release.log"
+      }
+      let log = @process.redirect_to_file(log_path)
       let child = @process.spawn(
         group,
         executable,
@@ -104,6 +123,8 @@ async fn sample_release_resources(
         cwd=directory,
         extra_env=Map([("METONIC_NOTES_DATA", directory + "/data")]),
         no_console_window=true,
+        stdout=log,
+        stderr=log,
         cancel_handler=@process.hard_cancel(),
       )
       let mut window = 0UL
@@ -141,6 +162,7 @@ async fn sample_release_resources(
         send(window, 0x0010U, 0UL, 0L)
         assert_eq(child.wait(), 0)
         assert_eq(locate(child.pid), 0UL)
+        verify_release_shutdown_log(log_path)
         return {
           "reopen": true,
           "ready": ready,
@@ -149,6 +171,7 @@ async fn sample_release_resources(
           "before_exit": before_exit,
           "exit_code": 0,
           "window_closed": true,
+          "gpu_ownership_released": true,
         }
       }
       uia_set_value(window, "Search memos", "")
@@ -191,6 +214,7 @@ async fn sample_release_resources(
       send(window, 0x0010U, 0UL, 0L)
       assert_eq(child.wait(), 0)
       assert_eq(locate(child.pid), 0UL)
+      verify_release_shutdown_log(log_path)
       {
         "reopen": false,
         "ready": ready,
@@ -205,6 +229,7 @@ async fn sample_release_resources(
         "before_exit": before_exit,
         "exit_code": 0,
         "window_closed": true,
+        "gpu_ownership_released": true,
       }
     }
   })
