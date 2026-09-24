@@ -95,6 +95,29 @@ the Driver still owns asynchronous cleanup and joining. Keep separate Resource
 instances for independent lanes such as search and save. A Resource does not
 substitute for capability ports, which describe external services.
 
+`core/reactive_task.Source[K, V]` adds a keyed observable state over one
+Resource. Give independently fetched values separate Sources in the component
+Scope, connect each to the same host `TaskControl`, and mint one opaque
+`Cycle::new()` for a coordinated selection or refresh. Pass that cycle to both
+`replace` proposals, then return their requests as one `@task.group` with
+`apply => graph.batch(apply)`. Check that both proposals exist before making
+the group. The group's `on_admitted` callback can publish the selected key and
+cycle in the same batch; a rejected group changes neither source. Each source
+exposes `Idle`, `Pending`, `Ready`, `Failed` and `Canceled`. A same-key refresh
+can retain an earlier ready snapshot; a changed key cannot retain it. The
+`derive_pair` function returns a current pair only when both Sources are ready
+for the selected key and cycle, and retains a previous pair only when its two
+snapshots share one earlier cycle. It also exposes failed/canceled/pending
+presentation without launching work from a Memo. `replace_with_progress`
+forwards posted completions through the same Resource generation and host
+application boundary; progress callbacks must update state only when applied
+there. Explicit `Source.dispose` marks pending work canceled before disposing
+its child Resource. Parent Scope disposal rejects later callbacks without
+writing an already disposed Signal. Use Source for replaceable presentation
+results; a successful storage write remains an external fact even if the UI
+request becomes stale. Match its saved revision before changing an unsaved
+indicator instead of treating cancellation as a rollback.
+
 Both hosts use the shared operation driver. Replacement invalidates earlier
 results for that identity synchronously when admission succeeds, then awaits its
 active cleanup before preparing new work. The canceled model state is visible
