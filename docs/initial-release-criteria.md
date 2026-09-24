@@ -55,13 +55,14 @@ Atomic admission of independent requests
 result/derivation state [#571](https://github.com/dijdzv/metonic/issues/571),
 and the independent two-host usage check
 [#572](https://github.com/dijdzv/metonic/issues/572) are implemented and
-verified. The remaining release blockers are the external ESM consumer's native
-GPU prebuild [#453](https://github.com/dijdzv/metonic/issues/453) and the pinned
-structural checker [#568](https://github.com/dijdzv/metonic/issues/568). An
-isolated grammar repair parses the current sources, but the checker is not yet
-integrated with a fail-closed parse gate, a tested rule, and CI. The accepted
+verified. The remaining release blocker is the external ESM consumer's native
+GPU prebuild [#453](https://github.com/dijdzv/metonic/issues/453). The pinned
+structural checker [#568](https://github.com/dijdzv/metonic/issues/568) parses
+the project fail-closed and runs a tested rule in the local hook and manual CI.
+Its supported syntax and limits are recorded in the
+[static-analysis verification](verification/static-analysis.md). The accepted
 design [#567](https://github.com/dijdzv/metonic/issues/567) and completed async
-implementation do not by themselves finish these remaining gates.
+implementation still require the remaining GPU integration gate for release.
 
 The other open P2 tasks cover subsequent improvements and upstream proposals;
 their currently working product paths stay in place. P3 tasks include optional
