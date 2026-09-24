@@ -50,16 +50,18 @@ asynchronous dependencies must test that the API is not tailored to Notes.
 
 ## Frozen required scope
 
-The remaining implementation blockers are the external ESM consumer's native GPU
-prebuild [#453](https://github.com/dijdzv/metonic/issues/453), atomic admission
-of independent requests [#570](https://github.com/dijdzv/metonic/issues/570),
-keyed async result/derivation state [#571](https://github.com/dijdzv/metonic/issues/571),
-and the independent two-host usage check [#572](https://github.com/dijdzv/metonic/issues/572).
-The pinned structural checker [#568](https://github.com/dijdzv/metonic/issues/568)
-is also a Phase 4 completion gate; its initial parser probe has coverage gaps,
-so no unsupported rule is accepted yet. The completed design specification
-[#567](https://github.com/dijdzv/metonic/issues/567) does not complete these
-implementation tasks.
+Atomic admission of independent requests
+[#570](https://github.com/dijdzv/metonic/issues/570), keyed async
+result/derivation state [#571](https://github.com/dijdzv/metonic/issues/571),
+and the independent two-host usage check
+[#572](https://github.com/dijdzv/metonic/issues/572) are implemented and
+verified. The remaining release blockers are the external ESM consumer's native
+GPU prebuild [#453](https://github.com/dijdzv/metonic/issues/453) and the pinned
+structural checker [#568](https://github.com/dijdzv/metonic/issues/568). An
+isolated grammar repair parses the current sources, but the checker is not yet
+integrated with a fail-closed parse gate, a tested rule, and CI. The accepted
+design [#567](https://github.com/dijdzv/metonic/issues/567) and completed async
+implementation do not by themselves finish these remaining gates.
 
 The other open P2 tasks cover subsequent improvements and upstream proposals;
 their currently working product paths stay in place. P3 tasks include optional
