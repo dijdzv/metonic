@@ -184,6 +184,10 @@ try {
       await cdp.detach();
       observation.gpuResourcesAfterReload = await page.evaluate(() =>
         window.__metonicGpuResourceStats?.());
+      await page.locator('#stop').click();
+      await page.waitForFunction(() => document.querySelector('#status')?.textContent === 'Stopped.');
+      observation.gpuResourcesAfterStop = await page.evaluate(() =>
+        window.__metonicGpuResourceStats?.());
       for (const stats of [observation.gpuResourcesAtReady,
         observation.gpuResourcesBeforeReload,
         observation.gpuResourcesAfterReload]) {
@@ -198,6 +202,14 @@ try {
         assert.ok(stats.peakTextureBytes <= 4 * 1024 * 1024);
         assert.ok(stats.liveBufferBytes <= 1024 && stats.peakBufferBytes <= 2048);
       }
+      const stopped = observation.gpuResourcesAfterStop;
+      assert.ok(stopped && !stopped.error, stopped?.error || 'missing stopped WebGPU ledger');
+      assert.equal(stopped.textureCreates, stopped.textureDestroys);
+      assert.equal(stopped.bufferCreates, stopped.bufferDestroys);
+      assert.equal(stopped.liveTextures, 0);
+      assert.equal(stopped.liveBuffers, 0);
+      assert.equal(stopped.liveTextureBytes, 0);
+      assert.equal(stopped.liveBufferBytes, 0);
       assert.deepEqual(pageErrors, [], 'page errors during scale sequence');
     } catch (error) {
       observation.error = String(error);
