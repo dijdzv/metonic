@@ -106,6 +106,7 @@ inspection; neither is a native application runtime requirement. See the
 ## Documentation
 
 - [Architecture and scope](DESIGN.md)
+- [Initial usable release criteria](docs/initial-release-criteria.md)
 - [Development guide](docs/development.md)
 - [Development automation and accessibility](docs/adr/023-development-automation.md)
 - [Verification results](docs/verification/p0.md)
