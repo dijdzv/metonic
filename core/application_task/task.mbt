@@ -92,6 +92,7 @@ pub struct Request {
   priv on_failure : (String) -> Outcome
   priv invalidate : () -> Unit
   priv prepare : () -> Work?
+  priv members : Array[Request]?
 }
 
 ///|
@@ -101,7 +102,7 @@ pub fn replace(
   operation? : Operation = default_operation,
   on_failure? : (String) -> Outcome = message => Failed(message),
 ) -> Request {
-  { operation, on_failure, invalidate, prepare, }
+  { operation, on_failure, invalidate, prepare, members: None, }
 }
 
 ///|
@@ -114,11 +115,49 @@ pub fn cancel(
     on_failure: message => Failed(message),
     invalidate,
     prepare: () => None,
+    members: None,
   }
 }
 
 ///|
+pub fn group(
+  requests : Array[Request],
+  batch : (() -> Unit) -> Unit,
+  on_admitted? : () -> Unit = () => (),
+) -> Request {
+  let frozen = requests.map(request => request)
+  {
+    operation: default_operation,
+    on_failure: message => Failed(message),
+    invalidate: () => {
+      batch(() => {
+        for request in frozen {
+          request.invalidate()
+        }
+        on_admitted()
+      })
+    },
+    prepare: () => None,
+    members: Some(frozen),
+  }
+}
+
+///|
+pub fn Request::members(self : Request) -> Array[Request] {
+  match self.members {
+    Some(members) => members.map(request => request)
+    None => [self]
+  }
+}
+
+///|
+pub fn Request::is_group(self : Request) -> Bool {
+  self.members is Some(_)
+}
+
+///|
 pub fn Request::operation(self : Request) -> Operation {
+  guard self.members is None else { abort("grouped request has no operation") }
   self.operation
 }
 

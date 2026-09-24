@@ -69,7 +69,12 @@ fn Session::submit(self : Session, request : @task.Request) -> Bool {
     // not drain runnable coroutines until the host re-enters the event loop.
     @async.run_async_main(() => ())
   } else if !self.stopped {
-    (self.application.input_error)(Some("Application task capacity is full."))
+    let message = if request.is_group() {
+      "Application task group was not admitted."
+    } else {
+      "Application task capacity is full."
+    }
+    (self.application.input_error)(Some(message))
     self.notify()
   }
   accepted

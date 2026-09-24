@@ -9,8 +9,36 @@ priv struct Lane {
 }
 
 ///|
+priv struct Command {
+  lane : Lane
+  generation : Int
+  request : @task.Request
+}
+
+///|
+priv struct CommandGroup {
+  commands : Array[Command]
+  on_prepared : () -> Unit
+}
+
+///|
+priv struct PreparedGroup {
+  mut remaining : Int
+  callback : () -> Unit
+}
+
+///|
+fn PreparedGroup::ack(self : PreparedGroup) -> Unit {
+  guard self.remaining > 0 else { return }
+  self.remaining -= 1
+  if self.remaining == 0 {
+    (self.callback)()
+  }
+}
+
+///|
 pub struct Driver {
-  priv commands : @aqueue.Queue[(Lane, Int, @task.Request, () -> Unit)]
+  priv commands : @aqueue.Queue[CommandGroup]
   priv lanes : Map[@task.Operation, Lane]
   priv mut accepting : Bool
   priv mut started : Bool
@@ -34,31 +62,47 @@ pub fn Driver::submit(
   request : @task.Request,
   on_prepared? : () -> Unit = () => (),
 ) -> Bool {
-  guard self.accepting && self.pending_commands < 16 else { return false }
-  let operation = request.operation()
-  let lane = match self.lanes.get(operation) {
-    Some(lane) => lane
-    None => {
-      guard self.lanes.length() < 16 else { return false }
-      Lane::{
-        operation,
-        generation: 0,
-        running: None,
-        running_generation: 0,
-        running_active: false,
-        retiring: false,
+  let members = request.members()
+  guard self.accepting &&
+    !members.is_empty() &&
+    self.pending_commands + members.length() <= 16 else {
+    return false
+  }
+  let operations : Array[@task.Operation] = []
+  let commands : Array[Command] = []
+  let mut new_lanes = 0
+  for item in members {
+    guard !item.is_group() else { return false }
+    let operation = item.operation()
+    guard !operations.contains(operation) else { return false }
+    operations.push(operation)
+    let lane = match self.lanes.get(operation) {
+      Some(lane) => lane
+      None => {
+        new_lanes += 1
+        Lane::{
+          operation,
+          generation: 0,
+          running: None,
+          running_generation: 0,
+          running_active: false,
+          retiring: false,
+        }
       }
     }
+    commands.push({ lane, generation: lane.generation + 1, request: item, })
   }
-  let generation = lane.generation + 1
-  let accepted = self.commands.try_put((lane, generation, request, on_prepared)) catch {
+  guard self.lanes.length() + new_lanes <= 16 else { return false }
+  let accepted = self.commands.try_put({ commands, on_prepared, }) catch {
     _ => false
   }
   if accepted {
-    self.pending_commands += 1
-    lane.generation = generation
-    lane.retiring = false
-    self.lanes[operation] = lane
+    self.pending_commands += members.length()
+    for command in commands {
+      command.lane.generation = command.generation
+      command.lane.retiring = false
+      self.lanes[command.lane.operation] = command.lane
+    }
     request.invalidate()
   }
   accepted
@@ -94,10 +138,9 @@ pub fn Driver::cancel_operation(
 pub fn Driver::close(self : Driver) -> Unit {
   guard self.accepting else { return }
   self.accepting = false
-  while (self.commands.try_get() catch { _ => None })
-        is Some((_, _, _, on_prepared)) {
-    self.pending_commands -= 1
-    on_prepared()
+  while (self.commands.try_get() catch { _ => None }) is Some(group) {
+    self.pending_commands -= group.commands.length()
+    (group.on_prepared)()
   }
   self.commands.close(clear=true)
   for _, lane in self.lanes {
@@ -180,59 +223,68 @@ pub async fn Driver::run(
         @aqueue.QueueAlreadyClosed => None
         other => raise other
       }
-      guard command is Some((lane, generation, request, on_prepared)) else {
-        break
-      }
+      guard command is Some(command_group) else { break }
       guard self.accepting else {
-        self.pending_commands -= 1
-        on_prepared()
+        self.pending_commands -= command_group.commands.length()
+        (command_group.on_prepared)()
         break
       }
-      let previous = lane.running
-      lane.running_generation = generation
-      lane.running_active = true
-      lane.running = Some(
-        group.spawn(() => {
-          let posted = Ref(false)
-          let preparing = Ref(true)
-          let acknowledged = Ref(false)
-          defer {
-            if !acknowledged.val {
-              on_prepared()
+      let prepared_group = PreparedGroup::{
+        remaining: command_group.commands.length(),
+        callback: command_group.on_prepared,
+      }
+      for command in command_group.commands {
+        let lane = command.lane
+        let generation = command.generation
+        let request = command.request
+        let previous = lane.running
+        lane.running_generation = generation
+        lane.running_active = true
+        lane.running = Some(
+          group.spawn(() => {
+            let posted = Ref(false)
+            let preparing = Ref(true)
+            let acknowledged = Ref(false)
+            defer {
+              if !acknowledged.val {
+                prepared_group.ack()
+              }
+              if preparing.val {
+                self.pending_commands -= 1
+              }
+              if lane.running_generation == generation {
+                lane.running_active = false
+              }
+              if (lane.retiring && lane.running_generation == generation) ||
+                (!posted.val && lane.generation == generation) {
+                self.remove_current_lane(lane)
+              }
             }
-            if preparing.val {
-              self.pending_commands -= 1
+            cancel_and_wait(previous)
+            self.pending_commands -= 1
+            preparing.val = false
+            guard self.accepting && lane.generation == generation else {
+              return
             }
-            if lane.running_generation == generation {
-              lane.running_active = false
+            let work = request.prepare()
+            on_state_change()
+            acknowledged.val = true
+            prepared_group.ack()
+            guard work is Some(work) else { return }
+            let completion = work.run(post_progress=progress => {
+              self.deliver_progress(lane, generation, progress, post)
+            }) catch {
+              error if cancellation_error(error) => raise error
+              error => {
+                let message = error.to_string()
+                request.failure(message)
+              }
             }
-            if (lane.retiring && lane.running_generation == generation) ||
-              (!posted.val && lane.generation == generation) {
-              self.remove_current_lane(lane)
-            }
-          }
-          cancel_and_wait(previous)
-          self.pending_commands -= 1
-          preparing.val = false
-          guard self.accepting && lane.generation == generation else { return }
-          let work = request.prepare()
-          on_state_change()
-          acknowledged.val = true
-          on_prepared()
-          guard work is Some(work) else { return }
-          let completion = work.run(post_progress=progress => {
-            self.deliver_progress(lane, generation, progress, post)
-          }) catch {
-            error if cancellation_error(error) => raise error
-            error => {
-              let message = error.to_string()
-              request.failure(message)
-            }
-          }
-          posted.val = true
-          self.deliver(lane, generation, completion, post)
-        }),
-      )
+            posted.val = true
+            self.deliver(lane, generation, completion, post)
+          }),
+        )
+      }
     }
     for _, lane in self.lanes {
       if lane.running is Some(running) {

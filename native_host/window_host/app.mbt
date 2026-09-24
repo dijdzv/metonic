@@ -792,9 +792,12 @@ async fn run_loop(
             ApplicationTask(request, _, acknowledge) => {
               if !tasks.submit(request, on_prepared=acknowledge) {
                 acknowledge()
-                (app.host.input_error)(
-                  Some("Application task capacity is full."),
-                )
+                let message = if request.is_group() {
+                  "Application task group was not admitted."
+                } else {
+                  "Application task capacity is full."
+                }
+                (app.host.input_error)(Some(message))
               }
               app.draw()
             }
