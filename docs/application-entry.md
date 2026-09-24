@@ -57,6 +57,20 @@ do not create a fresh identity for every replacement of the same operation.
 Expected failures should be returned as typed work results and displayed by the
 application. Rendering must not start storage or network operations.
 
+One callback can return `Some(@task.group(requests, batch, on_admitted~))` to
+admit multiple independent operations together without changing the existing
+`Request?` callback shape. Each member needs its own `Operation` identity;
+two requests using the legacy default identity in one group are rejected.
+Supply `batch` as `apply => graph.batch(apply)` when the invalidations or
+`on_admitted` update reactive state. The callback runs after all member
+invalidations, inside that same batch, so it can publish a shared request cycle.
+The Driver checks closure, command/lane capacity, duplicate identities and
+nested groups before accepting any member. Rejection leaves all member state
+unchanged; accepted work runs and cancels independently. The group has no
+operation identity or direct Work of its own. Its `on_prepared` acknowledgement
+runs once after every member has prepared or retired, including closure before
+preparation. Existing single requests retain their behavior.
+
 `Application.connect_tasks` receives a host-owned `TaskControl` exactly once
 before `initialize`. An application with no scoped asynchronous resources may
 use `connect_tasks: _ => ()`. The control exposes only
@@ -88,7 +102,7 @@ at admission, before resource cleanup finishes.
 Other operations and the native event loop can continue during that wait.
 Native control commands await their own preparation (including preceding cleanup)
 and the queued redraw before returning a snapshot; they do not await work completion.
-The driver's optional `on_prepared` callback runs once for an accepted command
+The driver's optional `on_prepared` callback runs once for an accepted submission
 after preparation or retirement by replacement/closure. Rejected submissions
 do not invoke it. Acknowledgement alone does not mean that work succeeded.
 Cancellation keeps the identity reusable; removing a component must cancel its

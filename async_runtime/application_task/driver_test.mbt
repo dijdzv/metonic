@@ -33,6 +33,219 @@ async test "closing a driver waits for active work cleanup and rejects further r
 }
 
 ///|
+test "group admission publishes both reactive invalidations in one batch" {
+  let graph = @reactive.Graph::new()
+  let scope = @reactive.Scope::root(graph)
+  let left = @reactive.Signal::new(scope, 0)
+  let right = @reactive.Signal::new(scope, 0)
+  let seen : Array[Int] = []
+  let _ = @reactive.Binding::new(
+    scope,
+    fn() { left.get() * 10 + right.get() },
+    fn(value) { seen.push(value) },
+  )
+  let driver = @application_task.driver()
+  let first = @task.Operation::new()
+  let second = @task.Operation::new()
+  let admitted = Ref(0)
+  let prepared = Ref(0)
+  let requests = [
+    @task.cancel(() => left.set(1), operation=first),
+    @task.cancel(() => right.set(1), operation=second),
+  ]
+  let pair = @task.group(requests, apply => graph.batch(apply), on_admitted=() => {
+    admitted.val += 1
+  })
+  requests.clear()
+  let exposed = pair.members()
+  exposed.clear()
+  assert_true(driver.submit(pair, on_prepared=() => prepared.val += 1))
+  assert_eq(seen, [0, 11])
+  assert_eq(admitted.val, 1)
+  let duplicate = @task.group(
+    [
+      @task.cancel(() => left.set(2), operation=first),
+      @task.cancel(() => right.set(2), operation=first),
+    ],
+    apply => graph.batch(apply),
+  )
+  assert_false(driver.submit(duplicate))
+  assert_eq(seen, [0, 11])
+  for _ in 0..<14 {
+    assert_true(
+      driver.submit(@task.cancel(() => (), operation=@task.Operation::new())),
+    )
+  }
+  assert_false(driver.submit(pair))
+  assert_eq(seen, [0, 11])
+  driver.close()
+  assert_false(driver.submit(pair))
+  assert_eq(prepared.val, 1)
+  scope.dispose()
+}
+
+///|
+async test "grouped requests run independently and acknowledge preparation once" {
+  @async.with_timeout(5000, () => {
+    let driver = @application_task.driver()
+    let ready = @async.CondVar::Cond()
+    let results : Array[Int] = []
+    let outcomes : Array[@task.Outcome] = []
+    let prepared = Ref(0)
+    let requests : Array[@task.Request] = []
+    for value in [1, 2] {
+      requests.push(
+        @task.replace(
+          () => (),
+          () => {
+            Some(
+              @task.work(() => value, result => {
+                results.push(result)
+                @task.Changed
+              }),
+            )
+          },
+          operation=@task.Operation::new(),
+        ),
+      )
+    }
+    assert_true(
+      driver.submit(@task.group(requests, apply => apply()), on_prepared=() => {
+        prepared.val += 1
+      }),
+    )
+    @async.with_task_group(group => {
+      let running = group.spawn(() => {
+        driver.run(completion => {
+          outcomes.push(completion.apply())
+          ready.signal()
+        })
+      })
+      while results.length() < 2 {
+        ready.wait()
+      }
+      assert_true(results.contains(1))
+      assert_true(results.contains(2))
+      assert_eq(outcomes, [@task.Changed, @task.Changed])
+      assert_eq(prepared.val, 1)
+      driver.close()
+      running.wait()
+    })
+  })
+}
+
+///|
+async test "closing a grouped submission joins both independent workers" {
+  @async.with_timeout(5000, () => {
+    let driver = @application_task.driver()
+    let entered = @async.CondVar::Cond()
+    let blocked = @async.CondVar::Cond()
+    let started = Ref(0)
+    let cleaned = Ref(0)
+    let prepared = Ref(0)
+    let requests : Array[@task.Request] = []
+    for _ in 0..<2 {
+      requests.push(
+        @task.replace(
+          () => (),
+          () => {
+            Some(
+              @task.work(
+                () => {
+                  defer {
+                    cleaned.val += 1
+                  }
+                  started.val += 1
+                  entered.signal()
+                  blocked.wait()
+                },
+                _ => @task.Changed,
+              ),
+            )
+          },
+          operation=@task.Operation::new(),
+        ),
+      )
+    }
+    assert_true(
+      driver.submit(@task.group(requests, apply => apply()), on_prepared=() => {
+        prepared.val += 1
+      }),
+    )
+    @async.with_task_group(group => {
+      let running = group.spawn(() => driver.run(_ => ()))
+      while started.val < 2 {
+        entered.wait()
+      }
+      assert_eq(prepared.val, 1)
+      driver.close()
+      running.wait()
+    })
+    assert_eq(cleaned.val, 2)
+    assert_eq(prepared.val, 1)
+  })
+}
+
+///|
+async test "canceling one grouped lane does not reject the other result" {
+  @async.with_timeout(5000, () => {
+    let driver = @application_task.driver()
+    let first = @task.Operation::new()
+    let second = @task.Operation::new()
+    let ready = @async.CondVar::Cond()
+    let completions : Array[@task.Completion] = []
+    let first_value = Ref(0)
+    let second_value = Ref(0)
+    let requests = [
+      @task.replace(
+        () => (),
+        () => {
+          Some(
+            @task.work(() => 1, result => {
+              first_value.val = result
+              @task.Changed
+            }),
+          )
+        },
+        operation=first,
+      ),
+      @task.replace(
+        () => (),
+        () => {
+          Some(
+            @task.work(() => 2, result => {
+              second_value.val = result
+              @task.Changed
+            }),
+          )
+        },
+        operation=second,
+      ),
+    ]
+    assert_true(driver.submit(@task.group(requests, apply => apply())))
+    @async.with_task_group(group => {
+      let running = group.spawn(() => {
+        driver.run(completion => {
+          completions.push(completion)
+          ready.signal()
+        })
+      })
+      while completions.length() < 2 {
+        ready.wait()
+      }
+      assert_true(driver.cancel_operation(first))
+      let outcomes = completions.map(completion => completion.apply())
+      assert_true(outcomes.contains(@task.Rejected))
+      assert_true(outcomes.contains(@task.Changed))
+      assert_eq(first_value.val, 0)
+      assert_eq(second_value.val, 2)
+      driver.close()
+      running.wait()
+    })
+  })
+}
+
+///|
 async test "a delivered result cannot mutate state after replacement or close" {
   for close in [false, true] {
     let driver = @application_task.driver()
