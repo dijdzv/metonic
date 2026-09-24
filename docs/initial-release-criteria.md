@@ -1,9 +1,8 @@
 # Initial usable release criteria
 
-Status: Phase 4 acceptance contract in progress. This page describes the release
-claim to prove; it does not announce a release. The open-Issue audit in
-[#566](https://github.com/dijdzv/metonic/issues/566) will freeze the finite set
-of release-blocking gaps before that claim is made.
+Status: Phase 4 acceptance scope frozen on 2026-09-24; the release is not yet
+complete or announced. The [open-Issue audit](https://github.com/dijdzv/metonic/issues/566)
+separates the finite required work below from subsequent and deferred work.
 
 ## Targets and guarantee
 
@@ -37,7 +36,7 @@ binary or semantic-version compatibility promise.
 | --- | --- | --- | --- |
 | State, derived values, and retained UI identity | `core/reactive` Graph/Signal/Memo/Scope; `core/application` Control/Binding; independent [Notes consumer](../consumers/metonic-notes/README.md) | [ADR 035](adr/035-reactive-graph-ownership.md), [lifecycle verification](verification/reactive-notes-lifecycle.md), Notes model and 1,000-memo scenario | Confirm ordinary application composition does not need host-internal imports. |
 | Text editing, focus, selection, IME, accessibility | Portable application editor/control contract, native AccessKit adapter, browser semantic DOM input | [Application entry](application-entry.md), [browser input checks](verification/browser-input.md), recorded physical input acceptance in the [Notes consumer](../consumers/metonic-notes/README.md#physical-native-input-acceptance) | State the tested OS, browser and assistive-client scope; keep real IME observations distinct from synthetic tests. |
-| Independent asynchronous work and cleanup | `core/application_task` Driver/Operation; Scope-owned `core/reactive_task.Resource` | [Application entry](application-entry.md), [memo-operation verification](verification/memo-operations.md) | [#567](https://github.com/dijdzv/metonic/issues/567): add derived pending/success/failure semantics and a two-result example without mixed generations. |
+| Independent asynchronous work and cleanup | `core/application_task` Driver/Operation; Scope-owned `core/reactive_task.Resource` | [Application entry](application-entry.md), [memo-operation verification](verification/memo-operations.md), [async-state contract](adr/036-async-derived-state.md) and [pre-change baseline](verification/reactive-phase4-baseline.md) | Implement grouped admission [#570](https://github.com/dijdzv/metonic/issues/570), keyed derivation [#571](https://github.com/dijdzv/metonic/issues/571), and a two-host consumer [#572](https://github.com/dijdzv/metonic/issues/572) without mixed generations. |
 | Portable and platform-specific resources | `capabilities/clock` and `capabilities/http`; native/browser host storage, clipboard and asset packages | [ADR 033](adr/033-capability-platform-boundaries.md), [resource table](application-entry.md#resource-responsibilities) | Keep distinct storage, permission and close guarantees explicit; do not invent a universal platform interface. |
 | Save, restore, close, and distribution | Notes source consumer with selected-target builds and native/browser packages | [Notes build and package verification](../consumers/metonic-notes/README.md#build-and-verification) | Resolve external ESM consumer's native GPU prebuild [#453](https://github.com/dijdzv/metonic/issues/453); distinguish relocation tests from clean-machine installation. |
 | Development control without production exposure | Native CLI/MCP adapter and browser DOM automation on development entries | [Application entry](application-entry.md#native-development-control), [browser development control](application-entry.md#browser-development-control), package-exclusion checks | Recheck exclusion on the final consumer artifacts after required changes. |
@@ -49,15 +48,34 @@ framework contract does not satisfy the boundary. The existing Notes source is
 one independent consumer; a smaller second example with different state and
 asynchronous dependencies must test that the API is not tailored to Notes.
 
+## Frozen required scope
+
+The remaining implementation blockers are the external ESM consumer's native GPU
+prebuild [#453](https://github.com/dijdzv/metonic/issues/453), atomic admission
+of independent requests [#570](https://github.com/dijdzv/metonic/issues/570),
+keyed async result/derivation state [#571](https://github.com/dijdzv/metonic/issues/571),
+and the independent two-host usage check [#572](https://github.com/dijdzv/metonic/issues/572).
+The pinned structural checker [#568](https://github.com/dijdzv/metonic/issues/568)
+is also a Phase 4 completion gate; its initial parser probe has coverage gaps,
+so no unsupported rule is accepted yet. The completed design specification
+[#567](https://github.com/dijdzv/metonic/issues/567) does not complete these
+implementation tasks.
+
+The other open P2 tasks cover subsequent improvements and upstream proposals;
+their currently working product paths stay in place. P3 tasks include optional
+gRPC and intermittent problems with explicit recurrence triggers. A fresh
+reproduction that demonstrates a release defect can change this scope, but its
+evidence and impact must be recorded on the relevant Issue before promoting it.
+
 ## Release gate and known limits
 
 Before calling the initial usable release complete:
 
-1. Finish the [open-Issue audit](https://github.com/dijdzv/metonic/issues/566),
-   classify each actionable gap on its own Issue, and freeze the finite required
-   scope. Recurrence-only and external-release work must retain evidence and a
-   restart condition; their existence alone does not prove a current product bug.
-2. Implement and verify [async-derived-state integration](https://github.com/dijdzv/metonic/issues/567)
+1. Keep the [open-Issue classification](https://github.com/dijdzv/metonic/issues/566)
+   and finite required scope above current. Recurrence-only and external-release
+   work must retain evidence and a restart condition; their existence alone
+   does not prove a current product bug.
+2. Implement and verify [async-derived-state integration](adr/036-async-derived-state.md)
    on native and the primary browser backend, with JS comparison coverage where
    the shared browser contract needs it. Verify pending, refresh with prior value,
    failure, cancellation, replacement, Scope disposal and two independent results.
