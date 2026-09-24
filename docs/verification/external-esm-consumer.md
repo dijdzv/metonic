@@ -23,12 +23,18 @@ because Node treated `build.js` as ESM. Adding only the cache-root marker made
 that same build pass. The source entry also rejected an existing native cache
 marker with `{"type":"module"}` without overwriting it.
 
-These checks ran on Windows 11 Pro 10.0.26200 with pinned Moon
-`0.1.20260904`, Node 26.8.1 and a Windows x64 native toolchain. They establish
-source-entry builds, native start/close and browser artifact presence, not a
-clean-machine installation, interactive editing in the packaged Notes UI,
-another OS/browser/driver, or an upstream fix.
-The local release gate still requires the normal native/browser input,
-persistence, resource and packaged-artifact regressions on the integrated
-revision. A future pinned `wgpu_mbt` release with explicit `.cjs` prebuilds
-should remove the temporary scope marker.
+The source-entry correction was merged in [#581](https://github.com/dijdzv/metonic/pull/581).
+The tracked independent Notes consumer now pins that merged revision and
+declares `"type":"module"` in [#582](https://github.com/dijdzv/metonic/pull/582).
+It passed native and browser release builds, browser and native verification,
+the source contract, a fresh first-setup check, and all local pre-commit and
+pre-push checks. [Clean Windows CI](https://github.com/dijdzv/metonic/actions/runs/36013320767)
+passed on that consumer revision. The initial isolated checks ran on Windows 11
+Pro 10.0.26200 with pinned Moon `0.1.20260904`, Node 26.8.1 and a Windows x64
+native toolchain.
+
+These checks establish the source-entry compatibility path, not a clean-machine
+installation, another OS/browser/driver, or an upstream fix. The local release
+gate still requires the final integrated native/browser input, persistence,
+resource and packaged-artifact checks. A future pinned `wgpu_mbt` release with
+explicit `.cjs` prebuilds should remove the temporary scope marker.
