@@ -459,7 +459,20 @@ fn App::finish(self : App) -> Unit raise Error {
     "GPU initialization still owns window",
   )
   match self.renderer {
-    Some(renderer) => renderer.close()
+    Some(renderer) => {
+      renderer.close()
+      let resources = renderer.gpu_resources()
+      require(resources.closed, "GPU renderer remained open after cleanup")
+      require(
+        resources.text_texture_count == 0 &&
+        resources.text_texture_bytes == 0UL &&
+        resources.retained_frame_count == 0 &&
+        resources.retained_frame_bytes == 0UL &&
+        resources.uniform_buffer_bytes == 0UL,
+        "GPU renderer retained app-owned resources after cleanup",
+      )
+      (self.report)("GPU_OWNERSHIP_RELEASED")
+    }
     None => ()
   }
   self.renderer = None
