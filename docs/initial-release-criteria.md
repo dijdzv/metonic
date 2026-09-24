@@ -38,7 +38,7 @@ binary or semantic-version compatibility promise.
 | Text editing, focus, selection, IME, accessibility | Portable application editor/control contract, native AccessKit adapter, browser semantic DOM input | [Application entry](application-entry.md), [browser input checks](verification/browser-input.md), recorded physical input acceptance in the [Notes consumer](../consumers/metonic-notes/README.md#physical-native-input-acceptance) | State the tested OS, browser and assistive-client scope; keep real IME observations distinct from synthetic tests. |
 | Independent asynchronous work and cleanup | `core/application_task` Driver/Operation; Scope-owned `core/reactive_task.Resource` and `Source` | [Application entry](application-entry.md), [async-state contract](adr/036-async-derived-state.md), and [two-host paired application](verification/async-pair-phase4.md) | Keep driver cleanup and the public state contract aligned as APIs evolve; the demonstration data is not a network/storage guarantee. |
 | Portable and platform-specific resources | `capabilities/clock` and `capabilities/http`; native/browser host storage, clipboard and asset packages | [ADR 033](adr/033-capability-platform-boundaries.md), [resource table](application-entry.md#resource-responsibilities) | Keep distinct storage, permission and close guarantees explicit; do not invent a universal platform interface. |
-| Save, restore, close, and distribution | Notes source consumer with selected-target builds and native/browser packages | [Notes build and package verification](../consumers/metonic-notes/README.md#build-and-verification) | Resolve external ESM consumer's native GPU prebuild [#453](https://github.com/dijdzv/metonic/issues/453); distinguish relocation tests from clean-machine installation. |
+| Save, restore, close, and distribution | Notes source consumer with selected-target builds and native/browser packages | [Notes build and package verification](../consumers/metonic-notes/README.md#build-and-verification), [external ESM consumer](verification/external-esm-consumer.md) | Complete the final integrated package checks; distinguish relocation tests from clean-machine installation. |
 | Development control without production exposure | Native CLI/MCP adapter and browser DOM automation on development entries | [Application entry](application-entry.md#native-development-control), [browser development control](application-entry.md#browser-development-control), package-exclusion checks | Recheck exclusion on the final consumer artifacts after required changes. |
 
 The acceptance example must use the framework through its source entry and
@@ -55,14 +55,17 @@ Atomic admission of independent requests
 result/derivation state [#571](https://github.com/dijdzv/metonic/issues/571),
 and the independent two-host usage check
 [#572](https://github.com/dijdzv/metonic/issues/572) are implemented and
-verified. The remaining release blocker is the external ESM consumer's native
-GPU prebuild [#453](https://github.com/dijdzv/metonic/issues/453). The pinned
+verified. The external ESM consumer's native GPU integration is verified through
+the public source entry and an independent ESM Notes app. The published GPU
+package still needs an upstream correction [#453](https://github.com/dijdzv/metonic/issues/453),
+but that publication is no longer a Metonic release prerequisite. The pinned
 structural checker [#568](https://github.com/dijdzv/metonic/issues/568) parses
 the project fail-closed and runs a tested rule in the local hook and manual CI.
 Its supported syntax and limits are recorded in the
 [static-analysis verification](verification/static-analysis.md). The accepted
-design [#567](https://github.com/dijdzv/metonic/issues/567) and completed async
-implementation still require the remaining GPU integration gate for release.
+design [#567](https://github.com/dijdzv/metonic/issues/567), completed async
+implementation and source integration still require the final integrated release
+checks below before a release is declared.
 
 The other open P2 tasks cover subsequent improvements and upstream proposals;
 their currently working product paths stay in place. P3 tasks include optional
@@ -85,8 +88,10 @@ Before calling the initial usable release complete:
    A successful B-path Resource check is not evidence that this C-path exists.
 3. Validate a pinned [MoonBit structural parser and useful rule](https://github.com/dijdzv/metonic/issues/568)
    on real source and valid/invalid fixtures. Parsing failure must fail the check.
-4. Resolve release-blocking external integration issues, including #453, without
-   changing GPU dependencies in the registry cache or duplicating the GPU bridge.
+4. Keep the verified external ESM source entry working without changing GPU
+   dependencies in the registry cache or duplicating the GPU bridge. The
+   temporary workspace package-scope marker remains until #453's upstream
+   correction is available; upstream publication is a separate P2 improvement.
 5. Run the relevant native/browser input, editing, persistence, async,
    accessibility, resource, performance and packaged-artifact regressions after
    integration. Report any manual or machine-specific evidence separately.
