@@ -50,17 +50,20 @@ async fn main {
         }
         let release = path.has_prefix("/release/")
         let notes = path.has_prefix("/notes/")
+        let pair = path.has_prefix("/async-pair/")
         let path = if release {
           path[8:].to_owned()
         } else if notes {
           path[6:].to_owned()
+        } else if pair {
+          path[11:].to_owned()
         } else {
           path
         }
         let entry = match path {
-          "/gpu-probe.mjs" if !release && !notes =>
+          "/gpu-probe.mjs" if !release && !notes && !pair =>
             Some(("gpu-probe.mjs", "text/javascript; charset=utf-8"))
-          "/gpu-probe.wasm" if !release && !notes =>
+          "/gpu-probe.wasm" if !release && !notes && !pair =>
             Some(("gpu-probe.wasm", "application/wasm"))
           "/" => Some(("index.html", "text/html; charset=utf-8"))
           "/index.html" => Some(("index.html", "text/html; charset=utf-8"))
@@ -76,11 +79,17 @@ async fn main {
           "/host.mjs" => Some(("host.mjs", "text/javascript; charset=utf-8"))
           "/notes-host.mjs" if notes =>
             Some(("notes-host.mjs", "text/javascript; charset=utf-8"))
-          "/application.mjs" if notes =>
+          "/async-pair-host.mjs" if pair =>
+            Some(("async-pair-host.mjs", "text/javascript; charset=utf-8"))
+          "/application.mjs" if notes || pair =>
             Some(("application.mjs", "text/javascript; charset=utf-8"))
           "/notes.mjs" if notes =>
             Some(("notes.mjs", "text/javascript; charset=utf-8"))
           "/notes.wasm" if notes => Some(("notes.wasm", "application/wasm"))
+          "/async-pair.mjs" if pair =>
+            Some(("async-pair.mjs", "text/javascript; charset=utf-8"))
+          "/async-pair.wasm" if pair =>
+            Some(("async-pair.wasm", "application/wasm"))
           "/layer-renderer.mjs" =>
             Some(("layer-renderer.mjs", "text/javascript; charset=utf-8"))
           "/surface.mjs" =>
@@ -113,7 +122,9 @@ async fn main {
           Some((filename, content_type)) => {
             let content = Some(
               @fs.read_file(
-                (if notes {
+                (if pair {
+                  ".work/browser-async-pair/"
+                } else if notes {
                   ".work/browser-notes/"
                 } else if release {
                   ".work/browser-release/"

@@ -82,7 +82,8 @@ async fn main {
         moon,
         [
           "-C", "browser_host", "build", "app/probe", "app/notes", "app/gpu_probe",
-          "app/application_probe", "--target", target, "--release", "--deny-warn",
+          "app/application_probe", "app/async_pair", "--target", target, "--release",
+          "--deny-warn",
         ],
         no_console_window=true,
       ),
@@ -241,6 +242,14 @@ async fn main {
     @process.run(
       moon,
       ["run", "scripts/package-browser-notes.mbtx"],
+      no_console_window=true,
+    ),
+    0,
+  )
+  assert_eq(
+    @process.run(
+      moon,
+      ["run", "scripts/package-browser-async-pair.mbtx"],
       no_console_window=true,
     ),
     0,
