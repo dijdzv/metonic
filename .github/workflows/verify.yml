@@ -32,6 +32,8 @@ jobs:
         run: mise run bootstrap:test
       - name: Verify tracked Markdown links
         run: .\.tools\moonbit\bin\moon.exe run scripts/verify-docs.mbtx
+      - name: Verify MoonBit structural rules
+        run: mise run static:verify
       - name: Verify WasmGC and JavaScript
         run: mise run verify
       - name: Verify browser artifacts

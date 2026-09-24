@@ -442,6 +442,10 @@ Tracked Markdown links are checked by `moon run scripts/verify-docs.mbtx`.
 The check resolves relative file targets and ignores external URLs and fragments;
 it does not validate heading anchors or implement a complete Markdown parser.
 
+`mise run static:verify` performs the separate fail-closed MoonBit parse and
+structural-rule check. Its pinned tool inputs, grammar patch, coverage rule and
+limitations are recorded in [MoonBit structural checks](verification/static-analysis.md).
+
 Contract compile-failure checks use `scripts/verify-types.mbtx`. Set
 `METONIC_VERIFY_TARGET` to `js`, `wasm-gc` (default), or `native`; native builds
 require the MSVC environment. Each case copies only the tracked RPC core and API

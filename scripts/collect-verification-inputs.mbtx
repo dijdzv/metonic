@@ -31,6 +31,11 @@ async fn main {
       "run", "scripts/prepare-browser-dev.mbtx",
     ]),
   )
+  ignore(
+    checked(@fs.realpath(".tools/moonbit/bin/moon.exe"), [
+      "run", "scripts/prepare-static-analysis.mbtx",
+    ]),
+  )
   let files : Array[String] = []
   for path in checked("git", ["ls-files", "--cached", "-z"]).split("\u0000") {
     if !path.is_empty() {
@@ -50,6 +55,16 @@ async fn main {
     trees.push(@fs.realpath(path))
   }
   files.push(@fs.realpath(".work/accesskit-focus-build/release/accesskit.dll"))
+  for
+    path in [
+      ".work/static-analysis/app-x86_64-pc-windows-msvc.zip", ".work/static-analysis/tree-sitter-cli-windows-x64.zip",
+      ".work/static-analysis/source-5435c307c6cf2ef0d508a99047b06f35a4308444.tar.gz",
+      ".work/static-analysis/ast-grep.exe", ".work/static-analysis/tree-sitter.exe",
+      ".work/static-analysis/tree-sitter-moonbit.dll", ".work/static-analysis/sgconfig.yml",
+      ".work/static-analysis/prepared.txt",
+    ] {
+    files.push(@fs.realpath(path))
+  }
   for command in ["git.exe", "node.exe", "mise.exe", "cargo.exe", "rustc.exe"] {
     let output = checked("where.exe", [command])
     let selected = output.split("\n").next().unwrap().trim().to_owned()

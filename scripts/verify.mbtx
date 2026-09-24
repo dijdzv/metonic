@@ -207,6 +207,16 @@ async fn main {
     }
     for target in targets {
       if !contracts_only {
+        if target == "wasm" {
+          run_checked(
+            moon,
+            [
+              "build", "tools/browser_supervisor_fixture", "--target", "wasm", "--release",
+              "--frozen", "--deny-warn",
+            ],
+            envmap,
+          )
+        }
         let test_args = ["test"]
         for package_path in packages {
           test_args.push(package_path)

@@ -69,6 +69,10 @@ description = "Verify contracts with Windows MSVC"
 run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify.mbtx'
 env = { METONIC_VERIFY_NATIVE = "1" }
 
+[tasks."static:verify"]
+description = "Parse every MoonBit source and check pinned structural rules"
+run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-static-analysis.mbtx'
+
 [tasks.pre-commit]
 description = "Run checks for staged changes"
 run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/pre-commit.mbtx'
