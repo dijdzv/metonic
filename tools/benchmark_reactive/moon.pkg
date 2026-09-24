@@ -1,0 +1,8 @@
+import {
+  "local/p0/core/reactive",
+  "moonbitlang/async",
+}
+
+pkgtype(kind: "executable")
+
+supported_targets = "+native+js+wasm-gc"
