@@ -77,6 +77,57 @@ async fn run_recorded_push(
           }
           if ancestor {
             base = Some(candidate)
+          } else {
+            let (parent_code, parent_output, _) = @process.collect_output(
+              "git",
+              ["-C", directory, "rev-list", "--parents", "-n", "1", candidate],
+              no_console_window=true,
+            )
+            assert_eq(
+              parent_code,
+              0,
+              msg="cannot inspect verification base parents",
+            )
+            let parents = parent_output.text().trim().split(" ").to_array()
+            if parents.length() == 2 {
+              let (tree_code, tree_output, _) = @process.collect_output(
+                "git",
+                [
+                  "-C",
+                  directory,
+                  "rev-parse",
+                  "--verify",
+                  candidate + "^{tree}",
+                ],
+                no_console_window=true,
+              )
+              assert_eq(
+                tree_code,
+                0,
+                msg="cannot inspect verification base tree",
+              )
+              if tree_output.text().trim() == expected {
+                let mut same_parent = true
+                for commit in commits {
+                  let (code, output, _) = @process.collect_output(
+                    "git",
+                    [
+                      "-C", directory, "rev-list", "--parents", "-n", "1", commit,
+                    ],
+                    no_console_window=true,
+                  )
+                  assert_eq(code, 0, msg="cannot inspect pushed commit parents")
+                  let fields = output.text().trim().split(" ").to_array()
+                  same_parent = same_parent &&
+                    fields.length() == 2 &&
+                    fields[1] == parents[1]
+                }
+                if same_parent {
+                  // WhyNot: Diffing from the replaced commit would hide its own changes.
+                  base = Some(parents[1].to_owned())
+                }
+              }
+            }
           }
         }
       }

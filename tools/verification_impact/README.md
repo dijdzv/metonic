@@ -112,9 +112,12 @@ checkout guard with record selection. Commands are JSON arrays. It validates all
 non-deletion pushed trees before executing anything; empty and deletion-only
 updates run nothing. A matching record must identify the same tree, canonical
 checkout and commit command. Its comparison base must be a full resolved commit
-ID and an ancestor of every pushed commit. The remainder command receives that
-base as its final argument, and inputs and the success record are checked again
-after it finishes.
+ID and an ancestor of every pushed commit. A same-tree replacement of a
+single-parent commit can also reuse the record when every pushed tip has that
+same parent and tree. In that case the remainder command receives the common
+parent, so it still tests changes introduced by the replaced commit. Otherwise
+the remainder command receives the saved base. Inputs and the success record
+are checked again after it finishes.
 
 Missing or mismatched success, changed inputs, an unrelated base, or an unborn
 base select the full command. Invalid configuration and input read errors fail

@@ -129,3 +129,114 @@ async test "push dispatch reuses only matching commit input and falls back other
   )
   assert_eq(code, 1)
 }
+
+///|
+async test "same-tree amend verifies the shared parent delta and other histories fall back" {
+  let directory = @fs.tmpdir(prefix="metonic-push-amend")
+  let git = async fn(args : Array[String]) {
+    let (code, output, error) = @process.collect_output(
+      "git",
+      ["-C", directory] + args,
+      no_console_window=true,
+    )
+    assert_eq(code, 0, msg=error.text())
+    output.text().trim().to_owned()
+  }
+  let commit = async fn(arguments : Array[String]) {
+    ignore(
+      git(
+        [
+          "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
+          "-c", "commit.gpgsign=false", "-c", "core.hooksPath=disabled-hooks", "commit",
+        ] +
+        arguments,
+      ),
+    )
+  }
+  ignore(git(["init", "--quiet"]))
+  @fs.write_file(directory + "/input.mbt", "first")
+  ignore(git(["add", "."]))
+  commit(["--quiet", "-m", "parent"])
+  let parent = git(["rev-parse", "HEAD"])
+  @fs.write_file(directory + "/input.mbt", "second")
+  ignore(git(["add", "."]))
+  commit(["--quiet", "-m", "original"])
+  let original = git(["rev-parse", "HEAD"])
+  let tree = git(["rev-parse", "HEAD^{tree}"])
+  let zero = "0000000000000000000000000000000000000000"
+  let config_file = directory + "-config.json"
+  let record_file = directory + "-record.json"
+  let command = ["git", "diff", "--quiet"]
+  let invocation : Json = Json::array(command.map(Json::string))
+  let config : Json = {
+    "files": [directory + "/input.mbt"],
+    "context": {
+      "target": "fixture",
+      "toolchain": "fixture",
+      "policy": "fixture",
+      "tree": tree,
+      "checkout": @fs.realpath(directory),
+      "base_commit": original,
+      "command": invocation.stringify(),
+    },
+  }
+  @fs.write_file(config_file, config.stringify())
+  record_checkout(directory, tree, config_file, record_file, "git", [
+    "diff", "--quiet",
+  ])
+  let full = ["git", "config", "--add", "fixture.runs", "full"]
+  let remainder = ["git", "config", "--add", "fixture.runs"]
+  let dispatch = async fn(head : String) {
+    run_recorded_push(
+      directory,
+      "HEAD " + head + " refs/heads/test " + zero,
+      config_file,
+      record_file,
+      command,
+      full,
+      remainder,
+    )
+  }
+  commit(["--amend", "--quiet", "-m", "amended"])
+  let amended = git(["rev-parse", "HEAD"])
+  assert_true(amended != original)
+  assert_eq(git(["rev-parse", "HEAD^{tree}"]), tree)
+  dispatch(amended)
+  assert_eq(git(["config", "--get-all", "fixture.runs"]), parent)
+  ignore(git(["config", "--unset-all", "fixture.runs"]))
+
+  let unrelated = git([
+    "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit-tree",
+    tree, "-m", "unrelated root",
+  ])
+  run_recorded_push(
+    directory,
+    "HEAD " +
+    amended +
+    " refs/heads/test " +
+    zero +
+    "\n" +
+    "other " +
+    unrelated +
+    " refs/heads/other " +
+    zero,
+    config_file,
+    record_file,
+    command,
+    full,
+    remainder,
+  )
+  assert_eq(git(["config", "--get-all", "fixture.runs"]), "full")
+  ignore(git(["config", "--unset-all", "fixture.runs"]))
+
+  @fs.write_file(directory + "/input.mbt", "third")
+  ignore(git(["add", "."]))
+  commit(["--amend", "--quiet", "-m", "changed tree"])
+  dispatch(git(["rev-parse", "HEAD"]))
+  assert_eq(git(["config", "--get-all", "fixture.runs"]), "full")
+  ignore(git(["config", "--unset-all", "fixture.runs"]))
+
+  ignore(git(["reset", "--hard", unrelated]))
+  dispatch(unrelated)
+  assert_eq(git(["config", "--get-all", "fixture.runs"]), "full")
+}
