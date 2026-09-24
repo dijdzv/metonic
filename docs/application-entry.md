@@ -117,6 +117,10 @@ writing an already disposed Signal. Use Source for replaceable presentation
 results; a successful storage write remains an external fact even if the UI
 request becomes stale. Match its saved revision before changing an unsaved
 indicator instead of treating cancellation as a rollback.
+The [paired async application](../examples/async_pair/application/application.mbt)
+shows the same public model on native and browser hosts; its
+[verification record](verification/async-pair-phase4.md) includes visible
+pending, retained, failed, retried and canceled states.
 
 Both hosts use the shared operation driver. Replacement invalidates earlier
 results for that identity synchronously when admission succeeds, then awaits its

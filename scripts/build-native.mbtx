@@ -68,6 +68,8 @@ async fn main {
       mode != "notes" &&
       mode != "notes-release" &&
       mode != "notes-probe" &&
+      mode != "async-pair" &&
+      mode != "async-pair-probe" &&
       mode != "headless" &&
       mode != "window" &&
       mode != "window-release" &&
@@ -90,6 +92,8 @@ async fn main {
       mode == "notes" ||
       mode == "notes-release" ||
       mode == "notes-probe" ||
+      mode == "async-pair" ||
+      mode == "async-pair-probe" ||
       mode == "window" ||
       mode == "window-release" ||
       mode == "window-dev" ||
@@ -255,6 +259,8 @@ async fn main {
       mode == "notes" ||
       mode == "notes-release" ||
       mode == "notes-probe" ||
+      mode == "async-pair" ||
+      mode == "async-pair-probe" ||
       mode == "async" ||
       mode == "window" ||
       mode == "window-release" ||
@@ -270,6 +276,8 @@ async fn main {
         "application" | "application-release" => [entry]
         "notes" | "notes-release" => ["notes_app"]
         "notes-probe" => ["notes_probe"]
+        "async-pair" => ["async_pair"]
+        "async-pair-probe" => ["async_pair_probe"]
         "async" => ["async_app"]
         "window-dev" => ["window_dev"]
         "window-display-dev" => ["window_display_dev"]
@@ -287,8 +295,9 @@ async fn main {
       let needs_accesskit = fn(host_app : String) {
         external ||
         [
-          "notes_app", "notes_probe", "window_app", "window_dev", "window_display_dev",
-          "accessibility_probe", "mailbox_probe", "sdk_mailbox_probe", "window_probe",
+          "notes_app", "notes_probe", "async_pair", "async_pair_probe", "window_app",
+          "window_dev", "window_display_dev", "accessibility_probe", "mailbox_probe",
+          "sdk_mailbox_probe", "window_probe",
         ].contains(host_app)
       }
       let native_host_build_dir = if external {

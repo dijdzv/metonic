@@ -1,7 +1,9 @@
 # ADR 036: Propagate owned async results through the reactive graph
 
-Status: Proposed for Phase 4 implementation. The rules below are the acceptance
-contract; API names and host wiring are not yet merged. See
+Status: Accepted for Phase 4. `core/reactive_task.Source`, `Cycle` and
+`derive_pair` implement the contract, and the
+[two-host application verification](../verification/async-pair-phase4.md)
+records the integrated checks. See
 [#567](https://github.com/dijdzv/metonic/issues/567) and the
 [pre-change baseline](../verification/reactive-phase4-baseline.md).
 

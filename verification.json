@@ -7,9 +7,9 @@
   },
   "full_gate_tasks": [
     "verify", "verify-native", "browser:verify", "browser:server-test",
-    "browser:supervisor-test", "browser:headless", "browser:async", "devtools:test",
+    "browser:supervisor-test", "browser:headless", "browser:async", "async-pair:browser-headless", "devtools:test",
     "native:headless-integration", "native:window",
-    "native:window-integration", "native:notes-test", "native:application-control-test", "native:pipe-verify",
+    "native:window-integration", "native:notes-test", "async-pair:native-verify", "native:application-control-test", "native:pipe-verify",
     "native:host-verify", "native:async",
     "native:surface", "native:binding", "rpc:verify", "native:production-integration",
     "demo:test",
