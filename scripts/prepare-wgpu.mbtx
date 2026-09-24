@@ -60,9 +60,16 @@ async fn main {
   if extract_code != 0 {
     fail("wgpu extraction failed: " + @utf8.decode_lossy(extract_err.binary()))
   }
-  let mooncakes = ".mooncakes"
-  if !@fs.exists(mooncakes) {
-    @fs.mkdir(mooncakes, recursive=true)
+  // The pinned wgpu_mbt prebuild uses require() in .js files. Keep each Moon
+  // workspace's dependency cache out of the root ESM package scope until the
+  // upstream .cjs fix is published.
+  for
+    mooncakes in [
+      ".mooncakes", "browser_host/.mooncakes", "native_host/.mooncakes",
+    ] {
+    if !@fs.exists(mooncakes) {
+      @fs.mkdir(mooncakes, recursive=true)
+    }
+    @fs.write_file(mooncakes + "/package.json", "{\"type\":\"commonjs\"}\n")
   }
-  @fs.write_file(mooncakes + "/package.json", "{\"type\":\"commonjs\"}\n")
 }

@@ -1,0 +1,4 @@
+fn good(scope : @reactive.Scope, value : @reactive.Signal[Int]) {
+  value.set(1)
+  let _ = @reactive.Memo::new(scope, () => value.get())
+}

@@ -1,0 +1,229 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/env",
+}
+
+///|
+async fn checked(command : String, args : Array[String]) -> String {
+  let (code, out, err) = @process.collect_output(
+    command,
+    args,
+    no_console_window=true,
+  )
+  assert_eq(
+    code,
+    0,
+    msg=command +
+      ": " +
+      @utf8.decode_lossy(out.binary()) +
+      @utf8.decode_lossy(err.binary()),
+  )
+  @utf8.decode_lossy(out.binary())
+}
+
+///|
+async fn checked_at(
+  command : String,
+  args : Array[String],
+  directory : String,
+) -> String {
+  let (code, out, err) = @process.collect_output(
+    command,
+    args,
+    cwd=directory,
+    no_console_window=true,
+  )
+  assert_eq(
+    code,
+    0,
+    msg=command +
+      ": " +
+      @utf8.decode_lossy(out.binary()) +
+      @utf8.decode_lossy(err.binary()),
+  )
+  @utf8.decode_lossy(out.binary())
+}
+
+///|
+async fn sha256(path : String) -> String {
+  let output = checked("certutil.exe", ["-hashfile", path, "SHA256"])
+  for line in output.to_lower().split("\n") {
+    let value = line.trim().to_owned()
+    if value.length() == 64 &&
+      value.iter().all(c => (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+      return value
+    }
+  }
+  abort("missing SHA256 for " + path)
+}
+
+///|
+async fn release_archive(
+  root : String,
+  repository : String,
+  version : String,
+  name : String,
+  digest : String,
+) -> String {
+  let archive = root + "/" + name
+  if !@fs.exists(archive) {
+    ignore(
+      checked("gh", [
+        "release", "download", version, "-R", repository, "-p", name, "-D", root,
+      ]),
+    )
+  }
+  assert_eq(
+    sha256(archive),
+    digest,
+    msg="release archive digest mismatch: " + name,
+  )
+  archive
+}
+
+///|
+async fn main {
+  let repo = @fs.realpath(".").replace_all(old="\\", new="/")
+  let root = repo + "/.work/static-analysis"
+  if !@fs.exists(root) {
+    @fs.mkdir(root, recursive=true)
+  }
+  assert_eq(
+    @fs.realpath(root).replace_all(old="\\", new="/").to_lower(),
+    root.to_lower(),
+  )
+  @fs.mkdir(root + "/prepare.lock")
+  defer @fs.rmdir(root + "/prepare.lock")
+  let sg_zip = release_archive(
+    root, "ast-grep/ast-grep", "0.45.3", "app-x86_64-pc-windows-msvc.zip", "3751b7d6be7fd39a80df1180ffe7e053903dcf92d3190e5a8336ff1746af9059",
+  )
+  let ts_zip = release_archive(
+    root, "tree-sitter/tree-sitter", "v0.27.0", "tree-sitter-cli-windows-x64.zip",
+    "46188d31c1f3847307b03e92f3a3f60606eb04147609e26cdd50a07f7d0b35da",
+  )
+  let revision = "5435c307c6cf2ef0d508a99047b06f35a4308444"
+  let source_zip = root + "/source-" + revision + ".tar.gz"
+  if !@fs.exists(source_zip) {
+    ignore(
+      checked("curl.exe", [
+        "--fail",
+        "--location",
+        "--max-time",
+        "60",
+        "https://codeload.github.com/moonbitlang/tree-sitter-moonbit/tar.gz/" +
+        revision,
+        "-o",
+        source_zip,
+      ]),
+    )
+  }
+  assert_eq(
+    sha256(source_zip),
+    "2b0b188a17bcb82b2a9fe1e7f88b04f6c3763fead21e73f0f43b518b7dd91e64",
+    msg="MoonBit grammar archive digest mismatch",
+  )
+  let patch = repo + "/tools/static_analysis/parser.patch"
+  let input = [
+    "static-analysis-v1",
+    sha256(sg_zip),
+    sha256(ts_zip),
+    sha256(source_zip),
+    sha256(patch),
+    sha256(repo + "/scripts/prepare-static-analysis.mbtx"),
+  ].join("\n")
+  let sg = root + "/ast-grep.exe"
+  let ts = root + "/tree-sitter.exe"
+  let dll = root + "/tree-sitter-moonbit.dll"
+  let sg_digest = "daff0f5963faab7617045833132a3538c85eee65f3afeedf347f829a7b8d83fb"
+  let ts_digest = "9fbc4f285c876b1a38c7e9d5223a51fb7842255285cdd7db3ffb0ba3934f2662"
+  let source = root + "/source"
+  let stamp = root + "/prepared.txt"
+  if @fs.exists(stamp) {
+    if @fs.exists(sg) &&
+      @fs.exists(ts) &&
+      @fs.exists(dll) &&
+      @fs.exists(source + "/src/parser.c") &&
+      @fs.exists(root + "/sgconfig.yml") {
+      let saved = @fs.read_file(stamp).text()
+      if saved == input + "\n" + sha256(dll) &&
+        sha256(sg) == sg_digest &&
+        sha256(ts) == ts_digest {
+        println("STATIC_ANALYSIS_CACHED parser=" + revision)
+        return
+      }
+    }
+  }
+  if @fs.exists(source) {
+    assert_eq(
+      @fs.realpath(source).replace_all(old="\\", new="/").to_lower(),
+      source.to_lower(),
+    )
+    @fs.rmdir(source, recursive=true)
+  }
+  @fs.mkdir(source)
+  if @fs.exists(stamp) {
+    @fs.remove(stamp)
+  }
+  ignore(checked("tar", ["-xf", sg_zip, "-C", root]))
+  ignore(checked("tar", ["-xf", ts_zip, "-C", root]))
+  assert_eq(sha256(sg), sg_digest, msg="ast-grep executable digest mismatch")
+  assert_eq(sha256(ts), ts_digest, msg="tree-sitter executable digest mismatch")
+  ignore(
+    checked("tar", ["-xf", source_zip, "--strip-components", "1", "-C", source]),
+  )
+  // The extracted source lives under Metonic's ignored .work directory. Give it
+  // its own index so git apply cannot silently skip the ignored patch paths.
+  ignore(checked_at("git", ["init", "-q"], source))
+  ignore(
+    checked_at("git", ["apply", "--unidiff-zero", "--check", patch], source),
+  )
+  ignore(checked_at("git", ["apply", "--unidiff-zero", patch], source))
+  let grammar = @fs.read_file(source + "/grammar.js").text()
+  assert_true(grammar.contains("errdefer_expression"))
+  assert_true(@fs.exists(source + "/test/corpus/metonic-phase4.txt"))
+  ignore(checked_at(ts, ["generate"], source))
+  ignore(checked_at(ts, ["test"], source))
+  let vswhere = @env.get_env_var("ProgramFiles(x86)").unwrap_or(
+      "C:/Program Files (x86)",
+    ) +
+    "/Microsoft Visual Studio/Installer/vswhere.exe"
+  let install = checked(vswhere, [
+      "-utf8", "-latest", "-products", "*", "-requires", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+      "-property", "installationPath",
+    ])
+    .trim()
+    .to_owned()
+  assert_false(
+    install.is_empty() ||
+    install.contains("\n") ||
+    install.contains("\"") ||
+    install.contains("%"),
+  )
+  let build = root + "/build.cmd"
+  @fs.write_file(
+    build,
+    "@echo off\r\ncall \"" +
+    install +
+    "/Common7/Tools/VsDevCmd.bat\" -no_logo -arch=x64 -host_arch=x64 >nul\r\n" +
+    "if errorlevel 1 exit /b 1\r\n" +
+    "cl /nologo /LD /O2 /I src src\\parser.c src\\scanner.c /link /OUT:\"" +
+    dll +
+    "\"\r\n",
+  )
+  ignore(checked_at("cmd.exe", ["/d", "/c", build], source))
+  assert_true(@fs.exists(dll), msg="MoonBit parser DLL missing")
+  @fs.write_file(
+    root + "/sgconfig.yml",
+    "ruleDirs: [../../tools/static_analysis/rules]\n" +
+    "customLanguages:\n" +
+    "  moonbit:\n" +
+    "    libraryPath: tree-sitter-moonbit.dll\n" +
+    "    extensions: [mbt, mbtx]\n" +
+    "    expandoChar: _\n",
+  )
+  @fs.write_file(stamp, input + "\n" + sha256(dll))
+  println("STATIC_ANALYSIS_PREPARED parser=" + revision)
+}

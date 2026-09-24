@@ -1,0 +1,76 @@
+diff --git a/grammar.js b/grammar.js
+index ac54fa5..e72649e 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -1303,0 +1304 @@ module.exports = grammar({
++        $.errdefer_expression,
+@@ -1311,0 +1313,2 @@ module.exports = grammar({
++    errdefer_expression: ($) => seq("errdefer", $._expression),
++
+@@ -1468 +1471 @@ module.exports = grammar({
+-        strictList(",", $._lowercase_identifier),
++        strictList(",", choice($._lowercase_identifier, $.tuple_pattern)),
+diff --git a/test/corpus/metonic-phase4.txt b/test/corpus/metonic-phase4.txt
+new file mode 100644
+index 0000000..0779e68
+--- /dev/null
++++ b/test/corpus/metonic-phase4.txt
+@@ -0,0 +1,58 @@
++================================================================================
++errdefer expression
++================================================================================
++fn main {
++  errdefer file.close()
++  file.read()
++}
++--------------------------------------------------------------------------------
++
++(structure
++  (function_definition
++    (function_identifier
++      (lowercase_identifier))
++    (block_expression
++      (errdefer_expression
++        (dot_apply_expression
++          (qualified_identifier
++            (lowercase_identifier))
++          (dot_identifier
++            (dot_lowercase_identifier))))
++      (dot_apply_expression
++        (qualified_identifier
++          (lowercase_identifier))
++        (dot_identifier
++          (dot_lowercase_identifier))))))
++
++================================================================================
++tuple-bound for in expression
++================================================================================
++fn main {
++  for (left, right) in pairs {
++    consume(left, right)
++  }
++}
++--------------------------------------------------------------------------------
++
++(structure
++  (function_definition
++    (function_identifier
++      (lowercase_identifier))
++    (block_expression
++      (for_in_expression
++        (tuple_pattern
++          (lowercase_identifier)
++          (lowercase_identifier))
++        (qualified_identifier
++          (lowercase_identifier))
++        (block_expression
++          (apply_expression
++            (qualified_identifier
++              (lowercase_identifier))
++            (arguments
++              (argument
++                (qualified_identifier
++                  (lowercase_identifier)))
++              (argument
++                (qualified_identifier
++                  (lowercase_identifier))))))))))

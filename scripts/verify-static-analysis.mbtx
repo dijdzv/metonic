@@ -1,0 +1,176 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/json",
+}
+
+///|
+async fn result(
+  command : String,
+  args : Array[String],
+) -> (Int, String, String) {
+  let (code, out, err) = @process.collect_output(
+    command,
+    args,
+    no_console_window=true,
+  )
+  (code, @utf8.decode_lossy(out.binary()), @utf8.decode_lossy(err.binary()))
+}
+
+///|
+fn count_matches(output : String) -> Array[Json] raise {
+  @json.from_json(@json.parse(output))
+}
+
+///|
+async fn main {
+  let root = ".work/static-analysis"
+  let moon = ".tools/moonbit/bin/moon.exe"
+  let (prepare, out, err) = result(moon, [
+    "run", "scripts/prepare-static-analysis.mbtx",
+  ])
+  assert_eq(prepare, 0, msg="static tool preparation: " + out + err)
+  let parser = root + "/tree-sitter-moonbit.dll"
+  let tree_sitter = root + "/tree-sitter.exe"
+  let ast_grep = root + "/ast-grep.exe"
+  let config = root + "/sgconfig.yml"
+  let rule = "tools/static_analysis/rules/no-signal-write-in-memo.yml"
+  let (inventory, paths, inventory_error) = result("git", [
+    "ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", "*.mbt",
+    "*.mbtx",
+  ])
+  assert_eq(inventory, 0, msg="MoonBit file inventory: " + inventory_error)
+  let sources : Array[String] = []
+  for path in paths.split("\u0000") {
+    if !path.is_empty() {
+      assert_false(path.contains("\n") || path.contains("\r"))
+      sources.push(path.to_owned())
+    }
+  }
+  assert_false(sources.is_empty(), msg="no MoonBit sources discovered")
+  sources.sort()
+  let list = root + "/sources.txt"
+  @fs.write_file(list, sources.join("\n") + "\n")
+  let (parse, parse_out, parse_err) = result(tree_sitter, [
+    "parse", "--paths", list, "--lib-path", parser, "--lang-name", "moonbit", "--json-summary",
+  ])
+  if parse != 0 {
+    let sample : Array[String] = []
+    for line in parse_out.split("\n") {
+      if line.contains("\tParse:") && sample.length() < 8 {
+        sample.push(line.to_owned())
+      }
+    }
+    abort(
+      "MoonBit parser rejected source files (first 8):\n" +
+      sample.join("\n") +
+      "\n" +
+      parse_err,
+    )
+  }
+  let summary : Map[String, Json] = @json.from_json(@json.parse(parse_out))
+  let count : Int = @json.from_json(summary.get("source_count").unwrap())
+  let parses : Array[Json] = @json.from_json(
+    summary.get("parse_summaries").unwrap(),
+  )
+  assert_eq(count, sources.length(), msg="MoonBit parser skipped source files")
+  assert_eq(
+    parses.length(),
+    sources.length(),
+    msg="MoonBit parse summary incomplete",
+  )
+  for item in parses {
+    let entry : Map[String, Json] = @json.from_json(item)
+    let successful : Bool = @json.from_json(entry.get("successful").unwrap())
+    assert_true(successful, msg="MoonBit parser reported an unsuccessful parse")
+  }
+  println("STATIC_PARSE_OK files=" + count.to_string())
+  let fixtures = root + "/fixtures"
+  if !@fs.exists(fixtures) {
+    @fs.mkdir(fixtures)
+  }
+  for
+    name in [
+      "invalid", "memo-bad", "memo-concise-bad", "memo-good", "memo-nested-good",
+    ] {
+    @fs.write_file(
+      fixtures + "/" + name + ".mbt",
+      @fs.read_file("tools/static_analysis/fixtures/" + name + ".mbt.txt").binary(),
+    )
+  }
+  let (bad_parse, bad_out, _) = result(tree_sitter, [
+    "parse",
+    fixtures + "/invalid.mbt",
+    "--lib-path",
+    parser,
+    "--lang-name",
+    "moonbit",
+    "--json-summary",
+  ])
+  assert_true(
+    bad_parse != 0 && bad_out.contains("\"successful\": false"),
+    msg="malformed MoonBit was accepted as a clean parse",
+  )
+  for
+    (name, expected) in [
+      ("memo-bad", 1),
+      ("memo-concise-bad", 1),
+      ("memo-good", 0),
+      ("memo-nested-good", 0),
+    ] {
+    let (status, matches, error) = result(ast_grep, [
+      "scan",
+      "--config",
+      config,
+      "--rule",
+      rule,
+      "--json=compact",
+      fixtures + "/" + name + ".mbt",
+    ])
+    assert_true(status == 0 || status == 1, msg=name + ": " + error)
+    assert_eq(
+      count_matches(matches).length(),
+      expected,
+      msg=name + ": " + error,
+    )
+    assert_eq(status, if expected == 0 { 0 } else { 1 })
+  }
+  println("STATIC_RULE_FIXTURES_OK cases=4 malformed=1")
+  let (scan, matches, inspection) = result(ast_grep, [
+    "scan", "--config", config, "--json=compact", "--inspect", "summary", ".",
+  ])
+  assert_true(scan == 0 || scan == 1, msg="ast-grep scan failed: " + inspection)
+  assert_true(
+    inspection.contains(
+      "scannedFileCount=" + count.to_string() + ",skippedFileCount=0",
+    ),
+    msg="ast-grep file coverage differs from the MoonBit parser inventory: " +
+      inspection,
+  )
+  assert_true(
+    inspection.contains("effectiveRuleCount=1,skippedRuleCount=0"),
+    msg="ast-grep did not load the expected rule: " + inspection,
+  )
+  let found = count_matches(matches)
+  if !found.is_empty() {
+    println("STATIC_RULE_VIOLATIONS count=" + found.length().to_string())
+    let mut shown = 0
+    for item in found {
+      if shown < 5 {
+        let entry : Map[String, Json] = @json.from_json(item)
+        let file : String = @json.from_json(entry.get("file").unwrap())
+        let message : String = @json.from_json(entry.get("message").unwrap())
+        println(file + ": " + message)
+        shown += 1
+      }
+    }
+  }
+  assert_eq(scan, 0, msg="MoonBit static rules found violations")
+  assert_true(
+    found.is_empty(),
+    msg="MoonBit static rules returned inconsistent results",
+  )
+  println("STATIC_ANALYSIS_OK files=" + count.to_string() + " rules=1")
+}

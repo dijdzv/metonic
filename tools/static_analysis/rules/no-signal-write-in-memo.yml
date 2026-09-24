@@ -1,0 +1,22 @@
+id: no-signal-write-in-memo
+language: moonbit
+severity: error
+message: Memo evaluation must not write reactive state.
+rule:
+  kind: dot_apply_expression
+  all:
+    - pattern:
+        context: 'fn probe { _SIGNAL.set(_VALUE) }'
+        selector: dot_apply_expression
+    - inside:
+        kind: arrow_function_expression
+        stopBy:
+          kind: arrow_function_expression
+        inside:
+          kind: argument
+          inside:
+            stopBy:
+              kind: apply_expression
+            pattern:
+              context: 'fn probe { @reactive.Memo::new(_SCOPE, _COMPUTE) }'
+              selector: apply_expression
