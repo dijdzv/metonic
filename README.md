@@ -6,10 +6,13 @@ metonic aims to let one MoonBit application run as a native Windows UI and in a
 WebGPU browser. The UI runtime and RPC libraries are independent, so either can
 be used without the other.
 
-**Work in progress — not ready for production.** The current prototype connects
-GPU rendering, text editing and HTTP/JSON RPC on Windows and in a browser. It is
-not yet a usable UI framework; broader editing, reliability and distribution work
-remain incomplete. Public APIs may change substantially.
+**Experimental initial usable scope; not production ready.** The bounded
+Windows x64 native and Chromium WebGPU/WasmGC application path has passed the
+[Phase 4 acceptance checks](docs/verification/phase4-acceptance.md), including
+an independent source consumer, packages, editing, persistence and resource
+checks. Browser JS is a comparison backend using the same WebGPU canvas, not a
+DOM renderer. APIs may change substantially, and other environments are not
+covered by that acceptance.
 
 ## Direction
 

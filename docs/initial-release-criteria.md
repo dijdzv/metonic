@@ -1,7 +1,9 @@
 # Initial usable release criteria
 
-Status: Phase 4 acceptance scope frozen on 2026-09-24; the release is not yet
-complete or announced. The [open-Issue audit](https://github.com/dijdzv/metonic/issues/566)
+Status: Phase 4 acceptance scope frozen on 2026-09-24 and verified for the
+bounded initial usable path on 2026-09-25. No version tag has been announced.
+The [acceptance record](verification/phase4-acceptance.md) and
+[open-Issue audit](https://github.com/dijdzv/metonic/issues/566)
 separates the finite required work below from subsequent and deferred work.
 
 ## Targets and guarantee
@@ -64,8 +66,9 @@ the project fail-closed and runs a tested rule in the local hook and manual CI.
 Its supported syntax and limits are recorded in the
 [static-analysis verification](verification/static-analysis.md). The accepted
 design [#567](https://github.com/dijdzv/metonic/issues/567), completed async
-implementation and source integration still require the final integrated release
-checks below before a release is declared.
+implementation and source integration passed the bounded final checks in the
+[acceptance record](verification/phase4-acceptance.md). A future version tag or
+broader support promise requires its own decision.
 
 The other open P2 tasks cover subsequent improvements and upstream proposals;
 their currently working product paths stay in place. P3 tasks include optional
