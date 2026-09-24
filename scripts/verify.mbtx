@@ -190,11 +190,11 @@ async fn main {
       return
     }
     run_checked(moon, ["run", "scripts/doctor.mbtx"], envmap)
+    // Do not freeze the first root build: a fresh checkout has no .mooncakes yet.
     run_checked(
       moon,
       [
-        "build", "tools/control_fixture", "--target", "wasm", "--release", "--frozen",
-        "--deny-warn",
+        "build", "tools/control_fixture", "--target", "wasm", "--release", "--deny-warn",
       ],
       envmap,
     )
