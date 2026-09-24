@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { chromium } from 'playwright';
 
-const base = process.argv[2];
+const base = process.argv[2] || process.env.METONIC_BROWSER_BASE;
 assert.ok(base, 'usage: node examples/async_pair/browser/verify.mjs http://127.0.0.1:PORT/');
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 const browser = await chromium.launch({

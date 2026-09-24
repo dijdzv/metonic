@@ -121,6 +121,14 @@ run = '.\\.tools\\moonbit\\bin\\moon.exe test examples/async_pair/application --
 description = "Verify the paired application on the running browser:serve server"
 run = 'node examples/async_pair/browser/verify.mjs http://127.0.0.1:4173/'
 
+[tasks."async-pair:browser-headless"]
+description = "Build and verify paired application rendering on browser JS and WasmGC"
+depends = ["browser:build"]
+run = [
+  '.\\.tools\\moonbit\\bin\\moon.exe build tools/browser_server tools/browser_supervisor --target wasm --release --frozen --deny-warn',
+  '.\\.tools\\moonbit\\bin\\moonrun.exe _build/wasm/release/build/tools/browser_supervisor/browser_supervisor.wasm pair',
+]
+
 [tasks."async-pair:native-build"]
 env = { METONIC_NATIVE_BUILD = "async-pair" }
 run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/build-native.mbtx'

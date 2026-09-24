@@ -20,7 +20,8 @@ release-style owned-window start/close check was run with
 `METONIC_RELEASE_TITLE=Async pair`; both normal close and system-key close
 passed. The production entry does not include the development controller.
 
-Run `mise run browser:build`, then `mise run browser:serve` in one terminal and
+Run `mise run async-pair:browser-headless` for the automated browser check. To
+inspect the sample manually, run `mise run browser:serve` in one terminal and
 `mise run async-pair:browser-verify` in another. The browser check runs both
 MoonBit JS and WasmGC outputs in headless Chromium with SwiftShader. It checks
 five semantic buttons, no page errors, canvas changes across selection,
