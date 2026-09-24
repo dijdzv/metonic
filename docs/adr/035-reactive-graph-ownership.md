@@ -1,7 +1,7 @@
 # ADR 035: Own the reactive graph and bind it to persistent UI lifetimes
 
-Status: Accepted for the Phase 3 core; the consumer integration and scale
-acceptance remain open.
+Status: Accepted; the Phase 3 consumer and scale acceptance completed in
+[Issue #501](https://github.com/dijdzv/metonic/issues/501).
 
 ## Context
 
@@ -70,8 +70,10 @@ No second runtime or frame loop is introduced.
 
 The core contract tests can run without OS or GPU services on JS, WasmGC and
 native. Negative cycle and reentry cases need isolated-process checks because
-they intentionally abort. This initial package does not establish the memo
+they intentionally abort. The initial package alone did not establish memo
 consumer integration, host invalidation granularity, accessibility behavior or
-1,000-item performance. Those are separate Phase 3 acceptance steps. The
-[library comparison](../verification/library-reuse.md) records candidate
-evidence; current implementation work is tracked in Issues #500 and #501.
+1,000-item performance. Those separate Phase 3 steps were completed and
+recorded in [Issue #501](https://github.com/dijdzv/metonic/issues/501) and its
+resource follow-up [Issue #553](https://github.com/dijdzv/metonic/issues/553).
+The [library comparison](../verification/library-reuse.md) records the bounded
+candidate evidence and its retention limit.
