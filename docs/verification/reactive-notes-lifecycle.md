@@ -1,7 +1,9 @@
 # Reactive Notes lifecycle acceptance
 
-The independent Notes source consumer pins framework revision `47fdff0` and
-uses one Scope-owned Resource each for search and save. The consumer's
+At the recorded Issue #504 acceptance run, the independent Notes source
+consumer pinned framework revision `47fdff0` (the current pin is in
+`consumers/metonic-notes/dependency.json`) and used one Scope-owned Resource
+each for search and save. The consumer's
 workspace, query, persistence state and control availability feed Memos and
 Bindings; ordinary updates keep editor and action references.
 

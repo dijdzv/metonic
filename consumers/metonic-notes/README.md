@@ -207,6 +207,31 @@ also runs scrolling and reordering, legacy migration, empty collections, save/re
 injected quota/access failures and retry on
 both targets; fault injection does not establish physical quota exhaustion.
 
+## Tested collection size
+
+The fixed 1,000-memo dataset exercises startup, scrolling, search, selection,
+reordering, editing, explicit save, autosave, close and reopen on Windows native,
+browser JS and browser WasmGC. One warmup and three measured runs per target met
+the operation limits frozen before optimization; every measured run passed, not
+just the median. The native release executable also stayed below 300 MiB working
+set, 512 MiB private use and 800 handles at every recorded checkpoint. The
+browser Stop action released all tracked app-created WebGPU textures and buffers;
+the native release close path reported zero remaining renderer-owned GPU
+descriptors. The [operation record](https://github.com/dijdzv/metonic/issues/501)
+and [resource record](https://github.com/dijdzv/metonic/issues/553) contain the
+exact measurements and fixed thresholds.
+
+These results were obtained on Windows 11 Pro 10.0.26200, an Intel i5-13400 and
+31.8 GiB RAM; browser measurements used headless Chromium 153 with SwiftShader.
+Run `mise run scale:baseline-browser`, `mise run scale:baseline-native` and
+`mise run scale:resources-native` to repeat the fixed scenario. The runners
+retain detailed local results under the ignored `.work/scale/` directory.
+Observed application-owned GPU descriptor counts are not physical GPU-memory
+measurements. Browser page teardown, clean-machine installation, storage quotas,
+collections larger than 1,000 memos and arbitrary browser/IME combinations are
+not certified by these runs. The separate 1024-UTF-16-unit limit applies to each
+memo; it is not a collection-size or storage-capacity limit.
+
 ## Physical native input acceptance
 
 Use a disposable memo in the ordinary native executable. These operations use
