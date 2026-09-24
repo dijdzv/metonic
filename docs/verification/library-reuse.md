@@ -20,7 +20,7 @@ remain comparison baselines until equivalent requirements pass.
 | `examples/p0/browser/host/*.mjs` | Browser startup, adapter/device acquisition, canvas coordination, animation-frame scheduling, module loading and buffer transfer | Remaining JavaScript adapter; GPU drawing, text-input ownership, control placement and font hash validation have moved to MoonBit |
 | `tools/devtools/*.mjs`, `scripts/*` | CLI/MCP transport and development verification | MoonBit orchestration first; external SDK adapters scoped separately |
 | `core/text_position`, `core/task_scope`, `core/semantics` | Position validity, task lifetime and semantic actions | Framework packages without sample dependencies; P0 initialization and legacy actions remain in its semantic adapter |
-| `core/reactive` | Phase 3 dependency graph and component lifetime | Metonic-owned implementation in progress after the bounded `mizchi/signals@0.6.5` and `bikallem/rsignal@0.3.0` comparison; [ADR 035](../adr/035-reactive-graph-ownership.md) records the decision |
+| `core/reactive` | Phase 3 dependency graph and component lifetime | Metonic-owned implementation integrated with the independent Notes consumer after the bounded `mizchi/signals@0.6.5` and `bikallem/rsignal@0.3.0` comparison; [ADR 035](../adr/035-reactive-graph-ownership.md) records the decision and [Issue #501](https://github.com/dijdzv/metonic/issues/501) records acceptance |
 | `platform/windows/ime_presentation` | Interpretation of Windows IMM composition attributes | Pure Windows presentation policy; separate from platform-independent text offsets |
 
 `examples/p0` contains bounded architecture probes, not a supported public API.
@@ -53,7 +53,7 @@ that every line in the remaining adapters is irreducible.
 | --- | --- |
 | `native_host/windows_loop/wake.c`, `experiments/window_async_contract/wake.c` | Context-free callbacks from foreign threads into the window wake mechanism; application task policy is MoonBit |
 | `native_host/accessibility/mailbox.c` | AccessKit callbacks and bounded native request ownership; semantic state and action handling are MoonBit |
-| `native_host/accessibility_probe/navigate.c` | Windows UIA/COM client and owned-window input observation used by verification, not the production editor |
+| `native_host/uia_test_bridge/navigate.c` | Reusable Windows UIA/COM client and owned-window input observation used by verification, not the production editor |
 | `native_host/mailbox_probe/boundary.c`, `native_host/sdk_mailbox_probe/boundary.c` | Native-thread/SDK callback ownership and lifetime verification |
 | `experiments/async_waiter_handles/host.c` | Windows handle-count observation and a native callback for the async regression |
 | `experiments/wgpu_binding/window_bridge.c`, `tools/native_surface_probe/window.c`, `tools/native_surface_probe/bridge.c` | Diagnostic HWND/handle boundaries for binding and device-replacement comparisons; not the ordinary application's window implementation |
@@ -90,6 +90,14 @@ than `2` after a source update). A separate bounded writeback probe stopped
 with source value `1` rather than reaching `3` or rejecting the write. These
 results are from an ignored local fixture; they are not a reproducible test
 artifact shipped with the repository. Issue #499 retains the exact scenario.
+The fixture is retired as a required repository artifact: neither candidate
+was selected, its published version and observed differences are recorded
+here and in ADR 035, and the adopted core has cross-target contract tests and
+independent-consumer acceptance. Preserving an external package evaluation
+fixture would add a maintained dependency without improving the accepted
+implementation's regression coverage. A fresh candidate comparison should
+rebuild its probe against the then-current library rather than treating this
+ignored snapshot as a permanent test.
 
 The package implements identity-based equality and a module-global tracking
 context. A watch-and-output-Signal adapter can suppress downstream publication
@@ -100,8 +108,8 @@ explicit subscription and mapping operations rather than automatic dynamic
 dependency replacement and batched graph propagation. Neither candidate is a
 drop-in for the Phase 3 contract. [ADR 035](../adr/035-reactive-graph-ownership.md)
 records the self-owned core decision and its boundaries. This comparison does
-not assert defects outside Metonic's requirements or claim the new core has
-already passed consumer integration.
+not assert defects outside Metonic's requirements. Consumer integration and
+scale acceptance are recorded in [Issue #501](https://github.com/dijdzv/metonic/issues/501).
 
 ## Initial results
 
