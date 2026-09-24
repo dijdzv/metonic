@@ -54,12 +54,48 @@ fn process_resources(pid : Int) -> Json raise {
 }
 
 ///|
+async fn wait_memos(window : UInt64, expected : Int) -> Unit {
+  @async.with_timeout(30000, () => {
+    while uia_memos(window) != expected {
+      @async.sleep(50)
+    }
+  })
+}
+
+///|
+async fn wait_value(window : UInt64, name : String, expected : String) -> Unit {
+  @async.with_timeout(30000, () => {
+    while !uia_value_is(window, name, expected) {
+      @async.sleep(50)
+    }
+  })
+}
+
+///|
+async fn wait_saved(directory : String, text : String, position : Int) -> Unit {
+  @async.with_timeout(30000, () => {
+    let path = directory + "/data/snapshot"
+    let mut verified = false
+    while !verified {
+      let document = @collection.decode(Some(@fs.read_file(path).text())).unwrap()
+      let items = document.items()
+      verified = items.length() == 1000 &&
+        items[position].id == 10 &&
+        document.find(10).unwrap().text == text
+      if !verified {
+        @async.sleep(50)
+      }
+    }
+  })
+}
+
+///|
 async fn sample_release_resources(
   executable : String,
   directory : String,
   reopen : Bool,
 ) -> Json {
-  @async.with_timeout(20000, async fn() {
+  @async.with_timeout(120000, async fn() {
     @async.with_task_group() <| group => {
       let child = @process.spawn(
         group,
@@ -79,22 +115,105 @@ async fn sample_release_resources(
         window = locate(child.pid)
         @async.sleep(50)
       }
-      // WhyNot: locating the HWND alone does not prove the saved collection has loaded.
       @async.sleep(1000)
+      wait_memos(window, 1000)
+      assert_true(uia_name_exists(window, "Memo 1000"))
       let ready = process_resources(child.pid)
-      click(window, 200, 140)
-      type_text(window, "alpha")
-      @async.sleep(500)
+      uia_set_value(window, "Search memos", "alpha")
+      wait_memos(window, 100)
+      assert_true(uia_value_is(window, "Search memos", "alpha"))
+      assert_true(uia_name_exists(window, "Memo 10"))
+      assert_false(uia_name_exists(window, "Memo 1"))
       let filtered = process_resources(child.pid)
+      uia_invoke(window, "Memo 10")
+      wait_value(
+        window,
+        "Memo",
+        if reopen {
+          "Memo 10 alpha autosaved"
+        } else {
+          "Memo 10 alpha"
+        },
+      )
+      let selected = process_resources(child.pid)
+      if reopen {
+        let before_exit = process_resources(child.pid)
+        send(window, 0x0010U, 0UL, 0L)
+        assert_eq(child.wait(), 0)
+        assert_eq(locate(child.pid), 0UL)
+        return {
+          "reopen": true,
+          "ready": ready,
+          "filtered": filtered,
+          "selected": selected,
+          "before_exit": before_exit,
+          "exit_code": 0,
+          "window_closed": true,
+        }
+      }
+      uia_set_value(window, "Search memos", "")
+      wait_memos(window, 1000)
+      let cleared = process_resources(child.pid)
+      let mut scroll_row = ""
+      let mut before_y = -1.0
+      for id in 1..<=32 {
+        let name = if id == 10 { "* Memo 10" } else { "Memo " + id.to_string() }
+        let y = uia_y(window, name)
+        if y >= 0.0 {
+          scroll_row = name
+          before_y = y
+          break
+        }
+      }
+      assert_true(scroll_row != "", msg="No visible release row had UIA bounds")
+      send(window, 0x0200U, 0UL, (200 * 65536 + 40).to_int64())
+      send(window, 0x020AU, 0xFF880000UL, 0L)
+      @async.with_timeout(30000, () => {
+        while uia_y(window, scroll_row) >= before_y {
+          @async.sleep(50)
+        }
+      })
+      let scrolled = process_resources(child.pid)
+      uia_invoke(window, "Move up")
+      @async.sleep(100)
+      assert_true(uia_name_exists(window, "* Memo 10"))
+      let reordered = process_resources(child.pid)
+      uia_set_value(window, "Memo", "Memo 10 alpha edited")
+      wait_value(window, "Memo", "Memo 10 alpha edited")
+      let edited = process_resources(child.pid)
+      uia_invoke(window, "Save all")
+      wait_saved(directory, "Memo 10 alpha edited", 8)
+      let saved = process_resources(child.pid)
+      uia_set_value(window, "Memo", "Memo 10 alpha autosaved")
+      wait_saved(directory, "Memo 10 alpha autosaved", 8)
+      let autosaved = process_resources(child.pid)
+      let before_exit = process_resources(child.pid)
       send(window, 0x0010U, 0UL, 0L)
       assert_eq(child.wait(), 0)
-      { "reopen": reopen, "ready": ready, "filtered": filtered }
+      assert_eq(locate(child.pid), 0UL)
+      {
+        "reopen": false,
+        "ready": ready,
+        "filtered": filtered,
+        "selected": selected,
+        "cleared": cleared,
+        "scrolled": scrolled,
+        "reordered": reordered,
+        "edited": edited,
+        "saved": saved,
+        "autosaved": autosaved,
+        "before_exit": before_exit,
+        "exit_code": 0,
+        "window_closed": true,
+      }
     }
   })
 }
 
 ///|
 async fn release_resource_sample(executable : String, fixture : String) -> Unit {
+  assert_true(initialize_uia(0UL, 0U) >= 0)
+  defer uninitialize_uia()
   let source = @fs.read_file(fixture)
   let document = @collection.decode(Some(source.text())).unwrap()
   assert_eq(document.items().length(), 1000)

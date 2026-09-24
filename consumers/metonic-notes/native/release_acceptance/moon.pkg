@@ -6,6 +6,7 @@ import {
   "moonbitlang/core/env",
   "moonbitlang/core/json",
   "local/metonic_notes/collection",
+  "local/native_host/uia_test_bridge" @uia,
 }
 
 pkgtype(kind: "executable")
@@ -13,5 +14,9 @@ pkgtype(kind: "executable")
 supported_targets = "native"
 
 options(
-  link: { "native": { "cc-link-flags": "user32.lib" } },
+  link: {
+    "native": {
+      "cc-link-flags": "user32.lib uiautomationcore.lib ole32.lib oleaut32.lib",
+    },
+  },
 )
