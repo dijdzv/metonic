@@ -1,11 +1,58 @@
 ///|
 fn line(app : @app.Application, index : Int) -> String {
-  (app.view)()[index].element.text
+  (app.view)()[index + 1].element.text
 }
 
 ///|
 fn button(app : @app.Application, index : Int) -> @semantics.NodeRef {
-  (app.view)()[index].element.reference.unwrap()
+  (app.view)()[if index == 2 { 4 } else { index }].element.reference.unwrap()
+}
+
+///|
+async test "recreating detail revokes old controls and rejects old shipping results" {
+  let app = create(_ => ())
+  (app.connect_tasks)(@task.task_control(_ => ()))
+  let first = (app.initialize)().unwrap()
+  first.invalidate()
+  for request in first.members() {
+    assert_eq(request.prepare().unwrap().run().apply(), @task.Changed)
+  }
+  let quotes : Array[@task.Request] = []
+  assert_true(
+    app.reconcile_downstreams(request => {
+      quotes.push(request)
+      request.invalidate()
+      true
+    }),
+  )
+  let old_result = quotes[0].members()[0].prepare().unwrap().run()
+  let old_quantity = button(app, 2)
+  assert_true((app.activate)(button(app, 3)) is None)
+  ignore(app.publish())
+  assert_eq((app.view)()[7].element.text, "Shipping: detail hidden")
+  assert_true(@semantics.node(app.editor, old_quantity) is Err(_))
+  assert_eq(old_result.apply(), @task.Rejected)
+
+  assert_true((app.activate)(button(app, 3)) is None)
+  let new_quantity = button(app, 2)
+  assert_true(old_quantity != new_quantity)
+  assert_true(
+    app.reconcile_downstreams(request => {
+      quotes.push(request)
+      request.invalidate()
+      true
+    }),
+  )
+  assert_eq(quotes.length(), 2)
+  ignore(app.publish())
+  assert_eq(line(app, 7), "Shipping: loading")
+  assert_eq(
+    quotes[1].members()[0].prepare().unwrap().run().apply(),
+    @task.Changed,
+  )
+  ignore(app.publish())
+  assert_eq(line(app, 7), "Shipping: 112 for 1")
+  (app.dispose)()
 }
 
 ///|
@@ -118,9 +165,13 @@ async test "switching items rejects an unfinished detail from the previous selec
   (app.connect_tasks)(@task.task_control(_ => ()))
   let amber = (app.initialize)().unwrap()
   amber.invalidate()
+  let first_amber_quantity = button(app, 2)
   let late_detail = amber.members()[0].prepare().unwrap().run()
   let blue = (app.activate)(button(app, 1)).unwrap()
   blue.invalidate()
+  let blue_quantity = button(app, 2)
+  assert_true(blue_quantity != first_amber_quantity)
+  assert_true(@semantics.node(app.editor, first_amber_quantity) is Err(_))
   assert_eq(late_detail.apply(), @task.Rejected)
   for request in blue.members() {
     assert_eq(request.prepare().unwrap().run().apply(), @task.Changed)
@@ -142,5 +193,28 @@ async test "switching items rejects an unfinished detail from the previous selec
   assert_eq(line(app, 4), "Item: blue · Quantity: 1")
   assert_eq(line(app, 5), "Detail: Blue stool")
   assert_eq(line(app, 7), "Shipping: 107 for 1")
+  let recreated_amber = (app.activate)(button(app, 0)).unwrap()
+  recreated_amber.invalidate()
+  let next_amber_quantity = button(app, 2)
+  assert_true(next_amber_quantity != first_amber_quantity)
+  assert_true(@semantics.node(app.editor, blue_quantity) is Err(_))
+  for request in recreated_amber.members() {
+    assert_eq(request.prepare().unwrap().run().apply(), @task.Changed)
+  }
+  let fresh_quotes : Array[@task.Request] = []
+  assert_true(
+    app.reconcile_downstreams(request => {
+      fresh_quotes.push(request)
+      request.invalidate()
+      true
+    }),
+  )
+  assert_eq(fresh_quotes.length(), 1)
+  assert_eq(
+    fresh_quotes[0].members()[0].prepare().unwrap().run().apply(),
+    @task.Changed,
+  )
+  ignore(app.publish())
+  assert_eq(line(app, 7), "Shipping: 112 for 1")
   (app.dispose)()
 }

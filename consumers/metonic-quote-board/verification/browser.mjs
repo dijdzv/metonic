@@ -52,7 +52,7 @@ try {
     page.on('pageerror', error => errors.push(error.message));
     await page.goto(`${base}?target=${target}`);
     await page.waitForFunction(() => document.querySelector('#status')?.textContent?.startsWith('Ready:'), null, { timeout: 30000 });
-    assert.equal(await page.locator('#controls button').count(), 4);
+    assert.equal(await page.locator('#controls button').count(), 5);
     const canvas = page.locator('#canvas');
     const waitLines = (detail, stock, quote) => page.waitForFunction(expected => {
       const lines = [...document.querySelectorAll('#controls .gpu-text')].map(node => node.textContent);
@@ -86,6 +86,14 @@ try {
     await waitLines('Detail: Blue stool', 'Stock: 7', 'Shipping: 214 for 2');
     const quantityReady = await shot('quantity-ready');
     assert.notEqual(quantityReady, quantityPending, `${target}: new downstream quote did not redraw`);
+    await page.getByRole('button', { name: 'Quantity +' }).click();
+    await waitLines('Detail: Blue stool', 'Stock: 7', 'Shipping: loading');
+    await page.getByRole('button', { name: 'Toggle detail' }).click();
+    await waitLines('Detail: Blue stool', 'Stock: 7', 'Shipping: detail hidden');
+    assert.equal(await page.getByRole('button', { name: 'Quantity +' }).count(), 0);
+    await page.getByRole('button', { name: 'Toggle detail' }).click();
+    assert.equal(await page.getByRole('button', { name: 'Quantity +' }).count(), 1);
+    await waitLines('Detail: Blue stool', 'Stock: 7', 'Shipping: 321 for 3');
     assert.deepEqual(errors, [], `${target}: browser errors`);
     await page.getByRole('button', { name: 'Stop' }).click();
     assert.equal(await page.locator('#status').textContent(), 'Stopped.');
