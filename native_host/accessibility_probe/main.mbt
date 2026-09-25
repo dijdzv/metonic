@@ -241,6 +241,30 @@ async fn verify_checkbox_gallery(hwnd : UInt64) -> Unit {
     fail("list item SelectionItem pattern missing")
   }
   ignore(release_pattern(selected_pattern[0]))
+  let status = child_named(root[0], "Quote: waiting")
+  guard status != 0UL else { fail("status UIA node missing") }
+  defer ignore(release_node(status))
+  let retry = child_named(root[0], "Retry")
+  guard retry != 0UL else { fail("retry UIA button missing") }
+  defer ignore(release_node(retry))
+  guard integer(retry, 30003) == 50000 else {
+    fail("retry UIA control type mismatch")
+  }
+  let invoke_retry = FixedArray::make(1, 0UL)
+  guard pattern(retry, 10000, invoke_retry) == 0 && invoke_retry[0] != 0UL else {
+    fail("retry Invoke pattern missing")
+  }
+  defer ignore(release_pattern(invoke_retry[0]))
+  guard invoke(invoke_retry[0]) == 0 else { fail("retry UIA invoke failed") }
+  for _ in 0..<50 {
+    if text_is(status, 30005, "Quote: loading") {
+      break
+    }
+    @async.sleep(20)
+  }
+  guard text_is(status, 30005, "Quote: loading") else {
+    fail("status UIA update missing")
+  }
   guard post(hwnd, 0x0010U, 0UL, 0L) != 0 else {
     fail("checkbox gallery close request failed")
   }

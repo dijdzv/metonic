@@ -37,6 +37,14 @@ pub fn[K] Widget::list_item(value : @component.UiListItem[K]) -> Widget {
 }
 
 ///|
+pub fn Widget::status(value : @component.UiStatus) -> Widget {
+  {
+    reference: value.reference(),
+    render: (bounds, clip) => status(value, bounds, clip~),
+  }
+}
+
+///|
 pub fn Widget::label(value : @component.UiLabel) -> Widget {
   {
     reference: value.reference(),

@@ -59,6 +59,7 @@ fn semantic_nodes(tree : @semantics.Tree) -> Array[NodeDto] {
       @semantics.Role::TextInput => "text_input"
       @semantics.Role::List => "list"
       @semantics.Role::ListItem => "list_item"
+      @semantics.Role::Status => "status"
     }
     {
       session: node.reference.session,

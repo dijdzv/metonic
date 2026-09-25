@@ -44,6 +44,7 @@ fn Session::reconcile_controls(
         @app.Checkbox => node.role == @semantics.Checkbox
         @app.List => node.role == @semantics.List
         @app.ListItem => node.role == @semantics.ListItem
+        @app.Status => node.role == @semantics.Status
         @app.Input(..) => node.role == @semantics.TextInput
       }
       if !compatible {
@@ -119,6 +120,7 @@ fn Session::reconcile_controls(
           @app.Checkbox => "button"
           @app.List => "div"
           @app.ListItem => "div"
+          @app.Status => "div"
           @app.Input(single_line=true) => "input"
           @app.Input(single_line=false) => "textarea"
           @app.Text => "span"
@@ -146,7 +148,7 @@ fn Session::reconcile_controls(
                 return self.activate_reference(reference) != 0
               }
               let direction = match key {
-                "ArrowUp" => Some(@component.Previous)
+                "ArrowUp" => Some(@component.ListMove::Previous)
                 "ArrowDown" => Some(@component.Next)
                 "Home" => Some(@component.First)
                 "End" => Some(@component.Last)
@@ -190,7 +192,9 @@ fn Session::reconcile_controls(
     if control.element.reference is Some(reference) {
       bindings.push({ reference, element_id: owned.id, })
       if @semantics.node(self.application.editor, reference) is Ok(node) {
-        @dom_view.label(owned.element, node.name)
+        if control.kind != @app.Status {
+          @dom_view.label(owned.element, node.name)
+        }
       }
     }
     if control.kind == @app.Text {
@@ -206,6 +210,7 @@ fn Session::reconcile_controls(
           @app.Checkbox => "gpu-button"
           @app.List => "gpu-list"
           @app.ListItem => "gpu-list-item"
+          @app.Status => "gpu-status"
           @app.Input(..) => "gpu-input"
           @app.Text => "gpu-text"
         },

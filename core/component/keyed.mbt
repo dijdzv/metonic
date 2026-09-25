@@ -113,6 +113,19 @@ pub fn ChildOwner::add_list(
 }
 
 ///|
+pub fn ChildOwner::add_status(
+  self : ChildOwner,
+  message : String,
+) -> @semantics.NodeRef? {
+  guard !self.scope.is_disposed() else { return None }
+  let reference = @semantics.add_status(self.tree, message)
+  if reference is Some(value) {
+    self.references.push(value)
+  }
+  reference
+}
+
+///|
 pub fn ChildOwner::add_list_item(
   self : ChildOwner,
   parent : @semantics.NodeRef,

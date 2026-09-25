@@ -139,6 +139,32 @@ pub fn list_item(
 }
 
 ///|
+pub fn status(id : String, message : String) -> Unit {
+  let child = element(id)
+  let dom = child.to_element()
+  if child.to_node().get_text_content() != Some(message) {
+    text(child, message)
+  }
+  dom
+  .set_attribute("role", @input_dom.TrustedTypeOrString::from_string("status"))
+  .unwrap()
+  dom
+  .set_attribute(
+    "aria-live",
+    @input_dom.TrustedTypeOrString::from_string("polite"),
+  )
+  .unwrap()
+  dom
+  .set_attribute(
+    "aria-atomic",
+    @input_dom.TrustedTypeOrString::from_string("true"),
+  )
+  .unwrap()
+  host_style(child, "color", "transparent")
+  host_style(child, "pointer-events", "none")
+}
+
+///|
 pub fn on_keydown(
   child : @input_dom.HTMLElement,
   callback : (String) -> Bool,

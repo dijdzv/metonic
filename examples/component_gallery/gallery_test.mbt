@@ -108,3 +108,41 @@ test "gallery list revokes deleted rows before late activation" {
   assert_eq(gallery.list_selection.peek(), None)
   scope.dispose()
 }
+
+///|
+test "gallery status changes phase without changing identity and retry stays a button" {
+  let scope = @reactive.Scope::root(@reactive.Graph::new())
+  let tree = @semantics.empty(918, 1)
+  let ui = @component.UiRoot::new(scope, tree)
+  let gallery = Gallery::new(ui)
+  let status = gallery.status.reference()
+  assert_eq(@semantics.node(tree, status).unwrap().role, @semantics.Status)
+  assert_eq(
+    @semantics.node(tree, gallery.retry.reference()).unwrap().role,
+    @semantics.Button,
+  )
+  gallery.status_value.set(
+    @component.StatusState::RetainedPrevious("Quote: loading", "112"),
+  )
+  assert_true(ui.synchronize(None))
+  assert_eq(
+    @semantics.node(tree, status).unwrap().name,
+    "Quote: loading (previous 112)",
+  )
+  gallery.status_value.set(@component.StatusState::Failed("Quote: failed"))
+  assert_true(ui.synchronize(None))
+  assert_true(@semantics.node(tree, status).unwrap().invalid)
+  ignore(ui.activate(gallery.retry.reference()))
+  assert_true(ui.synchronize(None))
+  assert_eq(@semantics.node(tree, status).unwrap().name, "Quote: loading")
+  assert_false(@semantics.node(tree, status).unwrap().invalid)
+  assert_true(
+    gallery
+    .view()
+    .any(control => {
+      control.kind == @app.Status && control.element.reference == Some(status)
+    }),
+  )
+  scope.dispose()
+  assert_true(@semantics.node(tree, status) is Err("stale_target"))
+}

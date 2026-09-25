@@ -67,8 +67,53 @@ fn render_item(engine : @raster.Engine, item : Item) -> Layer {
       )
       { bounds, pixels, }
     }
+    Status(error~) => {
+      let label = @raster.render(
+        engine,
+        element.text,
+        (bounds.width - 16).max(1),
+        32,
+      )
+      { bounds, pixels: status_pixels(bounds, label, error), }
+    }
   }
   clip_layer(layer, item.clip)
+}
+
+///|
+fn status_pixels(bounds : @view.Bounds, label : Bytes, error : Bool) -> Bytes {
+  let width = bounds.width
+  let height = bounds.height
+  let label_width = (width - 16).max(1)
+  let rgba = FixedArray::make(width * height * 4, b'\xff')
+  for y in 0..<height {
+    for x in 0..<width {
+      let offset = (y * width + x) * 4
+      if error {
+        rgba[offset] = b'\xFF'
+        rgba[offset + 1] = b'\xE8'
+        rgba[offset + 2] = b'\xE8'
+      } else {
+        rgba[offset] = b'\xE9'
+        rgba[offset + 1] = b'\xF4'
+        rgba[offset + 2] = b'\xFF'
+      }
+    }
+  }
+  for y in 2..<(height - 2).min(34) {
+    for x in 8..<(width - 8) {
+      let dest = (y * width + x) * 4
+      let source = ((y - 2) * label_width + x - 8) * 4
+      if label[source] != b'\xff' ||
+        label[source + 1] != b'\xff' ||
+        label[source + 2] != b'\xff' {
+        for channel in 0..<4 {
+          rgba[dest + channel] = label[source + channel]
+        }
+      }
+    }
+  }
+  rgba.unsafe_reinterpret_as_bytes()
 }
 
 ///|

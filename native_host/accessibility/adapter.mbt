@@ -167,6 +167,7 @@ fn tree(_data : UInt64) -> UInt64 {
         @semantics.TextInput => 17
         @semantics.List => 24
         @semantics.ListItem => 7
+        @semantics.Status => 116
       },
     )
     let name = @utf8.encode(semantic.name)
@@ -179,7 +180,9 @@ fn tree(_data : UInt64) -> UInt64 {
     if semantic.invalid {
       invalid(node, 0)
     }
-    if semantic.role != @semantics.Label && semantic.role != @semantics.List {
+    if semantic.role != @semantics.Label &&
+      semantic.role != @semantics.List &&
+      semantic.role != @semantics.Status {
       add_action(node, 1)
     }
     bounds(

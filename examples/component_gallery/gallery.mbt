@@ -12,6 +12,9 @@ pub struct Gallery {
   list_view : @app.ScrollView
   list_selection : @reactive.Signal[String?]
   mut list_rows : Array[@component.ListRow[String]]
+  status_value : @reactive.Signal[@component.StatusState]
+  status : @component.UiStatus
+  retry : @component.UiButton
 }
 
 ///|
@@ -59,6 +62,19 @@ pub fn Gallery::new(ui : @component.UiRoot) -> Gallery {
     })
   }
   ignore(list.reconcile(list_rows))
+  let status_value = @reactive.Signal::new(
+    fixed.scope(),
+    @component.StatusState::Waiting("Quote: waiting"),
+  )
+  let status = fixed
+    .status("quote-status", @component.Read::new(() => status_value.peek()))
+    .unwrap()
+  let retry = fixed
+    .button("retry", "Retry", () => {
+      status_value.set(@component.StatusState::Loading("Quote: loading"))
+      None
+    })
+    .unwrap()
   let gallery : Gallery = {
     ui,
     checked: checked_control(fixed, "checked", "Checked", true),
@@ -78,6 +94,9 @@ pub fn Gallery::new(ui : @component.UiRoot) -> Gallery {
     list_view: @app.ScrollView::new(gap=4).unwrap(),
     list_selection,
     list_rows,
+    status_value,
+    status,
+    retry,
   }
   self_ref.val = Some(gallery)
   gallery.toggle_dynamic()
@@ -140,6 +159,12 @@ pub fn Gallery::view(self : Gallery) -> Array[@app.Control] {
     )
     .unwrap(),
   )
+  controls.push(
+    @app.status(self.status, { x: 330, y: 370, width: 350, height: 40, }),
+  )
+  controls.push(
+    @app.button(self.retry, { x: 330, y: 420, width: 150, height: 40, }),
+  )
   controls
 }
 
@@ -153,7 +178,7 @@ pub fn create() -> @app.Application {
     title: "Component gallery",
     editor: tree,
     default_input: None,
-    initial_size: (400, 640),
+    initial_size: (720, 640),
     viewport: Some(gallery.list_view.viewport()),
     publications: None,
     downstreams: None,
