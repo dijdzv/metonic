@@ -1,11 +1,178 @@
 ///|
 fn line(app : @app.Application, index : Int) -> String {
-  (app.view)()[index + 1].element.text
+  (app.view)().filter(control => control.element.reference is None)[index - 4].element.text
 }
 
 ///|
 fn button(app : @app.Application, index : Int) -> @semantics.NodeRef {
-  (app.view)()[if index == 2 { 4 } else { index }].element.reference.unwrap()
+  (app.view)()[if index == 2 { 6 } else { index }].element.reference.unwrap()
+}
+
+///|
+async test "currency completes before the item without admitting D early" {
+  let app = create(_ => ())
+  (app.connect_tasks)(@task.task_control(_ => ()))
+  let item = (app.initialize)().unwrap()
+  item.invalidate()
+  let rate = (app.activate)(button(app, 5)).unwrap()
+  rate.invalidate()
+  assert_eq(rate.members().length(), 1)
+  assert_eq(rate.members()[0].prepare().unwrap().run().apply(), @task.Changed)
+  ignore(app.publish())
+  assert_eq(line(app, 7), "Shipping: waiting for item")
+  assert_false(app.reconcile_downstreams(_ => abort("D must wait for A/B")))
+  for request in item.members() {
+    assert_eq(request.prepare().unwrap().run().apply(), @task.Changed)
+  }
+  let quotes : Array[@task.Request] = []
+  assert_true(
+    app.reconcile_downstreams(request => {
+      quotes.push(request)
+      request.invalidate()
+      true
+    }),
+  )
+  assert_eq(quotes.length(), 1)
+  assert_eq(
+    quotes[0].members()[0].prepare().unwrap().run().apply(),
+    @task.Changed,
+  )
+  ignore(app.publish())
+  assert_eq(line(app, 7), "Shipping: 224 USD for 1")
+  assert_false(app.reconcile_downstreams(_ => abort("C must not restart D")))
+  (app.dispose)()
+}
+
+///|
+async test "currency changes retain only same-demand aggregates and leave D intact" {
+  let app = create(_ => ())
+  (app.connect_tasks)(@task.task_control(_ => ()))
+  let item = (app.initialize)().unwrap()
+  item.invalidate()
+  for request in item.members() {
+    assert_eq(request.prepare().unwrap().run().apply(), @task.Changed)
+  }
+  let quotes : Array[@task.Request] = []
+  assert_true(
+    app.reconcile_downstreams(request => {
+      quotes.push(request)
+      request.invalidate()
+      true
+    }),
+  )
+  assert_eq(
+    quotes[0].members()[0].prepare().unwrap().run().apply(),
+    @task.Changed,
+  )
+  ignore(app.publish())
+  assert_eq(line(app, 7), "Shipping: 112 for 1")
+
+  let rate = (app.activate)(button(app, 5)).unwrap()
+  rate.invalidate()
+  ignore(app.publish())
+  assert_eq(line(app, 7), "Shipping: loading")
+  assert_false(
+    app.reconcile_downstreams(_ => abort("currency must not restart D")),
+  )
+  assert_eq(rate.members()[0].prepare().unwrap().run().apply(), @task.Changed)
+  ignore(app.publish())
+  assert_eq(line(app, 7), "Shipping: 224 USD for 1")
+
+  let refresh = (app.activate)(button(app, 5)).unwrap()
+  refresh.invalidate()
+  ignore(app.publish())
+  assert_eq(line(app, 7), "Shipping: loading (previous 224 USD)")
+  let stale = refresh.members()[0].prepare().unwrap().run()
+  assert_true((app.activate)(button(app, 4)) is None)
+  assert_eq(stale.apply(), @task.Rejected)
+  ignore(app.publish())
+  assert_eq(line(app, 7), "Shipping: 112 for 1")
+  assert_false(app.reconcile_downstreams(_ => abort("yen must not restart D")))
+  assert_eq(quotes.length(), 1)
+  (app.dispose)()
+}
+
+///|
+async test "a failed currency source never becomes a converted quote" {
+  let app = create_with_rate(_ => (), _ => Err("rate unavailable"))
+  (app.connect_tasks)(@task.task_control(_ => ()))
+  let item = (app.initialize)().unwrap()
+  item.invalidate()
+  for request in item.members() {
+    assert_eq(request.prepare().unwrap().run().apply(), @task.Changed)
+  }
+  let quotes : Array[@task.Request] = []
+  assert_true(
+    app.reconcile_downstreams(request => {
+      quotes.push(request)
+      request.invalidate()
+      true
+    }),
+  )
+  assert_eq(
+    quotes[0].members()[0].prepare().unwrap().run().apply(),
+    @task.Changed,
+  )
+  ignore(app.publish())
+  assert_eq(line(app, 7), "Shipping: 112 for 1")
+  let rate = (app.activate)(button(app, 5)).unwrap()
+  rate.invalidate()
+  assert_eq(rate.members()[0].prepare().unwrap().run().apply(), @task.Changed)
+  ignore(app.publish())
+  assert_eq(line(app, 7), "Shipping: failed")
+  assert_false(
+    app.reconcile_downstreams(_ => abort("C failure must not restart D")),
+  )
+  assert_true((app.activate)(button(app, 4)) is None)
+  ignore(app.publish())
+  assert_eq(line(app, 7), "Shipping: 112 for 1")
+  (app.dispose)()
+}
+
+///|
+async test "quantity restarts D while reusing a completed independent currency" {
+  let app = create(_ => ())
+  (app.connect_tasks)(@task.task_control(_ => ()))
+  let item = (app.initialize)().unwrap()
+  item.invalidate()
+  let rate = (app.activate)(button(app, 5)).unwrap()
+  rate.invalidate()
+  for request in item.members() {
+    assert_eq(request.prepare().unwrap().run().apply(), @task.Changed)
+  }
+  assert_eq(rate.members()[0].prepare().unwrap().run().apply(), @task.Changed)
+  let quotes : Array[@task.Request] = []
+  assert_true(
+    app.reconcile_downstreams(request => {
+      quotes.push(request)
+      request.invalidate()
+      true
+    }),
+  )
+  assert_eq(
+    quotes[0].members()[0].prepare().unwrap().run().apply(),
+    @task.Changed,
+  )
+  ignore(app.publish())
+  assert_eq(line(app, 7), "Shipping: 224 USD for 1")
+  assert_true((app.activate)(button(app, 2)) is None)
+  assert_true(
+    app.reconcile_downstreams(request => {
+      quotes.push(request)
+      request.invalidate()
+      true
+    }),
+  )
+  assert_eq(quotes.length(), 2)
+  ignore(app.publish())
+  assert_eq(line(app, 7), "Shipping: loading")
+  assert_eq(
+    quotes[1].members()[0].prepare().unwrap().run().apply(),
+    @task.Changed,
+  )
+  ignore(app.publish())
+  assert_eq(line(app, 7), "Shipping: 448 USD for 2")
+  (app.dispose)()
 }
 
 ///|
@@ -29,7 +196,7 @@ async test "recreating detail revokes old controls and rejects old shipping resu
   let old_quantity = button(app, 2)
   assert_true((app.activate)(button(app, 3)) is None)
   ignore(app.publish())
-  assert_eq((app.view)()[7].element.text, "Shipping: detail hidden")
+  assert_eq(line(app, 7), "Shipping: detail hidden")
   assert_true(@semantics.node(app.editor, old_quantity) is Err(_))
   assert_eq(old_result.apply(), @task.Rejected)
 
@@ -95,7 +262,7 @@ async test "stock-first and detail-first item requests start shipping only after
   second.invalidate()
   ignore(app.reconcile_downstreams(_ => true))
   ignore(app.publish())
-  assert_eq(line(app, 4), "Item: blue · Quantity: 1")
+  assert_eq(line(app, 4), "Item: blue · Quantity: 1 · Currency: JPY")
   assert_eq(line(app, 7), "Shipping: waiting for item")
   let blue = second.members()
   assert_eq(blue[0].prepare().unwrap().run().apply(), @task.Changed)
@@ -190,7 +357,7 @@ async test "switching items rejects an unfinished detail from the previous selec
     @task.Changed,
   )
   ignore(app.publish())
-  assert_eq(line(app, 4), "Item: blue · Quantity: 1")
+  assert_eq(line(app, 4), "Item: blue · Quantity: 1 · Currency: JPY")
   assert_eq(line(app, 5), "Detail: Blue stool")
   assert_eq(line(app, 7), "Shipping: 107 for 1")
   let recreated_amber = (app.activate)(button(app, 0)).unwrap()
