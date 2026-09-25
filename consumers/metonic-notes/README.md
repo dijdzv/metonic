@@ -111,6 +111,8 @@ source entry rejects a conflicting marker and does not edit the dependency.
 Update the pinned revision and dependency checkout together, then run the
 platform and package verification commands below. The public build prepares its
 selected dependencies. Do not edit registry packages or generated bindings by hand.
+The Phase 5 Application contract adds `downstreams`; Notes has no derived child
+requests, so its application specifies `downstreams: None`.
 
 When copying the application to another directory, reinstall development
 dependencies from the lockfile instead of copying `node_modules`: Windows pnpm
