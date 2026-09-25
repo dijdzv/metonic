@@ -13,6 +13,14 @@ pub fn Widget::button(value : @component.UiButton) -> Widget {
 }
 
 ///|
+pub fn Widget::checkbox(value : @component.UiCheckbox) -> Widget {
+  {
+    reference: value.reference(),
+    render: (bounds, clip) => checkbox(value, bounds, clip~),
+  }
+}
+
+///|
 pub fn Widget::label(value : @component.UiLabel) -> Widget {
   {
     reference: value.reference(),

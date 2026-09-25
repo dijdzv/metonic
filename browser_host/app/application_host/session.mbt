@@ -434,6 +434,7 @@ fn Session::resize(self : Session, width : Int, height : Int) -> Int {
         class_name: match control.kind {
           @app.Input(..) => Some("gpu-input")
           @app.Button => Some("gpu-button")
+          @app.Checkbox => Some("gpu-button")
           @app.Text => None
         },
       })
@@ -486,6 +487,19 @@ fn Session::render(self : Session) -> Int {
       @semantics.node(self.application.editor, reference) is Ok(node) {
       @dom_view.button(binding.element_id, node.name, node.enabled)
     }
+    if control.kind == @app.Checkbox &&
+      control.element.reference is Some(reference) &&
+      self.bindings.iter().find_first(binding => binding.reference == reference)
+      is Some(binding) &&
+      @semantics.node(self.application.editor, reference) is Ok(node) {
+      @dom_view.checkbox(
+        binding.element_id,
+        node.name,
+        node.enabled,
+        node.checked,
+        node.invalid,
+      )
+    }
     if control.kind is @app.Input(..) &&
       control.element.reference is Some(reference) {
       guard self.editors
@@ -532,6 +546,14 @@ fn Session::render(self : Session) -> Int {
           clip=control.clip,
           surface=if control.kind == @app.Button {
             @renderer.Control
+          } else if control.kind == @app.Checkbox &&
+            control.element.reference is Some(reference) &&
+            @semantics.node(self.application.editor, reference) is Ok(node) {
+            @renderer.Checkbox(
+              checked=node.checked,
+              enabled=node.enabled,
+              invalid=node.invalid,
+            )
           } else {
             @renderer.Text
           },
@@ -567,7 +589,7 @@ fn Session::activate_reference(
   }
   let view = (self.application.view)()
   if !view.any(control => {
-      control.kind == @app.Button &&
+      (control.kind == @app.Button || control.kind == @app.Checkbox) &&
       control.element.reference == Some(reference)
     }) {
     return 0

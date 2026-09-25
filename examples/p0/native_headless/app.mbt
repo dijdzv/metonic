@@ -55,6 +55,7 @@ fn semantic_nodes(tree : @semantics.Tree) -> Array[NodeDto] {
     let role = match node.role {
       @semantics.Role::Label => "label"
       @semantics.Role::Button => "button"
+      @semantics.Role::Checkbox => "checkbox"
       @semantics.Role::TextInput => "text_input"
     }
     {

@@ -55,6 +55,64 @@ test "UI root dispatches live fixed controls and synchronizes committed values" 
 }
 
 ///|
+test "controlled checkbox toggles through its live owner and keeps semantic states" {
+  let scope = @reactive.Scope::root(@reactive.Graph::new())
+  let tree = @semantics.empty(85, 1)
+  let ui = UiRoot::new(scope, tree)
+  let value = @reactive.Signal::new(scope, false)
+  let enabled = @reactive.Signal::new(scope, true)
+  let invalid = @reactive.Signal::new(scope, false)
+  let commits = Ref(0)
+  let owner = ui.fixed("settings")
+  let control = owner
+    .checkbox(
+      "updates",
+      "Send updates",
+      Controlled::new(() => value.peek(), checked => {
+        commits.val += 1
+        value.set(checked)
+        None
+      }),
+      enabled=Read::new(() => enabled.peek()),
+      invalid=Read::new(() => invalid.peek()),
+    )
+    .unwrap()
+  let reference = control.reference()
+  assert_eq(@semantics.node(tree, reference).unwrap().role, @semantics.Checkbox)
+  assert_false(@semantics.node(tree, reference).unwrap().checked)
+  ignore(ui.activate(reference))
+  assert_eq(commits.val, 1)
+  assert_true(value.peek())
+  assert_true(ui.synchronize(None))
+  assert_true(@semantics.node(tree, reference).unwrap().checked)
+  invalid.set(true)
+  enabled.set(false)
+  assert_true(ui.synchronize(None))
+  assert_true(@semantics.node(tree, reference).unwrap().invalid)
+  assert_false(@semantics.node(tree, reference).unwrap().enabled)
+  ignore(ui.activate(reference))
+  assert_eq(commits.val, 1)
+  owner.scope().dispose()
+  let fresh = ui
+    .fixed("settings")
+    .checkbox(
+      "updates",
+      "Send updates",
+      Controlled::new(() => false, _ => {
+        commits.val += 10
+        None
+      }),
+    )
+    .unwrap()
+  assert_true(fresh.reference() != reference)
+  ignore(ui.activate(reference))
+  assert_eq(commits.val, 1)
+  ignore(ui.activate(fresh.reference()))
+  assert_eq(commits.val, 11)
+  scope.dispose()
+}
+
+///|
 test "keyed UI owner revokes an old reference before same-key recreation" {
   let scope = @reactive.Scope::root(@reactive.Graph::new())
   let tree = @semantics.empty(81, 1)

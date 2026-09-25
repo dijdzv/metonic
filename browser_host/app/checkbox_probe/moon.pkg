@@ -1,0 +1,18 @@
+import {
+  "local/p0/examples/component_gallery" @gallery,
+  "local/browser_host/application_host" @host,
+}
+
+pkgtype(kind: "foreign_library")
+
+supported_targets = "+js+wasm-gc"
+
+options(
+  link: {
+    "js": { "format": "esm" },
+    "wasm-gc": {
+      "imported-string-constants": "_",
+      "use-js-builtin-string": true,
+    },
+  },
+)

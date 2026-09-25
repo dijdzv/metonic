@@ -43,6 +43,43 @@ pub fn button(id : String, label : String, enabled : Bool) -> Unit {
 }
 
 ///|
+pub fn checkbox(
+  id : String,
+  label : String,
+  enabled : Bool,
+  checked : Bool,
+  invalid : Bool,
+) -> Unit {
+  let child = element(id)
+  let button = @input_dom.HTMLButtonElement::from_js_value_opt(
+    child.to_js_value(),
+  ).unwrap()
+  button.set_disabled(!enabled)
+  text(child, label)
+  child
+  .to_element()
+  .set_attribute(
+    "role",
+    @input_dom.TrustedTypeOrString::from_string("checkbox"),
+  )
+  .unwrap()
+  child
+  .to_element()
+  .set_attribute(
+    "aria-checked",
+    @input_dom.TrustedTypeOrString::from_string(checked.to_string()),
+  )
+  .unwrap()
+  child
+  .to_element()
+  .set_attribute(
+    "aria-invalid",
+    @input_dom.TrustedTypeOrString::from_string(invalid.to_string()),
+  )
+  .unwrap()
+}
+
+///|
 pub fn create_control(
   parent : @input_dom.HTMLElement,
   id : String,

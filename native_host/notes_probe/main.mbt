@@ -1,5 +1,17 @@
 ///|
 async fn main {
+  if @env.args().contains("--checkbox-uia") {
+    @window_host.run(
+      @host_application.from_application(@gallery.create()),
+      hidden=true,
+    )
+    println("NATIVE_CHECKBOX_UIA_HOST_STOP_OK")
+    return
+  }
+  if @env.args().contains("--checkbox") {
+    verify_checkbox_gallery()
+    return
+  }
   if @env.args().contains("--ui-root") {
     verify_ui_root()
     return

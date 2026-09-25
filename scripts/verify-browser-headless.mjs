@@ -5,6 +5,7 @@ import path from 'node:path'
 import { chromium } from 'playwright'
 import { observedPage, reportFailure } from '../tools/devtools/browser-observation.mjs'
 import { verifyDynamicControls } from '../tools/devtools/application-controls.mjs'
+import { verifyCheckboxGallery } from '../tools/devtools/checkbox-gallery.mjs'
 import { verify as verifyPixels, runScene, runFailures, runFontFailures, runText, runDpr, runSuite, runRelease, runEditorScroll, runQueryObservation } from '../_build/js/release/build/tools/verify_browser_pixels/verify_browser_pixels.js'
 
 if (process.env.METONIC_BROWSER_SUPERVISED !== '1') throw new Error('Run mise run browser:async/headless')
@@ -671,6 +672,7 @@ try {
   }
   await verifyNotes(browser)
   await verifyDynamicControls(browser, baseUrl, outputDir)
+  await verifyCheckboxGallery(browser, baseUrl, outputDir)
   const output = await runSuite(async (request) => {
     if (request.op === 'input-lifetime' || request.op === 'input-diagnostics') {
       const page = await observedPage(browser);

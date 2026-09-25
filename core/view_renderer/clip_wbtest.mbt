@@ -59,3 +59,22 @@ test "control pixels retain border, label and blank interior" {
   let focused = control_pixels(bounds, label, 4, true)
   assert_eq(focused[0:4], b"\xf5\xa1\x5c\xff")
 }
+
+///|
+test "checkbox paints checked mark separately from its label and state border" {
+  let bounds : @view.Bounds = { x: 0, y: 0, width: 140, height: 40, }
+  let label = Bytes::make(96 * 32 * 4, b'\x80')
+  let unchecked = checkbox_pixels(bounds, label, 4, false, false, true, false)
+  let checked = checkbox_pixels(bounds, label, 4, false, true, true, false)
+  let mark = (22 * 140 + 15) * 4
+  assert_eq(unchecked[mark:mark + 4], b"\xff\xff\xff\xff")
+  assert_eq(checked[mark:mark + 4], b"\x35\x50\x6d\xff")
+  assert_eq(
+    checked[(4 * 140 + 36) * 4:(4 * 140 + 36) * 4 + 4],
+    b"\x80\x80\x80\x80",
+  )
+  let invalid = checkbox_pixels(bounds, label, 4, false, true, true, true)
+  assert_eq(invalid[0:4], b"\xc4\x3c\x3c\xff")
+  let disabled = checkbox_pixels(bounds, label, 4, false, true, false, false)
+  assert_eq(disabled[0:4], b"\x8a\x8a\x8a\xff")
+}

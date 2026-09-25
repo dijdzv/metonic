@@ -38,8 +38,92 @@ fn render_item(engine : @raster.Engine, item : Item) -> Layer {
       let pixels = control_pixels(bounds, label, label_top, element.focused)
       { bounds, pixels, }
     }
+    Checkbox(checked~, enabled~, invalid~) => {
+      let label_width = (bounds.width - 44).max(1)
+      let label_top = if bounds.height < 36 { 2 } else { 4 }
+      let label = @raster.render(engine, element.text, label_width, 32)
+      let pixels = checkbox_pixels(
+        bounds,
+        label,
+        label_top,
+        element.focused,
+        checked,
+        enabled,
+        invalid,
+      )
+      { bounds, pixels, }
+    }
   }
   clip_layer(layer, item.clip)
+}
+
+///|
+fn checkbox_pixels(
+  bounds : @view.Bounds,
+  label : Bytes,
+  label_top : Int,
+  focused : Bool,
+  checked : Bool,
+  enabled : Bool,
+  invalid : Bool,
+) -> Bytes {
+  let width = bounds.width
+  let height = bounds.height
+  let label_width = (width - 44).max(1)
+  let rgba = FixedArray::make(width * height * 4, b'\xff')
+  let border_r = if invalid {
+    b'\xC4'
+  } else if focused {
+    b'\xF5'
+  } else {
+    b'\x35'
+  }
+  let border_g = if invalid {
+    b'\x3C'
+  } else if focused {
+    b'\xA1'
+  } else {
+    b'\x50'
+  }
+  let border_b = if invalid {
+    b'\x3C'
+  } else if focused {
+    b'\x5C'
+  } else {
+    b'\x6D'
+  }
+  let box_y = ((height - 20) / 2).max(2)
+  for y in 0..<height {
+    for x in 0..<width {
+      let index = (y * width + x) * 4
+      let outer = x < 2 || x >= width - 2 || y < 2 || y >= height - 2
+      let bx = x - 8
+      let by = y - box_y
+      let inside = bx >= 0 && bx < 20 && by >= 0 && by < 20
+      let edge = inside && (bx < 2 || bx >= 18 || by < 2 || by >= 18)
+      let mark = checked &&
+        inside &&
+        (
+          (bx >= 5 && bx <= 9 && (by - bx - 5).abs() <= 1) ||
+          (bx >= 9 && bx <= 17 && (by + bx - 23).abs() <= 1)
+        )
+      if outer || edge || mark {
+        rgba[index] = if !enabled { b'\x8A' } else { border_r }
+        rgba[index + 1] = if !enabled { b'\x8A' } else { border_g }
+        rgba[index + 2] = if !enabled { b'\x8A' } else { border_b }
+      }
+    }
+  }
+  for y in label_top.max(2)..<(label_top + 32).min(height - 2) {
+    for x in 36..<(width - 8) {
+      let dest = (y * width + x) * 4
+      let source = ((y - label_top) * label_width + x - 36) * 4
+      for channel in 0..<4 {
+        rgba[dest + channel] = label[source + channel]
+      }
+    }
+  }
+  rgba.unsafe_reinterpret_as_bytes()
 }
 
 ///|

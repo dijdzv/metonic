@@ -33,11 +33,14 @@ fn controls(state : @host.Snapshot) -> Json {
         "role": match node.role {
           @semantics.Label => "label"
           @semantics.Button => "button"
+          @semantics.Checkbox => "checkbox"
           @semantics.TextInput => "text_input"
         },
         "name": node.name,
         "value": node.value,
         "enabled": node.enabled,
+        "checked": node.checked,
+        "invalid": node.invalid,
         "focused": node.focused,
         "selection_start": node.selection_start,
         "selection_end": node.selection_end,
