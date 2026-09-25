@@ -127,3 +127,78 @@ synthetic checks is physical IME verification. Reproduce with the Notes consumer
 tasks `verify:browser`, `verify:native-control`, `verify:persistence`,
 `verify:browser-package`, `verify:native-package`, `scale:baseline-browser`,
 `scale:baseline-native` and `scale:resources-native`.
+
+## Final first-group integration check
+
+On 2026-09-26, both independent consumers were repinned to integrated Metonic
+`c4a9bf6d05006b40b5f259547b29e0b8beeb12b6` after the owned Status and
+first-group theme/gallery changes. This section is a new measurement, not a
+replacement for the historical baseline above. The quote board's model tests
+passed 18/18 on JS and native; browser JS/WasmGC and native operation checks
+passed without application-side behavior changes. Its native measurement helper
+had to stop selecting status text by the position of controls without a semantic
+reference: owned Status controls now have one. It selects the existing display
+row by geometry and buttons by name; the measured action sequence and limits
+are unchanged. The Notes consumer, which constructs `Application` directly and
+uses its own controls, added `components: None` for the new public field. Its
+56 JS and 20 WasmGC model tests then passed.
+
+The same quote-board warmup and three measured flows passed on all three
+targets. Median step times in milliseconds:
+
+| Observed step | Browser JS | Browser WasmGC | Native debug |
+| --- | ---: | ---: | ---: |
+| Host Ready | 380 | 552 | — |
+| Initial quote Ready | 1,583 | 1,722 | 1,680 |
+| Blue change: pending | 63 | 55 | 45 |
+| Blue change: quote Ready | 1,247 | 1,240 | 1,262 |
+| USD change: pending | 47 | 51 | 44 |
+| USD change: converted quote Ready | 658 | 661 | 675 |
+| Detail hidden | 49 | 35 | 23 |
+| Detail recreated and quote Ready | 304 | 312 | 310 |
+| Note input visible | 50 | 39 | 32 |
+| Note save acknowledged | 867 | 859 | 860 |
+
+These times include the same deliberate fixture delays and automation overhead
+described above. No fixed operation limit was relaxed. Measured end-of-flow
+Chromium JS heap was 14,335,696–15,116,900 bytes for JS and
+22,089,344–32,436,620 bytes for WasmGC; this counter does not include all
+process or GPU memory. The three native release-process post-operation samples
+used 233,222,144–237,817,856 working-set bytes,
+410,316,800–415,113,216 private bytes and 624 handles, then closed with GPU
+ownership released. Native debug operation measurements and release resource
+measurements remain separate.
+
+Release payload sizes from this pin:
+
+| Browser file group | Raw bytes | gzip bytes |
+| --- | ---: | ---: |
+| Application JS | 6,969,203 | 750,725 |
+| Application WasmGC | 2,131,399 | 665,644 |
+| Shared host JavaScript | 54,440 | 10,632 |
+| Noto Sans JP font | 9,589,900 | 5,874,995 |
+| Requested files, JS path | 16,614,394 | 6,636,877 |
+| Requested files, WasmGC path | 11,776,590 | 6,551,796 |
+
+The browser requested-path rows include `index.html` and exclude unfetched
+licenses. They are gzip level-6 estimates, not observed compressed transfer.
+The native 26-file package totals 24,027,139 payload bytes excluding its
+inventory JSON, including `QuoteBoard.exe` at 13,766,656 bytes. Against the
+earlier record, application JS increased 708,722 raw bytes, WasmGC increased
+200,777, and the native executable increased 320,000. This interval also
+contains the owned component, status and theme work; it is not a measured
+per-feature size allocation. Both package verifiers passed browser JS/WasmGC,
+native unrelated-directory launch and close, inventory and license checks,
+development-feature exclusion and overwrite protection.
+
+Notes browser JS/WasmGC editing, persistence, search, dynamic list, autosave,
+CLI and MCP checks passed. Native MCP, persisted storage, save/restore and
+package relocation passed. Its fixed 1,000-memo browser and native operation
+sequences each passed one warmup and three measured runs under the existing
+per-sample limits. The native release resource run also passed all limits; the
+largest measured checkpoint was 241,991,680 working-set bytes,
+421,302,272 private bytes and 665 handles. The unchanged 100,000-write graph
+benchmark returned checksums 300001/500001/700001 on all targets, with
+native 33/34/33 ms, JS 61/56/52 ms and WasmGC 10/11/10 ms. These short
+integer-millisecond samples do not establish a material speed difference.
+Physical IME input remains outside these synthetic checks.
