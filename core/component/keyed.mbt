@@ -86,6 +86,19 @@ pub fn ChildOwner::add_button(
 }
 
 ///|
+pub fn ChildOwner::add_label(
+  self : ChildOwner,
+  text : String,
+) -> @semantics.NodeRef? {
+  guard !self.scope.is_disposed() else { return None }
+  let reference = @semantics.add_label(self.tree, text)
+  if reference is Some(value) {
+    self.references.push(value)
+  }
+  reference
+}
+
+///|
 pub fn ChildOwner::add_input(
   self : ChildOwner,
   name : String,

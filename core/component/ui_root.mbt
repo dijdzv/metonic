@@ -37,7 +37,17 @@ priv struct UiAction {
   key : String
   owner : ChildOwner
   reference : @semantics.NodeRef
+  label : Read[String]
+  enabled : Read[Bool]
   callback : () -> @task.Request?
+}
+
+///|
+priv struct UiText {
+  key : String
+  owner : ChildOwner
+  reference : @semantics.NodeRef
+  value : Read[String]
 }
 
 ///|
@@ -60,6 +70,7 @@ pub struct UiRoot {
   priv tree : @semantics.Tree
   priv fixed : Array[FixedOwner]
   priv actions : Array[UiAction]
+  priv labels : Array[UiText]
   priv edits : Array[UiEdit]
 }
 
@@ -70,11 +81,25 @@ pub struct UiOwner {
 }
 
 ///|
+pub struct UiButton {
+  priv root : UiRoot
+  priv owner : ChildOwner
+  priv reference : @semantics.NodeRef
+}
+
+///|
+pub struct UiLabel {
+  priv root : UiRoot
+  priv owner : ChildOwner
+  priv reference : @semantics.NodeRef
+}
+
+///|
 pub fn UiRoot::new(scope : @reactive.Scope, tree : @semantics.Tree) -> UiRoot {
   if scope.is_disposed() {
     abort("UI root requires a live scope")
   }
-  { scope, tree, fixed: [], actions: [], edits: [], }
+  { scope, tree, fixed: [], actions: [], labels: [], edits: [], }
 }
 
 ///|
@@ -136,6 +161,12 @@ fn UiOwner::check_key(self : UiOwner, key : String) -> Unit {
       abort("duplicate UI control key")
     }
   }
+  for label in self.root.labels {
+    if physical_equal(label.owner.scope(), self.child.scope()) &&
+      label.key == key {
+      abort("duplicate UI control key")
+    }
+  }
 }
 
 ///|
@@ -144,13 +175,20 @@ pub fn UiOwner::button(
   key : String,
   label : String,
   on_activate : () -> @task.Request?,
-) -> @semantics.NodeRef? {
+  enabled? : Read[Bool] = Read::new(() => true),
+) -> UiButton? {
   self.check_key(key)
   guard self.child.add_button(label) is Some(reference) else { return None }
+  let state = self.root.scope.graph().read_only(() => enabled.get())
+  if !state {
+    ignore(@semantics.set_enabled(self.root.tree, reference, false))
+  }
   self.root.actions.push({
     key,
     owner: self.child,
     reference,
+    label: Read::new(() => label),
+    enabled,
     callback: on_activate,
   })
   self.child
@@ -158,7 +196,61 @@ pub fn UiOwner::button(
   .on_dispose(() => {
     self.root.actions.retain(action => action.reference != reference)
   })
-  Some(reference)
+  Some({ root: self.root, owner: self.child, reference, })
+}
+
+///|
+pub fn UiOwner::label(
+  self : UiOwner,
+  key : String,
+  value : Read[String],
+) -> UiLabel? {
+  self.check_key(key)
+  let text = self.root.scope.graph().read_only(() => value.get())
+  guard self.child.add_label(text) is Some(reference) else { return None }
+  self.root.labels.push({ key, owner: self.child, reference, value, })
+  self.child
+  .scope()
+  .on_dispose(() => {
+    self.root.labels.retain(label => label.reference != reference)
+  })
+  Some({ root: self.root, owner: self.child, reference, })
+}
+
+///|
+pub fn UiButton::reference(self : UiButton) -> @semantics.NodeRef {
+  self.reference
+}
+
+///|
+pub fn UiLabel::reference(self : UiLabel) -> @semantics.NodeRef {
+  self.reference
+}
+
+///|
+pub fn UiButton::element(
+  self : UiButton,
+  bounds : @view.Bounds,
+) -> @view.Element {
+  if !self.owner.owns(self.reference) {
+    abort("UI button owner is disposed")
+  }
+  let node = @semantics.node(self.root.tree, self.reference).unwrap()
+  {
+    bounds,
+    text: node.name,
+    reference: Some(self.reference),
+    focused: node.focused,
+  }
+}
+
+///|
+pub fn UiLabel::element(self : UiLabel, bounds : @view.Bounds) -> @view.Element {
+  if !self.owner.owns(self.reference) {
+    abort("UI label owner is disposed")
+  }
+  let node = @semantics.node(self.root.tree, self.reference).unwrap()
+  { bounds, text: node.name, reference: Some(self.reference), focused: false, }
 }
 
 ///|
@@ -230,6 +322,34 @@ pub fn UiRoot::synchronize(
 ) -> Bool {
   guard !self.scope.is_disposed() else { return false }
   let mut changed = false
+  for action in self.actions {
+    if !action.owner.owns(action.reference) {
+      continue
+    }
+    let next_name = self.scope.graph().read_only(() => action.label.get())
+    let next_enabled = self.scope.graph().read_only(() => action.enabled.get())
+    if @semantics.node(self.tree, action.reference) is Ok(node) {
+      if node.name != next_name &&
+        @semantics.set_name(self.tree, action.reference, next_name) == "" {
+        changed = true
+      }
+      if node.enabled != next_enabled &&
+        @semantics.set_enabled(self.tree, action.reference, next_enabled) == "" {
+        changed = true
+      }
+    }
+  }
+  for label in self.labels {
+    if !label.owner.owns(label.reference) {
+      continue
+    }
+    let text = self.scope.graph().read_only(() => label.value.get())
+    if @semantics.node(self.tree, label.reference) is Ok(node) &&
+      node.name != text &&
+      @semantics.set_name(self.tree, label.reference, text) == "" {
+      changed = true
+    }
+  }
   for edit in self.edits {
     if !edit.owner.owns(edit.reference) || composing == Some(edit.reference) {
       continue

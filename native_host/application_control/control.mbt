@@ -30,10 +30,10 @@ fn controls(state : @host.Snapshot) -> Json {
           "id": target.id,
           "generation": target.generation,
         },
-        "role": if node.role == @semantics.Button {
-          "button"
-        } else {
-          "text_input"
+        "role": match node.role {
+          @semantics.Label => "label"
+          @semantics.Button => "button"
+          @semantics.TextInput => "text_input"
         },
         "name": node.name,
         "value": node.value,

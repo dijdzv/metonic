@@ -33,15 +33,15 @@ fn Session::reconcile_controls(
     if keys.contains(key) {
       return false
     }
-    if control.kind != @app.Text {
+    if control.kind != @app.Text || control.element.reference is Some(_) {
       guard control.element.reference is Some(reference) else { return false }
       guard @semantics.node(self.application.editor, reference) is Ok(node) else {
         return false
       }
       let compatible = match control.kind {
+        @app.Text => node.role == @semantics.Label
         @app.Button => node.role == @semantics.Button
         @app.Input(..) => node.role == @semantics.TextInput
-        @app.Text => true
       }
       if !compatible {
         return false

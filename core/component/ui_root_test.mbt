@@ -12,6 +12,7 @@ test "UI root dispatches live fixed controls and synchronizes committed values" 
       None
     })
     .unwrap()
+    .reference()
   let value = @reactive.Signal::new(scope, "old")
   let input = owner
     .text_input(
@@ -69,6 +70,7 @@ test "keyed UI owner revokes an old reference before same-key recreation" {
       None
     })
     .unwrap()
+    .reference()
   }
   assert_true(
     children.reconcile([{ key: "same", props: (), }], create, (_, _) => ()),
@@ -95,13 +97,63 @@ test "disposed fixed owner recreates a new instance under the same key" {
   let tree = @semantics.empty(82, 1)
   let ui = UiRoot::new(scope, tree)
   let old_owner = ui.fixed("panel")
-  let old = old_owner.button("action", "Old", () => None).unwrap()
+  let old = old_owner.button("action", "Old", () => None).unwrap().reference()
   old_owner.scope().dispose()
   let fresh_owner = ui.fixed("panel")
-  let fresh = fresh_owner.button("action", "New", () => None).unwrap()
+  let fresh = fresh_owner
+    .button("action", "New", () => None)
+    .unwrap()
+    .reference()
   assert_true(old_owner.generation() != fresh_owner.generation())
   assert_true(old != fresh)
   assert_true(@semantics.node(tree, old) is Err(_))
   assert_eq(@semantics.node(tree, fresh).unwrap().name, "New")
+  scope.dispose()
+}
+
+///|
+test "label identity and button enabled state follow their owner" {
+  let scope = @reactive.Scope::root(@reactive.Graph::new())
+  let tree = @semantics.empty(83, 1)
+  let ui = UiRoot::new(scope, tree)
+  let owner = ui.fixed("summary")
+  let text = @reactive.Signal::new(scope, "Waiting")
+  let enabled = @reactive.Signal::new(scope, false)
+  let label = owner.label("status", Read::new(() => text.peek())).unwrap()
+  let pressed = Ref(0)
+  let button = owner
+    .button(
+      "retry",
+      "Retry",
+      () => {
+        pressed.val += 1
+        None
+      },
+      enabled=Read::new(() => enabled.peek()),
+    )
+    .unwrap()
+  assert_eq(
+    @semantics.node(tree, label.reference()).unwrap().role,
+    @semantics.Label,
+  )
+  assert_eq(@semantics.focus(tree, label.reference()), "unsupported_action")
+  assert_eq(
+    label.element({ x: 1, y: 2, width: 80, height: 20, }).text,
+    "Waiting",
+  )
+  assert_false(@semantics.node(tree, button.reference()).unwrap().enabled)
+  ignore(ui.activate(button.reference()))
+  assert_eq(pressed.val, 0)
+  text.set("Ready")
+  enabled.set(true)
+  assert_true(ui.synchronize(None))
+  assert_eq(label.element({ x: 1, y: 2, width: 80, height: 20, }).text, "Ready")
+  assert_true(@semantics.node(tree, button.reference()).unwrap().enabled)
+  ignore(ui.activate(button.reference()))
+  assert_eq(pressed.val, 1)
+  owner.scope().dispose()
+  assert_true(@semantics.node(tree, label.reference()) is Err(_))
+  assert_true(@semantics.node(tree, button.reference()) is Err(_))
+  assert_true(ui.activate(button.reference()) is None)
   scope.dispose()
 }

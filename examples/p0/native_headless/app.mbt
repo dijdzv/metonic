@@ -53,6 +53,7 @@ fn node_ref(target : NodeTarget) -> @semantics.NodeRef {
 fn semantic_nodes(tree : @semantics.Tree) -> Array[NodeDto] {
   @semantics.snapshot(tree).map(fn(node) {
     let role = match node.role {
+      @semantics.Role::Label => "label"
       @semantics.Role::Button => "button"
       @semantics.Role::TextInput => "text_input"
     }

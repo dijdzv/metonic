@@ -118,7 +118,7 @@ fn Model::change(self : Model, command : Int) -> Unit {
               operation=@task.Operation::new(),
             ),
           ),
-        )
+        ).map(button => button.reference())
       }
     }
     31 => self.controlled.set("programmatic")
