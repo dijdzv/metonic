@@ -19,9 +19,11 @@ async fn wait_text(
 ///|
 async fn main {
   let clock = @production_clock.SystemClock::new()
-  let app = @board.create(milliseconds => {
-    @clock.Clock::sleep(clock, milliseconds)
-  })
+  let diagnostics = @async_state.TraceRegistry::new(128)
+  let app = @board.create(
+    milliseconds => @clock.Clock::sleep(clock, milliseconds),
+    diagnostics=Some(diagnostics),
+  )
   let amber_button = (app.view)()[0].element.reference.unwrap()
   let blue = (app.view)()[1].element.reference.unwrap()
   let toggle_detail = (app.view)()[3].element.reference.unwrap()
@@ -34,6 +36,11 @@ async fn main {
     controller=Some(handle => {
       @async.with_timeout(15000, async fn() {
         wait_text(app, 7, "Shipping: 112 for 1")
+        let first_trace = (handle.inspect)().diagnostics.unwrap()
+        assert_eq(diagnostics.owners().length(), 3)
+        assert_eq(diagnostics.sources().length(), 4)
+        assert_eq(diagnostics.derived()[0].phase, "ready")
+        assert_true(first_trace.stringify().contains("\"sources\""))
         let increase = (app.view)()[6].element.reference.unwrap()
         let amber = (handle.capture)(_ => ())
         assert_eq(amber.pixels.length(), amber.width * amber.height * 4)
@@ -46,6 +53,32 @@ async fn main {
           "",
         )
         assert_eq(text(app, 5), "Detail: loading")
+        let joined_before = diagnostics
+          .events()
+          .filter(event => event.kind == @async_state.CleanupJoined)
+          .length()
+        assert_eq(
+          (handle.operate)(
+            amber_button,
+            @window_host.ActivateControl,
+            (handle.inspect)().semantic_revision,
+          ),
+          "",
+        )
+        @async.with_timeout(5000, () => {
+          while diagnostics
+                .events()
+                .filter(event => event.kind == @async_state.CleanupJoined)
+                .length() <=
+                joined_before {
+            @async.sleep(20)
+          }
+        })
+        assert_true(
+          diagnostics
+          .events()
+          .any(event => event.kind == @async_state.CancellationRequested),
+        )
         wait_text(app, 6, "Stock: 12")
         assert_eq(text(app, 5), "Detail: loading")
         wait_text(app, 7, "Shipping: 112 for 1")
@@ -64,6 +97,16 @@ async fn main {
         let partial = (handle.capture)(_ => ())
         assert_true(partial.pixels != amber.pixels)
         wait_text(app, 7, "Shipping: 107 for 1")
+        assert_true(
+          diagnostics
+          .events()
+          .any(event => event.kind == @async_state.OwnerDisposed),
+        )
+        assert_true(
+          diagnostics
+          .events()
+          .any(event => event.kind == @async_state.SourceDisposed),
+        )
         let ready = (handle.capture)(_ => ())
         assert_true(ready.pixels != partial.pixels)
         assert_eq(
@@ -93,6 +136,7 @@ async fn main {
           ),
           "",
         )
+        wait_text(app, 7, "Shipping: loading")
         assert_eq(
           (handle.operate)(
             toggle_detail,
@@ -102,6 +146,11 @@ async fn main {
           "",
         )
         assert_eq(text(app, 7), "Shipping: detail hidden")
+        assert_true(
+          diagnostics
+          .events()
+          .any(event => event.kind == @async_state.CancellationRequested),
+        )
         assert_eq(
           (handle.operate)(
             blue_increase,
@@ -157,6 +206,11 @@ async fn main {
           "",
         )
         wait_text(app, 7, "Shipping: failed for blue x4")
+        assert_true(
+          diagnostics
+          .events()
+          .any(event => event.kind == @async_state.ExpectedFailure),
+        )
         let retry = (app.view)()
         .iter()
         .find_first(control => control.element.text == "Retry quote")
@@ -219,6 +273,12 @@ async fn main {
         )
         wait_text(app, 8, "Note: saved revision 1; saving revision 2")
         wait_text(app, 8, "Note: saved revision 2")
+        assert_false(
+          (handle.inspect)().diagnostics
+          .unwrap()
+          .stringify()
+          .contains("newer draft"),
+        )
         assert_eq((handle.inspect)().text, "first draft newer draft")
         assert_eq(
           (handle.operate)(
@@ -234,6 +294,7 @@ async fn main {
         completed.val = true
       })
     }),
+    diagnostics=Some(diagnostics),
   )
   assert_true(completed.val)
   println("QUOTE_BOARD_NATIVE_OK")

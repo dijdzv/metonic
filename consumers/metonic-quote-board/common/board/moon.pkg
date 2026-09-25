@@ -9,4 +9,5 @@ import {
 
 import {
   "moonbitlang/async",
+  "local/metonic_async/application_task" @driver,
 } for "test"

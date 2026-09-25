@@ -10,17 +10,30 @@ async fn main {
   let args = @env.args()
   assert_true(
     args.length() == 2,
-    msg="usage: build.mbtx browser|native|native-probe",
+    msg="usage: build.mbtx browser|browser-diagnostics|native|native-probe",
   )
   let target = args[1]
   assert_true(
-    target == "browser" || target == "native" || target == "native-probe",
+    target == "browser" ||
+    target == "browser-diagnostics" ||
+    target == "native" ||
+    target == "native-probe",
   )
   let root = @fs.realpath(".")
   let framework = root + "/.metonic/framework"
   let moon = framework + "/.tools/moonbit/bin/moon.exe"
-  let selected = if target == "browser" { "browser" } else { "native" }
-  let entry = if target == "native-probe" { "probe" } else { "main" }
+  let selected = if target == "browser" || target == "browser-diagnostics" {
+    "browser"
+  } else {
+    "native"
+  }
+  let entry = if target == "native-probe" {
+    "probe"
+  } else if target == "browser-diagnostics" {
+    "diagnostics"
+  } else {
+    "main"
+  }
   let profile = if target == "native-probe" { "debug" } else { "release" }
   assert_eq(
     @process.run(
@@ -34,11 +47,19 @@ async fn main {
     ),
     0,
   )
-  if target == "browser" {
+  if selected == "browser" {
     for name in ["index.html", "main.mjs"] {
       @fs.write_file(
         root + "/browser/.metonic-dist/" + name,
-        @fs.read_file(root + "/browser/" + name).binary(),
+        @fs.read_file(
+          root +
+          "/browser/" +
+          (if name == "main.mjs" && target == "browser-diagnostics" {
+            "diagnostics.mjs"
+          } else {
+            name
+          }),
+        ).binary(),
       )
     }
   } else if target == "native-probe" {
