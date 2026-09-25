@@ -1,5 +1,9 @@
 ///|
 async fn main {
+  if @env.args().contains("--ui-root") {
+    verify_ui_root()
+    return
+  }
   if @env.args().contains("--keyed") {
     verify_keyed()
     return

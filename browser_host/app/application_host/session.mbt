@@ -447,6 +447,11 @@ fn Session::render(self : Session) -> Int {
     return 0
   }
   guard self.engine is Some(engine) else { return 0 }
+  let composing = self.editors
+    .iter()
+    .find_first(editor => editor.composing)
+    .map(editor => editor.reference)
+  ignore(self.application.synchronize_components(composing))
   let mut view = (self.application.view)()
   let focused = @semantics.snapshot(self.application.editor)
     .iter()

@@ -191,8 +191,8 @@ async fn verify_publication() -> Unit {
         }
         let ready = (handle.capture)(_ => ())
         assert_true(ready.pixels != switched.pixels)
-        (handle.apply)(Close)
         finished.val = true
+        (handle.apply)(Close)
       })
     }),
   )

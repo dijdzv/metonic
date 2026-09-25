@@ -32,6 +32,10 @@ priv struct Model {
   publication_release : Ref[Bool]
   downstream_release : Ref[Bool]
   downstream_cleanup : Ref[Int]
+  ui : @component.UiRoot
+  controlled : @reactive.Signal[String]
+  controlled_input : Ref[@semantics.NodeRef?]
+  controlled_button : Ref[@semantics.NodeRef?]
 }
 
 ///|
@@ -88,6 +92,37 @@ fn Model::change(self : Model, command : Int) -> Unit {
     16 => self.downstream_key.set("other")
     17 => self.downstream_key.set("probe")
     18 => self.invalid = 18
+    30 => {
+      self.invalid = 30
+      if self.controlled_input.val is None {
+        self.controlled_input.val = self.ui.fixed("controlled").text_input(
+          "value", "Controlled",
+          @component.Controlled::new(() => self.controlled.peek(), text => {
+            self.controlled.set(text)
+            None
+          }),
+        )
+      }
+      if self.controlled_button.val is None {
+        self.controlled_button.val = self.ui.fixed("controlled").button(
+          "async", "Update async",
+          () => Some(
+            @task.replace(
+              () => (),
+              () => Some(
+                @task.work(() => "async", value => {
+                  self.controlled.set(value)
+                  @task.Changed
+                }),
+              ),
+              operation=@task.Operation::new(),
+            ),
+          ),
+        )
+      }
+    }
+    31 => self.controlled.set("programmatic")
+    32 => self.controlled.set("deferred")
     20 => {
       self.keyed_mode = true
       self.update_keyed([{ key: 1, props: "One", }, { key: 2, props: "Two", }])
@@ -165,10 +200,20 @@ pub fn operation_cancel() -> Bool {
 }
 
 ///|
+#export_name("controlled_value")
+pub fn controlled_value() -> String {
+  active.val.map(model => model.controlled.peek()).unwrap_or("")
+}
+
+///|
 #export_name("create")
 pub fn create() -> @host.Instance {
   let tree = @semantics.empty(901, 1)
   let publication_root = @reactive.Scope::root(@reactive.Graph::new())
+  let ui = @component.UiRoot::new(publication_root, tree)
+  let controlled = @reactive.Signal::new(publication_root, "initial")
+  let controlled_input : Ref[@semantics.NodeRef?] = Ref(None)
+  let controlled_button : Ref[@semantics.NodeRef?] = Ref(None)
   let keyed : @component.KeyedChildren[Int, String, @semantics.NodeRef] = @component.KeyedChildren::new(
     publication_root, tree,
   )
@@ -266,6 +311,10 @@ pub fn create() -> @host.Instance {
     publication_release: Ref(false),
     downstream_release,
     downstream_cleanup,
+    ui,
+    controlled,
+    controlled_input,
+    controlled_button,
   }
   active.val = Some(model)
   let app : @app.Application = {
@@ -282,7 +331,7 @@ pub fn create() -> @host.Instance {
     publications: Some(model.publication_registry),
     downstreams: Some(model.downstream_registry),
     serials: Some(model.serial_registry),
-    components: None,
+    components: Some(ui),
     connect_tasks: control => {
       if task_control.val is Some(_) {
         abort("task control connected twice")
@@ -315,6 +364,32 @@ pub fn create() -> @host.Instance {
       )
     },
     view: () => {
+      if model.invalid == 30 && model.controlled_input.val is Some(reference) {
+        let node = @semantics.node(tree, reference).unwrap()
+        let controls : Array[@app.Control] = [{
+          element: {
+            reference: Some(reference),
+            text: node.value,
+            focused: node.focused,
+            bounds: { x: 16, y: 60, width: 400, height: 60, },
+          },
+          kind: Input(single_line=true),
+          clip: None,
+        }]
+        if model.controlled_button.val is Some(button) {
+          controls.push({
+            element: {
+              reference: Some(button),
+              text: "Update async",
+              focused: @semantics.node(tree, button).unwrap().focused,
+              bounds: { x: 16, y: 130, width: 180, height: 40, },
+            },
+            kind: Button,
+            clip: None,
+          })
+        }
+        return controls
+      }
       if model.keyed_mode {
         let references = model.keyed.ordered()
         return Array::makei(references.length(), index => {
@@ -432,6 +507,9 @@ pub fn create() -> @host.Instance {
       controls
     },
     activate: reference => {
+      if model.controlled_button.val == Some(reference) {
+        return ui.activate(reference)
+      }
       if model.invalid == 9 {
         return (model.operations.application().activate)(reference)
       }
@@ -462,6 +540,9 @@ pub fn create() -> @host.Instance {
     close_ready: () => false,
     input_error: _ => (),
     edited: edit => {
+      if model.controlled_input.val == Some(edit.target) {
+        return ui.edited(edit.target, edit.text, edit.revision)
+      }
       model.edits.push(edit)
       Some(
         @task.replace(

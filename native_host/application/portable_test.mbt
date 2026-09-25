@@ -62,13 +62,17 @@ test "native adapter exposes host-boundary controlled input synchronization" {
   let tree = @semantics.empty(2, 1)
   let ui = @component.UiRoot::new(scope, tree)
   let value = @reactive.Signal::new(scope, "initial")
-  let input = ui.fixed("form").text_input(
-    "name", "Name",
-    @component.Controlled::new(() => value.peek(), text => {
-      value.set(text)
-      None
-    }),
-  ).unwrap()
+  let input = ui
+    .fixed("form")
+    .text_input(
+      "name",
+      "Name",
+      @component.Controlled::new(() => value.peek(), text => {
+        value.set(text)
+        None
+      }),
+    )
+    .unwrap()
   let app : @portable.Application = {
     title: "Controlled",
     editor: tree,
