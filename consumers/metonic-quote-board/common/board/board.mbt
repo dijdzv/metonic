@@ -20,17 +20,34 @@ struct Quote {
 } derive(Eq)
 
 ///|
+struct DisplayQuote {
+  quote : Quote
+  currency : String
+  amount : Int
+} derive(Eq)
+
+///|
+fn DisplayQuote::amount_text(self : DisplayQuote) -> String {
+  self.amount.to_string() +
+  (if self.currency == "JPY" { "" } else { " " + self.currency })
+}
+
+///|
 priv struct Board {
   graph : @reactive.Graph
   scope : @reactive.Scope
   selected : @reactive.Signal[String]
   quantity : @reactive.Signal[Int]
+  currency : @reactive.Signal[String]
+  rate_cycle : @reactive.Signal[@async_state.Cycle]
+  rate : @async_state.Source[String, Int]
   items : @component.KeyedChildren[String, Unit, ItemChild]
   downstreams : @async_state.DownstreamRegistry
   publications : @async_state.PublicationRegistry
   tree : @semantics.Tree
   buttons : Array[@semantics.NodeRef]
   wait : async (Int) -> Unit
+  rate_result : (String) -> Result[Int, String]
   mut task_control : @task.TaskControl?
   mut size : (Int, Int)
   mut error : String?
@@ -47,7 +64,7 @@ priv struct ItemChild {
 
 ///|
 priv struct DetailChild {
-  display : @async_state.Publication[(String, Int), Quote]
+  display : @async_state.Publication[(String, Int, String), DisplayQuote]
   quantity_button : @semantics.NodeRef
 }
 
@@ -111,12 +128,59 @@ fn ItemChild::show_detail(self : ItemChild, board : Board) -> Bool {
         },
       )
       let display = board.publications.register(owner.scope(), () => {
-        ((self.key, board.quantity.get()), quote.current())
+        let currency = board.currency.get()
+        let current = quote.current()
+        let converted = if currency == "JPY" {
+          current.map(value => DisplayQuote::{
+            quote: value,
+            currency,
+            amount: value.shipping,
+          })
+        } else {
+          @async_state.join_independent(
+            current,
+            board.rate.current(currency, board.rate_cycle.get()),
+            fn(value, rate) {
+              DisplayQuote::{
+                quote: value,
+                currency,
+                amount: value.shipping * rate,
+              }
+            },
+          )
+        }
+        ((self.key, board.quantity.get(), currency), converted)
       })
       let quantity_button = owner.add_button("Quantity +").unwrap()
       DetailChild::{ display, quantity_button, }
     },
     (_, _) => (),
+  )
+}
+
+///|
+fn Board::choose_currency(self : Board, currency : String) -> @task.Request? {
+  self.currency.set(currency)
+  if currency == "JPY" {
+    ignore(self.rate.retire_current())
+    return None
+  }
+  let cycle = @async_state.Cycle::new()
+  let rate = self.rate.replace_result(
+    currency,
+    cycle,
+    false,
+    () => {
+      (self.wait)(600)
+      (self.rate_result)(currency)
+    },
+    error => error,
+  )
+  guard rate is Some(request) else { return None }
+  Some(
+    @task.group([request], apply => self.graph.batch(apply), on_admitted=() => {
+      self.rate_cycle.set(cycle)
+    }),
   )
 }
 
@@ -165,12 +229,27 @@ fn Board::request(
 ///|
 fn Board::view(self : Board) -> Array[@app.Control] {
   let controls : Array[@app.Control] = []
-  let names = ["Amber lamp", "Blue stool", "Refresh", "Toggle detail"]
+  let names = [
+    "Amber lamp", "Blue stool", "Refresh", "Toggle detail", "JPY", "USD",
+  ]
   for index, reference in self.buttons {
     let node = @semantics.node(self.tree, reference).unwrap()
     controls.push({
       element: {
-        bounds: { x: 16 + index * 138, y: 16, width: 128, height: 36, },
+        bounds: {
+          x: if index < 4 {
+            16 + index * 138
+          } else {
+            16 + (index - 4) * 138
+          },
+          y: if index < 4 {
+            16
+          } else {
+            58
+          },
+          width: 128,
+          height: 36,
+        },
         text: names[index],
         reference: Some(reference),
         focused: node.focused,
@@ -213,17 +292,13 @@ fn Board::view(self : Board) -> Array[@app.Control] {
         quote = match details.display.get() {
           Some({ current: CurrentReady(value, _), .. }) =>
             "Shipping: " +
-            value.shipping.to_string() +
+            value.amount_text() +
             " for " +
-            value.quantity.to_string()
+            value.quote.quantity.to_string()
           Some({ current: CurrentPending(_), previous: Some(previous), .. }) =>
-            "Shipping: loading (previous " +
-            previous.value.shipping.to_string() +
-            ")"
+            "Shipping: loading (previous " + previous.value.amount_text() + ")"
           Some({ current: CurrentBlocked(_), previous: Some(previous), .. }) =>
-            "Shipping: loading (previous " +
-            previous.value.shipping.to_string() +
-            ")"
+            "Shipping: loading (previous " + previous.value.amount_text() + ")"
           Some({ current: CurrentPending(_), .. }) => "Shipping: loading"
           Some({ current: CurrentFailed(_), .. }) => "Shipping: failed"
           _ => "Shipping: waiting for item"
@@ -233,7 +308,12 @@ fn Board::view(self : Board) -> Array[@app.Control] {
     }
   }
   let lines = [
-    "Item: " + item + " · Quantity: " + self.quantity.peek().to_string(),
+    "Item: " +
+    item +
+    " · Quantity: " +
+    self.quantity.peek().to_string() +
+    " · Currency: " +
+    self.currency.peek(),
     detail,
     stock,
     quote,
@@ -243,7 +323,7 @@ fn Board::view(self : Board) -> Array[@app.Control] {
       element: {
         bounds: {
           x: 16,
-          y: 72 + index * 48,
+          y: 112 + index * 48,
           width: (self.size.0 - 32).max(32),
           height: 42,
         },
@@ -260,7 +340,7 @@ fn Board::view(self : Board) -> Array[@app.Control] {
       element: {
         bounds: {
           x: 16,
-          y: 272,
+          y: 312,
           width: (self.size.0 - 32).max(32),
           height: 40,
         },
@@ -276,33 +356,43 @@ fn Board::view(self : Board) -> Array[@app.Control] {
 }
 
 ///|
-pub fn create(wait : async (Int) -> Unit) -> @app.Application {
+pub fn create_with_rate(
+  wait : async (Int) -> Unit,
+  rate_result : (String) -> Result[Int, String],
+) -> @app.Application {
   let graph = @reactive.Graph::new()
   let scope = @reactive.Scope::root(graph)
   let selected = @reactive.Signal::new(scope, "amber")
   let quantity = @reactive.Signal::new(scope, 1)
+  let currency = @reactive.Signal::new(scope, "JPY")
+  let rate_cycle = @reactive.Signal::new(scope, @async_state.Cycle::new())
+  let rate : @async_state.Source[String, Int] = @async_state.Source::new(scope)
   let downstreams = @async_state.DownstreamRegistry::new(scope)
   let publications = @async_state.PublicationRegistry::new(scope)
   let tree = @semantics.empty(1, 1)
   let items : @component.KeyedChildren[String, Unit, ItemChild] = @component.KeyedChildren::new(
     scope, tree,
   )
-  let buttons = ["Amber lamp", "Blue stool", "Refresh", "Toggle detail"].map(name => {
-    @semantics.add_button(tree, name).unwrap()
-  })
+  let buttons = [
+    "Amber lamp", "Blue stool", "Refresh", "Toggle detail", "JPY", "USD",
+  ].map(name => @semantics.add_button(tree, name).unwrap())
   let model : Board = {
     graph,
     scope,
     selected,
     quantity,
+    currency,
+    rate_cycle,
+    rate,
     items,
     downstreams,
     publications,
     tree,
     buttons,
     wait,
+    rate_result,
     task_control: None,
-    size: (720, 320),
+    size: (720, 360),
     error: None,
   }
   {
@@ -314,7 +404,7 @@ pub fn create(wait : async (Int) -> Unit) -> @app.Application {
     publications: Some(publications),
     downstreams: Some(downstreams),
     connect_tasks: control => {
-      if !downstreams.connect(control) {
+      if !downstreams.connect(control) || !rate.connect(control) {
         abort("quote board task connection failed")
       }
       model.task_control = Some(control)
@@ -337,6 +427,10 @@ pub fn create(wait : async (Int) -> Unit) -> @app.Application {
           }
         }
         None
+      } else if reference == model.buttons[4] {
+        model.choose_currency("JPY")
+      } else if reference == model.buttons[5] {
+        model.choose_currency("USD")
       } else {
         if model.items.get(model.selected.peek()) is Some(item) &&
           item.details.for_reference(reference) is Some(_) {
@@ -347,7 +441,7 @@ pub fn create(wait : async (Int) -> Unit) -> @app.Application {
     },
     edited: _ => None,
     resize: (width, height) => {
-      if width < 700 || height < 300 {
+      if width < 700 || height < 340 {
         return false
       }
       let changed = model.size != (width, height)
@@ -361,4 +455,9 @@ pub fn create(wait : async (Int) -> Unit) -> @app.Application {
     input_error: message => model.error = message,
     dispose: () => model.scope.dispose(),
   }
+}
+
+///|
+pub fn create(wait : async (Int) -> Unit) -> @app.Application {
+  create_with_rate(wait, _ => Ok(2))
 }
