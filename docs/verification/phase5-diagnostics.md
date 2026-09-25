@@ -5,13 +5,15 @@ The diagnostic implementation at `525ba6b` was checked on Windows 11 Pro
 These are local observations, not a performance guarantee.
 
 `core/reactive_task` passed 43 JS and 43 native tests. The driver observer
-passed 38 JS and 38 native tests. The controlled async-pair fixture passed in
+passed 39 JS and 39 native tests. The controlled async-pair fixture passed in
 browser JS and WasmGC, including pending, expected failure, retry, cancellation
 and eventual cleanup join; native display and development CLI snapshot checks
-passed. Tests separately cover capacity rejection, stale callbacks, unexpected
-failure, disposal, ring overflow and diagnostic reads without reactive
-subscriptions. The registry stores opaque key IDs and causal source identities,
-not request values or error text.
+passed. A single owned-Source scenario also joins capacity rejection, expected
+and unexpected failure, stale completion rejection, cancellation request,
+cleanup wait/join and disposal to the same owner and Operation IDs. Separate
+tests cover ring overflow and diagnostic reads without reactive subscriptions.
+The registry stores opaque key IDs and causal source identities, not request
+values or error text.
 
 The normal browser package and native release executable were built after the
 change. The browser packager's fixed inventory and WasmGC string checks reject
