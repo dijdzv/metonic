@@ -15,6 +15,21 @@ The source is pinned by `dependency.json`. It is an experimental source
 consumer, not a published Metonic package. Windows setup requires mise, Git,
 Visual Studio C++ build tools and the framework prerequisites.
 
+To extract only this consumer from a Metonic checkout into a new directory,
+create a short empty path first and run:
+
+```text
+mkdir C:\qbr
+git archive --format=zip --output=C:\qbr-source.zip HEAD:consumers/metonic-quote-board
+tar -xf C:\qbr-source.zip -C C:\qbr
+cd C:\qbr
+```
+
+On Windows with long paths disabled, a deeply nested checkout can make
+MoonBit's generated bootstrap paths exceed the 260-character limit. A short
+consumer path avoids that OS constraint; the build does not require a custom
+system setting.
+
 ```text
 mise trust
 mise install
@@ -66,9 +81,15 @@ JS/WasmGC browser behavior, a native launch from an unrelated directory,
 development-feature exclusion and overwrite protection. The native acceptance
 helper is a debug-only verification entry, not a shipped file. To update the
 framework dependency, change `dependency.json` to a reviewed commit, fetch
-that commit into `.metonic/framework`, check it out detached, then rebuild and
-rerun the model, host and package checks. The current dependency is pinned
-source, not a published Metonic package.
+that commit into `.metonic/framework` and check it out detached:
+
+```text
+git -C .metonic/framework fetch origin main
+git -C .metonic/framework checkout --detach <revision-from-dependency.json>
+```
+
+Then rerun the model, host and package checks. The current dependency is
+pinned source, not a published Metonic package.
 
 The model checks assert both A/B completion orders, rejection of an old D
 result after quantity changes, child removal/recreation during an unfinished
