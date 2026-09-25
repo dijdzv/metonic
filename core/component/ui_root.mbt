@@ -56,6 +56,8 @@ priv struct UiEdit {
   owner : ChildOwner
   reference : @semantics.NodeRef
   value : Controlled[String]
+  enabled : Read[Bool]
+  read_only : Read[Bool]
 }
 
 ///|
@@ -92,6 +94,14 @@ pub struct UiLabel {
   priv root : UiRoot
   priv owner : ChildOwner
   priv reference : @semantics.NodeRef
+}
+
+///|
+pub struct UiInput {
+  priv root : UiRoot
+  priv owner : ChildOwner
+  priv reference : @semantics.NodeRef
+  priv single_line : Bool
 }
 
 ///|
@@ -228,6 +238,16 @@ pub fn UiLabel::reference(self : UiLabel) -> @semantics.NodeRef {
 }
 
 ///|
+pub fn UiInput::reference(self : UiInput) -> @semantics.NodeRef {
+  self.reference
+}
+
+///|
+pub fn UiInput::single_line(self : UiInput) -> Bool {
+  self.single_line
+}
+
+///|
 pub fn UiButton::element(
   self : UiButton,
   bounds : @view.Bounds,
@@ -254,22 +274,78 @@ pub fn UiLabel::element(self : UiLabel, bounds : @view.Bounds) -> @view.Element 
 }
 
 ///|
+pub fn UiInput::element(self : UiInput, bounds : @view.Bounds) -> @view.Element {
+  if !self.owner.owns(self.reference) {
+    abort("UI input owner is disposed")
+  }
+  let node = @semantics.node(self.root.tree, self.reference).unwrap()
+  {
+    bounds,
+    text: node.value,
+    reference: Some(self.reference),
+    focused: node.focused,
+  }
+}
+
+///|
 pub fn UiOwner::text_input(
   self : UiOwner,
   key : String,
   label : String,
   value : Controlled[String],
-) -> @semantics.NodeRef? {
+  enabled? : Read[Bool] = Read::new(() => true),
+  read_only? : Read[Bool] = Read::new(() => false),
+) -> UiInput? {
+  self.add_text_input(key, label, value, true, enabled, read_only)
+}
+
+///|
+pub fn UiOwner::text_area(
+  self : UiOwner,
+  key : String,
+  label : String,
+  value : Controlled[String],
+  enabled? : Read[Bool] = Read::new(() => true),
+  read_only? : Read[Bool] = Read::new(() => false),
+) -> UiInput? {
+  self.add_text_input(key, label, value, false, enabled, read_only)
+}
+
+///|
+fn UiOwner::add_text_input(
+  self : UiOwner,
+  key : String,
+  label : String,
+  value : Controlled[String],
+  single_line : Bool,
+  enabled : Read[Bool],
+  read_only : Read[Bool],
+) -> UiInput? {
   self.check_key(key)
   let initial = self.root.scope.graph().read_only(() => value.get())
   guard self.child.add_input(label, initial) is Some(reference) else {
     return None
   }
-  self.root.edits.push({ key, owner: self.child, reference, value, })
+  let is_enabled = self.root.scope.graph().read_only(() => enabled.get())
+  let is_read_only = self.root.scope.graph().read_only(() => read_only.get())
+  if !is_enabled {
+    ignore(@semantics.set_enabled(self.root.tree, reference, false))
+  }
+  if is_read_only {
+    ignore(@semantics.set_read_only(self.root.tree, reference, true))
+  }
+  self.root.edits.push({
+    key,
+    owner: self.child,
+    reference,
+    value,
+    enabled,
+    read_only,
+  })
   self.child
   .scope()
   .on_dispose(() => self.root.edits.retain(edit => edit.reference != reference))
-  Some(reference)
+  Some({ root: self.root, owner: self.child, reference, single_line, })
 }
 
 ///|
@@ -309,6 +385,7 @@ pub fn UiRoot::edited(
   guard @semantics.node(self.tree, reference) is Ok(node) &&
     node.role == @semantics.TextInput &&
     node.enabled &&
+    !node.read_only &&
     node.value == text else {
     return None
   }
@@ -351,13 +428,31 @@ pub fn UiRoot::synchronize(
     }
   }
   for edit in self.edits {
-    if !edit.owner.owns(edit.reference) || composing == Some(edit.reference) {
+    if !edit.owner.owns(edit.reference) {
+      continue
+    }
+    let next_enabled = self.scope.graph().read_only(() => edit.enabled.get())
+    let next_read_only = self.scope
+      .graph()
+      .read_only(() => edit.read_only.get())
+    if @semantics.node(self.tree, edit.reference) is Ok(node) {
+      if node.enabled != next_enabled &&
+        @semantics.set_enabled(self.tree, edit.reference, next_enabled) == "" {
+        changed = true
+      }
+      if node.read_only != next_read_only &&
+        @semantics.set_read_only(self.tree, edit.reference, next_read_only) ==
+        "" {
+        changed = true
+      }
+    }
+    if composing == Some(edit.reference) {
       continue
     }
     let next = self.scope.graph().read_only(() => edit.value.get())
     if @semantics.node(self.tree, edit.reference) is Ok(node) &&
       node.value != next &&
-      @semantics.set_text(self.tree, edit.reference, next) == "" {
+      @semantics.set_controlled_text(self.tree, edit.reference, next) == "" {
       changed = true
     }
   }

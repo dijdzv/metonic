@@ -95,30 +95,38 @@ fn Model::change(self : Model, command : Int) -> Unit {
     30 => {
       self.invalid = 30
       if self.controlled_input.val is None {
-        self.controlled_input.val = self.ui.fixed("controlled").text_input(
-          "value", "Controlled",
-          @component.Controlled::new(() => self.controlled.peek(), text => {
-            self.controlled.set(text)
-            None
-          }),
-        )
+        self.controlled_input.val = self.ui
+          .fixed("controlled")
+          .text_input(
+            "value",
+            "Controlled",
+            @component.Controlled::new(() => self.controlled.peek(), text => {
+              self.controlled.set(text)
+              None
+            }),
+          )
+          .map(input => input.reference())
       }
       if self.controlled_button.val is None {
-        self.controlled_button.val = self.ui.fixed("controlled").button(
-          "async", "Update async",
-          () => Some(
-            @task.replace(
-              () => (),
-              () => Some(
-                @task.work(() => "async", value => {
-                  self.controlled.set(value)
-                  @task.Changed
-                }),
+        self.controlled_button.val = self.ui
+          .fixed("controlled")
+          .button("async", "Update async", () => {
+            Some(
+              @task.replace(
+                () => (),
+                () => {
+                  Some(
+                    @task.work(() => "async", value => {
+                      self.controlled.set(value)
+                      @task.Changed
+                    }),
+                  )
+                },
+                operation=@task.Operation::new(),
               ),
-              operation=@task.Operation::new(),
-            ),
-          ),
-        ).map(button => button.reference())
+            )
+          })
+          .map(button => button.reference())
       }
     }
     31 => self.controlled.set("programmatic")
@@ -366,16 +374,18 @@ pub fn create() -> @host.Instance {
     view: () => {
       if model.invalid == 30 && model.controlled_input.val is Some(reference) {
         let node = @semantics.node(tree, reference).unwrap()
-        let controls : Array[@app.Control] = [{
-          element: {
-            reference: Some(reference),
-            text: node.value,
-            focused: node.focused,
-            bounds: { x: 16, y: 60, width: 400, height: 60, },
+        let controls : Array[@app.Control] = [
+          {
+            element: {
+              reference: Some(reference),
+              text: node.value,
+              focused: node.focused,
+              bounds: { x: 16, y: 60, width: 400, height: 60, },
+            },
+            kind: Input(single_line=true),
+            clip: None,
           },
-          kind: Input(single_line=true),
-          clip: None,
-        }]
+        ]
         if model.controlled_button.val is Some(button) {
           controls.push({
             element: {

@@ -48,6 +48,7 @@ priv struct Session {
 fn Editor::sync(self : Editor, tree : @semantics.Tree) -> Unit {
   guard @semantics.node(tree, self.reference) is Ok(node) else { return }
   self.element.set_enabled(node.enabled)
+  self.element.set_read_only(node.read_only)
   if !self.composing && self.element.value() != node.value {
     match self.element {
       Multiline(value) => value.set_value(node.value)
@@ -308,11 +309,13 @@ fn Session::bind_editor(self : Session, editor : Editor) -> Unit {
       if !self.accepts_input(editor) {
         return 0
       }
+      guard @semantics.begin_composition(tree, target=editor.reference)
+        is Some(composition) else {
+        editor.sync(tree)
+        return 0
+      }
       editor.composing = true
-      editor.composition = @semantics.begin_composition(
-        tree,
-        target=editor.reference,
-      )
+      editor.composition = Some(composition)
       1
     },
     end_composition: () => {
@@ -340,7 +343,10 @@ fn Session::bind_editor(self : Session, editor : Editor) -> Unit {
           return 0
         }
       }
-      guard @semantics.node(tree, editor.reference) is Ok(node) && node.enabled else {
+      guard @semantics.node(tree, editor.reference) is Ok(node) &&
+        node.enabled &&
+        !node.read_only else {
+        editor.sync(tree)
         return 0
       }
       if !self.accepts_input(editor) ||

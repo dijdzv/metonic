@@ -24,6 +24,7 @@ test "UI root dispatches live fixed controls and synchronizes committed values" 
       }),
     )
     .unwrap()
+    .reference()
   assert_true(ui.activate(button) is None)
   assert_eq(pressed.val, 1)
   assert_eq(@semantics.set_enabled(tree, button, false), "")
@@ -202,5 +203,59 @@ test "keyed buttons retain handlers across reorder and revoke removed instances"
   ignore(ui.activate(a.reference()))
   ignore(ui.activate(recreated.reference()))
   assert_eq(activated, ["a", "b", "b", "a"])
+  scope.dispose()
+}
+
+///|
+test "controlled single and multiline inputs keep editing and ownership separate" {
+  let scope = @reactive.Scope::root(@reactive.Graph::new())
+  let tree = @semantics.empty(85, 1)
+  let ui = UiRoot::new(scope, tree)
+  let owner = ui.fixed("form")
+  let value = @reactive.Signal::new(scope, "line one")
+  let enabled = @reactive.Signal::new(scope, true)
+  let read_only = @reactive.Signal::new(scope, false)
+  let commits = Ref(0)
+  let field = owner
+    .text_input(
+      "title",
+      "Title",
+      Controlled::new(() => value.peek(), text => {
+        commits.val += 1
+        value.set(text)
+        None
+      }),
+      enabled=Read::new(() => enabled.peek()),
+      read_only=Read::new(() => read_only.peek()),
+    )
+    .unwrap()
+  let area = owner
+    .text_area("body", "Body", Controlled::new(() => "a\nb", _ => None))
+    .unwrap()
+  assert_true(field.single_line())
+  assert_false(area.single_line())
+  assert_eq(area.element({ x: 0, y: 0, width: 80, height: 30, }).text, "a\nb")
+  let reference = field.reference()
+  assert_eq(@semantics.set_selection(tree, reference, 0, 4), "")
+  assert_false(ui.synchronize(None))
+  assert_eq(@semantics.node(tree, reference).unwrap().selection_end, 4)
+  assert_eq(@semantics.replace_selection(tree, reference, "new"), "")
+  ignore(ui.edited(reference, "new one", @semantics.revision(tree)))
+  assert_eq(commits.val, 1)
+  read_only.set(true)
+  assert_true(ui.synchronize(None))
+  assert_true(@semantics.node(tree, reference).unwrap().read_only)
+  assert_eq(@semantics.replace_selection(tree, reference, "bad"), "read_only")
+  ignore(ui.edited(reference, "new one", @semantics.revision(tree)))
+  assert_eq(commits.val, 1)
+  enabled.set(false)
+  value.set("external")
+  assert_true(ui.synchronize(None))
+  assert_false(@semantics.node(tree, reference).unwrap().enabled)
+  assert_eq(@semantics.node(tree, reference).unwrap().value, "external")
+  owner.scope().dispose()
+  assert_true(@semantics.node(tree, reference) is Err(_))
+  ignore(ui.edited(reference, "late", @semantics.revision(tree)))
+  assert_eq(commits.val, 1)
   scope.dispose()
 }

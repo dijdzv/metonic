@@ -18,6 +18,14 @@ pub fn Element::set_enabled(self : Element, enabled : Bool) -> Unit {
 }
 
 ///|
+pub fn Element::set_read_only(self : Element, read_only : Bool) -> Unit {
+  match self {
+    Multiline(value) => value.set_read_only(read_only)
+    SingleLine(value) => value.set_read_only(read_only)
+  }
+}
+
+///|
 pub fn Element::capture_scroll(self : Element) -> (Int, Bool) {
   match self {
     SingleLine(value) => (input_scroll(value), false)

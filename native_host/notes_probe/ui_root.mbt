@@ -15,6 +15,7 @@ async fn verify_ui_root() -> Unit {
       }),
     )
     .unwrap()
+    .reference()
   let button = owner
     .button("async", "Update async", () => {
       Some(
@@ -93,14 +94,21 @@ async fn verify_ui_root() -> Unit {
         )
         assert_eq(value.peek(), "initialtyped")
         assert_eq(
-          (handle.operate)(button.reference(), ActivateControl, @semantics.revision(tree)),
+          (handle.operate)(
+            button.reference(),
+            ActivateControl,
+            @semantics.revision(tree),
+          ),
           "",
         )
         while value.peek() != "async" ||
               @semantics.node(tree, input).unwrap().value != "async" {
           @async.sleep(1)
         }
-        assert_eq(@semantics.node(tree, status.reference()).unwrap().name, "Status: async")
+        assert_eq(
+          @semantics.node(tree, status.reference()).unwrap().name,
+          "Status: async",
+        )
         let frame = (handle.capture)(_ => ())
         assert_true(frame.state.frames > 0)
         finished.val = true

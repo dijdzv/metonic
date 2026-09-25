@@ -29,3 +29,15 @@ test "target content selection and disabled state invalidate composition" {
   assert_true(disabled.remove_selected_text() is None)
   assert_eq(node(tree, input).unwrap().value, "model")
 }
+
+///|
+test "turning an input read-only revokes an active composition" {
+  let tree = empty(83, 1)
+  let input = add_input(tree, "Draft", "abc").unwrap()
+  let composition = begin_composition(tree, target=input).unwrap()
+  assert_eq(composition.preview("あ"), Some("abcあ"))
+  assert_eq(set_read_only(tree, input, true), "")
+  assert_eq(composition.preview("あ"), None)
+  assert_eq(composition.commit("あ"), "stale_composition")
+  assert_eq(node(tree, input).unwrap().value, "abc")
+}

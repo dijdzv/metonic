@@ -47,6 +47,7 @@ interface CSSStyleDeclaration {
 };
 interface HTMLInputElement : HTMLElement {
   attribute boolean disabled;
+  attribute boolean readOnly;
   undefined setSelectionRange(unsigned long start, unsigned long end, DOMString direction);
   attribute DOMString value;
   readonly attribute unsigned long? selectionStart;
@@ -58,6 +59,7 @@ interface HTMLButtonElement : HTMLElement {
 };
 interface HTMLTextAreaElement : HTMLElement {
   attribute boolean disabled;
+  attribute boolean readOnly;
   undefined setSelectionRange(unsigned long start, unsigned long end, DOMString direction);
   attribute DOMString value;
   readonly attribute unsigned long selectionStart;

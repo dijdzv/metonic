@@ -13,7 +13,8 @@ pub fn begin_composition(tree : Tree, target~ : NodeRef) -> Composition? {
   let (id, _) = resolve(tree, target)
   let node = if id < 0 { None } else { input_node(tree, id) }
   match node {
-    Some(node) if node.enabled => Some({ tree, node, active: true, })
+    Some(node) if node.enabled && !node.read_only =>
+      Some({ tree, node, active: true, })
     _ => None
   }
 }
@@ -79,6 +80,7 @@ fn Composition::current(self : Composition) -> Bool {
     return false
   }
   current.enabled &&
+  !current.read_only &&
   current.value == self.node.value &&
   current.selection_start == self.node.selection_start &&
   current.selection_end == self.node.selection_end &&

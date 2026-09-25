@@ -10,6 +10,7 @@ fn App::report_edit(
   }
   guard @semantics.node(self.host.editor, target) is Ok(node) &&
     node.enabled &&
+    !node.read_only &&
     node.value != previous else {
     return
   }
