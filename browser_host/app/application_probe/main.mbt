@@ -6,7 +6,7 @@ priv struct Model {
   mut serial : Int
   mut invalid : Int
   mut clipped : Bool
-  list : @layout.VerticalList
+  scroll : @app.ScrollView
   rows : Array[@semantics.NodeRef]
   operations : @operations.Model
   edits : Array[@app.TextEdit]
@@ -291,7 +291,7 @@ pub fn create() -> @host.Instance {
     serial: 0,
     invalid: 0,
     clipped: false,
-    list: @layout.VerticalList::new(row_height=36, gap=4).unwrap(),
+    scroll: @app.ScrollView::new(gap=4).unwrap(),
     rows: Array::makei(8, index => {
       @semantics.add_button(tree, "Row " + (index + 1).to_string()).unwrap()
     }),
@@ -332,9 +332,10 @@ pub fn create() -> @host.Instance {
     initial_size: (480, 400),
     viewport: Some({
       scroll: (x, y, delta) => {
-        model.invalid == 15 && model.list.scroll_at(x, y, delta)
+        model.invalid == 15 && (model.scroll.viewport().scroll)(x, y, delta)
       },
-      reveal: reference => model.invalid == 15 && model.list.reveal(reference),
+      reveal: reference =>
+        model.invalid == 15 && (model.scroll.viewport().reveal)(reference),
     }),
     publications: Some(model.publication_registry),
     downstreams: Some(model.downstream_registry),
@@ -419,22 +420,26 @@ pub fn create() -> @host.Instance {
       }
       if model.invalid == 15 {
         let clip : @view.Bounds = { x: 16, y: 60, width: 180, height: 100, }
-        model.list.arrange(clip, model.rows).unwrap()
-        return model.list
-          .items()
-          .map(placement => {
-            let node = @semantics.node(tree, placement.reference).unwrap()
-            @app.Control::{
-              element: {
-                bounds: placement.bounds,
-                text: node.name,
-                reference: Some(node.reference),
-                focused: node.focused,
-              },
-              kind: Button,
-              clip: Some(clip),
-            }
-          })
+        return model.scroll.arrange(
+          clip,
+          model.rows.map(reference =>
+            @app.ScrollItem::new(
+              36,
+              @app.Widget::custom(reference, (bounds, clipping) => {
+                let node = @semantics.node(tree, reference).unwrap()
+                @app.Control::{
+                  element: {
+                    bounds,
+                    text: node.name,
+                    reference: Some(node.reference),
+                    focused: node.focused,
+                  },
+                  kind: Button,
+                  clip: clipping,
+                }
+              }),
+            )),
+        ).unwrap()
       }
       if model.invalid == 9 {
         return (model.operations.application().view)()
