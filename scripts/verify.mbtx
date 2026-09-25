@@ -76,7 +76,7 @@ async fn main {
       packages.push(directory)
     }
   }
-  @async.with_timeout(120000, async fn() {
+  @async.with_timeout(if native_workspace { 300000 } else { 120000 }, async fn() {
     let moon = @fs.realpath(".tools/moonbit/bin/moon.exe")
     let moon_home = @fs.realpath(".tools/moonbit")
     let native = match requested_target {
@@ -176,13 +176,13 @@ async fn main {
         envmap,
       )
       for
-        package in [
+        package_path in [
           "../async_runtime/http", "../async_runtime/application_task", "rpc_client",
         ] {
         run_checked(
           moon,
           [
-            "-C", "native_host", "test", package, "--target", "native", "--deny-warn",
+            "-C", "native_host", "test", package_path, "--target", "native", "--deny-warn",
           ],
           envmap,
         )

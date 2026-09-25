@@ -435,6 +435,8 @@ fn Session::resize(self : Session, width : Int, height : Int) -> Int {
           @app.Input(..) => Some("gpu-input")
           @app.Button => Some("gpu-button")
           @app.Checkbox => Some("gpu-button")
+          @app.List => Some("gpu-list")
+          @app.ListItem => Some("gpu-list-item")
           @app.Text => None
         },
       })
@@ -500,6 +502,18 @@ fn Session::render(self : Session) -> Int {
         node.invalid,
       )
     }
+    if control.kind == @app.ListItem &&
+      control.element.reference is Some(reference) &&
+      self.bindings.iter().find_first(binding => binding.reference == reference)
+      is Some(binding) &&
+      @semantics.node(self.application.editor, reference) is Ok(node) {
+      @dom_view.list_item(
+        binding.element_id,
+        node.name,
+        node.selected,
+        node.enabled,
+      )
+    }
     if control.kind is @app.Input(..) &&
       control.element.reference is Some(reference) {
       guard self.editors
@@ -554,6 +568,10 @@ fn Session::render(self : Session) -> Int {
               enabled=node.enabled,
               invalid=node.invalid,
             )
+          } else if control.kind == @app.ListItem &&
+            control.element.reference is Some(reference) &&
+            @semantics.node(self.application.editor, reference) is Ok(node) {
+            @renderer.ListItem(selected=node.selected, enabled=node.enabled)
           } else {
             @renderer.Text
           },
@@ -589,7 +607,11 @@ fn Session::activate_reference(
   }
   let view = (self.application.view)()
   if !view.any(control => {
-      (control.kind == @app.Button || control.kind == @app.Checkbox) &&
+      (
+        control.kind == @app.Button ||
+        control.kind == @app.Checkbox ||
+        control.kind == @app.ListItem
+      ) &&
       control.element.reference == Some(reference)
     }) {
     return 0

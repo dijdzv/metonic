@@ -183,7 +183,7 @@ async fn verify_checkbox_gallery(hwnd : UInt64) -> Unit {
     fail("checkbox gallery UIA root missing")
   }
   defer ignore(release_node(root[0]))
-  guard text_is(root[0], 30005, "Checkbox gallery") &&
+  guard text_is(root[0], 30005, "Component gallery") &&
     integer(root[0], 30003) == 50032 else {
     fail("checkbox gallery UIA root role/name mismatch")
   }
@@ -223,6 +223,24 @@ async fn verify_checkbox_gallery(hwnd : UInt64) -> Unit {
   guard integer(unchecked, 30086) == 1 else {
     fail("checkbox UIA toggle did not update checked state")
   }
+  let list = child_named(root[0], "Selectable items")
+  guard list != 0UL else { fail("list UIA node missing") }
+  defer ignore(release_node(list))
+  guard integer(list, 30003) == 50008 else {
+    fail("list UIA control type mismatch")
+  }
+  let first = child_named(list, "Item 0")
+  guard first != 0UL else { fail("nested list item UIA node missing") }
+  defer ignore(release_node(first))
+  guard integer(first, 30003) == 50007 else {
+    fail("list item UIA control type mismatch")
+  }
+  let selected_pattern = FixedArray::make(1, 0UL)
+  guard pattern(first, 10010, selected_pattern) == 0 &&
+    selected_pattern[0] != 0UL else {
+    fail("list item SelectionItem pattern missing")
+  }
+  ignore(release_pattern(selected_pattern[0]))
   guard post(hwnd, 0x0010U, 0UL, 0L) != 0 else {
     fail("checkbox gallery close request failed")
   }
@@ -400,7 +418,7 @@ async fn main {
       hwnd = owned_window(
         pid,
         hidden=hidden_close || checkbox_gallery,
-        name=if checkbox_gallery { "Checkbox gallery" } else { "Metonic" },
+        name=if checkbox_gallery { "Component gallery" } else { "Metonic" },
       )
       @async.sleep(20)
     }

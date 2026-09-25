@@ -87,6 +87,10 @@ interface WheelEvent : MouseEvent {
   readonly attribute double deltaY;
   readonly attribute unsigned long deltaMode;
 };
+interface KeyboardEvent : UIEvent {
+  readonly attribute DOMString key;
+  readonly attribute boolean isComposing;
+};
 interface DOMRectReadOnly {
   readonly attribute double left;
   readonly attribute double top;

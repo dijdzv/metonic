@@ -52,6 +52,9 @@ extern "C" fn read_only(node : UInt64) -> Unit = "accesskit_node_set_read_only"
 extern "C" fn toggled(node : UInt64, value : Int) -> Unit = "accesskit_node_set_toggled"
 
 ///|
+extern "C" fn selected(node : UInt64, value : Bool) -> Unit = "accesskit_node_set_selected"
+
+///|
 extern "C" fn invalid(node : UInt64, value : Int) -> Unit = "accesskit_node_set_invalid"
 
 ///|
@@ -162,6 +165,8 @@ fn tree(_data : UInt64) -> UInt64 {
         @semantics.Button => 18
         @semantics.Checkbox => 15
         @semantics.TextInput => 17
+        @semantics.List => 24
+        @semantics.ListItem => 7
       },
     )
     let name = @utf8.encode(semantic.name)
@@ -174,7 +179,7 @@ fn tree(_data : UInt64) -> UInt64 {
     if semantic.invalid {
       invalid(node, 0)
     }
-    if semantic.role != @semantics.Label {
+    if semantic.role != @semantics.Label && semantic.role != @semantics.List {
       add_action(node, 1)
     }
     bounds(
@@ -185,12 +190,16 @@ fn tree(_data : UInt64) -> UInt64 {
       box.height.to_double(),
     )
     if semantic.role is @semantics.Button ||
-      semantic.role is @semantics.Checkbox {
+      semantic.role is @semantics.Checkbox ||
+      semantic.role is @semantics.ListItem {
       add_action(node, 0)
       if semantic.role is @semantics.Checkbox {
         toggled(node, if semantic.checked { 1 } else { 0 })
       } else if presentation.toggled is Some(active) {
         toggled(node, if active { 1 } else { 0 })
+      }
+      if semantic.role is @semantics.ListItem {
+        selected(node, semantic.selected)
       }
     } else if bridge.presentation.text_owner == Some(semantic.reference) {
       if bridge.presentation.composing || semantic.read_only {
@@ -243,7 +252,16 @@ fn tree(_data : UInt64) -> UInt64 {
         add_value_action(node)
       }
     }
-    push_child(root, id)
+    if semantic.role is @semantics.List {
+      for child in bridge.nodes {
+        if child.parent == Some(semantic.reference) {
+          push_child(node, child.reference.id.to_uint64())
+        }
+      }
+    }
+    if semantic.parent is None {
+      push_child(root, id)
+    }
     push_node(result, id, node)
   }
   for item in bridge.presentation.statuses {

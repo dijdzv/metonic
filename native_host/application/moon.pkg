@@ -1,5 +1,6 @@
 import {
   "local/p0/core/application" @portable,
+  "local/p0/core/component",
   "local/p0/core/semantics",
   "local/p0/core/view",
   "local/p0/core/application_task" @task,
@@ -13,6 +14,5 @@ import {
 supported_targets = "native"
 
 import {
-  "local/p0/core/component",
   "local/p0/core/reactive",
 } for "test"

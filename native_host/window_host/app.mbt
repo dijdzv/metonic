@@ -806,6 +806,14 @@ async fn run_loop(
                   ),
                 )
                 app.draw()
+              } else if kind == 1 || kind == 2 {
+                if (app.host.navigate_unhandled)(
+                    0,
+                    if kind == 1 { -1000000 } else { 1000000 },
+                  ) {
+                  ignore(app.publish())
+                }
+                app.draw()
               }
             ApplicationTask(_, PointerIdle | CommittedInput, acknowledge) if app.ime_pointer.pending() => {
               acknowledge()

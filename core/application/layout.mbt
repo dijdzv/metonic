@@ -21,6 +21,22 @@ pub fn Widget::checkbox(value : @component.UiCheckbox) -> Widget {
 }
 
 ///|
+pub fn[K] Widget::list(value : @component.UiList[K]) -> Widget {
+  {
+    reference: value.reference(),
+    render: (bounds, clip) => list(value, bounds, clip~),
+  }
+}
+
+///|
+pub fn[K] Widget::list_item(value : @component.UiListItem[K]) -> Widget {
+  {
+    reference: value.reference(),
+    render: (bounds, clip) => list_item(value, bounds, clip~),
+  }
+}
+
+///|
 pub fn Widget::label(value : @component.UiLabel) -> Widget {
   {
     reference: value.reference(),

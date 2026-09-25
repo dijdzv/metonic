@@ -3,6 +3,7 @@ pub(all) enum Surface {
   Text
   Control
   Checkbox(checked~ : Bool, enabled~ : Bool, invalid~ : Bool)
+  ListItem(selected~ : Bool, enabled~ : Bool)
 } derive(Eq)
 
 ///|

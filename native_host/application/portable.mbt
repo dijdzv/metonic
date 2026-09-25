@@ -83,6 +83,14 @@ pub fn from_application(app : @portable.Application) -> Application {
                 invalid=node.invalid,
               )
             }
+            @portable.ListItem => {
+              let reference = control.element.reference.unwrap()
+              let node = nodes
+                .iter()
+                .find_first(node => node.reference == reference)
+                .unwrap()
+              @renderer.ListItem(selected=node.selected, enabled=node.enabled)
+            }
             _ => @renderer.Text
           }
           @renderer.item(control.element, surface~, clip=control.clip)
@@ -105,7 +113,7 @@ pub fn from_application(app : @portable.Application) -> Application {
     },
     focus_order: () => {
       (app.view)().filter_map(control => {
-        if control.kind == @portable.Text {
+        if control.kind == @portable.Text || control.kind == @portable.List {
           None
         } else {
           control.element.reference
@@ -124,7 +132,23 @@ pub fn from_application(app : @portable.Application) -> Application {
     },
     shortcut: (_, _, _) => None,
     navigation_blocked: () => false,
-    navigate_unhandled: (_, _) => false,
+    navigate_unhandled: (_, dy) => {
+      guard app.components is Some(root) else { return false }
+      guard @semantics.snapshot(app.editor).iter().find_first(node => node.focused)
+        is Some(node) else {
+        return false
+      }
+      let direction = if dy <= -1000000 {
+        @component.First
+      } else if dy >= 1000000 {
+        @component.Last
+      } else if dy < 0 {
+        @component.Previous
+      } else {
+        @component.Next
+      }
+      root.navigate_list(node.reference, direction) is Some(_)
+    },
     pointer_unhandled: (_, _) => false,
     scroll_unhandled: (x, y, delta) => {
       app.viewport

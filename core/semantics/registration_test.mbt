@@ -115,3 +115,29 @@ test "checkbox keeps checked and invalid state independent of its name" {
   assert_eq(set_checked(tree, box, true), "stale_target")
   assert_eq(set_invalid(tree, box, false), "stale_target")
 }
+
+///|
+test "list item ownership and selection reject removed parents" {
+  let tree = empty(72, 1)
+  let list = add_list(tree, "Items").unwrap()
+  let first = add_list_item(tree, list, "First").unwrap()
+  let second = add_list_item(tree, list, "Second", selected=true).unwrap()
+  assert_eq(node(tree, first).unwrap().parent, Some(list))
+  assert_false(node(tree, first).unwrap().selected)
+  assert_true(node(tree, second).unwrap().selected)
+  assert_eq(set_selected(tree, first, true), "")
+  assert_true(node(tree, first).unwrap().selected)
+  assert_false(node(tree, second).unwrap().selected)
+  let third = add_list_item(tree, list, "Third", selected=true).unwrap()
+  assert_false(node(tree, first).unwrap().selected)
+  assert_true(node(tree, third).unwrap().selected)
+  assert_eq(focus(tree, list), "unsupported_action")
+  assert_eq(set_selected(tree, second, false), "")
+  assert_false(node(tree, second).unwrap().selected)
+  assert_eq(set_selected(tree, list, true), "unsupported_action")
+  assert_eq(remove(tree, list), "")
+  assert_true(node(tree, first) is Err("stale_target"))
+  assert_true(node(tree, second) is Err("stale_target"))
+  assert_true(node(tree, third) is Err("stale_target"))
+  assert_true(add_list_item(tree, list, "Late") is None)
+}

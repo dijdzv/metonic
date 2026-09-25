@@ -44,6 +44,27 @@ export async function verifyCheckboxGallery(browser, baseUrl, outputDir) {
       assert.equal(await checkbox('Dynamic').getAttribute('aria-checked'), 'false', 'Removed control changed a new instance');
       await previous.dispose();
 
+      const list = page.getByRole('listbox', { name: 'Selectable items' });
+      const option = name => page.getByRole('option', { name, exact: true });
+      assert.equal(await list.count(), 1);
+      assert.equal(await page.getByRole('option').count(), 12);
+      assert.equal(await option('Item 0').getAttribute('aria-selected'), 'true');
+      assert.equal(await option('Item 4').getAttribute('aria-disabled'), 'true');
+      await option('Item 1').click();
+      assert.equal(await option('Item 1').getAttribute('aria-selected'), 'true');
+      await option('Item 1').press('ArrowDown');
+      assert.equal(await option('Item 2').evaluate(element => document.activeElement === element), true);
+      await option('Item 2').press('Home');
+      assert.equal(await option('Item 0').evaluate(element => document.activeElement === element), true);
+      await option('Item 0').press('End');
+      assert.equal(await option('Item 11').evaluate(element => document.activeElement === element), true);
+      const topBefore = await option('Item 11').evaluate(element => element.getBoundingClientRect().top);
+      await option('Item 11').hover();
+      await page.mouse.wheel(0, -80);
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      const topAfter = await option('Item 11').evaluate(element => element.getBoundingClientRect().top);
+      assert.notEqual(topAfter, topBefore, 'List wheel did not move row placements');
+
       await page.locator('#stop').click();
       assert.equal(await page.locator('#controls button').count(), 0);
       assert.deepEqual(errors, []);
