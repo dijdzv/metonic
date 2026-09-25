@@ -49,6 +49,7 @@ priv struct Board {
   buttons : Array[@semantics.NodeRef]
   wait : async (Int) -> Unit
   rate_result : (String) -> Result[Int, String]
+  quote_result : (QuoteInput) -> Result[Int, String]
   mut task_control : @task.TaskControl?
   mut size : (Int, Int)
   mut error : String?
@@ -65,8 +66,10 @@ priv struct ItemChild {
 
 ///|
 priv struct DetailChild {
+  quote : @async_state.Downstream[QuoteInput, Quote]
   display : @async_state.Publication[(String, Int, String), DisplayQuote]
   quantity_button : @semantics.NodeRef
+  retry_button : @semantics.NodeRef
 }
 
 ///|
@@ -102,7 +105,7 @@ fn ItemChild::show_detail(self : ItemChild, board : Board) -> Bool {
   self.details.reconcile(
     [{ key: "detail", props: (), }],
     (owner, _, _) => {
-      let quote = board.downstreams.register(
+      let quote = board.downstreams.register_result(
         owner.scope(),
         () => {
           let related = @async_state.Related::new(self.key, self.cycle.get())
@@ -120,13 +123,18 @@ fn ItemChild::show_detail(self : ItemChild, board : Board) -> Bool {
         },
         input => {
           (board.wait)(250)
-          {
-            name: input.name,
-            stock: input.stock,
-            quantity: input.quantity,
-            shipping: (100 + input.stock) * input.quantity,
+          match (board.quote_result)(input) {
+            Ok(shipping) =>
+              Ok(Quote::{
+                name: input.name,
+                stock: input.stock,
+                quantity: input.quantity,
+                shipping,
+              })
+            Err(message) => Err(message)
           }
         },
+        error => error,
       )
       let display = board.publications.register(owner.scope(), () => {
         let currency = board.currency.get()
@@ -153,7 +161,8 @@ fn ItemChild::show_detail(self : ItemChild, board : Board) -> Bool {
         ((self.key, board.quantity.get(), currency), converted)
       })
       let quantity_button = owner.add_button("Quantity +").unwrap()
-      DetailChild::{ display, quantity_button, }
+      let retry_button = owner.add_button("Retry quote").unwrap()
+      DetailChild::{ quote, display, quantity_button, retry_button, }
     },
     (_, _) => (),
   )
@@ -290,6 +299,19 @@ fn Board::view(self : Board) -> Array[@app.Control] {
           kind: @app.Button,
           clip: None,
         })
+        if details.quote.current().view() is CurrentFailed(_) ||
+          details.quote.admission() is @async_state.Rejected(_, _) {
+          controls.push({
+            element: {
+              bounds: { x: 16 + 4 * 138, y: 58, width: 128, height: 36, },
+              text: "Retry quote",
+              reference: Some(details.retry_button),
+              focused: @semantics.node(self.tree, details.retry_button).unwrap().focused,
+            },
+            kind: @app.Button,
+            clip: None,
+          })
+        }
         quote = match details.display.get() {
           Some({ current: CurrentReady(value, _), .. }) =>
             "Shipping: " +
@@ -301,7 +323,15 @@ fn Board::view(self : Board) -> Array[@app.Control] {
           Some({ current: CurrentBlocked(_), previous: Some(previous), .. }) =>
             "Shipping: loading (previous " + previous.value.amount_text() + ")"
           Some({ current: CurrentPending(_), .. }) => "Shipping: loading"
-          Some({ current: CurrentFailed(_), .. }) => "Shipping: failed"
+          Some({ current: CurrentFailed(_), .. }) =>
+            if details.quote.current().view() is CurrentFailed(_) {
+              "Shipping: failed for " +
+              item +
+              " x" +
+              self.quantity.peek().to_string()
+            } else {
+              "Shipping: failed"
+            }
           _ => "Shipping: waiting for item"
         }
       }
@@ -406,6 +436,24 @@ pub fn create_with_save(
   rate_result : (String) -> Result[Int, String],
   save : async (SaveSnapshot) -> Result[Unit, String],
 ) -> @app.Application {
+  let failed_once = Ref(false)
+  create_with_quote_result(wait, rate_result, save, (name, stock, quantity) => {
+    if name == "Blue stool" && quantity == 4 && !failed_once.val {
+      failed_once.val = true
+      Err("quote service unavailable")
+    } else {
+      Ok((100 + stock) * quantity)
+    }
+  })
+}
+
+///|
+pub fn create_with_quote_result(
+  wait : async (Int) -> Unit,
+  rate_result : (String) -> Result[Int, String],
+  save : async (SaveSnapshot) -> Result[Unit, String],
+  quote_result : (String, Int, Int) -> Result[Int, String],
+) -> @app.Application {
   let graph = @reactive.Graph::new()
   let scope = @reactive.Scope::root(graph)
   let selected = @reactive.Signal::new(scope, "amber")
@@ -440,6 +488,7 @@ pub fn create_with_save(
     buttons,
     wait,
     rate_result,
+    quote_result: input => quote_result(input.name, input.stock, input.quantity),
     task_control: None,
     size: (720, 500),
     error: None,
@@ -488,8 +537,12 @@ pub fn create_with_save(
         None
       } else {
         if model.items.get(model.selected.peek()) is Some(item) &&
-          item.details.for_reference(reference) is Some(_) {
-          model.quantity.set(model.quantity.peek() + 1)
+          item.details.for_reference(reference) is Some(details) {
+          if reference == details.quantity_button {
+            model.quantity.set(model.quantity.peek() + 1)
+          } else if reference == details.retry_button {
+            ignore(details.quote.retry())
+          }
         }
         None
       }

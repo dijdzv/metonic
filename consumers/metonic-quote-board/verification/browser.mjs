@@ -103,6 +103,15 @@ try {
     await page.getByRole('button', { name: 'USD' }).click();
     await waitLines('Detail: Blue stool', 'Stock: 7', 'Shipping: loading (previous 642 USD)');
     await waitLines('Detail: Blue stool', 'Stock: 7', 'Shipping: 642 USD for 3');
+    await page.getByRole('button', { name: 'Quantity +' }).click();
+    await waitLines('Detail: Blue stool', 'Stock: 7', 'Shipping: failed for blue x4');
+    assert.equal(await page.getByRole('button', { name: 'Retry quote' }).count(), 1);
+    await page.waitForTimeout(300);
+    await waitLines('Detail: Blue stool', 'Stock: 7', 'Shipping: failed for blue x4');
+    await page.getByRole('button', { name: 'Retry quote' }).click();
+    await waitLines('Detail: Blue stool', 'Stock: 7', 'Shipping: loading');
+    await waitLines('Detail: Blue stool', 'Stock: 7', 'Shipping: 856 USD for 4');
+    assert.equal(await page.getByRole('button', { name: 'Retry quote' }).count(), 0);
     const note = page.getByRole('textbox', { name: 'Note' });
     const waitNote = expected => page.waitForFunction(text => {
       const lines = [...document.querySelectorAll('#controls .gpu-text')].map(node => node.textContent);

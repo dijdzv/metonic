@@ -148,6 +148,28 @@ async fn main {
           "",
         )
         wait_text(app, 7, "Shipping: 642 USD for 3")
+        assert_eq(
+          (handle.operate)(
+            recreated_increase,
+            @window_host.ActivateControl,
+            (handle.inspect)().semantic_revision,
+          ),
+          "",
+        )
+        wait_text(app, 7, "Shipping: failed for blue x4")
+        let retry = (app.view)()
+        .iter()
+        .find_first(control => control.element.text == "Retry quote")
+        .unwrap().element.reference.unwrap()
+        assert_eq(
+          (handle.operate)(
+            retry,
+            @window_host.ActivateControl,
+            (handle.inspect)().semantic_revision,
+          ),
+          "",
+        )
+        wait_text(app, 7, "Shipping: 856 USD for 4")
         let note = app.default_input.unwrap()
         let save = (app.view)()
         .iter()
