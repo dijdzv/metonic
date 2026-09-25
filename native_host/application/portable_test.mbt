@@ -13,6 +13,7 @@ test "native adapter keeps offscreen semantics without rendering their controls"
     publications: None,
     downstreams: None,
     serials: None,
+    components: None,
     connect_tasks: _ => (),
     initialize: () => None,
     view: () => {
@@ -52,5 +53,51 @@ test "native adapter keeps offscreen semantics without rendering their controls"
     .find_first(control => control.reference == offscreen)
     .unwrap()
   assert_eq(offscreen_control.bounds, { x: 0, y: 0, width: 0, height: 0, })
+  ignore(@semantics.dispose(tree))
+}
+
+///|
+test "native adapter exposes host-boundary controlled input synchronization" {
+  let scope = @reactive.Scope::root(@reactive.Graph::new())
+  let tree = @semantics.empty(2, 1)
+  let ui = @component.UiRoot::new(scope, tree)
+  let value = @reactive.Signal::new(scope, "initial")
+  let input = ui.fixed("form").text_input(
+    "name", "Name",
+    @component.Controlled::new(() => value.peek(), text => {
+      value.set(text)
+      None
+    }),
+  ).unwrap()
+  let app : @portable.Application = {
+    title: "Controlled",
+    editor: tree,
+    default_input: Some(input),
+    initial_size: (120, 80),
+    viewport: None,
+    publications: None,
+    downstreams: None,
+    serials: None,
+    components: Some(ui),
+    connect_tasks: _ => (),
+    initialize: () => None,
+    view: () => [],
+    activate: _ => None,
+    edited: edit => ui.edited(edit.target, edit.text, edit.revision),
+    resize: (_, _) => false,
+    stop: () => (),
+    can_close: () => true,
+    close_requested: () => (),
+    close_ready: () => true,
+    input_error: _ => (),
+    dispose: () => scope.dispose(),
+  }
+  let host = from_application(app)
+  value.set("updated")
+  assert_true((host.synchronize_controls)(Some(input)) == false)
+  assert_eq(@semantics.node(tree, input).unwrap().value, "initial")
+  assert_true((host.synchronize_controls)(None))
+  assert_eq(@semantics.node(tree, input).unwrap().value, "updated")
+  scope.dispose()
   ignore(@semantics.dispose(tree))
 }

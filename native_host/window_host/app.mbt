@@ -441,9 +441,11 @@ fn App::draw(self : App) -> Unit raise Error {
 
 ///|
 fn App::publish(self : App) -> Bool {
-  (self.host.publication_round)(request => {
+  let published = (self.host.publication_round)(request => {
     self.publication_submit.map(submit => submit(request)).unwrap_or(false)
   })
+  let synchronized = (self.host.synchronize_controls)(self.composition_target)
+  published || synchronized
 }
 
 ///|

@@ -105,7 +105,12 @@ fn Session::publish(self : Session) -> Bool {
     self.wake_pending = true
   }
   let published = self.application.publish()
-  reconciled || published
+  let composing = self.editors
+    .iter()
+    .find_first(editor => editor.composing)
+    .map(editor => editor.reference)
+  let synchronized = self.application.synchronize_components(composing)
+  reconciled || published || synchronized
 }
 
 ///|

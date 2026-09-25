@@ -11,6 +11,7 @@ pub fn from_application(app : @portable.Application) -> Application {
       let published = app.publish()
       reconciled || published
     },
+    synchronize_controls: composing => app.synchronize_components(composing),
     initial_size: app.initial_size,
     initialize: () => {
       (app.initialize)().map(request => { request, gate: Always, })

@@ -1,10 +1,10 @@
 import {
   "local/p0/core/reactive",
   "local/p0/core/semantics",
+  "local/p0/core/application_task" @task,
 }
 
 import {
   "local/p0/core/reactive_task",
-  "local/p0/core/application_task" @task,
   "moonbitlang/async",
 } for "test"

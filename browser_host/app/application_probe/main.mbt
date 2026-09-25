@@ -282,6 +282,7 @@ pub fn create() -> @host.Instance {
     publications: Some(model.publication_registry),
     downstreams: Some(model.downstream_registry),
     serials: Some(model.serial_registry),
+    components: None,
     connect_tasks: control => {
       if task_control.val is Some(_) {
         abort("task control connected twice")

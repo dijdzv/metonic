@@ -207,6 +207,7 @@ pub fn create(
     publications: None,
     downstreams: None,
     serials: None,
+    components: None,
     connect_tasks: control => {
       if !model.detail.connect(control) || !model.related.connect(control) {
         abort("async pair task connection failed")
