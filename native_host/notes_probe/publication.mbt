@@ -2,13 +2,32 @@
 async fn verify_publication() -> Unit {
   let root = @reactive.Scope::root(@reactive.Graph::new())
   let registry = @reactive_task.PublicationRegistry::new(root)
+  let downstream_registry = @reactive_task.DownstreamRegistry::new(root)
   let source : @reactive_task.Source[String, Int] = @reactive_task.Source::new(
     root,
   )
   let cycle = @reactive_task.Cycle::new()
   let demand = @reactive.Signal::new(root, "item-1")
+  let downstream_release = Ref(false)
+  let downstream_cleanup = Ref(0)
   let published = registry.register(root, () => {
     (demand.get(), source.current(demand.get(), cycle))
+  })
+  let downstream = downstream_registry.register(
+    root,
+    () => source.current(demand.get(), cycle),
+    async fn(value : Int) {
+      defer {
+        downstream_cleanup.val += 1
+      }
+      while !downstream_release.val {
+        @async.sleep(1)
+      }
+      value * 2
+    },
+  )
+  let downstream_published = registry.register(root, () => {
+    (demand.get(), downstream.current())
   })
   let tree = @semantics.empty(928, 1)
   let switch = @semantics.add_button(tree, "Switch item").unwrap()
@@ -20,9 +39,13 @@ async fn verify_publication() -> Unit {
     initial_size: (480, 240),
     viewport: None,
     publications: Some(registry),
+    downstreams: Some(downstream_registry),
     connect_tasks: control => {
       if !source.connect(control) {
         abort("publication source was not connected")
+      }
+      if !downstream_registry.connect(control) {
+        abort("downstream registry was not connected")
       }
     },
     initialize: () => {
@@ -60,6 +83,26 @@ async fn verify_publication() -> Unit {
         },
         @portable.Control::{
           element: {
+            reference: None,
+            text: match downstream_published.get() {
+              Some(state) =>
+                match state.current {
+                  @reactive_task.CurrentReady(value, _) =>
+                    "Downstream " + value.to_string()
+                  @reactive_task.CurrentPending(_) => "Downstream pending"
+                  @reactive_task.CurrentBlocked(_) => "Downstream blocked"
+                  _ => "Downstream other"
+                }
+              None => "Downstream not published"
+            },
+            focused: false,
+            bounds: { x: 220, y: 68, width: 240, height: 40, },
+          },
+          kind: Text,
+          clip: None,
+        },
+        @portable.Control::{
+          element: {
             reference: Some(switch),
             text: "Switch item",
             focused: false,
@@ -72,7 +115,7 @@ async fn verify_publication() -> Unit {
     },
     activate: reference => {
       if reference == switch {
-        demand.set("item-2")
+        demand.set(if demand.peek() == "item-1" { "item-2" } else { "item-1" })
       }
       None
     },
@@ -106,8 +149,12 @@ async fn verify_publication() -> Unit {
               is @reactive_task.CurrentReady(7, _)) {
           @async.sleep(1)
         }
-        let ready = (handle.capture)(_ => ())
-        assert_true(ready.pixels != pending.pixels)
+        while !(downstream_published.get().unwrap().current
+              is @reactive_task.CurrentPending(_)) {
+          @async.sleep(1)
+        }
+        let child_pending = (handle.capture)(_ => ())
+        assert_true(child_pending.pixels != pending.pixels)
         assert_eq(
           (handle.operate)(switch, ActivateControl, @semantics.revision(tree)),
           "",
@@ -117,8 +164,31 @@ async fn verify_publication() -> Unit {
           published.get().unwrap().current is @reactive_task.CurrentBlocked(_),
         )
         assert_true(published.get().unwrap().previous is None)
+        assert_true(
+          downstream_published.get().unwrap().current
+          is @reactive_task.CurrentBlocked(_),
+        )
+        assert_true(downstream_published.get().unwrap().previous is None)
+        while downstream_cleanup.val == 0 {
+          @async.sleep(1)
+        }
         let switched = (handle.capture)(_ => ())
-        assert_true(switched.pixels != ready.pixels)
+        assert_true(switched.pixels != child_pending.pixels)
+        assert_eq(
+          (handle.operate)(switch, ActivateControl, @semantics.revision(tree)),
+          "",
+        )
+        assert_true(
+          downstream_published.get().unwrap().current
+          is @reactive_task.CurrentPending(_),
+        )
+        downstream_release.val = true
+        while !(downstream_published.get().unwrap().current
+              is @reactive_task.CurrentReady(14, _)) {
+          @async.sleep(1)
+        }
+        let ready = (handle.capture)(_ => ())
+        assert_true(ready.pixels != switched.pixels)
         (handle.apply)(Close)
         finished.val = true
       })

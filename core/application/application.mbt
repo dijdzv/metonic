@@ -41,6 +41,7 @@ pub(all) struct Application {
   initial_size : (Int, Int)
   viewport : Viewport?
   publications : @reactive_task.PublicationRegistry?
+  downstreams : @reactive_task.DownstreamRegistry?
   connect_tasks : (@task.TaskControl) -> Unit
   initialize : () -> @task.Request?
   view : () -> Array[Control]
@@ -58,4 +59,12 @@ pub(all) struct Application {
 ///|
 pub fn Application::publish(self : Application) -> Bool {
   self.publications.map(registry => registry.publish()).unwrap_or(false)
+}
+
+///|
+pub fn Application::reconcile_downstreams(
+  self : Application,
+  submit : (@task.Request) -> Bool,
+) -> Bool {
+  self.downstreams.map(registry => registry.reconcile(submit)).unwrap_or(false)
 }

@@ -54,6 +54,14 @@ pub(all) enum CurrentCause {
   CanceledSource(Origin)
   OriginConflict(Int, Origin, Origin)
   RelatedContractMismatch
+  DownstreamBlocked(Int, DownstreamBlock)
+} derive(Debug, Eq)
+
+///|
+pub(all) enum DownstreamBlock {
+  WaitingUpstream
+  NotAdmitted
+  AdmissionRejected
 } derive(Debug, Eq)
 
 ///|
@@ -93,6 +101,7 @@ enum LeafPhase {
   LeafReady
   LeafFailed(String)
   LeafCanceled
+  LeafDownstreamBlocked(DownstreamBlock)
 } derive(Debug, Eq)
 
 ///|
@@ -148,6 +157,7 @@ fn observation_phase_rank(phase : LeafPhase) -> Int {
     LeafReady => 3
     LeafCanceled => 4
     LeafFailed(_) => 5
+    LeafDownstreamBlocked(_) => 6
   }
 }
 
@@ -192,7 +202,10 @@ fn EvidenceSet::merge(left : EvidenceSet, right : EvidenceSet) -> EvidenceSet {
 ///|
 fn cause_source(cause : CurrentCause) -> Int {
   match cause {
-    IdleSource(id) | OtherRequest(id) | OriginConflict(id, _, _) => id
+    IdleSource(id)
+    | OtherRequest(id)
+    | OriginConflict(id, _, _)
+    | DownstreamBlocked(id, _) => id
     PendingSource(origin) | FailedSource(origin, _) | CanceledSource(origin) =>
       origin.source_id
     RelatedContractMismatch => 0
@@ -209,6 +222,7 @@ fn cause_rank(cause : CurrentCause) -> Int {
     CanceledSource(_) => 4
     FailedSource(_, _) => 5
     OriginConflict(_, _, _) => 6
+    DownstreamBlocked(_, _) => 7
   }
 }
 
@@ -218,6 +232,7 @@ fn cause_origin(cause : CurrentCause) -> Origin? {
     PendingSource(origin) | FailedSource(origin, _) | CanceledSource(origin) =>
       Some(origin)
     OriginConflict(_, first, _) => Some(first)
+    DownstreamBlocked(_, _) => None
     _ => None
   }
 }
@@ -283,6 +298,10 @@ fn EvidenceSet::phase_and_causes(self : EvidenceSet) -> (Int, CauseSet) {
           None => abort("canceled evidence has no admitted origin")
         }
       }
+      LeafDownstreamBlocked(reason) => {
+        blocked = true
+        Some(DownstreamBlocked(item.source_id, reason))
+      }
     }
     match cause {
       Some(value) if !causes.contains(value) => causes.push(value)
@@ -332,6 +351,27 @@ fn EvidenceSet::phase_and_causes(self : EvidenceSet) -> (Int, CauseSet) {
     0
   }
   (phase, { values: causes, })
+}
+
+///|
+fn[A, B] blocked_downstream(
+  current : Current[A],
+  source_id : Int,
+  reason : DownstreamBlock,
+) -> Current[B] {
+  let observations = current.evidence.observations.copy()
+  observations.push({
+    source_id,
+    origin: None,
+    phase: LeafDownstreamBlocked(reason),
+  })
+  {
+    evidence: {
+      observations,
+      related_mismatch: current.evidence.related_mismatch,
+    },
+    value: None,
+  }
 }
 
 ///|

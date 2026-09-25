@@ -201,6 +201,19 @@ pub fn[K, V] Source::cancel(self : Source[K, V]) -> @task.Request? {
 }
 
 ///|
+/// Stops an obsolete in-flight value immediately, even when the Driver cannot
+/// accept another Request. It does not claim that cleanup has finished.
+pub fn[K, V] Source::retire_current(self : Source[K, V]) -> Bool {
+  guard self.resource.retire_current() else { return false }
+  match self.state.peek() {
+    Pending(key, cycle, previous) =>
+      self.publish(Canceled(key, cycle, previous))
+    _ => ()
+  }
+  true
+}
+
+///|
 pub fn[K, V] Source::dispose(self : Source[K, V]) -> Unit {
   guard !self.scope.is_disposed() && !self.resource.is_disposed() else {
     return

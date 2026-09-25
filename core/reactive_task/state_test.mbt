@@ -124,6 +124,29 @@ async test "source cancel and disposal leave no live result writer" {
 }
 
 ///|
+async test "retiring current work rejects late completion without another request" {
+  let root = @reactive.Scope::root(@reactive.Graph::new())
+  let source : Source[String, Int] = Source::new(root)
+  let cancellations = Ref(0)
+  assert_true(source.connect(@task.task_control(_ => cancellations.val += 1)))
+  let cycle = Cycle::new()
+  let request = source.replace("one", cycle, false, () => 10).unwrap()
+  request.invalidate()
+  let late = request.prepare().unwrap().run()
+  assert_eq(source.get(), Pending("one", cycle, None))
+  assert_true(source.retire_current())
+  assert_eq(cancellations.val, 1)
+  assert_eq(source.get(), Canceled("one", cycle, None))
+  assert_eq(late.apply(), @task.Rejected)
+  let next = Cycle::new()
+  let replacement = source.replace("one", next, false, () => 20).unwrap()
+  replacement.invalidate()
+  assert_eq(replacement.prepare().unwrap().run().apply(), @task.Changed)
+  assert_eq(source.get(), Ready("one", next, 20, None))
+  root.dispose()
+}
+
+///|
 async test "parent scope disposal rejects late source results without signal writes" {
   let root = @reactive.Scope::root(@reactive.Graph::new())
   let source : Source[String, Int] = Source::new(root)

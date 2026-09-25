@@ -26,6 +26,8 @@ pub fn create(
     editors: [],
     started: false,
     reconciling: false,
+    publishing: false,
+    wake_pending: false,
     applied_focus: None,
     revealed_focus: None,
     remove_wheel: None,
@@ -117,7 +119,7 @@ pub fn create(
         }
         (application.input_error)(None)
         (application.close_requested)()
-        ignore(application.publish())
+        ignore(session.publish())
         for editor in session.editors {
           editor.sync(application.editor)
         }

@@ -11,7 +11,7 @@ pub fn create(model : @application.Model) -> @host.Application {
   {
     editor: model.editor,
     default_input: Some(model.editor_input),
-    publication_round: () => false,
+    publication_round: _ => false,
     connect_tasks: _ => (),
     initialize: () => {
       ignore(
