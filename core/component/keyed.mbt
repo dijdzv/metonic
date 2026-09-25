@@ -100,6 +100,33 @@ pub fn ChildOwner::add_checkbox(
 }
 
 ///|
+pub fn ChildOwner::add_list(
+  self : ChildOwner,
+  name : String,
+) -> @semantics.NodeRef? {
+  guard !self.scope.is_disposed() else { return None }
+  let reference = @semantics.add_list(self.tree, name)
+  if reference is Some(value) {
+    self.references.push(value)
+  }
+  reference
+}
+
+///|
+pub fn ChildOwner::add_list_item(
+  self : ChildOwner,
+  parent : @semantics.NodeRef,
+  name : String,
+) -> @semantics.NodeRef? {
+  guard !self.scope.is_disposed() else { return None }
+  let reference = @semantics.add_list_item(self.tree, parent, name)
+  if reference is Some(value) {
+    self.references.push(value)
+  }
+  reference
+}
+
+///|
 pub fn ChildOwner::add_label(
   self : ChildOwner,
   text : String,

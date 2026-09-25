@@ -23,7 +23,9 @@ fn App::apply_accessibility(
     }
     @accessibility.Click(target) => {
       guard app.accessibility_target(target) is Some(node) else { return }
-      guard node.role == @semantics.Button || node.role == @semantics.Checkbox else {
+      guard node.role == @semantics.Button ||
+        node.role == @semantics.Checkbox ||
+        node.role == @semantics.ListItem else {
         return
       }
       ignore(@semantics.focus(app.host.editor, node.reference))

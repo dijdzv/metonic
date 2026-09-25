@@ -42,6 +42,8 @@ fn Session::reconcile_controls(
         @app.Text => node.role == @semantics.Label
         @app.Button => node.role == @semantics.Button
         @app.Checkbox => node.role == @semantics.Checkbox
+        @app.List => node.role == @semantics.List
+        @app.ListItem => node.role == @semantics.ListItem
         @app.Input(..) => node.role == @semantics.TextInput
       }
       if !compatible {
@@ -115,13 +117,17 @@ fn Session::reconcile_controls(
         let tag = match control.kind {
           @app.Button => "button"
           @app.Checkbox => "button"
+          @app.List => "div"
+          @app.ListItem => "div"
           @app.Input(single_line=true) => "input"
           @app.Input(single_line=false) => "textarea"
           @app.Text => "span"
         }
         let element = @dom_view.create_control(root, id, tag)
         let remove_listener = if (
-            control.kind == @app.Button || control.kind == @app.Checkbox
+            control.kind == @app.Button ||
+            control.kind == @app.Checkbox ||
+            control.kind == @app.ListItem
           ) &&
           control.element.reference is Some(reference) {
           let remove_click = @dom_view.on_click(element, () => {
@@ -134,9 +140,34 @@ fn Session::reconcile_controls(
               self.notify()
             }
           })
+          let remove_key = if control.kind == @app.ListItem {
+            @dom_view.on_keydown(element, key => {
+              if key == "Enter" || key == " " {
+                return self.activate_reference(reference) != 0
+              }
+              let direction = match key {
+                "ArrowUp" => Some(@component.Previous)
+                "ArrowDown" => Some(@component.Next)
+                "Home" => Some(@component.First)
+                "End" => Some(@component.Last)
+                _ => None
+              }
+              guard direction is Some(direction) &&
+                self.application.components is Some(components) &&
+                components.navigate_list(reference, direction) is Some(_) else {
+                return false
+              }
+              self.sync_focus((self.application.view)())
+              self.notify()
+              true
+            })
+          } else {
+            () => ()
+          }
           () => {
             remove_click()
             remove_focus()
+            remove_key()
           }
         } else {
           () => ()
@@ -173,6 +204,8 @@ fn Session::reconcile_controls(
         match control.kind {
           @app.Button => "gpu-button"
           @app.Checkbox => "gpu-button"
+          @app.List => "gpu-list"
+          @app.ListItem => "gpu-list-item"
           @app.Input(..) => "gpu-input"
           @app.Text => "gpu-text"
         },
@@ -181,6 +214,25 @@ fn Session::reconcile_controls(
   }
   self.owned.clear()
   self.owned.append(ordered)
+  for owned in ordered {
+    if owned.kind == @app.List &&
+      owned.key is Semantic(reference) &&
+      @semantics.node(self.application.editor, reference) is Ok(node) {
+      let mut owns = ""
+      for item in ordered {
+        if item.key is Semantic(item_reference) &&
+          @semantics.node(self.application.editor, item_reference)
+          is Ok(item_node) &&
+          item_node.parent == Some(reference) {
+          if owns != "" {
+            owns += " "
+          }
+          owns += item.id
+        }
+      }
+      @dom_view.list(owned.id, node.name, owns)
+    }
+  }
   self.bindings.clear()
   self.bindings.append(bindings)
   @dom_view.place(@dom_view.element(self.canvas_id), placements)

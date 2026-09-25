@@ -3,6 +3,8 @@ pub(all) enum Role {
   Label
   Button
   Checkbox
+  List
+  ListItem
   TextInput
 } derive(Debug, Eq)
 
@@ -17,12 +19,14 @@ pub(all) struct NodeRef {
 ///|
 pub struct Node {
   reference : NodeRef
+  parent : NodeRef?
   role : Role
   name : String
   value : String
   enabled : Bool
   read_only : Bool
   checked : Bool
+  selected : Bool
   invalid : Bool
   focused : Bool
   selection_start : Int
@@ -56,6 +60,9 @@ pub fn create(
 ) -> Tree? {
   let tree = empty(session, window)
   for item in initial {
+    if item.role == ListItem {
+      return None
+    }
     if @text_position.utf16_to_scalar(item.value, 0) is None {
       return None
     }
@@ -154,7 +161,7 @@ pub fn focus(tree : Tree, reference : NodeRef) -> String {
     return error
   }
   let node = extra_node(tree, id).unwrap()
-  if node.role == Label {
+  if node.role == Label || node.role == List {
     return "unsupported_action"
   }
   if !node.enabled {
@@ -398,6 +405,43 @@ pub fn set_checked(tree : Tree, reference : NodeRef, checked : Bool) -> String {
 }
 
 ///|
+pub fn set_selected(
+  tree : Tree,
+  reference : NodeRef,
+  selected : Bool,
+) -> String {
+  let (id, error) = resolve(tree, reference)
+  if id < 0 {
+    return error
+  }
+  let node = extra_node(tree, id).unwrap()
+  if node.role != ListItem {
+    return "unsupported_action"
+  }
+  if selected {
+    let changed = tree.nodes.any(other => {
+      other.role == ListItem &&
+      other.parent == node.parent &&
+      other.selected != (other.reference == reference)
+    })
+    if changed {
+      tree.nodes = tree.nodes.map(other => {
+        if other.role == ListItem && other.parent == node.parent {
+          { ..other, selected: other.reference == reference, }
+        } else {
+          other
+        }
+      })
+      tree.revision += 1
+    }
+  } else if node.selected {
+    store_input(tree, { ..node, selected: false, })
+    tree.revision += 1
+  }
+  ""
+}
+
+///|
 pub fn set_invalid(tree : Tree, reference : NodeRef, invalid : Bool) -> String {
   let (id, error) = resolve(tree, reference)
   if id < 0 {
@@ -498,7 +542,9 @@ pub fn remove(tree : Tree, reference : NodeRef) -> String {
   if id < 0 {
     return error
   }
-  tree.nodes = tree.nodes.filter(node => node.reference != reference)
+  tree.nodes = tree.nodes.filter(node => {
+    node.reference != reference && node.parent != Some(reference)
+  })
   tree.revision += 1
   ""
 }
@@ -527,12 +573,14 @@ pub fn restore_input(
   tree.next_generation += 1
   tree.nodes.push({
     reference,
+    parent: None,
     role: TextInput,
     name,
     value,
     enabled: true,
     read_only: false,
     checked: false,
+    selected: false,
     invalid: false,
     focused: false,
     selection_start: value.length(),
@@ -576,6 +624,28 @@ pub fn add_checkbox(tree : Tree, name : String, checked : Bool) -> NodeRef? {
 }
 
 ///|
+pub fn add_list(tree : Tree, name : String) -> NodeRef? {
+  add_node(tree, name, List, "")
+}
+
+///|
+pub fn add_list_item(
+  tree : Tree,
+  parent : NodeRef,
+  name : String,
+  selected? : Bool = false,
+) -> NodeRef? {
+  guard node(tree, parent) is Ok(container) && container.role == List else {
+    return None
+  }
+  let reference = add_node(tree, name, ListItem, "", parent=Some(parent))
+  if selected && reference is Some(value) {
+    ignore(set_selected(tree, value, true))
+  }
+  reference
+}
+
+///|
 pub fn add_label(tree : Tree, text : String) -> NodeRef? {
   add_node(tree, text, Label, "")
 }
@@ -587,6 +657,8 @@ fn add_node(
   role : Role,
   value : String,
   checked? : Bool = false,
+  selected? : Bool = false,
+  parent? : NodeRef? = None,
 ) -> NodeRef? {
   if tree.closed ||
     tree.next_id == 2147483647 ||
@@ -603,12 +675,14 @@ fn add_node(
   tree.next_generation += 1
   tree.nodes.push({
     reference,
+    parent,
     role,
     name,
     value,
     enabled: true,
     read_only: false,
     checked,
+    selected,
     invalid: false,
     focused: false,
     selection_start: value.length(),

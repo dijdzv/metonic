@@ -34,6 +34,8 @@ fn controls(state : @host.Snapshot) -> Json {
           @semantics.Label => "label"
           @semantics.Button => "button"
           @semantics.Checkbox => "checkbox"
+          @semantics.List => "list"
+          @semantics.ListItem => "list_item"
           @semantics.TextInput => "text_input"
         },
         "name": node.name,

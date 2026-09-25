@@ -84,6 +84,7 @@ pub struct UiRoot {
   priv fixed : Array[FixedOwner]
   priv actions : Array[UiAction]
   priv checks : Array[UiCheck]
+  priv lists : Array[UiListAction]
   priv labels : Array[UiText]
   priv edits : Array[UiEdit]
 }
@@ -128,7 +129,16 @@ pub fn UiRoot::new(scope : @reactive.Scope, tree : @semantics.Tree) -> UiRoot {
   if scope.is_disposed() {
     abort("UI root requires a live scope")
   }
-  { scope, tree, fixed: [], actions: [], checks: [], labels: [], edits: [], }
+  {
+    scope,
+    tree,
+    fixed: [],
+    actions: [],
+    checks: [],
+    lists: [],
+    labels: [],
+    edits: [],
+  }
 }
 
 ///|
@@ -188,6 +198,11 @@ fn UiOwner::check_key(self : UiOwner, key : String) -> Unit {
   for check in self.root.checks {
     if physical_equal(check.owner.scope(), self.child.scope()) &&
       check.key == key {
+      abort("duplicate UI control key")
+    }
+  }
+  for list in self.root.lists {
+    if physical_equal(list.owner.scope(), self.child.scope()) && list.key == key {
       abort("duplicate UI control key")
     }
   }
@@ -461,6 +476,13 @@ pub fn UiRoot::activate(
     }
     return (check.value.commit)(!node.checked)
   }
+  if node.role == @semantics.ListItem {
+    guard self.lists.iter().find_first(list => (list.contains)(reference))
+      is Some(list) else {
+      return None
+    }
+    return (list.activate)(reference)
+  }
   None
 }
 
@@ -512,6 +534,9 @@ pub fn UiRoot::synchronize(
         changed = true
       }
     }
+  }
+  for list in self.lists {
+    changed = (list.synchronize)() || changed
   }
   for check in self.checks {
     if !check.owner.owns(check.reference) {

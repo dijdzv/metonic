@@ -8,6 +8,10 @@ pub struct Gallery {
   toggle : @component.UiButton
   mut dynamic_owner : @component.UiOwner?
   mut dynamic : @component.UiCheckbox?
+  list : @component.UiList[String]
+  list_view : @app.ScrollView
+  list_selection : @reactive.Signal[String?]
+  mut list_rows : Array[@component.ListRow[String]]
 }
 
 ///|
@@ -44,6 +48,17 @@ pub fn Gallery::new(ui : @component.UiRoot) -> Gallery {
       None
     })
     .unwrap()
+  let list_selection = @reactive.Signal::new(fixed.scope(), Some("item-0"))
+  let list = fixed.list("items", "Selectable items", list_selection).unwrap()
+  let list_rows : Array[@component.ListRow[String]] = []
+  for index in 0..<12 {
+    list_rows.push({
+      key: "item-" + index.to_string(),
+      label: "Item " + index.to_string(),
+      enabled: index != 4,
+    })
+  }
+  ignore(list.reconcile(list_rows))
   let gallery : Gallery = {
     ui,
     checked: checked_control(fixed, "checked", "Checked", true),
@@ -59,10 +74,23 @@ pub fn Gallery::new(ui : @component.UiRoot) -> Gallery {
     toggle,
     dynamic_owner: None,
     dynamic: None,
+    list,
+    list_view: @app.ScrollView::new(gap=4).unwrap(),
+    list_selection,
+    list_rows,
   }
   self_ref.val = Some(gallery)
   gallery.toggle_dynamic()
   gallery
+}
+
+///|
+pub fn Gallery::set_list_rows(
+  self : Gallery,
+  rows : Array[@component.ListRow[String]],
+) -> Bool {
+  self.list_rows = rows
+  self.list.reconcile(rows)
 }
 
 ///|
@@ -97,9 +125,22 @@ pub fn Gallery::view(self : Gallery) -> Array[@app.Control] {
   items.push(
     @app.StackItem::new(@layout.Fixed(40), @app.Widget::button(self.toggle)),
   )
-  @app.Stack::new(@layout.Vertical, gap=8)
-  .arrange({ x: 20, y: 20, width: 280, height: 320, }, items)
-  .unwrap()
+  let controls = @app.Stack::new(@layout.Vertical, gap=8)
+    .arrange({ x: 20, y: 20, width: 280, height: 320, }, items)
+    .unwrap()
+  let bounds : @view.Bounds = { x: 20, y: 370, width: 280, height: 220, }
+  controls.push(@app.list(self.list, bounds))
+  controls.append(
+    self.list_view
+    .arrange(
+      bounds,
+      self.list
+      .items()
+      .map(item => @app.ScrollItem::new(36, @app.Widget::list_item(item))),
+    )
+    .unwrap(),
+  )
+  controls
 }
 
 ///|
@@ -109,11 +150,11 @@ pub fn create() -> @app.Application {
   let ui = @component.UiRoot::new(scope, tree)
   let gallery = Gallery::new(ui)
   {
-    title: "Checkbox gallery",
+    title: "Component gallery",
     editor: tree,
     default_input: None,
-    initial_size: (400, 380),
-    viewport: None,
+    initial_size: (400, 640),
+    viewport: Some(gallery.list_view.viewport()),
     publications: None,
     downstreams: None,
     serials: None,

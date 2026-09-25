@@ -5,7 +5,9 @@ fn App::activate_focused(app : App) -> Unit raise {
       continue
     }
     if node.enabled &&
-      (node.role == @semantics.Button || node.role == @semantics.Checkbox) {
+      (node.role == @semantics.Button ||
+        node.role == @semantics.Checkbox ||
+        node.role == @semantics.ListItem) {
       if (app.host.activate)(node.reference) is Some(action) {
         app.queue(ApplicationTask(action.request, action.gate, () => ()))
       } else {

@@ -58,6 +58,51 @@ pub fn checkbox(
 }
 
 ///|
+pub fn list(id : String, label : String, owns : String) -> Unit {
+  let child = element(id)
+  child.set_attribute("role", "listbox")
+  child.set_attribute("aria-label", label)
+  child.set_attribute("aria-owns", owns)
+  host_style(child, "pointer-events", "none")
+}
+
+///|
+pub fn list_item(
+  id : String,
+  label : String,
+  selected : Bool,
+  enabled : Bool,
+) -> Unit {
+  let child = element(id)
+  text(child, label)
+  child.set_attribute("role", "option")
+  child.set_attribute("aria-selected", selected.to_string())
+  child.set_attribute("aria-disabled", (!enabled).to_string())
+  child.set_attribute("tabindex", if enabled { "0" } else { "-1" })
+  host_style(child, "color", "transparent")
+}
+
+///|
+pub fn on_keydown(
+  child : @input_dom.HTMLElement,
+  callback : (String) -> Bool,
+) -> () -> Unit {
+  let target = child.as_event_target()
+  let listener = @input_dom.EventListener::new(event => {
+    guard @input_dom.KeyboardEvent::from_event_opt(event) is Some(key) &&
+      !key.is_composing() else {
+      return
+    }
+    if callback(key.key()) {
+      event.prevent_default()
+      event.stop_propagation()
+    }
+  })
+  target.add_event_listener("keydown", listener, false)
+  () => target.remove_event_listener("keydown", listener, false)
+}
+
+///|
 pub fn create_control(
   parent : @input_dom.HTMLElement,
   id : String,

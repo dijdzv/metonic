@@ -80,6 +80,84 @@ pub fn checkbox(
 }
 
 ///|
+pub fn list(id : String, label : String, owns : String) -> Unit {
+  let child = element(id)
+  let dom = child.to_element()
+  dom
+  .set_attribute("role", @input_dom.TrustedTypeOrString::from_string("listbox"))
+  .unwrap()
+  dom
+  .set_attribute(
+    "aria-label",
+    @input_dom.TrustedTypeOrString::from_string(label),
+  )
+  .unwrap()
+  dom
+  .set_attribute("aria-owns", @input_dom.TrustedTypeOrString::from_string(owns))
+  .unwrap()
+  host_style(child, "pointer-events", "none")
+}
+
+///|
+pub fn list_item(
+  id : String,
+  label : String,
+  selected : Bool,
+  enabled : Bool,
+) -> Unit {
+  let child = element(id)
+  let dom = child.to_element()
+  text(child, label)
+  dom
+  .set_attribute("role", @input_dom.TrustedTypeOrString::from_string("option"))
+  .unwrap()
+  dom
+  .set_attribute(
+    "aria-selected",
+    @input_dom.TrustedTypeOrString::from_string(selected.to_string()),
+  )
+  .unwrap()
+  dom
+  .set_attribute(
+    "aria-disabled",
+    @input_dom.TrustedTypeOrString::from_string((!enabled).to_string()),
+  )
+  .unwrap()
+  dom
+  .set_attribute(
+    "tabindex",
+    @input_dom.TrustedTypeOrString::from_string(
+      if enabled {
+        "0"
+      } else {
+        "-1"
+      },
+    ),
+  )
+  .unwrap()
+  host_style(child, "color", "transparent")
+}
+
+///|
+pub fn on_keydown(
+  child : @input_dom.HTMLElement,
+  callback : (String) -> Bool,
+) -> () -> Unit {
+  let target = child.to_event_target()
+  let listener = @input_dom.EventListener::from_fn(event => {
+    guard event.as_keyboard_event() is Some(key) && !key.get_is_composing() else {
+      return
+    }
+    if callback(key.get_key()) {
+      event.prevent_default()
+      event.stop_propagation()
+    }
+  })
+  target.add_event_listener("keydown", Some(listener))
+  () => target.remove_event_listener("keydown", Some(listener))
+}
+
+///|
 pub fn create_control(
   parent : @input_dom.HTMLElement,
   id : String,

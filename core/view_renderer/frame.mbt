@@ -53,8 +53,71 @@ fn render_item(engine : @raster.Engine, item : Item) -> Layer {
       )
       { bounds, pixels, }
     }
+    ListItem(selected~, enabled~) => {
+      let label_width = (bounds.width - 16).max(1)
+      let label_top = if bounds.height < 36 { 2 } else { 4 }
+      let label = @raster.render(engine, element.text, label_width, 32)
+      let pixels = list_item_pixels(
+        bounds,
+        label,
+        label_top,
+        element.focused,
+        selected,
+        enabled,
+      )
+      { bounds, pixels, }
+    }
   }
   clip_layer(layer, item.clip)
+}
+
+///|
+fn list_item_pixels(
+  bounds : @view.Bounds,
+  label : Bytes,
+  label_top : Int,
+  focused : Bool,
+  selected : Bool,
+  enabled : Bool,
+) -> Bytes {
+  let width = bounds.width
+  let height = bounds.height
+  let label_width = (width - 16).max(1)
+  let rgba = FixedArray::make(width * height * 4, b'\xff')
+  for y in 0..<height {
+    for x in 0..<width {
+      let offset = (y * width + x) * 4
+      let border = focused &&
+        (x < 2 || x >= width - 2 || y < 2 || y >= height - 2)
+      if border {
+        rgba[offset] = b'\xF5'
+        rgba[offset + 1] = b'\xA1'
+        rgba[offset + 2] = b'\x5C'
+      } else if !enabled {
+        rgba[offset] = b'\xEF'
+        rgba[offset + 1] = b'\xEF'
+        rgba[offset + 2] = b'\xEF'
+      } else if selected {
+        rgba[offset] = b'\xD7'
+        rgba[offset + 1] = b'\xED'
+        rgba[offset + 2] = b'\xFF'
+      }
+    }
+  }
+  for y in label_top.max(2)..<(label_top + 32).min(height - 2) {
+    for x in 8..<(width - 8) {
+      let dest = (y * width + x) * 4
+      let source = ((y - label_top) * label_width + x - 8) * 4
+      if label[source] != b'\xff' ||
+        label[source + 1] != b'\xff' ||
+        label[source + 2] != b'\xff' {
+        for channel in 0..<4 {
+          rgba[dest + channel] = label[source + channel]
+        }
+      }
+    }
+  }
+  rgba.unsafe_reinterpret_as_bytes()
 }
 
 ///|
