@@ -7,12 +7,24 @@ pub struct Cycle {
 let next_cycle : Ref[Int] = Ref(0)
 
 ///|
+let next_source_id : Ref[Int] = Ref(0)
+
+///|
+let next_admission_id : Ref[Int] = Ref(0)
+
+///|
+let next_state_revision : Ref[Int] = Ref(0)
+
+///|
+fn fresh_identity(counter : Ref[Int], name : String) -> Int {
+  guard counter.val < 0x7fffffff else { abort(name + " identity exhausted") }
+  counter.val += 1
+  counter.val
+}
+
+///|
 pub fn Cycle::new() -> Cycle {
-  guard next_cycle.val < 0x7fffffff else {
-    abort("async cycle identity exhausted")
-  }
-  next_cycle.val += 1
-  { id: next_cycle.val, }
+  { id: fresh_identity(next_cycle, "async cycle"), }
 }
 
 ///|
@@ -36,6 +48,9 @@ pub struct Source[K, V] {
   priv scope : @reactive.Scope
   priv resource : Resource
   priv state : @reactive.Signal[AsyncState[K, V]]
+  priv source_id : Int
+  priv admission_id : Ref[Int]
+  priv state_revision : Ref[Int]
 }
 
 ///|
@@ -45,7 +60,14 @@ pub fn[K, V] Source::new(parent : @reactive.Scope) -> Source[K, V] {
     Idle,
     fn(_, _) { false },
   )
-  { scope: parent, resource: Resource::new(parent), state, }
+  {
+    scope: parent,
+    resource: Resource::new(parent),
+    state,
+    source_id: fresh_identity(next_source_id, "source"),
+    admission_id: Ref(0),
+    state_revision: Ref(0),
+  }
 }
 
 ///|
@@ -64,6 +86,12 @@ pub fn[K, V] Source::get(self : Source[K, V]) -> AsyncState[K, V] {
 ///|
 pub fn[K, V] Source::peek(self : Source[K, V]) -> AsyncState[K, V] {
   self.state.peek()
+}
+
+///|
+fn[K, V] Source::publish(self : Source[K, V], next : AsyncState[K, V]) -> Unit {
+  self.state_revision.val = fresh_identity(next_state_revision, "source state")
+  self.state.set(next)
 }
 
 ///|
@@ -98,11 +126,12 @@ fn[K : Eq, V] Source::proposal(
       } else {
         None
       }
-      self.state.set(Pending(key, cycle, retained.val))
+      self.admission_id.val = fresh_identity(next_admission_id, "admission")
+      self.publish(Pending(key, cycle, retained.val))
     },
     () => prepare(retained.val),
     on_failure=message => {
-      self.state.set(Failed(key, cycle, message, retained.val))
+      self.publish(Failed(key, cycle, message, retained.val))
       @task.Failed(message)
     },
   )
@@ -119,7 +148,7 @@ pub fn[K : Eq, V] Source::replace_with_progress(
   self.proposal(key, cycle, retain_previous, previous => {
     Some(
       @task.work_with_progress(run, value => {
-        self.state.set(Ready(key, cycle, value, previous))
+        self.publish(Ready(key, cycle, value, previous))
         @task.Changed
       }),
     )
@@ -150,9 +179,9 @@ pub fn[K : Eq, V, E] Source::replace_result(
     Some(
       @task.work(run, result => {
         match result {
-          Ok(value) => self.state.set(Ready(key, cycle, value, previous))
+          Ok(value) => self.publish(Ready(key, cycle, value, previous))
           Err(error) =>
-            self.state.set(Failed(key, cycle, error_text(error), previous))
+            self.publish(Failed(key, cycle, error_text(error), previous))
         }
         @task.Changed
       }),
@@ -165,7 +194,7 @@ pub fn[K, V] Source::cancel(self : Source[K, V]) -> @task.Request? {
   self.resource.cancel(() => {
     match self.state.peek() {
       Pending(key, cycle, previous) =>
-        self.state.set(Canceled(key, cycle, previous))
+        self.publish(Canceled(key, cycle, previous))
       _ => ()
     }
   })
@@ -178,7 +207,7 @@ pub fn[K, V] Source::dispose(self : Source[K, V]) -> Unit {
   }
   match self.state.peek() {
     Pending(key, cycle, previous) =>
-      self.state.set(Canceled(key, cycle, previous))
+      self.publish(Canceled(key, cycle, previous))
     _ => ()
   }
   self.resource.dispose()

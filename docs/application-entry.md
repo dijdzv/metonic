@@ -122,6 +122,30 @@ shows the same public model on native and browser hosts; its
 [verification record](verification/async-pair-phase4.md) includes visible
 pending, retained, failed, retried and canceled states.
 
+For related Sources, create one `Related[K]` from the expected typed key and
+Cycle, then read each Source through that contract and call `join_related`.
+The join checks that both inputs have the same key and Cycle; this can be
+chained for three or more related Sources. Call `RelatedCurrent::current` to
+obtain a `Current[T]`, then use `join_independent` to add Sources with their own
+keys and Cycles. `Source::current` provides the typed projection for each
+independent Source. `Current::map` and either join can be composed through
+multiple Memo stages. `Current::view` reports Idle, Blocked, Pending, Ready,
+Failed and Canceled with the active per-input causes.
+
+Every intermediate `Current` retains the leaf observations, including Ready
+origins while other inputs are incomplete. Consequently grouping nested joins
+does not change their phase or causes. Different admissions or state revisions
+of the same Source cannot form one Ready value, even when payloads and visible
+keys compare equal. A proposal that is never admitted does not change the
+origin; Source recreation creates a new identity. These operations are pure:
+place them in Memos, and read a conditional Source only in the selected branch.
+A previous Source snapshot never becomes current Ready. The [Phase 5 quote-board
+contract](adr/037-phase5-external-quote-board.md) uses related item detail/stock
+A+B and an independent currency C to exercise this distinction.
+Complete-display retention, downstream request admission and component
+ownership have separate implementation tasks; this projection does not yet
+provide those contracts.
+
 Both hosts use the shared operation driver. Replacement invalidates earlier
 results for that identity synchronously when admission succeeds, then awaits its
 active cleanup before preparing new work. The canceled model state is visible
