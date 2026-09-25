@@ -37,13 +37,21 @@ Source builds invoke the pinned framework's public `application-source.mbtx`
 entry and do not edit its internal workspace or host packages. The selected
 item owns detail and stock requests; its keyed detail child owns the shipping
 quote and display publication. `Toggle detail` removes or recreates that child
-while keeping the selected item's completed data. Note saving and a
-distribution package remain in the parent
+while keeping the selected item's completed data. The note editor and Save note
+button belong to the application Scope. Each save captures its text and edit
+revision; writes for this document complete in order even if the selected item
+or detail disappears. The status shows unsaved, saving, saved and failed states.
+Closing with unsaved text queues a save and waits for its acknowledgement. A
+failed or rejected write keeps the app open so Save note can retry it. This
+example uses an in-memory delayed storage fixture: it verifies save ordering
+and acknowledgements, but does not restore text after a process restart. A
+distribution package and the remaining end-to-end cases are tracked in
 [Issue #591](https://github.com/dijdzv/metonic/issues/591).
 
 The model checks assert both A/B completion orders, rejection of an old D
 result after quantity changes, child removal/recreation during an unfinished
-quote, and independent currency completion and invalidation. The browser check
+quote, independent currency completion and invalidation, and serialized note
+saves after newer edits, child removal and close. The browser check
 runs a real HTTP server and
 headless Chromium on JS and WasmGC, saving stage screenshots in the ignored
 `verification-output` directory. The native check owns a hidden window and

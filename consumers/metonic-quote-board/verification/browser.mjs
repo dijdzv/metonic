@@ -52,7 +52,7 @@ try {
     page.on('pageerror', error => errors.push(error.message));
     await page.goto(`${base}?target=${target}`);
     await page.waitForFunction(() => document.querySelector('#status')?.textContent?.startsWith('Ready:'), null, { timeout: 30000 });
-    assert.equal(await page.locator('#controls button').count(), 7);
+    assert.equal(await page.locator('#controls button').count(), 8);
     const canvas = page.locator('#canvas');
     const waitLines = (detail, stock, quote) => page.waitForFunction(expected => {
       const lines = [...document.querySelectorAll('#controls .gpu-text')].map(node => node.textContent);
@@ -103,9 +103,27 @@ try {
     await page.getByRole('button', { name: 'USD' }).click();
     await waitLines('Detail: Blue stool', 'Stock: 7', 'Shipping: loading (previous 642 USD)');
     await waitLines('Detail: Blue stool', 'Stock: 7', 'Shipping: 642 USD for 3');
-    assert.deepEqual(errors, [], `${target}: browser errors`);
+    const note = page.getByRole('textbox', { name: 'Note' });
+    const waitNote = expected => page.waitForFunction(text => {
+      const lines = [...document.querySelectorAll('#controls .gpu-text')].map(node => node.textContent);
+      return lines[4] === text;
+    }, expected, { timeout: 5000 });
+    await note.fill('first draft');
+    await waitNote('Note: unsaved revision 1');
+    await page.getByRole('button', { name: 'Save note' }).click();
+    await waitNote('Note: saving revision 1');
+    await note.fill('newer draft');
+    await page.getByRole('button', { name: 'Save note' }).click();
+    await page.getByRole('button', { name: 'Toggle detail' }).click();
+    await waitNote('Note: saved revision 1; saving revision 2');
+    await waitNote('Note: saved revision 2');
+    assert.equal(await note.inputValue(), 'newer draft');
+    await note.fill('close draft');
+    await waitNote('Note: unsaved revision 3');
     await page.getByRole('button', { name: 'Stop' }).click();
-    assert.equal(await page.locator('#status').textContent(), 'Stopped.');
+    assert.notEqual(await page.locator('#status').textContent(), 'Stopped.');
+    await page.waitForFunction(() => document.querySelector('#status')?.textContent === 'Stopped.', null, { timeout: 5000 });
+    assert.deepEqual(errors, [], `${target}: browser errors`);
     await page.close();
   }
   console.log('QUOTE_BOARD_BROWSER_OK targets=js,wasm-gc');
