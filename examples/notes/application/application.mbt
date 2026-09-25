@@ -9,6 +9,7 @@ pub fn Model::application(self : Model) -> @app.Application {
     connect_tasks: _ => (),
     publications: None,
     downstreams: None,
+    serials: None,
     initialize: () => None,
     view: () => {
       let elements = self.elements()

@@ -30,6 +30,7 @@ async fn verify_keyed() -> Unit {
     viewport: None,
     publications: None,
     downstreams: None,
+    serials: None,
     connect_tasks: _ => (),
     initialize: () => None,
     view: () => {

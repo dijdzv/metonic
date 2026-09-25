@@ -8,6 +8,10 @@ async fn main {
     verify_publication()
     return
   }
+  if @env.args().contains("--serial") {
+    verify_serial()
+    return
+  }
   if @env.args().contains("--viewport") {
     verify_viewport()
     return

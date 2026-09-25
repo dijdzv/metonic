@@ -7,7 +7,7 @@ pub fn from_application(app : @portable.Application) -> Application {
     default_input: app.default_input,
     connect_tasks: app.connect_tasks,
     publication_round: submit => {
-      let reconciled = app.reconcile_downstreams(submit)
+      let reconciled = app.reconcile_tasks(submit)
       let published = app.publish()
       reconciled || published
     },

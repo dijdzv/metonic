@@ -18,6 +18,11 @@ priv struct Model {
   keyed_disposed : Ref[Int]
   publication_registry : @reactive_task.PublicationRegistry
   downstream_registry : @reactive_task.DownstreamRegistry
+  serial_registry : @reactive_task.SerialRegistry
+  serial_writer : @reactive_task.SerialTask[Int, String, String]
+  serial_release : Ref[Bool]
+  serial_started : Array[Int]
+  serial_applied : Array[Int]
   publication_source : @reactive_task.Source[String, Int]
   publication_cycle : @reactive_task.Cycle
   publication_demand : @reactive.Signal[Int]
@@ -82,6 +87,7 @@ fn Model::change(self : Model, command : Int) -> Unit {
     15 => self.invalid = 15
     16 => self.downstream_key.set("other")
     17 => self.downstream_key.set("probe")
+    18 => self.invalid = 18
     20 => {
       self.keyed_mode = true
       self.update_keyed([{ key: 1, props: "One", }, { key: 2, props: "Two", }])
@@ -172,6 +178,29 @@ pub fn create() -> @host.Instance {
   let downstream_registry = @reactive_task.DownstreamRegistry::new(
     publication_root,
   )
+  let serial_registry = @reactive_task.SerialRegistry::new(publication_root)
+  let serial_release = Ref(false)
+  let serial_started : Array[Int] = []
+  let serial_applied : Array[Int] = []
+  let serial_writer : @reactive_task.SerialTask[Int, String, String] = serial_registry.register(
+    publication_root,
+    async fn(value : String) {
+      let identity = if value == "first" { 1 } else { 2 }
+      serial_started.push(identity)
+      if identity == 1 {
+        while !serial_release.val {
+          @async.sleep(1)
+        }
+      }
+      Ok(value)
+    },
+    (job, result) => {
+      if !(result is Ok(_)) {
+        abort("serial write failed")
+      }
+      serial_applied.push(job.identity)
+    },
+  )
   let publication_source : @reactive_task.Source[String, Int] = @reactive_task.Source::new(
     publication_root,
   )
@@ -223,6 +252,11 @@ pub fn create() -> @host.Instance {
     keyed_disposed: Ref(0),
     publication_registry,
     downstream_registry,
+    serial_registry,
+    serial_writer,
+    serial_release,
+    serial_started,
+    serial_applied,
     publication_source,
     publication_cycle,
     publication_demand,
@@ -247,6 +281,7 @@ pub fn create() -> @host.Instance {
     }),
     publications: Some(model.publication_registry),
     downstreams: Some(model.downstream_registry),
+    serials: Some(model.serial_registry),
     connect_tasks: control => {
       if task_control.val is Some(_) {
         abort("task control connected twice")
@@ -257,6 +292,9 @@ pub fn create() -> @host.Instance {
       }
       if !model.downstream_registry.connect(control) {
         abort("downstream probe registry was not connected")
+      }
+      if !model.serial_registry.connect(control) {
+        abort("serial probe registry was not connected")
       }
     },
     initialize: () => {
@@ -397,6 +435,13 @@ pub fn create() -> @host.Instance {
         return (model.operations.application().activate)(reference)
       }
       if reference == model.add {
+        if model.invalid == 18 &&
+          (
+            !model.serial_writer.enqueue(1, "first") ||
+            !model.serial_writer.enqueue(2, "second")
+          ) {
+          abort("serial probe writes were not queued")
+        }
         model.change(0)
         model.publication_demand.set(model.publication_demand.peek() + 1)
         ignore(@semantics.focus(tree, model.inputs[model.inputs.length() - 1]))
@@ -502,6 +547,41 @@ pub fn downstream_release() -> Unit {
 #export_name("downstream_cleanup")
 pub fn downstream_cleanup() -> Int {
   active.val.map(model => model.downstream_cleanup.val).unwrap_or(-1)
+}
+
+///|
+#export_name("serial_started")
+pub fn serial_started() -> Int {
+  active.val.map(model => model.serial_started.length()).unwrap_or(-1)
+}
+
+///|
+#export_name("serial_applied")
+pub fn serial_applied() -> Int {
+  active.val.map(model => model.serial_applied.length()).unwrap_or(-1)
+}
+
+///|
+#export_name("serial_active")
+pub fn serial_active() -> Int {
+  guard active.val is Some(model) else { return -1 }
+  model.serial_writer.snapshot().active.map(job => job.identity).unwrap_or(0)
+}
+
+///|
+#export_name("serial_queued")
+pub fn serial_queued() -> Int {
+  active.val
+  .map(model => model.serial_writer.snapshot().queued.length())
+  .unwrap_or(-1)
+}
+
+///|
+#export_name("serial_release")
+pub fn serial_release() -> Unit {
+  if active.val is Some(model) {
+    model.serial_release.val = true
+  }
 }
 
 ///|

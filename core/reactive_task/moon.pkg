@@ -2,6 +2,7 @@ import {
   "local/p0/core/reactive",
   "local/p0/core/application_task" @task,
   "moonbitlang/core/json",
+  "moonbitlang/core/hashset",
 }
 
 import {

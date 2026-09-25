@@ -351,8 +351,29 @@ export async function verifyDynamicControls(browser, baseUrl, outputDir) {
       await retainedKeyed.dispose();
       await page.locator('#stop').click();
       assert.equal(await page.evaluate(() => globalThis.keyedProbe.keyed_disposed()), 3);
+      await page.reload();
+      await page.waitForFunction(() => document.querySelector('#status').textContent.startsWith('Ready:'));
+      await page.evaluate(async target => {
+        globalThis.serialProbe = target === 'js' ? await import('./notes.mjs') : globalThis.dynamicProbe;
+      }, target);
+      await change(18);
+      await page.getByRole('button', { name: 'Add input', exact: true }).click();
+      await page.waitForFunction(() => globalThis.serialProbe.serial_started() === 1);
+      assert.deepEqual(await page.evaluate(() => [
+        globalThis.serialProbe.serial_applied(),
+        globalThis.serialProbe.serial_active(),
+        globalThis.serialProbe.serial_queued(),
+      ]), [0, 1, 1], 'The second write started before the first acknowledgement');
+      await page.evaluate(() => globalThis.serialProbe.serial_release());
+      await page.waitForFunction(() => globalThis.serialProbe.serial_applied() === 2);
+      assert.deepEqual(await page.evaluate(() => [
+        globalThis.serialProbe.serial_started(),
+        globalThis.serialProbe.serial_active(),
+        globalThis.serialProbe.serial_queued(),
+      ]), [2, 0, 0], 'The queued write did not finish after the first acknowledgement');
+      await page.locator('#stop').click();
       assert.deepEqual(errors, []);
-      results.push({ target, publicationBoundary: true, add: true, reorder: true, retainedSelectionScrollComposition: true, replaceGeneration: true, lateEvents: true, removeLast: true, stop: true, exclusiveRoot: true, duplicateAndKindRejection: true });
+      results.push({ target, publicationBoundary: true, serializedWrite: true, add: true, reorder: true, retainedSelectionScrollComposition: true, replaceGeneration: true, lateEvents: true, removeLast: true, stop: true, exclusiveRoot: true, duplicateAndKindRejection: true });
     } catch (error) { await reportFailure(page); throw error; }
     finally { await page.close(); }
   }

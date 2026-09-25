@@ -35,6 +35,33 @@ scheduler, worker pool or global task registry. Parallel application operations
 can use separate owned task slots; the helper does not impose a single global
 operation on an application.
 
+## Ordered writes
+
+`core/reactive_task.SerialRegistry` connects Scope-owned `SerialTask` writers to
+the same Driver. Register one writer under the application Scope for each
+independent document or write lane. `enqueue(identity, value)` captures the
+caller's immutable write value and places it after any active write in that
+lane. A later edit may enqueue a newer revision while the earlier write is
+running; it does not replace that write. Acknowledgements and failures are
+applied on the host event path through the caller's `on_applied` callback.
+The next write is admitted only on a later host reconciliation after that
+callback returns. Separate writers can run concurrently.
+
+An application passes `Some(registry)` as its `serials` field and connects it
+in `connect_tasks`. The native and browser hosts reconcile it alongside
+derived downstream requests. The caller can inspect `snapshot()` for the
+active job, queued jobs, last completion and admission rejection. A rejected
+admission remains queued until `retry()` is called; it never appears as an
+active write. Duplicate identities already active, queued or successfully
+acknowledged are ignored. `cancel()` or disposal of the owning Scope requests
+Driver cleanup and prevents a late acknowledgement from changing UI state.
+
+The native caller and host-boundary check in
+`native_host/notes_probe/serial.mbt` shows two revisions entering one writer;
+the browser application probe exercises the same contract on JS and WasmGC.
+An app-owned writer must not be placed under a transient UI child's Scope when
+its acknowledgement needs to survive that child disappearing.
+
 Before shutdown, the application invalidates its lifetime and the host cancels
 and awaits owned tasks. Queued results must still pass the application's
 lifetime guard. Preparation and invalidation are synchronous; only the work and
