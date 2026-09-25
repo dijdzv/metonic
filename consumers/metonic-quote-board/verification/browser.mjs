@@ -9,7 +9,8 @@ import { chromium } from 'playwright';
 
 const consumer = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const diagnosticsMode = process.argv.includes('--diagnostics');
-const dist = join(consumer, 'browser', '.metonic-dist');
+const distribution = process.argv.slice(2).find(argument => !argument.startsWith('--'));
+const dist = distribution ? resolve(distribution) : join(consumer, 'browser', '.metonic-dist');
 if (!diagnosticsMode) {
   for (const artifact of ['app.mjs', 'app.wasm']) {
     assert(!(await readFile(join(dist, artifact))).includes('diagnostics_json'),

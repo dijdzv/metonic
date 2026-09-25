@@ -1,0 +1,66 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+  "moonbitlang/x@0.5.1/crypto",
+}
+
+///|
+async fn main {
+  let args = @env.args()
+  assert_true(
+    args.length() == 2,
+    msg="usage: package-browser.mbtx <new-output-directory>",
+  )
+  let output = args[1]
+  assert_true(
+    !@fs.exists(output),
+    msg="Package destination already exists; choose a new directory",
+  )
+  let source = "browser/.metonic-dist"
+  let files : Array[(String, String)] = []
+  for
+    name in [
+      "app.mjs", "app.wasm", "application.mjs", "browser-buffer.mjs", "index.html",
+      "layer-renderer.mjs", "main.mjs", "surface.mjs", "wasm-imports.mjs", "websys-input.mjs",
+      "NotoSansJP.ttf", "OFL.txt", "LICENSE-APACHE", "LICENSE-MIT", "LICENSE-async",
+      "LICENSE-chicle", "LICENSE-websys",
+    ] {
+    files.push((source + "/" + name, name))
+  }
+  for name in ["LICENSE", "NOTICE"] {
+    files.push(
+      (
+        ".metonic/framework/.tools/moonbit/lib/core/" + name,
+        name + "-moonbit-core",
+      ),
+    )
+  }
+  files.push(("browser/DISTRIBUTION.md", "DISTRIBUTION.md"))
+  let dependency = @json.parse(@fs.read_file("dependency.json").text())
+  // Read every input before creating the output so missing assets cannot look like a package.
+  let contents : Array[(String, Bytes)] = []
+  for (path, name) in files {
+    contents.push((name, @fs.read_file(path).binary()))
+  }
+  @fs.mkdir(output, recursive=true)
+  let inventory : Array[Json] = []
+  for (name, bytes) in contents {
+    @fs.write_file(output + "/" + name, bytes)
+    let digest = @crypto.bytes_to_hex_string(@crypto.sha256(bytes))
+    inventory.push({ "path": name, "bytes": bytes.length(), "sha256": digest })
+  }
+  let manifest : Json = {
+    "schema_version": 1,
+    "application": "Metonic Quote Board",
+    "targets": ["js", "wasm-gc"],
+    "framework": dependency,
+    "files": inventory,
+  }
+  @fs.write_file(output + "/package.json", manifest.stringify(indent=2))
+  println(
+    "BROWSER_PACKAGE_OK files=\{inventory.length()} output=" +
+    @fs.realpath(output),
+  )
+}
