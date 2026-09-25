@@ -324,6 +324,8 @@ pub impl @windows.ApplicationHandler for App with fn window_event(
               )
               is Some(action) {
               self.queue(ApplicationTask(action.request, action.gate, () => ()))
+            } else if self.publish() {
+              self.queue(Redraw)
             }
         }
       }
@@ -434,6 +436,11 @@ fn App::draw(self : App) -> Unit raise Error {
       "invalid accessibility presentation",
     )
   }
+}
+
+///|
+fn App::publish(self : App) -> Bool {
+  (self.host.publication_round)()
 }
 
 ///|
@@ -599,6 +606,8 @@ async fn run_loop(
     )
     if (host.initialize)() is Some(action) {
       app.queue(ApplicationTask(action.request, action.gate, () => ()))
+    } else {
+      ignore(app.publish())
     }
     let window = app.window.unwrap()
     ignore(
@@ -750,17 +759,15 @@ async fn run_loop(
                     extend_selection,
                   ),
                 )
-              } else {
-                ignore(
-                  (app.host.navigate_unhandled)(
-                    if forward {
-                      10
-                    } else {
-                      -10
-                    },
-                    0,
-                  ),
-                )
+              } else if (app.host.navigate_unhandled)(
+                  if forward {
+                    10
+                  } else {
+                    -10
+                  },
+                  0,
+                ) {
+                ignore(app.publish())
               }
               app.draw()
             }
@@ -785,10 +792,19 @@ async fn run_loop(
                 )
                 app.draw()
               }
-            ApplicationTask(_, PointerIdle | CommittedInput, acknowledge) if app.ime_pointer.pending() =>
+            ApplicationTask(_, PointerIdle | CommittedInput, acknowledge) if app.ime_pointer.pending() => {
               acknowledge()
+              if app.publish() {
+                app.draw()
+              }
+            }
             ApplicationTask(_, CommittedInput, acknowledge) if app.composition
-              is Some(_) => acknowledge()
+              is Some(_) => {
+              acknowledge()
+              if app.publish() {
+                app.draw()
+              }
+            }
             ApplicationTask(request, _, acknowledge) => {
               if !tasks.submit(request, on_prepared=acknowledge) {
                 acknowledge()
@@ -799,15 +815,20 @@ async fn run_loop(
                 }
                 (app.host.input_error)(Some(message))
               }
+              ignore(app.publish())
               app.draw()
             }
             ApplicationResult(result) =>
               match result.apply() {
-                @task.Changed => app.draw()
+                @task.Changed => {
+                  ignore(app.publish())
+                  app.draw()
+                }
                 @task.Rejected => app.diagnostics.rejected()
-                @task.Unchanged => ()
+                @task.Unchanged => if app.publish() { app.draw() }
                 @task.Failed(message) => {
                   (app.host.input_error)(Some(message))
+                  ignore(app.publish())
                   app.draw()
                 }
               }
@@ -820,6 +841,7 @@ async fn run_loop(
             Close if !(app.host.can_close)() => {
               (app.host.input_error)(None)
               (app.host.close_requested)()
+              ignore(app.publish())
               app.draw()
             }
             Close => {
@@ -829,7 +851,9 @@ async fn run_loop(
             }
             Resize(size) =>
               if size.width() > 0 && size.height() > 0 {
-                if (app.host.resize)(size.width(), size.height()) {
+                let changed = (app.host.resize)(size.width(), size.height())
+                let published = app.publish()
+                if changed || published {
                   app.draw()
                 }
               }
@@ -988,6 +1012,7 @@ async fn run_loop(
               .map(node => node.focused)
               .unwrap_or(false) =>
               if (app.host.navigate_unhandled)(x, y) {
+                ignore(app.publish())
                 app.draw()
               }
             Input(_) => ()

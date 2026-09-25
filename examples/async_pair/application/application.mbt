@@ -181,6 +181,7 @@ pub fn create(wait : async (Int) -> Unit) -> @app.Application {
     default_input: None,
     initial_size: model.size,
     viewport: None,
+    publications: None,
     connect_tasks: control => {
       if !model.detail.connect(control) || !model.related.connect(control) {
         abort("async pair task connection failed")

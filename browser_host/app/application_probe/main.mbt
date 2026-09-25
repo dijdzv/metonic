@@ -11,6 +11,13 @@ priv struct Model {
   operations : @operations.Model
   edits : Array[@app.TextEdit]
   mut edit_completed : Int
+  publication_root : @reactive.Scope
+  publication_registry : @reactive_task.PublicationRegistry
+  publication_source : @reactive_task.Source[String, Int]
+  publication_cycle : @reactive_task.Cycle
+  publication_demand : @reactive.Signal[Int]
+  publication : @reactive_task.Publication[Int, Int]
+  publication_release : Ref[Bool]
 }
 
 ///|
@@ -115,6 +122,21 @@ pub fn operation_cancel() -> Bool {
 #export_name("create")
 pub fn create() -> @host.Instance {
   let tree = @semantics.empty(901, 1)
+  let publication_root = @reactive.Scope::root(@reactive.Graph::new())
+  let publication_registry = @reactive_task.PublicationRegistry::new(
+    publication_root,
+  )
+  let publication_source : @reactive_task.Source[String, Int] = @reactive_task.Source::new(
+    publication_root,
+  )
+  let publication_cycle = @reactive_task.Cycle::new()
+  let publication_demand = @reactive.Signal::new(publication_root, 0)
+  let publication = publication_registry.register(publication_root, () => {
+    (
+      publication_demand.get(),
+      publication_source.current("probe", publication_cycle),
+    )
+  })
   let model = Model::{
     tree,
     add: @semantics.add_button(tree, "Add input").unwrap(),
@@ -129,6 +151,13 @@ pub fn create() -> @host.Instance {
     operations: @operations.create(() => @async.CondVar::Cond().wait(), tree~),
     edits: [],
     edit_completed: 0,
+    publication_root,
+    publication_registry,
+    publication_source,
+    publication_cycle,
+    publication_demand,
+    publication,
+    publication_release: Ref(false),
   }
   active.val = Some(model)
   let app : @app.Application = {
@@ -142,17 +171,31 @@ pub fn create() -> @host.Instance {
       },
       reveal: reference => model.invalid == 15 && model.list.reveal(reference),
     }),
+    publications: Some(model.publication_registry),
     connect_tasks: control => {
       if task_control.val is Some(_) {
         abort("task control connected twice")
       }
       task_control.val = Some(control)
+      if !model.publication_source.connect(control) {
+        abort("publication probe source was not connected")
+      }
     },
     initialize: () => {
       if task_control.val is None {
         abort("task control was not connected before initialize")
       }
-      None
+      model.publication_source.replace(
+        "probe",
+        model.publication_cycle,
+        false,
+        () => {
+          while !model.publication_release.val {
+            @async.sleep(1)
+          }
+          7
+        },
+      )
     },
     view: () => {
       if model.invalid == 15 {
@@ -209,6 +252,29 @@ pub fn create() -> @host.Instance {
       if model.invalid == 4 && controls.length() > 1 {
         controls.push(controls[1])
       }
+      let publication_label = match model.publication.get() {
+        None => "Not published"
+        Some(state) => {
+          let phase = match state.current {
+            @reactive_task.CurrentPending(_) => "Pending"
+            @reactive_task.CurrentReady(value, _) =>
+              "Ready " + value.to_string()
+            @reactive_task.CurrentBlocked(_) => "Blocked"
+            _ => "Other"
+          }
+          "Publication " + state.demand.to_string() + ": " + phase
+        }
+      }
+      controls.push({
+        element: {
+          reference: None,
+          text: publication_label,
+          focused: false,
+          bounds: { x: 270, y: 8, width: 200, height: 40, },
+        },
+        kind: Text,
+        clip: None,
+      })
       controls
     },
     activate: reference => {
@@ -217,12 +283,15 @@ pub fn create() -> @host.Instance {
       }
       if reference == model.add {
         model.change(0)
+        model.publication_demand.set(model.publication_demand.peek() + 1)
         ignore(@semantics.focus(tree, model.inputs[model.inputs.length() - 1]))
       }
       None
     },
     resize: (_, _) => true,
     stop: () => {
+      model.publication_source.dispose()
+      model.publication_root.dispose()
       ignore(@semantics.dispose(tree))
       (model.operations.application().stop)()
     },
@@ -258,6 +327,49 @@ pub fn create() -> @host.Instance {
     font_url="./NotoSansJP.ttf",
     font_sha256="c2f3b4d463500a2ddcd3849cded1fceeb9fd6d1c32e6cbecd568453ba50fc68f",
   )
+}
+
+///|
+#export_name("publication_phase")
+pub fn publication_phase() -> Int {
+  guard active.val is Some(model) else { return -1 }
+  match model.publication.get() {
+    None => 0
+    Some(state) =>
+      match state.current {
+        @reactive_task.CurrentPending(_) => 1
+        @reactive_task.CurrentReady(_, _) => 2
+        @reactive_task.CurrentBlocked(_) => 3
+        _ => 4
+      }
+  }
+}
+
+///|
+#export_name("publication_source_phase")
+pub fn publication_source_phase() -> Int {
+  guard active.val is Some(model) else { return -1 }
+  match model.publication_source.peek() {
+    @reactive_task.Idle => 0
+    @reactive_task.Pending(_, _, _) => 1
+    @reactive_task.Ready(_, _, _, _) => 2
+    @reactive_task.Failed(_, _, _, _) => 3
+    @reactive_task.Canceled(_, _, _) => 4
+  }
+}
+
+///|
+#export_name("publication_demand")
+pub fn publication_demand() -> Int {
+  active.val.map(model => model.publication.get().unwrap().demand).unwrap_or(-1)
+}
+
+///|
+#export_name("publication_release")
+pub fn publication_release() -> Unit {
+  if active.val is Some(model) {
+    model.publication_release.val = true
+  }
 }
 
 ///|

@@ -117,6 +117,7 @@ pub fn create(
         }
         (application.input_error)(None)
         (application.close_requested)()
+        ignore(application.publish())
         for editor in session.editors {
           editor.sync(application.editor)
         }

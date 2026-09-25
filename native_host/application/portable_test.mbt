@@ -10,6 +10,7 @@ test "native adapter keeps offscreen semantics without rendering their controls"
     default_input: None,
     initial_size: (120, 80),
     viewport: None,
+    publications: None,
     connect_tasks: _ => (),
     initialize: () => None,
     view: () => {

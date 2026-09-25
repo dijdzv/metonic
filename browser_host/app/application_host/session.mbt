@@ -64,20 +64,25 @@ fn Session::notify(self : Session) -> Unit {
 ///|
 fn Session::submit(self : Session, request : @task.Request) -> Bool {
   let accepted = self.tasks.submit(request)
-  if accepted {
-    // DOM callbacks run outside the async scheduler; waking a queue alone does
-    // not drain runnable coroutines until the host re-enters the event loop.
-    @async.run_async_main(() => ())
-  } else if !self.stopped {
+  if !accepted && !self.stopped {
     let message = if request.is_group() {
       "Application task group was not admitted."
     } else {
       "Application task capacity is full."
     }
     (self.application.input_error)(Some(message))
-    self.notify()
   }
   accepted
+}
+
+///|
+fn Session::resume_submitted_tasks(self : Session, accepted : Bool) -> Unit {
+  let _ = self
+  if accepted {
+    // DOM callbacks run outside the async scheduler; waking a queue alone does
+    // not drain runnable coroutines until the host re-enters the event loop.
+    @async.run_async_main(() => ())
+  }
 }
 
 ///|
@@ -110,9 +115,12 @@ fn Session::start(
       }
     }),
   )
-  if (self.application.initialize)() is Some(request) {
-    ignore(self.submit(request))
+  let accepted = match (self.application.initialize)() {
+    Some(request) => self.submit(request)
+    None => false
   }
+  ignore(self.application.publish())
+  self.resume_submitted_tasks(accepted)
   1
 }
 
@@ -306,16 +314,22 @@ fn Session::bind_editor(self : Session, editor : Editor) -> Unit {
       if @semantics.set_selection(tree, editor.reference, start, end) != "" {
         return 0
       }
-      if node.value != value {
+      let accepted = if node.value != value {
         if (self.application.edited)({
             target: editor.reference,
             text: value,
             revision: @semantics.revision(tree),
           })
           is Some(request) {
-          ignore(self.submit(request))
+          self.submit(request)
+        } else {
+          false
         }
+      } else {
+        false
       }
+      ignore(self.application.publish())
+      self.resume_submitted_tasks(accepted)
       1
     },
   }
@@ -331,6 +345,7 @@ async fn Session::run_tasks(self : Session) -> Unit {
       if !self.stopped {
         match completion.apply() {
           Changed => {
+            ignore(self.application.publish())
             for editor in self.editors {
               editor.sync(self.application.editor)
             }
@@ -338,9 +353,11 @@ async fn Session::run_tasks(self : Session) -> Unit {
           }
           Failed(message) => {
             (self.application.input_error)(Some(message))
+            ignore(self.application.publish())
             self.notify()
           }
-          Unchanged | Rejected => ()
+          Unchanged => if self.application.publish() { self.notify() }
+          Rejected => ()
         }
       }
     },
@@ -354,6 +371,7 @@ fn Session::resize(self : Session, width : Int, height : Int) -> Int {
     return 0
   }
   ignore((self.application.resize)(width, height))
+  ignore(self.application.publish())
   self.revealed_focus = None
   let scroll = self.editors.map(editor => editor.element.capture_scroll())
   let placements : Array[@dom_view.Placement] = []
@@ -509,10 +527,16 @@ fn Session::activate_reference(
   }
   ignore(@semantics.focus(self.application.editor, reference))
   self.applied_focus = Some(reference)
-  if (self.application.activate)(reference) is Some(request) {
-    if !self.submit(request) {
-      return 0
-    }
+  let requested = (self.application.activate)(reference)
+  let accepted = match requested {
+    Some(request) => self.submit(request)
+    None => false
+  }
+  ignore(self.application.publish())
+  self.resume_submitted_tasks(accepted)
+  if requested is Some(_) && !accepted {
+    self.notify()
+    return 0
   }
   for editor in self.editors {
     editor.preview = None

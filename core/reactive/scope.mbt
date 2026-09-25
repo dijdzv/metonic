@@ -32,6 +32,16 @@ pub fn Scope::is_disposed(self : Scope) -> Bool {
 }
 
 ///|
+pub fn Scope::graph(self : Scope) -> Graph {
+  self.graph
+}
+
+///|
+pub fn Scope::contains(self : Scope, dependent : Scope) -> Bool {
+  self.outlives(dependent)
+}
+
+///|
 fn Scope::assert_alive(self : Scope) -> Unit {
   if self.disposed {
     abort("reactive scope is disposed")

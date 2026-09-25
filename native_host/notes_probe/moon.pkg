@@ -14,6 +14,8 @@ import {
   "local/native_host/window_host",
   "local/p0/core/semantics",
   "local/p0/core/application_task" @task,
+  "local/p0/core/reactive",
+  "local/p0/core/reactive_task",
   "local/p0/examples/notes/operations_fixture" @operations,
 }
 

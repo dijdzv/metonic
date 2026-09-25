@@ -24,6 +24,7 @@ pub(all) struct Application {
   editor : @semantics.Tree
   default_input : @semantics.NodeRef?
   connect_tasks : (@task.TaskControl) -> Unit
+  publication_round : () -> Bool
   initialize : () -> TaskAction?
   initial_size : (Int, Int)
   view : () -> View

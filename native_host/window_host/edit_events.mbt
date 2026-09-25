@@ -20,6 +20,8 @@ fn App::report_edit(
     })
     is Some(action) {
     self.queue(ApplicationTask(action.request, action.gate, () => ()))
+  } else {
+    ignore(self.publish())
   }
 }
 

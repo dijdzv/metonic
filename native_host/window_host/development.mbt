@@ -120,6 +120,8 @@ fn App::operate_control(
       ignore(@semantics.focus(app.host.editor, target))
       if (app.host.activate)(target) is Some(action) {
         app.queue(ApplicationTask(action.request, action.gate, () => ()))
+      } else {
+        ignore(app.publish())
       }
       ""
     }

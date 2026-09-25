@@ -32,6 +32,7 @@ fn App::scroll_pointer(app : App, delta : Int) -> Unit raise {
     break
   }
   if (app.host.scroll_unhandled)(x, y, delta) {
+    ignore(app.publish())
     app.draw()
   }
 }
@@ -191,11 +192,15 @@ fn App::apply_pointer(
       ignore(@semantics.focus(app.host.editor, reference))
       if (app.host.activate)(reference) is Some(action) {
         app.queue(ApplicationTask(action.request, action.gate, () => ()))
+      } else {
+        ignore(app.publish())
       }
     }
     app.draw()
     return
   }
-  ignore((app.host.pointer_unhandled)(x, y))
+  if (app.host.pointer_unhandled)(x, y) {
+    ignore(app.publish())
+  }
   app.draw()
 }

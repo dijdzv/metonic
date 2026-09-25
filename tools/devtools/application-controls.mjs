@@ -30,6 +30,21 @@ export async function verifyDynamicControls(browser, baseUrl, outputDir) {
     try {
       await page.goto(`${baseUrl}/notes/?target=${target}`);
       await page.waitForFunction(() => !document.querySelector('#status').textContent.startsWith('Loading'));
+      await page.evaluate(async target => {
+        globalThis.publicationProbe = target === 'js' ? await import('./notes.mjs') : globalThis.dynamicProbe;
+      }, target);
+      const publication = () => page.evaluate(() => {
+        const probe = globalThis.publicationProbe;
+        return [probe.publication_phase(), probe.publication_demand(), probe.publication_source_phase()];
+      });
+      assert.deepEqual(await publication(), [1, 0, 1], 'Initial admission was not published as pending');
+      const publicationBounds = await page.locator('#canvas').boundingBox();
+      const publicationClip = { x: publicationBounds.x + 270, y: publicationBounds.y + 8, width: 200, height: 40 };
+      const pendingPixels = await page.screenshot({ clip: publicationClip });
+      await page.evaluate(() => globalThis.publicationProbe.publication_release());
+      await page.waitForFunction(() => globalThis.publicationProbe.publication_phase() === 2);
+      assert.deepEqual(await publication(), [2, 0, 2], 'Completion did not publish the ready display');
+      assert.notDeepEqual(await page.screenshot({ clip: publicationClip }), pendingPixels, 'The ready publication was not rendered');
       assert.equal(await page.locator('#status').textContent(), `Ready: Notes (${target})`);
       await page.evaluate(async target => {
         const probe = target === 'js' ? await import('./notes.mjs') : globalThis.dynamicProbe;
@@ -67,6 +82,7 @@ export async function verifyDynamicControls(browser, baseUrl, outputDir) {
       await change(14);
       assert.deepEqual(await page.screenshot({ clip: clippedSide }), originalLeft, 'Removing clip did not restore pixels');
       await page.getByRole('button', { name: 'Add input', exact: true }).click();
+      assert.deepEqual(await publication(), [2, 1, 2], 'A synchronous button update did not publish');
       const first = page.getByRole('textbox', { name: 'Input 1', exact: true });
       assert.equal(await first.evaluate(element => document.activeElement === element), true);
       await change(7);
@@ -269,7 +285,7 @@ export async function verifyDynamicControls(browser, baseUrl, outputDir) {
       await waitState(4, 1);
       assert.equal(await state(3), 2);
       assert.deepEqual(errors, []);
-      results.push({ target, add: true, reorder: true, retainedSelectionScrollComposition: true, replaceGeneration: true, lateEvents: true, removeLast: true, stop: true, exclusiveRoot: true, duplicateAndKindRejection: true });
+      results.push({ target, publicationBoundary: true, add: true, reorder: true, retainedSelectionScrollComposition: true, replaceGeneration: true, lateEvents: true, removeLast: true, stop: true, exclusiveRoot: true, duplicateAndKindRejection: true });
     } catch (error) { await reportFailure(page); throw error; }
     finally { await page.close(); }
   }

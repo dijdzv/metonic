@@ -41,6 +41,11 @@ pub fn[T] Signal::peek(self : Signal[T]) -> T {
 }
 
 ///|
+pub fn[T] Signal::node_id(self : Signal[T]) -> Int {
+  self.node.id
+}
+
+///|
 pub fn[T] Signal::set(self : Signal[T], next : T) -> Unit {
   if self.node.disposed {
     abort("reactive signal is disposed")
@@ -144,4 +149,10 @@ pub fn[T] Memo::peek(self : Memo[T]) -> T {
     Some(value) => value
     None => abort("reactive memo was not initialized")
   }
+}
+
+///|
+pub fn[T] Memo::depends_on_node_id(self : Memo[T], target : Int) -> Bool {
+  let seen : Array[Int] = []
+  self.node.depends_on(target, seen)
 }

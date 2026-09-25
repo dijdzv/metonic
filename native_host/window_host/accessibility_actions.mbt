@@ -27,6 +27,8 @@ fn App::apply_accessibility(
       ignore(@semantics.focus(app.host.editor, node.reference))
       if (app.host.activate)(node.reference) is Some(action) {
         app.queue(ApplicationTask(action.request, action.gate, () => ()))
+      } else {
+        ignore(app.publish())
       }
     }
     @accessibility.SetValue(target, text) => {

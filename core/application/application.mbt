@@ -40,6 +40,7 @@ pub(all) struct Application {
   default_input : @semantics.NodeRef?
   initial_size : (Int, Int)
   viewport : Viewport?
+  publications : @reactive_task.PublicationRegistry?
   connect_tasks : (@task.TaskControl) -> Unit
   initialize : () -> @task.Request?
   view : () -> Array[Control]
@@ -52,4 +53,9 @@ pub(all) struct Application {
   close_ready : () -> Bool
   input_error : (String?) -> Unit
   dispose : async () -> Unit
+}
+
+///|
+pub fn Application::publish(self : Application) -> Bool {
+  self.publications.map(registry => registry.publish()).unwrap_or(false)
 }

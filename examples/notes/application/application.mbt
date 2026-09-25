@@ -7,6 +7,7 @@ pub fn Model::application(self : Model) -> @app.Application {
     initial_size: self.size(),
     viewport: None,
     connect_tasks: _ => (),
+    publications: None,
     initialize: () => None,
     view: () => {
       let elements = self.elements()

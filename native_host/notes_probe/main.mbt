@@ -1,5 +1,9 @@
 ///|
 async fn main {
+  if @env.args().contains("--publication") {
+    verify_publication()
+    return
+  }
   if @env.args().contains("--viewport") {
     verify_viewport()
     return
