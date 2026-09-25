@@ -306,6 +306,51 @@ export async function verifyDynamicControls(browser, baseUrl, outputDir) {
       await page.evaluate(() => globalThis.publicationProbe.downstream_release());
       await page.waitForFunction(() => globalThis.publicationProbe.downstream_phase() === 2);
       await page.locator('#stop').click();
+      await page.reload();
+      await page.waitForFunction(() => document.querySelector('#status').textContent.startsWith('Ready:'));
+      await page.evaluate(async target => {
+        globalThis.keyedProbe = target === 'js' ? await import('./notes.mjs') : globalThis.dynamicProbe;
+      }, target);
+      await change(20);
+      const keyedOne = page.getByRole('textbox', { name: 'One', exact: true });
+      const keyedTwo = page.getByRole('textbox', { name: 'Two', exact: true });
+      assert.equal(await keyedOne.count(), 1);
+      assert.equal(await keyedTwo.count(), 1);
+      const retainedKeyed = await keyedOne.elementHandle();
+      const oldGeneration = await page.evaluate(() => globalThis.keyedProbe.keyed_generation(1));
+      await retainedKeyed.evaluate(element => {
+        element.focus();
+        element.setSelectionRange(1, 2);
+      });
+      await change(21);
+      assert.deepEqual(await page.locator('#controls input').evaluateAll(elements => elements.map(element => element.getAttribute('aria-label'))), ['Two', 'One']);
+      assert.equal(await retainedKeyed.evaluate(element => element.isConnected && document.activeElement === element && element.selectionStart === 1 && element.selectionEnd === 2), true);
+      assert.equal(await page.evaluate(() => globalThis.keyedProbe.keyed_created()), 2);
+      assert.equal(await page.evaluate(() => globalThis.keyedProbe.keyed_disposed()), 0);
+      await retainedKeyed.evaluate(element => {
+        element.dispatchEvent(new CompositionEvent('compositionstart', { data: '' }));
+        element.value = 'あbc';
+        element.dispatchEvent(new InputEvent('input', { isComposing: true, data: 'あ' }));
+      });
+      await change(20);
+      assert.equal(await retainedKeyed.evaluate(element => element.isConnected && document.activeElement === element && element.value === 'あbc'), true);
+      await change(22);
+      assert.equal(await retainedKeyed.evaluate(element => element.isConnected), false);
+      assert.equal(await page.evaluate(() => globalThis.keyedProbe.keyed_disposed()), 1);
+      await change(23);
+      assert.equal(await page.evaluate(previous => globalThis.keyedProbe.keyed_generation(1) !== -1 && globalThis.keyedProbe.keyed_generation(1) !== previous, oldGeneration), true);
+      const recreatedKeyed = page.getByRole('textbox', { name: 'One', exact: true });
+      assert.equal(await recreatedKeyed.inputValue(), 'abc');
+      assert.equal(await recreatedKeyed.evaluate(element => document.activeElement === element), false);
+      await retainedKeyed.evaluate(element => {
+        element.value = 'late';
+        element.dispatchEvent(new CompositionEvent('compositionend', { data: 'late' }));
+        element.dispatchEvent(new Event('input'));
+      });
+      assert.equal(await recreatedKeyed.inputValue(), 'abc');
+      await retainedKeyed.dispose();
+      await page.locator('#stop').click();
+      assert.equal(await page.evaluate(() => globalThis.keyedProbe.keyed_disposed()), 3);
       assert.deepEqual(errors, []);
       results.push({ target, publicationBoundary: true, add: true, reorder: true, retainedSelectionScrollComposition: true, replaceGeneration: true, lateEvents: true, removeLast: true, stop: true, exclusiveRoot: true, duplicateAndKindRejection: true });
     } catch (error) { await reportFailure(page); throw error; }

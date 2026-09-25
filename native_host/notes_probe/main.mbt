@@ -1,5 +1,9 @@
 ///|
 async fn main {
+  if @env.args().contains("--keyed") {
+    verify_keyed()
+    return
+  }
   if @env.args().contains("--publication") {
     verify_publication()
     return
