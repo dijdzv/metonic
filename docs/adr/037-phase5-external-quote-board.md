@@ -162,6 +162,14 @@ before another owner can reuse visible keys. Cleanup does not call
 `Source.dispose` from a Scope disposer that forbids reactive writes; the
 existing Resource invalidation and Driver retirement path remains responsible.
 
+`KeyedChildren` is the public parent/child identity boundary. Its ordered
+`ChildSpec` reconciliation preserves the Scope and semantic references of a
+retained key, applies changed properties, disposes removed children, and gives
+a recreated key a new generation. The `ChildOwner` owns semantic controls and
+the child Scope for Bindings, listeners and Sources. Host rendering continues
+to consume the application's ordinary `Control` array; the component registry
+does not render, start tasks or add a second scheduler.
+
 The save Operation and saved revision live in the app Scope, not the removable
 detail child. The event boundary passes a fixed document identity, immutable
 save value and edit revision to that owner; the save callback never reads a

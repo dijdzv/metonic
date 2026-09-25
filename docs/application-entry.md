@@ -181,6 +181,22 @@ Changing the desired value or its provenance retires old child work immediately;
 the Driver still owns completion of its cleanup. Dispose the owner Scope to
 unregister the child, and do not read it after disposal.
 
+For a dynamic set of semantic controls, create
+`core/component.KeyedChildren[K, P, V]` under the application's root or a
+longer-lived parent Scope. Reconcile an ordered array of `ChildSpec` values at
+an application event boundary, using immutable or copy-owned keys and props.
+A retained key keeps the same child Scope,
+semantic references and subscriptions across reorder; an unchanged property
+does not call `update` again. `create` receives a `ChildOwner`: use its Scope
+for child Signals, Bindings, Sources and listener cleanup, and its `add_input`
+or `add_button` methods for semantic controls. `for_reference` routes a live
+semantic reference to its owning value; it stops resolving immediately after
+removal. Removal disposes nested Scopes and later-registered callbacks before
+removing the owned semantic nodes. Recreating the same visible key allocates a
+new Scope generation and new `NodeRef`, so focus, selection and late events
+cannot pass through the old reference. A parent Memo cannot depend directly on
+a shorter-lived child Signal; promote shared state to the parent when needed.
+
 Both hosts use the shared operation driver. Replacement invalidates earlier
 results for that identity synchronously when admission succeeds, then awaits its
 active cleanup before preparing new work. The canceled model state is visible

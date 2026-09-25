@@ -12,6 +12,10 @@ priv struct Model {
   edits : Array[@app.TextEdit]
   mut edit_completed : Int
   publication_root : @reactive.Scope
+  keyed : @component.KeyedChildren[Int, String, @semantics.NodeRef]
+  mut keyed_mode : Bool
+  keyed_created : Ref[Int]
+  keyed_disposed : Ref[Int]
   publication_registry : @reactive_task.PublicationRegistry
   downstream_registry : @reactive_task.DownstreamRegistry
   publication_source : @reactive_task.Source[String, Int]
@@ -78,6 +82,15 @@ fn Model::change(self : Model, command : Int) -> Unit {
     15 => self.invalid = 15
     16 => self.downstream_key.set("other")
     17 => self.downstream_key.set("probe")
+    20 => {
+      self.keyed_mode = true
+      self.update_keyed([{ key: 1, props: "One", }, { key: 2, props: "Two", }])
+    }
+    21 =>
+      self.update_keyed([{ key: 2, props: "Two", }, { key: 1, props: "One", }])
+    22 => self.update_keyed([{ key: 2, props: "Two", }])
+    23 =>
+      self.update_keyed([{ key: 2, props: "Two", }, { key: 1, props: "One", }])
     6 => {
       for reference in self.inputs {
         ignore(@semantics.remove(self.tree, reference))
@@ -90,6 +103,26 @@ fn Model::change(self : Model, command : Int) -> Unit {
       }
     _ => ()
   }
+}
+
+///|
+fn Model::update_keyed(
+  self : Model,
+  specs : Array[@component.ChildSpec[Int, String]],
+) -> Unit {
+  ignore(
+    self.keyed.reconcile(
+      specs,
+      (owner, _, label) => {
+        self.keyed_created.val += 1
+        owner.scope().on_dispose(() => self.keyed_disposed.val += 1)
+        owner.add_input(label, "abc").unwrap()
+      },
+      (reference, label) => {
+        ignore(@semantics.set_name(self.tree, reference, label))
+      },
+    ),
+  )
 }
 
 ///|
@@ -130,6 +163,9 @@ pub fn operation_cancel() -> Bool {
 pub fn create() -> @host.Instance {
   let tree = @semantics.empty(901, 1)
   let publication_root = @reactive.Scope::root(@reactive.Graph::new())
+  let keyed : @component.KeyedChildren[Int, String, @semantics.NodeRef] = @component.KeyedChildren::new(
+    publication_root, tree,
+  )
   let publication_registry = @reactive_task.PublicationRegistry::new(
     publication_root,
   )
@@ -181,6 +217,10 @@ pub fn create() -> @host.Instance {
     edits: [],
     edit_completed: 0,
     publication_root,
+    keyed,
+    keyed_mode: false,
+    keyed_created: Ref(0),
+    keyed_disposed: Ref(0),
     publication_registry,
     downstream_registry,
     publication_source,
@@ -236,6 +276,23 @@ pub fn create() -> @host.Instance {
       )
     },
     view: () => {
+      if model.keyed_mode {
+        let references = model.keyed.ordered()
+        return Array::makei(references.length(), index => {
+          let reference = references[index]
+          let node = @semantics.node(tree, reference).unwrap()
+          @app.Control::{
+            element: {
+              reference: Some(reference),
+              text: node.value,
+              focused: node.focused,
+              bounds: { x: 16, y: 32 + index * 70, width: 300, height: 60, },
+            },
+            kind: Input(single_line=true),
+            clip: None,
+          }
+        })
+      }
       if model.invalid == 15 {
         let clip : @view.Bounds = { x: 16, y: 60, width: 180, height: 100, }
         model.list.arrange(clip, model.rows).unwrap()
@@ -348,6 +405,7 @@ pub fn create() -> @host.Instance {
     },
     resize: (_, _) => true,
     stop: () => {
+      ignore(model.keyed.clear())
       model.publication_source.dispose()
       model.publication_root.dispose()
       ignore(@semantics.dispose(tree))
@@ -444,6 +502,27 @@ pub fn downstream_release() -> Unit {
 #export_name("downstream_cleanup")
 pub fn downstream_cleanup() -> Int {
   active.val.map(model => model.downstream_cleanup.val).unwrap_or(-1)
+}
+
+///|
+#export_name("keyed_created")
+pub fn keyed_created() -> Int {
+  active.val.map(model => model.keyed_created.val).unwrap_or(-1)
+}
+
+///|
+#export_name("keyed_disposed")
+pub fn keyed_disposed() -> Int {
+  active.val.map(model => model.keyed_disposed.val).unwrap_or(-1)
+}
+
+///|
+#export_name("keyed_generation")
+pub fn keyed_generation(key : Int) -> Int {
+  guard active.val is Some(model) && model.keyed.get(key) is Some(reference) else {
+    return -1
+  }
+  reference.generation
 }
 
 ///|
