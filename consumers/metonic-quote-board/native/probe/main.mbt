@@ -148,8 +148,68 @@ async fn main {
           "",
         )
         wait_text(app, 7, "Shipping: 642 USD for 3")
-        completed.val = true
+        let note = app.default_input.unwrap()
+        let save = (app.view)()
+        .iter()
+        .find_first(control => control.element.text == "Save note")
+        .unwrap().element.reference.unwrap()
+        assert_eq(
+          (handle.operate)(
+            note,
+            @window_host.InsertText("first draft"),
+            (handle.inspect)().semantic_revision,
+          ),
+          "",
+        )
+        assert_eq(text(app, 8), "Note: unsaved revision 1")
+        assert_eq(
+          (handle.operate)(
+            save,
+            @window_host.ActivateControl,
+            (handle.inspect)().semantic_revision,
+          ),
+          "",
+        )
+        wait_text(app, 8, "Note: saving revision 1")
+        assert_eq(
+          (handle.operate)(
+            note,
+            @window_host.InsertText(" newer draft"),
+            (handle.inspect)().semantic_revision,
+          ),
+          "",
+        )
+        assert_eq(
+          (handle.operate)(
+            save,
+            @window_host.ActivateControl,
+            (handle.inspect)().semantic_revision,
+          ),
+          "",
+        )
+        assert_eq(
+          (handle.operate)(
+            toggle_detail,
+            @window_host.ActivateControl,
+            (handle.inspect)().semantic_revision,
+          ),
+          "",
+        )
+        wait_text(app, 8, "Note: saved revision 1; saving revision 2")
+        wait_text(app, 8, "Note: saved revision 2")
+        assert_eq((handle.inspect)().text, "first draft newer draft")
+        assert_eq(
+          (handle.operate)(
+            note,
+            @window_host.InsertText(" close draft"),
+            (handle.inspect)().semantic_revision,
+          ),
+          "",
+        )
+        assert_false((app.can_close)())
         (handle.apply)(@window_host.Close)
+        assert_false((handle.inspect)().closed)
+        completed.val = true
       })
     }),
   )

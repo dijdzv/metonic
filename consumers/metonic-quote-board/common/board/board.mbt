@@ -44,6 +44,7 @@ priv struct Board {
   items : @component.KeyedChildren[String, Unit, ItemChild]
   downstreams : @async_state.DownstreamRegistry
   publications : @async_state.PublicationRegistry
+  note : Note
   tree : @semantics.Tree
   buttons : Array[@semantics.NodeRef]
   wait : async (Int) -> Unit
@@ -335,12 +336,43 @@ fn Board::view(self : Board) -> Array[@app.Control] {
       clip: None,
     })
   }
+  let note_node = @semantics.node(self.tree, self.note.input).unwrap()
+  controls.push({
+    element: {
+      bounds: { x: 16, y: 320, width: (self.size.0 - 172).max(32), height: 72, },
+      text: note_node.value,
+      reference: Some(self.note.input),
+      focused: note_node.focused,
+    },
+    kind: @app.Input(single_line=false),
+    clip: None,
+  })
+  controls.push({
+    element: {
+      bounds: { x: self.size.0 - 144, y: 320, width: 128, height: 36, },
+      text: "Save note",
+      reference: Some(self.note.save_button),
+      focused: @semantics.node(self.tree, self.note.save_button).unwrap().focused,
+    },
+    kind: @app.Button,
+    clip: None,
+  })
+  controls.push({
+    element: {
+      bounds: { x: 16, y: 400, width: (self.size.0 - 32).max(32), height: 36, },
+      text: self.note.status(),
+      reference: None,
+      focused: false,
+    },
+    kind: @app.Text,
+    clip: None,
+  })
   if self.error is Some(message) {
     controls.push({
       element: {
         bounds: {
           x: 16,
-          y: 312,
+          y: 444,
           width: (self.size.0 - 32).max(32),
           height: 40,
         },
@@ -360,6 +392,20 @@ pub fn create_with_rate(
   wait : async (Int) -> Unit,
   rate_result : (String) -> Result[Int, String],
 ) -> @app.Application {
+  let stored : Ref[SaveSnapshot?] = Ref(None)
+  create_with_save(wait, rate_result, snapshot => {
+    wait(800)
+    stored.val = Some(snapshot)
+    Ok(())
+  })
+}
+
+///|
+pub fn create_with_save(
+  wait : async (Int) -> Unit,
+  rate_result : (String) -> Result[Int, String],
+  save : async (SaveSnapshot) -> Result[Unit, String],
+) -> @app.Application {
   let graph = @reactive.Graph::new()
   let scope = @reactive.Scope::root(graph)
   let selected = @reactive.Signal::new(scope, "amber")
@@ -369,7 +415,9 @@ pub fn create_with_rate(
   let rate : @async_state.Source[String, Int] = @async_state.Source::new(scope)
   let downstreams = @async_state.DownstreamRegistry::new(scope)
   let publications = @async_state.PublicationRegistry::new(scope)
+  let serials = @async_state.SerialRegistry::new(scope)
   let tree = @semantics.empty(1, 1)
+  let note = Note::new(scope, tree, serials, save)
   let items : @component.KeyedChildren[String, Unit, ItemChild] = @component.KeyedChildren::new(
     scope, tree,
   )
@@ -387,24 +435,28 @@ pub fn create_with_rate(
     items,
     downstreams,
     publications,
+    note,
     tree,
     buttons,
     wait,
     rate_result,
     task_control: None,
-    size: (720, 360),
+    size: (720, 500),
     error: None,
   }
   {
     title: "Item and quote board",
     editor: tree,
-    default_input: None,
+    default_input: Some(note.input),
     initial_size: model.size,
     viewport: None,
     publications: Some(publications),
     downstreams: Some(downstreams),
+    serials: Some(serials),
     connect_tasks: control => {
-      if !downstreams.connect(control) || !rate.connect(control) {
+      if !downstreams.connect(control) ||
+        !rate.connect(control) ||
+        !serials.connect(control) {
         abort("quote board task connection failed")
       }
       model.task_control = Some(control)
@@ -431,6 +483,9 @@ pub fn create_with_rate(
         model.choose_currency("JPY")
       } else if reference == model.buttons[5] {
         model.choose_currency("USD")
+      } else if reference == model.note.save_button {
+        ignore(model.note.save())
+        None
       } else {
         if model.items.get(model.selected.peek()) is Some(item) &&
           item.details.for_reference(reference) is Some(_) {
@@ -439,9 +494,14 @@ pub fn create_with_rate(
         None
       }
     },
-    edited: _ => None,
+    edited: edit => {
+      if edit.target == model.note.input {
+        model.note.edit(edit.text)
+      }
+      None
+    },
     resize: (width, height) => {
-      if width < 700 || height < 340 {
+      if width < 700 || height < 480 {
         return false
       }
       let changed = model.size != (width, height)
@@ -449,9 +509,9 @@ pub fn create_with_rate(
       changed
     },
     stop: () => (),
-    can_close: () => true,
-    close_requested: () => (),
-    close_ready: () => false,
+    can_close: () => model.note.can_close(),
+    close_requested: () => model.note.request_close(),
+    close_ready: () => model.note.close_ready(),
     input_error: message => model.error = message,
     dispose: () => model.scope.dispose(),
   }
