@@ -36,3 +36,17 @@ run = 'node verification/browser.mjs'
 
 [tasks."verify:native"]
 run = '.\.metonic\framework\.tools\moonbit\bin\moon.exe run build.mbtx -- native-probe'
+
+[tasks."measure:browser"]
+description = "Measure quote-board operations in headless Chromium for JS and WasmGC"
+depends = ["build:browser"]
+run = 'node verification/measure-browser.mjs'
+
+[tasks."measure:native"]
+description = "Measure quote-board operations through the native debug controller"
+run = [
+  '.\.metonic\framework\.tools\moonbit\bin\moon.exe run build.mbtx -- native',
+  '.\.metonic\framework\.tools\moonbit\bin\moon.exe run build.mbtx -- native-release-probe',
+  '.\.metonic\framework\.tools\moonbit\bin\moon.exe run build.mbtx -- native-measure',
+  '.\.metonic\framework\.tools\moonbit\bin\moon.exe run verification/measure-native.mbtx',
+]

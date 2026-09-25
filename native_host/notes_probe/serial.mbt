@@ -100,8 +100,8 @@ async fn verify_serial() -> Unit {
         assert_eq(applied, [1, 2])
         assert_true(writer.snapshot().active is None)
         assert_true(writer.snapshot().queued.is_empty())
-        (handle.apply)(Close)
         finished.val = true
+        (handle.apply)(Close)
       })
     }),
   )
