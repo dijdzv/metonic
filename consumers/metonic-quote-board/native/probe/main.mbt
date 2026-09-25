@@ -1,6 +1,7 @@
 ///|
 fn text(app : @app.Application, index : Int) -> String {
-  (app.view)().filter(control => control.element.reference is None)[index - 4].element.text
+  ignore(app.synchronize_components(None))
+  (app.view)().filter(control => control.kind == @app.Text)[index - 4].element.text
 }
 
 ///|
@@ -29,6 +30,8 @@ async fn main {
   let toggle_detail = (app.view)()[3].element.reference.unwrap()
   let yen = (app.view)()[4].element.reference.unwrap()
   let dollar = (app.view)()[5].element.reference.unwrap()
+  let heading = (app.view)().filter(control => control.kind == @app.Text)[0].element.reference.unwrap()
+  assert_eq(@semantics.node(app.editor, heading).unwrap().role, @semantics.Label)
   let completed = Ref(false)
   @window_host.run(
     @host.from_application(app),
@@ -91,6 +94,10 @@ async fn main {
           "",
         )
         assert_eq(text(app, 4), "Item: blue · Quantity: 1 · Currency: JPY")
+        assert_eq(
+          @semantics.node(app.editor, heading).unwrap().name,
+          "Item: blue · Quantity: 1 · Currency: JPY",
+        )
         assert_eq(text(app, 7), "Shipping: waiting for item")
         wait_text(app, 5, "Detail: Blue stool")
         assert_eq(text(app, 6), "Stock: loading")

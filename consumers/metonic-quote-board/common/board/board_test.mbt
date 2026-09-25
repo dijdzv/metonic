@@ -1,6 +1,7 @@
 ///|
 fn line(app : @app.Application, index : Int) -> String {
-  (app.view)().filter(control => control.element.reference is None)[index - 4].element.text
+  ignore(app.synchronize_components(None))
+  (app.view)().filter(control => control.kind == @app.Text)[index - 4].element.text
 }
 
 ///|
@@ -299,11 +300,14 @@ async test "recreating detail revokes old controls and rejects old shipping resu
   ignore(app.publish())
   assert_eq(line(app, 7), "Shipping: detail hidden")
   assert_true(@semantics.node(app.editor, old_quantity) is Err(_))
+  assert_true((app.activate)(old_quantity) is None)
   assert_eq(old_result.apply(), @task.Rejected)
 
   assert_true((app.activate)(button(app, 3)) is None)
   let new_quantity = button(app, 2)
   assert_true(old_quantity != new_quantity)
+  assert_true((app.activate)(old_quantity) is None)
+  assert_eq(line(app, 4), "Item: amber · Quantity: 1 · Currency: JPY")
   assert_true(
     app.reconcile_downstreams(request => {
       quotes.push(request)

@@ -5,6 +5,7 @@ import {
   "local/p0/core/reactive",
   "local/p0/core/reactive_task" @async_state,
   "local/p0/core/semantics",
+  "local/p0/core/view",
 }
 
 import {

@@ -75,6 +75,10 @@ try {
       return createHash('sha256').update(bytes).digest('hex');
     };
     await waitLines('Detail: Amber lamp', 'Stock: 12', 'Shipping: 112 for 1');
+    const heading = page.locator('#controls .gpu-text').first();
+    const headingId = await heading.getAttribute('id');
+    assert(headingId, `${target}: heading has no stable DOM identity`);
+    assert.equal(await heading.getAttribute('aria-label'), 'Item: amber · Quantity: 1 · Currency: JPY');
     if (diagnosticsMode) {
       const snapshot = await trace();
       assert.equal(snapshot.owners.length, 3);
@@ -83,6 +87,15 @@ try {
       assert.equal(snapshot.derived[0].phase, 'ready');
     }
     const amber = await shot('amber-ready');
+    const refresh = page.getByRole('button', { name: 'Refresh' });
+    await refresh.focus();
+    assert(await refresh.evaluate(node => document.activeElement === node));
+    await refresh.press('Enter');
+    await waitLines('Detail: loading', 'Stock: loading', 'Shipping: loading (previous 112)');
+    await waitLines('Detail: Amber lamp', 'Stock: 12', 'Shipping: 112 for 1');
+    await refresh.press('Space');
+    await waitLines('Detail: loading', 'Stock: loading', 'Shipping: loading (previous 112)');
+    await waitLines('Detail: Amber lamp', 'Stock: 12', 'Shipping: 112 for 1');
     await page.getByRole('button', { name: 'Amber lamp' }).click();
     await waitLines('Detail: loading', 'Stock: loading', 'Shipping: loading (previous 112)');
     if (diagnosticsMode) {
@@ -98,6 +111,11 @@ try {
     await waitLines('Detail: Amber lamp', 'Stock: 12', 'Shipping: 112 for 1');
     assert.notEqual(await shot('amber-refreshed'), amberPartial, `${target}: stock-first completion did not redraw`);
     await page.getByRole('button', { name: 'Blue stool' }).click();
+    await page.waitForFunction(id => {
+      const node = document.getElementById(id);
+      return node?.getAttribute('aria-label') === 'Item: blue · Quantity: 1 · Currency: JPY';
+    }, headingId);
+    assert.equal(await heading.getAttribute('id'), headingId);
     const pending = await shot('blue-pending');
     assert.notEqual(pending, amber, `${target}: item selection did not redraw`);
     await waitLines('Detail: Blue stool', 'Stock: loading', 'Shipping: waiting for item');

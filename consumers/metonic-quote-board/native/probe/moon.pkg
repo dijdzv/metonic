@@ -2,6 +2,7 @@ import {
   "local/metonic_quote/board",
   "local/p0/core/application" @app,
   "local/p0/core/reactive_task" @async_state,
+  "local/p0/core/semantics",
   "local/native_host/application" @host,
   "local/native_host/window_host",
   "local/metonic_async/clock" @production_clock,
