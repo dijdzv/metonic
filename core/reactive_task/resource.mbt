@@ -4,6 +4,7 @@ pub struct Resource {
   priv operation : @task.Operation
   priv mut control : @task.TaskControl?
   priv mut generation : Int
+  priv mut on_rejected : ((TraceKind) -> Unit)?
 }
 
 ///|
@@ -14,6 +15,7 @@ pub fn Resource::new(parent : @reactive.Scope) -> Resource {
     operation: @task.Operation::new(),
     control: None,
     generation: 0,
+    on_rejected: None,
   }
   scope.on_dispose(() => {
     resource.generation += 1
@@ -89,6 +91,9 @@ pub fn Resource::replace_prepared(
                 post_progress(
                   @task.completion(() => {
                     if self.scope.is_disposed() || self.generation != generation {
+                      if self.on_rejected is Some(record) {
+                        record(ProgressRejected)
+                      }
                       @task.Rejected
                     } else {
                       progress.apply()
@@ -99,6 +104,9 @@ pub fn Resource::replace_prepared(
             },
             completion => {
               if self.scope.is_disposed() || self.generation != generation {
+                if self.on_rejected is Some(record) {
+                  record(CompletionRejected)
+                }
                 @task.Rejected
               } else {
                 completion.apply()
@@ -112,6 +120,9 @@ pub fn Resource::replace_prepared(
         guard ticket.val is Some(generation) &&
           !self.scope.is_disposed() &&
           self.generation == generation else {
+          if self.on_rejected is Some(record) {
+            record(FailureRejected)
+          }
           return @task.Rejected
         }
         on_failure(message)

@@ -6,6 +6,7 @@ import {
   "local/native_host/view_presentation",
   "local/native_host/application" @host_application,
   "local/p0/core/application_task" @task,
+  "local/p0/core/reactive_task",
   "local/metonic_async/application_task" @task_runner,
   "local/p0/platform/windows/ime_presentation",
   "local/native_host/ime_focus",

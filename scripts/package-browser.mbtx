@@ -2,6 +2,29 @@ import {
   "moonbitlang/async@0.21.2",
   "moonbitlang/async@0.21.2/fs",
   "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/encoding/utf8",
+}
+
+///|
+fn contains_ascii(data : Bytes, token : String) -> Bool {
+  let bytes = data.to_array()
+  let needle = @utf8.encode(token).to_array()
+  if needle.is_empty() || bytes.length() < needle.length() {
+    return false
+  }
+  for start = 0; start + needle.length() <= bytes.length(); start = start + 1 {
+    let mut same = true
+    for index = 0; index < needle.length(); index = index + 1 {
+      if bytes[start + index] != needle[index] {
+        same = false
+        break
+      }
+    }
+    if same {
+      return true
+    }
+  }
+  false
 }
 
 ///|
@@ -45,11 +68,24 @@ async fn main {
       for
         forbidden in [
           "metonicAsyncProbe", "task-fail", "artifact-bytes", "environment-dev",
-          "?target=", "app.mjs", "metonicInputTrace", "input-diagnostics",
+          "?target=", "app.mjs", "metonicInputTrace", "input-diagnostics", "metonicAsyncDiagnostics",
+          "diagnostics_json", "async-diagnostics",
         ] {
         assert_true(
           !data.text().contains(forbidden),
           msg="development content in " + name + ": " + forbidden,
+        )
+      }
+    }
+    if name == "app.wasm" {
+      for
+        forbidden in [
+          "diagnostics_json", "request_admitted", "cleanup_joined", "expected_failure",
+          "unexpected_failure",
+        ] {
+        assert_true(
+          !contains_ascii(data.binary(), forbidden),
+          msg="development diagnostic retained in release wasm: " + forbidden,
         )
       }
     }

@@ -1,0 +1,22 @@
+import {
+  "local/p0/examples/async_pair/application" @pair,
+  "local/p0/core/reactive_task",
+  "local/browser_host/application_host" @host,
+  "local/metonic_async/clock" @production_clock,
+  "local/p0/capabilities/clock",
+  "moonbitlang/core/json",
+}
+
+pkgtype(kind: "foreign_library")
+
+supported_targets = "+js+wasm-gc"
+
+options(
+  link: {
+    "js": { "format": "esm" },
+    "wasm-gc": {
+      "imported-string-constants": "_",
+      "use-js-builtin-string": true,
+    },
+  },
+)

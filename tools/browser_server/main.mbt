@@ -51,12 +51,15 @@ async fn main {
         let release = path.has_prefix("/release/")
         let notes = path.has_prefix("/notes/")
         let pair = path.has_prefix("/async-pair/")
+        let diagnostic = path.has_prefix("/async-diagnostics/")
         let path = if release {
           path[8:].to_owned()
         } else if notes {
           path[6:].to_owned()
         } else if pair {
           path[11:].to_owned()
+        } else if diagnostic {
+          path[18:].to_owned()
         } else {
           path
         }
@@ -81,7 +84,9 @@ async fn main {
             Some(("notes-host.mjs", "text/javascript; charset=utf-8"))
           "/async-pair-host.mjs" if pair =>
             Some(("async-pair-host.mjs", "text/javascript; charset=utf-8"))
-          "/application.mjs" if notes || pair =>
+          "/diagnostics-host.mjs" if diagnostic =>
+            Some(("diagnostics-host.mjs", "text/javascript; charset=utf-8"))
+          "/application.mjs" if notes || pair || diagnostic =>
             Some(("application.mjs", "text/javascript; charset=utf-8"))
           "/notes.mjs" if notes =>
             Some(("notes.mjs", "text/javascript; charset=utf-8"))
@@ -90,6 +95,10 @@ async fn main {
             Some(("async-pair.mjs", "text/javascript; charset=utf-8"))
           "/async-pair.wasm" if pair =>
             Some(("async-pair.wasm", "application/wasm"))
+          "/async-pair-dev.mjs" if diagnostic =>
+            Some(("async-pair-dev.mjs", "text/javascript; charset=utf-8"))
+          "/async-pair-dev.wasm" if diagnostic =>
+            Some(("async-pair-dev.wasm", "application/wasm"))
           "/layer-renderer.mjs" =>
             Some(("layer-renderer.mjs", "text/javascript; charset=utf-8"))
           "/surface.mjs" =>
@@ -122,7 +131,9 @@ async fn main {
           Some((filename, content_type)) => {
             let content = Some(
               @fs.read_file(
-                (if pair {
+                (if diagnostic {
+                  ".work/browser-async-diagnostics/"
+                } else if pair {
                   ".work/browser-async-pair/"
                 } else if notes {
                   ".work/browser-notes/"

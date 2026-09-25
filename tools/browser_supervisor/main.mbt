@@ -124,7 +124,10 @@ async fn run_session(
   cleanup_capture? : @ref.Ref[String?] = @ref.new(None),
   transport_capture? : @ref.Ref[Json] = @ref.new(Json::null()),
 ) -> Unit raise Error {
-  if mode != "async" && mode != "headless" && mode != "pair" {
+  if mode != "async" &&
+    mode != "headless" &&
+    mode != "pair" &&
+    mode != "diagnostics" {
     fail("invalid mode")
   }
   let (server_reader, server_stdout) = @process.read_from_process()
@@ -282,16 +285,21 @@ async fn run_session(
 async fn main {
   let args = @env.args()
   guard args.length() == 2 else {
-    fail("usage: browser_supervisor.wasm async|headless|pair")
+    fail("usage: browser_supervisor.wasm async|headless|pair|diagnostics")
   }
   let mode = args[1]
-  if mode != "async" && mode != "headless" && mode != "pair" {
+  if mode != "async" &&
+    mode != "headless" &&
+    mode != "pair" &&
+    mode != "diagnostics" {
     fail("invalid mode")
   }
   let verifier = if mode == "async" {
     "scripts/verify-browser-async.mjs"
   } else if mode == "pair" {
     "examples/async_pair/browser/verify.mjs"
+  } else if mode == "diagnostics" {
+    "examples/async_pair/browser/verify-diagnostics.mjs"
   } else {
     "scripts/verify-browser-headless.mjs"
   }

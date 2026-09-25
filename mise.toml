@@ -133,6 +133,14 @@ run = [
   '.\\.tools\\moonbit\\bin\\moonrun.exe _build/wasm/release/build/tools/browser_supervisor/browser_supervisor.wasm pair',
 ]
 
+[tasks."async-pair:diagnostics-browser"]
+description = "Verify bounded development diagnostics on browser JS and WasmGC"
+depends = ["browser:build"]
+run = [
+  '.\\.tools\\moonbit\\bin\\moon.exe build tools/browser_server tools/browser_supervisor --target wasm --release --frozen --deny-warn',
+  '.\\.tools\\moonbit\\bin\\moonrun.exe _build/wasm/release/build/tools/browser_supervisor/browser_supervisor.wasm diagnostics',
+]
+
 [tasks."async-pair:native-build"]
 env = { METONIC_NATIVE_BUILD = "async-pair" }
 run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/build-native.mbtx'
@@ -143,6 +151,14 @@ run = [
   '.\\.tools\\moonbit\\bin\\moon.exe run scripts/build-native.mbtx',
   '.\\.work\\native-host-build\\native\\debug\\build\\local\\native_host\\async_pair_probe\\async_pair_probe.exe',
 ]
+
+[tasks."async-pair:diagnostics-test"]
+depends = ["async-pair:diagnostics-build"]
+run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-async-diagnostics.mbtx'
+
+[tasks."async-pair:diagnostics-build"]
+env = { METONIC_NATIVE_BUILD = "application", METONIC_NATIVE_WORKSPACE = "native_host", METONIC_NATIVE_PACKAGE = "async_pair_dev", METONIC_NATIVE_ARTIFACT = "local/native_host/async_pair_dev" }
+run = '.\\.tools\\moonbit\\bin\\moon.exe run scripts/build-native.mbtx'
 
 [tasks."browser:serve"]
 depends = ["browser:build"]

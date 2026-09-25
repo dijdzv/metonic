@@ -1,9 +1,9 @@
 import {
   "local/p0/examples/async_pair/application" @pair,
-  "local/p0/core/application" @app,
   "local/p0/core/reactive_task",
   "local/native_host/application" @host,
   "local/native_host/window_host",
+  "local/native_host/application_control",
   "local/metonic_async/clock" @production_clock,
   "local/p0/capabilities/clock",
   "moonbitlang/async",

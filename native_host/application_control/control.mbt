@@ -143,6 +143,7 @@ async fn respond(
     "height": state.height,
     "composing": state.composing,
     "closed": state.closed,
+    "diagnostics": state.diagnostics.unwrap_or(Json::null()),
     "image": image,
   }
   output.write(response.stringify() + "\n")

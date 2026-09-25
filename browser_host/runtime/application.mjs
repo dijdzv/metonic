@@ -2,7 +2,7 @@ import { createSurface } from './surface.mjs';
 import { createLayerRenderer } from './layer-renderer.mjs';
 import { wasmImports } from './wasm-imports.mjs';
 
-export function runApplication({ title, artifact, eventName, canvasId, statusId, stopId, controls = [] }) {
+export function runApplication({ title, artifact, eventName, canvasId, statusId, stopId, controls = [], onLoaded = () => {} }) {
   const canvas = document.getElementById(canvasId);
   const status = document.getElementById(statusId), stopButton = document.getElementById(stopId);
   const elements = controls.map(control => ({ ...control, element: document.getElementById(control.id) }));
@@ -70,13 +70,18 @@ export function runApplication({ title, artifact, eventName, canvasId, statusId,
     const resources = await surface.start();
     if (!resources || disposed) return;
     context = resources.context;
-    if (target === 'js') app = (await import(`${artifact}.mjs`)).create();
+    if (target === 'js') {
+      const module = await import(`${artifact}.mjs`);
+      app = module.create();
+      onLoaded(module);
+    }
     else {
       const response = await fetch(`${artifact}.wasm`);
       if (!response.ok) throw new Error(`Application load failed: ${response.status}`);
       const { instance } = await WebAssembly.instantiateStreaming(response, wasmImports(),
         { builtins: ['js-string'], importedStringConstants: '_' });
       app = instance.exports.create();
+      onLoaded(instance.exports);
     }
     if (disposed) { app.stop(); return; }
     const font = await app.load_font();

@@ -41,6 +41,7 @@ pub struct Snapshot {
   ime_requested_x : Int?
   ime_requested_y : Int?
   closed : Bool
+  diagnostics : Json?
 }
 
 ///|
@@ -246,6 +247,7 @@ fn App::snapshot(self : App) -> Snapshot {
       window.ime_cursor_area_position().y()
     }),
     closed: self.closed,
+    diagnostics: self.hooks.trace().map(registry => registry.snapshot_json()),
   }
 }
 

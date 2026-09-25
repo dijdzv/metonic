@@ -578,6 +578,9 @@ async fn run_loop(
   @async.set_external_event_loop(driver)
   event_loop.set_control_flow(@core.ControlFlow::Wait)
   let tasks = @task_runner.driver()
+  if hooks.trace() is Some(registry) {
+    ignore(tasks.observe((operation, event) => registry.driver_event(operation, event)))
+  }
   app.publication_submit = Some(request => tasks.submit(request))
   defer tasks.close()
   try {
