@@ -18,7 +18,7 @@ priv struct NoteState {
 ///|
 priv struct Note {
   state : NoteState
-  input : @semantics.NodeRef
+  input : @component.UiInput
   save_button : @semantics.NodeRef
   writer : @async_state.SerialTask[Int, SaveSnapshot, Unit]
 }
@@ -27,6 +27,7 @@ priv struct Note {
 fn Note::new(
   scope : @reactive.Scope,
   tree : @semantics.Tree,
+  ui : @component.UiRoot,
   registry : @async_state.SerialRegistry,
   save : async (SaveSnapshot) -> Result[Unit, String],
 ) -> Note {
@@ -51,18 +52,28 @@ fn Note::new(
   })
   {
     state,
-    input: @semantics.add_input(tree, "Note", "").unwrap(),
+    input: ui
+    .fixed("note")
+    .text_area(
+      "body",
+      "Note",
+      @component.Controlled::new(() => state.text, text => {
+        state.edit(text)
+        None
+      }),
+    )
+    .unwrap(),
     save_button: @semantics.add_button(tree, "Save note").unwrap(),
     writer,
   }
 }
 
 ///|
-fn Note::edit(self : Note, text : String) -> Unit {
-  if self.state.text != text {
-    self.state.text = text
-    self.state.edit_revision += 1
-    self.state.error = None
+fn NoteState::edit(self : NoteState, text : String) -> Unit {
+  if self.text != text {
+    self.text = text
+    self.edit_revision += 1
+    self.error = None
   }
 }
 

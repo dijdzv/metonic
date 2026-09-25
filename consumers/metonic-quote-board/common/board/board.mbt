@@ -402,17 +402,14 @@ fn Board::view(self : Board) -> Array[@app.Control] {
       })
     }
   }
-  let note_node = @semantics.node(self.tree, self.note.input).unwrap()
-  controls.push({
-    element: {
-      bounds: { x: 16, y: 320, width: (self.size.0 - 172).max(32), height: 72, },
-      text: note_node.value,
-      reference: Some(self.note.input),
-      focused: note_node.focused,
-    },
-    kind: @app.Input(single_line=false),
-    clip: None,
-  })
+  controls.push(
+    @app.input(self.note.input, {
+      x: 16,
+      y: 320,
+      width: (self.size.0 - 172).max(32),
+      height: 72,
+    }),
+  )
   controls.push({
     element: {
       bounds: { x: self.size.0 - 144, y: 320, width: 128, height: 36, },
@@ -533,7 +530,7 @@ pub fn create_with_quote_result(
   let serials = @async_state.SerialRegistry::new(scope)
   let tree = @semantics.empty(1, 1)
   let ui = @component.UiRoot::new(scope, tree)
-  let note = Note::new(scope, tree, serials, save)
+  let note = Note::new(scope, tree, ui, serials, save)
   let items : @component.KeyedChildren[String, Unit, ItemChild] = @component.KeyedChildren::new(
     scope, tree,
   )
@@ -596,7 +593,7 @@ pub fn create_with_quote_result(
   {
     title: "Item and quote board",
     editor: tree,
-    default_input: Some(note.input),
+    default_input: Some(note.input.reference()),
     initial_size: model.size,
     viewport: None,
     publications: Some(publications),
@@ -621,12 +618,7 @@ pub fn create_with_quote_result(
         ui.activate(reference)
       }
     },
-    edited: edit => {
-      if edit.target == model.note.input {
-        model.note.edit(edit.text)
-      }
-      None
-    },
+    edited: edit => ui.edited(edit.target, edit.text, edit.revision),
     resize: (width, height) => {
       if width < 700 || height < 480 {
         return false
