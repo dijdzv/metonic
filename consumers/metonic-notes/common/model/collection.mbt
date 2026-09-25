@@ -578,6 +578,7 @@ pub fn create_collection(
     }),
     publications: None,
     downstreams: None,
+    serials: None,
     connect_tasks: control => {
       if tasks_connected.val {
         abort("Notes task control connected twice")

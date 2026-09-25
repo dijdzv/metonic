@@ -40,6 +40,7 @@ async fn verify_publication() -> Unit {
     viewport: None,
     publications: Some(registry),
     downstreams: Some(downstream_registry),
+    serials: None,
     connect_tasks: control => {
       if !source.connect(control) {
         abort("publication source was not connected")

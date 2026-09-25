@@ -42,6 +42,7 @@ pub(all) struct Application {
   viewport : Viewport?
   publications : @reactive_task.PublicationRegistry?
   downstreams : @reactive_task.DownstreamRegistry?
+  serials : @reactive_task.SerialRegistry?
   connect_tasks : (@task.TaskControl) -> Unit
   initialize : () -> @task.Request?
   view : () -> Array[Control]
@@ -67,4 +68,16 @@ pub fn Application::reconcile_downstreams(
   submit : (@task.Request) -> Bool,
 ) -> Bool {
   self.downstreams.map(registry => registry.reconcile(submit)).unwrap_or(false)
+}
+
+///|
+pub fn Application::reconcile_tasks(
+  self : Application,
+  submit : (@task.Request) -> Bool,
+) -> Bool {
+  let downstream = self.reconcile_downstreams(submit)
+  let serial = self.serials
+    .map(registry => registry.reconcile(submit))
+    .unwrap_or(false)
+  downstream || serial
 }

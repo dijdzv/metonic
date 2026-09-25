@@ -94,7 +94,7 @@ fn Session::publish(self : Session) -> Bool {
     }
   }
   let mut admitted = false
-  let reconciled = self.application.reconcile_downstreams(request => {
+  let reconciled = self.application.reconcile_tasks(request => {
     let accepted = self.submit(request)
     if accepted {
       admitted = true
