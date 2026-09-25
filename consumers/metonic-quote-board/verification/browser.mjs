@@ -67,7 +67,7 @@ try {
     const canvas = page.locator('#canvas');
     const trace = () => page.evaluate(() => window.metonicQuoteDiagnostics?.());
     const waitLines = (detail, stock, quote) => page.waitForFunction(expected => {
-      const lines = [...document.querySelectorAll('#controls .gpu-text')].map(node => node.textContent);
+      const lines = [...document.querySelectorAll('#controls .gpu-text, #controls .gpu-status')].map(node => node.textContent);
       return lines[1] === expected[0] && lines[2] === expected[1] && lines[3] === expected[2];
     }, [detail, stock, quote], { timeout: 5000 });
     const shot = async name => {
@@ -75,6 +75,13 @@ try {
       return createHash('sha256').update(bytes).digest('hex');
     };
     await waitLines('Detail: Amber lamp', 'Stock: 12', 'Shipping: 112 for 1');
+    const statuses = page.locator('#controls [role="status"]');
+    assert.equal(await statuses.count(), 3);
+    assert.deepEqual(await statuses.allTextContents(),
+      ['Detail: Amber lamp', 'Stock: 12', 'Shipping: 112 for 1']);
+    assert.equal(await statuses.last().getAttribute('aria-live'), 'polite');
+    const quoteStatusId = await statuses.last().getAttribute('id');
+    assert(quoteStatusId, `${target}: quote status has no stable DOM identity`);
     const heading = page.locator('#controls .gpu-text').first();
     const headingId = await heading.getAttribute('id');
     assert(headingId, `${target}: heading has no stable DOM identity`);
@@ -92,6 +99,7 @@ try {
     assert(await refresh.evaluate(node => document.activeElement === node));
     await refresh.press('Enter');
     await waitLines('Detail: loading', 'Stock: loading', 'Shipping: loading (previous 112)');
+    assert.equal(await statuses.last().getAttribute('id'), quoteStatusId);
     await waitLines('Detail: Amber lamp', 'Stock: 12', 'Shipping: 112 for 1');
     await refresh.press('Space');
     await waitLines('Detail: loading', 'Stock: loading', 'Shipping: loading (previous 112)');
@@ -172,7 +180,7 @@ try {
     assert.equal(await page.getByRole('button', { name: 'Retry quote' }).count(), 0);
     const note = page.getByRole('textbox', { name: 'Note' });
     const waitNote = expected => page.waitForFunction(text => {
-      const lines = [...document.querySelectorAll('#controls .gpu-text')].map(node => node.textContent);
+      const lines = [...document.querySelectorAll('#controls .gpu-text, #controls .gpu-status')].map(node => node.textContent);
       return lines[4] === text;
     }, expected, { timeout: 5000 });
     await note.fill('first draft');

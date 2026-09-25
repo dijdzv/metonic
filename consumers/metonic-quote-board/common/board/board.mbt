@@ -49,6 +49,9 @@ priv struct Board {
   ui : @component.UiRoot
   mut buttons : Array[@component.UiButton]
   mut heading_label : @component.UiLabel?
+  mut detail_status : @component.UiStatus?
+  mut stock_status : @component.UiStatus?
+  mut quote_status : @component.UiStatus?
   wait : async (Int) -> Unit
   rate_result : (String) -> Result[Int, String]
   quote_result : (QuoteInput) -> Result[Int, String]
@@ -299,6 +302,78 @@ fn Board::heading(self : Board) -> String {
 }
 
 ///|
+fn Board::detail_state(self : Board) -> @component.StatusState {
+  guard self.items.get(self.selected.peek()) is Some(child) else {
+    return @component.Waiting("Detail: waiting")
+  }
+  match child.detail.current(self.selected.peek(), child.cycle.peek()).view() {
+    CurrentReady(name, _) => @component.Ready("Detail: " + name)
+    CurrentPending(_) => @component.Loading("Detail: loading")
+    CurrentFailed(_) => @component.Failed("Detail: failed")
+    CurrentCanceled(_) => @component.Canceled("Detail: canceled")
+    _ => @component.Waiting("Detail: waiting")
+  }
+}
+
+///|
+fn Board::stock_state(self : Board) -> @component.StatusState {
+  guard self.items.get(self.selected.peek()) is Some(child) else {
+    return @component.Waiting("Stock: waiting")
+  }
+  match child.stock.current(self.selected.peek(), child.cycle.peek()).view() {
+    CurrentReady(amount, _) => @component.Ready("Stock: " + amount.to_string())
+    CurrentPending(_) => @component.Loading("Stock: loading")
+    CurrentFailed(_) => @component.Failed("Stock: failed")
+    CurrentCanceled(_) => @component.Canceled("Stock: canceled")
+    _ => @component.Waiting("Stock: waiting")
+  }
+}
+
+///|
+fn Board::quote_state(self : Board) -> @component.StatusState {
+  let item = self.selected.peek()
+  guard self.items.get(item) is Some(child) else {
+    return @component.Waiting("Shipping: waiting for item")
+  }
+  guard child.details.get("detail") is Some(details) else {
+    return @component.Waiting("Shipping: detail hidden")
+  }
+  match details.display.get() {
+    Some({ current: CurrentReady(value, _), .. }) =>
+      @component.Ready(
+        "Shipping: " +
+        value.amount_text() +
+        " for " +
+        value.quote.quantity.to_string(),
+      )
+    Some({ current: CurrentPending(_), previous: Some(previous), .. })
+    | Some({ current: CurrentBlocked(_), previous: Some(previous), .. }) =>
+      @component.RetainedPrevious(
+        "Shipping: loading",
+        previous.value.amount_text(),
+      )
+    Some({ current: CurrentPending(_), .. }) =>
+      @component.Loading("Shipping: loading")
+    Some({ current: CurrentCanceled(_), .. }) =>
+      @component.Canceled("Shipping: canceled")
+    Some({ current: CurrentFailed(_), .. }) =>
+      if details.quote.current().view() is CurrentFailed(_) {
+        @component.Failed(
+          "Shipping: failed for " +
+          item +
+          " x" +
+          self.quantity.peek().to_string(),
+        )
+      } else if details.quote.admission() is @async_state.Rejected(_, _) {
+        @component.Rejected("Shipping: failed")
+      } else {
+        @component.Failed("Shipping: failed")
+      }
+    _ => @component.Waiting("Shipping: waiting for item")
+  }
+}
+
+///|
 fn Board::view(self : Board) -> Array[@app.Control] {
   let controls : Array[@app.Control] = []
   let first_row : Array[@app.StackItem] = []
@@ -314,24 +389,7 @@ fn Board::view(self : Board) -> Array[@app.Control] {
       second_row.push(item)
     }
   }
-  let item = self.selected.peek()
-  let mut detail = "Detail: waiting"
-  let mut stock = "Stock: waiting"
-  let mut quote = "Shipping: waiting for item"
-  if self.items.get(item) is Some(child) {
-    let cycle = child.cycle.peek()
-    detail = match child.detail.current(item, cycle).view() {
-      CurrentReady(name, _) => "Detail: " + name
-      CurrentPending(_) => "Detail: loading"
-      CurrentFailed(_) => "Detail: failed"
-      _ => "Detail: waiting"
-    }
-    stock = match child.stock.current(item, cycle).view() {
-      CurrentReady(amount, _) => "Stock: " + amount.to_string()
-      CurrentPending(_) => "Stock: loading"
-      CurrentFailed(_) => "Stock: failed"
-      _ => "Stock: waiting"
-    }
+  if self.items.get(self.selected.peek()) is Some(child) {
     match child.details.get("detail") {
       Some(details) => {
         first_row.push(
@@ -349,30 +407,8 @@ fn Board::view(self : Board) -> Array[@app.Control] {
             ),
           )
         }
-        quote = match details.display.get() {
-          Some({ current: CurrentReady(value, _), .. }) =>
-            "Shipping: " +
-            value.amount_text() +
-            " for " +
-            value.quote.quantity.to_string()
-          Some({ current: CurrentPending(_), previous: Some(previous), .. }) =>
-            "Shipping: loading (previous " + previous.value.amount_text() + ")"
-          Some({ current: CurrentBlocked(_), previous: Some(previous), .. }) =>
-            "Shipping: loading (previous " + previous.value.amount_text() + ")"
-          Some({ current: CurrentPending(_), .. }) => "Shipping: loading"
-          Some({ current: CurrentFailed(_), .. }) =>
-            if details.quote.current().view() is CurrentFailed(_) {
-              "Shipping: failed for " +
-              item +
-              " x" +
-              self.quantity.peek().to_string()
-            } else {
-              "Shipping: failed"
-            }
-          _ => "Shipping: waiting for item"
-        }
       }
-      None => quote = "Shipping: detail hidden"
+      None => ()
     }
   }
   let button_row = @app.Stack::new(@layout.Horizontal, gap=10)
@@ -388,8 +424,7 @@ fn Board::view(self : Board) -> Array[@app.Control] {
   for control in arranged_second {
     controls.push(control)
   }
-  let lines = [self.heading(), detail, stock, quote]
-  for index, line in lines {
+  for index in 0..<4 {
     let bounds : @view.Bounds = {
       x: 16,
       y: 112 + index * 48,
@@ -399,11 +434,12 @@ fn Board::view(self : Board) -> Array[@app.Control] {
     if index == 0 {
       controls.push(@app.label(self.heading_label.unwrap(), bounds))
     } else {
-      controls.push({
-        element: { bounds, text: line, reference: None, focused: false, },
-        kind: @app.Text,
-        clip: None,
-      })
+      let widget = match index {
+        1 => self.detail_status.unwrap()
+        2 => self.stock_status.unwrap()
+        _ => self.quote_status.unwrap()
+      }
+      controls.push(@app.status(widget, bounds))
     }
   }
   controls.push(
@@ -554,6 +590,9 @@ pub fn create_with_quote_result(
     ui,
     buttons: [],
     heading_label: None,
+    detail_status: None,
+    stock_status: None,
+    quote_status: None,
     wait,
     rate_result,
     quote_result: input => quote_result(input.name, input.stock, input.quantity),
@@ -564,9 +603,23 @@ pub fn create_with_quote_result(
     error: None,
   }
   let actions = ui.fixed("actions")
-  model.heading_label = ui
-    .fixed("summary")
-    .label("heading", @component.Read::new(() => model.heading()))
+  let summary = ui.fixed("summary")
+  model.heading_label = summary.label(
+    "heading",
+    @component.Read::new(() => model.heading()),
+  )
+  model.detail_status = summary.status(
+    "detail",
+    @component.Read::new(() => model.detail_state()),
+  )
+  model.stock_status = summary.status(
+    "stock",
+    @component.Read::new(() => model.stock_state()),
+  )
+  model.quote_status = summary.status(
+    "quote",
+    @component.Read::new(() => model.quote_state()),
+  )
   model.buttons = [
     actions
     .button("amber", "Amber lamp", () => model.request("amber", false))

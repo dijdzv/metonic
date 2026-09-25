@@ -54,7 +54,7 @@ try {
       page.on('request', request => requestedFiles.add(
         new URL(request.url()).pathname.replace(/^\//, '') || 'index.html'));
       const lines = expected => page.waitForFunction(value => {
-        const text = [...document.querySelectorAll('#controls .gpu-text')].map(node => node.textContent);
+        const text = [...document.querySelectorAll('#controls .gpu-text, #controls .gpu-status')].map(node => node.textContent);
         return value.every(([index, content]) => text[index] === content);
       }, expected, { timeout: 10000 });
       const elapsed = started => Math.round(performance.now() - started);
