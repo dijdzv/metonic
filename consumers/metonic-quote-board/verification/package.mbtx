@@ -1,0 +1,119 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/json",
+  "moonbitlang/x@0.5.1/crypto",
+}
+
+///|
+struct FileRecord {
+  path : String
+  bytes : Int
+  sha256 : String
+} derive(FromJson)
+
+///|
+struct Inventory {
+  files : Array[FileRecord]
+} derive(FromJson)
+
+///|
+async fn verify_inventory(directory : String, expected_count : Int) -> Unit {
+  let inventory : Inventory = @json.from_json(
+    @json.parse(@fs.read_file(directory + "/package.json").text()),
+  )
+  assert_eq(inventory.files.length(), expected_count)
+  for file in inventory.files {
+    let bytes = @fs.read_file(directory + "/" + file.path).binary()
+    assert_eq(bytes.length(), file.bytes)
+    assert_eq(@crypto.bytes_to_hex_string(@crypto.sha256(bytes)), file.sha256)
+  }
+}
+
+///|
+async fn main {
+  @async.with_timeout(300000, async fn() {
+    let root = @fs.realpath(".")
+    let moon = root + "/.metonic/framework/.tools/moonbit/bin/moon.exe"
+    let temporary = @fs.tmpdir(prefix="metonic-quote-distribution-")
+    let resolved = @fs.realpath(temporary)
+    defer {
+      assert_eq(@fs.realpath(temporary), resolved)
+      @fs.rmdir(temporary, recursive=true)
+    }
+    let browser = temporary + "/配布 browser"
+    let native = temporary + "/配布 native"
+    assert_eq(
+      @process.run(
+        moon,
+        ["run", "package-browser.mbtx", "--", browser],
+        cwd=root,
+        no_console_window=true,
+      ),
+      0,
+    )
+    verify_inventory(browser, 20)
+    assert_eq(
+      @process.run(
+        "node",
+        [root + "/verification/browser.mjs", browser],
+        cwd=temporary,
+        no_console_window=true,
+      ),
+      0,
+    )
+    assert_eq(
+      @process.run(
+        moon,
+        ["run", "package-native.mbtx", "--", native],
+        cwd=root,
+        no_console_window=true,
+      ),
+      0,
+    )
+    verify_inventory(native, 26)
+    let generated = @fs.read_file(
+      root +
+      "/native/.metonic-build/native/release/build/local/metonic_quote_native/main/main.c",
+    ).text()
+    let link = @fs.read_file(
+      root +
+      "/native/.metonic-build/native/release/build/local/metonic_quote_native/main/main.c.rsp",
+    ).text()
+    for
+      marker in [
+        "diagnostics_json", "metonic_quote_native/probe", "release_probe",
+      ] {
+      assert_false(generated.contains(marker))
+      assert_false(link.contains(marker))
+    }
+    assert_eq(
+      @process.run(
+        root +
+        "/native/.metonic-build/native/debug/build/local/metonic_quote_native/release_probe/release_probe.exe",
+        [native + "/QuoteBoard.exe"],
+        cwd=temporary,
+        no_console_window=true,
+      ),
+      0,
+    )
+    let (browser_repeat, _, _) = @process.collect_output(
+      moon,
+      ["run", "package-browser.mbtx", "--", browser],
+      cwd=root,
+      no_console_window=true,
+    )
+    assert_true(browser_repeat != 0)
+    let (native_repeat, _, _) = @process.collect_output(
+      moon,
+      ["run", "package-native.mbtx", "--", native],
+      cwd=root,
+      no_console_window=true,
+    )
+    assert_true(native_repeat != 0)
+    println(
+      "QUOTE_BOARD_PACKAGE_OK inventory relocation browser_js_wasmgc native_close development_exclusion overwrite_protection",
+    )
+  })
+}

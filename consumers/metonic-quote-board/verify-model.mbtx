@@ -9,6 +9,20 @@ async fn main {
   let root = @fs.realpath(".")
   let framework = root + "/.metonic/framework"
   let moon = framework + "/.tools/moonbit/bin/moon.exe"
+  for target in ["browser", "native"] {
+    assert_eq(
+      @process.run(
+        "mise",
+        [
+          "-C", framework, "exec", "--", moon, "run", "scripts/application-source.mbtx",
+          "--", "prepare", root, target,
+        ],
+        cwd=framework,
+        no_console_window=true,
+      ),
+      0,
+    )
+  }
   for
     (workspace, target) in [
       ("browser", "js"),

@@ -15,6 +15,21 @@ The source is pinned by `dependency.json`. It is an experimental source
 consumer, not a published Metonic package. Windows setup requires mise, Git,
 Visual Studio C++ build tools and the framework prerequisites.
 
+To extract only this consumer from a Metonic checkout into a new directory,
+create a short empty path first and run:
+
+```text
+mkdir C:\qbr
+git archive --format=zip --output=C:\qbr-source.zip HEAD:consumers/metonic-quote-board
+tar -xf C:\qbr-source.zip -C C:\qbr
+cd C:\qbr
+```
+
+On Windows with long paths disabled, a deeply nested checkout can make
+MoonBit's generated bootstrap paths exceed the 260-character limit. A short
+consumer path avoids that OS constraint; the build does not require a custom
+system setting.
+
 ```text
 mise trust
 mise install
@@ -29,6 +44,8 @@ mise run run:native
 mise run verify:model
 mise run verify:browser
 mise run verify:native
+mise exec -- moon run build.mbtx -- native-release-probe
+mise exec -- moon run verification/package.mbtx
 ```
 
 The browser output is `browser/.metonic-dist`; serve it over HTTP and select
@@ -45,9 +62,34 @@ or detail disappears. The status shows unsaved, saving, saved and failed states.
 Closing with unsaved text queues a save and waits for its acknowledgement. A
 failed or rejected write keeps the app open so Save note can retry it. This
 example uses an in-memory delayed storage fixture: it verifies save ordering
-and acknowledgements, but does not restore text after a process restart. A
-distribution package and the remaining end-to-end cases are tracked in
+and acknowledgements, but does not restore text after a process restart.
+Performance and resource baselines and final acceptance are tracked in
 [Issue #591](https://github.com/dijdzv/metonic/issues/591).
+
+To create distributable folders after both release builds, run the following
+from this directory with new output paths:
+
+```text
+mise exec -- moon run package-browser.mbtx -- output/browser
+mise exec -- moon run package-native.mbtx -- output/native
+```
+
+Each folder contains a file and license inventory in `package.json` and is
+independent of the source checkout. The package verification command above
+rebuilds neither target; it checks both release outputs, their inventories,
+JS/WasmGC browser behavior, a native launch from an unrelated directory,
+development-feature exclusion and overwrite protection. The native acceptance
+helper is a debug-only verification entry, not a shipped file. To update the
+framework dependency, change `dependency.json` to a reviewed commit, fetch
+that commit into `.metonic/framework` and check it out detached:
+
+```text
+git -C .metonic/framework fetch origin main
+git -C .metonic/framework checkout --detach <revision-from-dependency.json>
+```
+
+Then rerun the model, host and package checks. The current dependency is
+pinned source, not a published Metonic package.
 
 The model checks assert both A/B completion orders, rejection of an old D
 result after quantity changes, child removal/recreation during an unfinished

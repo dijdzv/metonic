@@ -1,0 +1,14 @@
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/process",
+  "moonbitlang/async/fs",
+  "moonbitlang/core/env",
+}
+
+pkgtype(kind: "executable")
+
+supported_targets = "native"
+
+options(
+  link: { "native": { "cc-link-flags": "user32.lib" } },
+)

@@ -10,14 +10,15 @@ async fn main {
   let args = @env.args()
   assert_true(
     args.length() == 2,
-    msg="usage: build.mbtx browser|browser-diagnostics|native|native-probe",
+    msg="usage: build.mbtx browser|browser-diagnostics|native|native-probe|native-release-probe",
   )
   let target = args[1]
   assert_true(
     target == "browser" ||
     target == "browser-diagnostics" ||
     target == "native" ||
-    target == "native-probe",
+    target == "native-probe" ||
+    target == "native-release-probe",
   )
   let root = @fs.realpath(".")
   let framework = root + "/.metonic/framework"
@@ -29,12 +30,18 @@ async fn main {
   }
   let entry = if target == "native-probe" {
     "probe"
+  } else if target == "native-release-probe" {
+    "release-probe"
   } else if target == "browser-diagnostics" {
     "diagnostics"
   } else {
     "main"
   }
-  let profile = if target == "native-probe" { "debug" } else { "release" }
+  let profile = if target == "native-probe" || target == "native-release-probe" {
+    "debug"
+  } else {
+    "release"
+  }
   assert_eq(
     @process.run(
       "mise",
