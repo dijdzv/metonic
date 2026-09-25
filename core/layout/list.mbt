@@ -13,6 +13,7 @@ pub struct VerticalList {
   mut extent : Int
   mut viewport : @view.Bounds
   mut placements : Array[Placement]
+  mut heights : Array[Int]
 }
 
 ///|
@@ -30,6 +31,7 @@ pub fn VerticalList::new(
     extent: 0,
     viewport: { x: 0, y: 0, width: 0, height: 0, },
     placements: [],
+    heights: [],
   })
 }
 
@@ -50,6 +52,20 @@ pub fn VerticalList::arrange(
   viewport : @view.Bounds,
   references : Array[@semantics.NodeRef],
 ) -> Result[Unit, String] {
+  self.arrange_heights(
+    viewport,
+    references,
+    references.map(_ => self.row_height),
+  )
+}
+
+///|
+pub fn VerticalList::arrange_heights(
+  self : VerticalList,
+  viewport : @view.Bounds,
+  references : Array[@semantics.NodeRef],
+  heights : Array[Int],
+) -> Result[Unit, String] {
   if viewport.x < 0 ||
     viewport.y < 0 ||
     viewport.width < 1 ||
@@ -58,14 +74,21 @@ pub fn VerticalList::arrange(
     viewport.y > 1000000 ||
     viewport.width > 1024 ||
     viewport.height > 1024 ||
-    references.length() > 100000 {
+    references.length() > 100000 ||
+    references.length() != heights.length() {
     return Err("invalid_list_bounds")
+  }
+  for height in heights {
+    if height <= 0 || height > 1024 {
+      return Err("invalid_list_metrics")
+    }
   }
   if viewport == self.viewport &&
     references.length() == self.placements.length() {
     let mut unchanged = true
     for index, reference in references {
-      if self.placements[index].reference != reference {
+      if self.placements[index].reference != reference ||
+        self.heights[index] != heights[index] {
         unchanged = false
         break
       }
@@ -88,15 +111,18 @@ pub fn VerticalList::arrange(
     seen[key] = true
   }
   let tree : @engine.ChicleTree[Unit] = @engine.ChicleTree()
-  let row_style = @style.Style::default()
-    .with_size(
-      @geometry.Size(
-        width=@style.DimPercent(1.0),
-        height=@style.DimLength(self.row_height.to_double()),
-      ),
+  let nodes = heights.map(height => {
+    tree.new_leaf(
+      @style.Style::default()
+      .with_size(
+        @geometry.Size(
+          width=@style.DimPercent(1.0),
+          height=@style.DimLength(height.to_double()),
+        ),
+      )
+      .with_flex_shrink(0.0),
     )
-    .with_flex_shrink(0.0)
-  let nodes = references.map(_ => tree.new_leaf(row_style))
+  })
   let root = tree.new_with_children(
     @style.Style::default()
     .with_flex_direction(@style.FlexColumn)
@@ -140,6 +166,7 @@ pub fn VerticalList::arrange(
     self.extent = extent
     self.offset = offset
     self.placements = placements
+    self.heights = heights.copy()
     Ok(())
   } catch {
     _ => Err("list_layout_failed")

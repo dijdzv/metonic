@@ -1,5 +1,4 @@
 import {
-  "local/p0/core/layout",
   "local/p0/core/view",
   "local/p0/core/application" @app,
   "local/p0/core/application_task" @task,
