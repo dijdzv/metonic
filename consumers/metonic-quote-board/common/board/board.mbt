@@ -50,6 +50,8 @@ priv struct Board {
   wait : async (Int) -> Unit
   rate_result : (String) -> Result[Int, String]
   quote_result : (QuoteInput) -> Result[Int, String]
+  diagnostics : @async_state.TraceRegistry?
+  trace_owner : Int?
   mut task_control : @task.TaskControl?
   mut size : (Int, Int)
   mut error : String?
@@ -58,6 +60,7 @@ priv struct Board {
 ///|
 priv struct ItemChild {
   key : String
+  trace_owner : Int?
   cycle : @reactive.Signal[@async_state.Cycle]
   detail : @async_state.Source[String, String]
   stock : @async_state.Source[String, Int]
@@ -91,6 +94,24 @@ fn Board::new_item(
   }
   let item : ItemChild = {
     key,
+    trace_owner: if self.diagnostics is Some(registry) {
+      let owner_id = registry
+        .track_owner(
+          owner.scope(),
+          self.trace_owner,
+          @async_state.ComponentOwner,
+          owner.generation(),
+        )
+        .unwrap()
+      let key_id = key => if key == "amber" { 1 } else { 2 }
+      if !registry.track_source(detail, owner_id, key_id) ||
+        !registry.track_source(stock, owner_id, key_id) {
+        abort("quote board item diagnostics registration failed")
+      }
+      Some(owner_id)
+    } else {
+      None
+    },
     cycle: @reactive.Signal::new(owner.scope(), @async_state.Cycle::new()),
     detail,
     stock,
@@ -136,6 +157,24 @@ fn ItemChild::show_detail(self : ItemChild, board : Board) -> Bool {
         },
         error => error,
       )
+      if board.diagnostics is Some(registry) {
+        let owner_id = registry
+          .track_owner(
+            owner.scope(),
+            self.trace_owner,
+            @async_state.ComponentOwner,
+            owner.generation(),
+          )
+          .unwrap()
+        if !quote.track_source(registry, owner_id, input => {
+            input.quantity * 2 + (if self.key == "amber" { 1 } else { 0 })
+          }) ||
+          !registry.track_derived(owner.scope(), owner_id, owner_id, () => {
+            quote.current()
+          }) {
+          abort("quote board downstream diagnostics registration failed")
+        }
+      }
       let display = board.publications.register(owner.scope(), () => {
         let currency = board.currency.get()
         let current = quote.current()
@@ -421,13 +460,19 @@ fn Board::view(self : Board) -> Array[@app.Control] {
 pub fn create_with_rate(
   wait : async (Int) -> Unit,
   rate_result : (String) -> Result[Int, String],
+  diagnostics? : @async_state.TraceRegistry? = None,
 ) -> @app.Application {
   let stored : Ref[SaveSnapshot?] = Ref(None)
-  create_with_save(wait, rate_result, snapshot => {
-    wait(800)
-    stored.val = Some(snapshot)
-    Ok(())
-  })
+  create_with_save(
+    wait,
+    rate_result,
+    snapshot => {
+      wait(800)
+      stored.val = Some(snapshot)
+      Ok(())
+    },
+    diagnostics~,
+  )
 }
 
 ///|
@@ -435,16 +480,23 @@ pub fn create_with_save(
   wait : async (Int) -> Unit,
   rate_result : (String) -> Result[Int, String],
   save : async (SaveSnapshot) -> Result[Unit, String],
+  diagnostics? : @async_state.TraceRegistry? = None,
 ) -> @app.Application {
   let failed_once = Ref(false)
-  create_with_quote_result(wait, rate_result, save, (name, stock, quantity) => {
-    if name == "Blue stool" && quantity == 4 && !failed_once.val {
-      failed_once.val = true
-      Err("quote service unavailable")
-    } else {
-      Ok((100 + stock) * quantity)
-    }
-  })
+  create_with_quote_result(
+    wait,
+    rate_result,
+    save,
+    (name, stock, quantity) => {
+      if name == "Blue stool" && quantity == 4 && !failed_once.val {
+        failed_once.val = true
+        Err("quote service unavailable")
+      } else {
+        Ok((100 + stock) * quantity)
+      }
+    },
+    diagnostics~,
+  )
 }
 
 ///|
@@ -453,6 +505,7 @@ pub fn create_with_quote_result(
   rate_result : (String) -> Result[Int, String],
   save : async (SaveSnapshot) -> Result[Unit, String],
   quote_result : (String, Int, Int) -> Result[Int, String],
+  diagnostics? : @async_state.TraceRegistry? = None,
 ) -> @app.Application {
   let graph = @reactive.Graph::new()
   let scope = @reactive.Scope::root(graph)
@@ -461,6 +514,23 @@ pub fn create_with_quote_result(
   let currency = @reactive.Signal::new(scope, "JPY")
   let rate_cycle = @reactive.Signal::new(scope, @async_state.Cycle::new())
   let rate : @async_state.Source[String, Int] = @async_state.Source::new(scope)
+  let trace_owner = if diagnostics is Some(registry) {
+    let owner_id = registry
+      .track_owner(scope, None, @async_state.ApplicationOwner, 0)
+      .unwrap()
+    if !registry.track_source(rate, owner_id, key => {
+        if key == "USD" {
+          1
+        } else {
+          2
+        }
+      }) {
+      abort("quote board currency diagnostics registration failed")
+    }
+    Some(owner_id)
+  } else {
+    None
+  }
   let downstreams = @async_state.DownstreamRegistry::new(scope)
   let publications = @async_state.PublicationRegistry::new(scope)
   let serials = @async_state.SerialRegistry::new(scope)
@@ -489,6 +559,8 @@ pub fn create_with_quote_result(
     wait,
     rate_result,
     quote_result: input => quote_result(input.name, input.stock, input.quantity),
+    diagnostics,
+    trace_owner,
     task_control: None,
     size: (720, 500),
     error: None,
@@ -571,6 +643,9 @@ pub fn create_with_quote_result(
 }
 
 ///|
-pub fn create(wait : async (Int) -> Unit) -> @app.Application {
-  create_with_rate(wait, _ => Ok(2))
+pub fn create(
+  wait : async (Int) -> Unit,
+  diagnostics? : @async_state.TraceRegistry? = None,
+) -> @app.Application {
+  create_with_rate(wait, _ => Ok(2), diagnostics~)
 }

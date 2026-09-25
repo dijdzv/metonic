@@ -60,6 +60,20 @@ headless Chromium on JS and WasmGC, saving stage screenshots in the ignored
 checks visible states, rendered pixels, operation dispatch and cleanup. These
 checks do not establish physical IME behavior or clean-machine installation.
 
+For development diagnostics, build the separate browser entry, verify both
+targets, then rebuild the normal browser entry before packaging:
+
+```text
+mise exec -- moon run build.mbtx -- browser-diagnostics
+mise exec -- node verification/browser.mjs --diagnostics
+mise run verify:browser
+```
+
+The development entry exposes bounded owner, Source, derived-state and Driver
+events without recording note text or failure messages. The normal browser
+entry has no diagnostics export; its verification checks that exclusion. The
+native probe uses the same optional registry through the public window host.
+
 The generated `moon.work` files include framework and prepared dependency
 packages. Scope formatting to application paths, for example
 `moon -C browser fmt ../common/board app/main`; workspace-wide formatting would

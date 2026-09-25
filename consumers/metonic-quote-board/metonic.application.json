@@ -8,6 +8,10 @@
         "main": {
           "entry_package": "app/main",
           "artifact": "local/metonic_quote_browser/main"
+        },
+        "diagnostics": {
+          "entry_package": "app/diagnostics",
+          "artifact": "local/metonic_quote_browser/diagnostics"
         }
       }
     },

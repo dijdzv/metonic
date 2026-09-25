@@ -1,14 +1,21 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { mkdir, stat } from 'node:fs/promises';
+import { mkdir, readFile, stat } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { dirname, extname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 
 const consumer = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const diagnosticsMode = process.argv.includes('--diagnostics');
 const dist = join(consumer, 'browser', '.metonic-dist');
+if (!diagnosticsMode) {
+  for (const artifact of ['app.mjs', 'app.wasm']) {
+    assert(!(await readFile(join(dist, artifact))).includes('diagnostics_json'),
+      `${artifact}: development diagnostics export reached production`);
+  }
+}
 const output = join(consumer, 'verification-output');
 const mime = new Map([
   ['.html', 'text/html; charset=utf-8'],
@@ -52,8 +59,12 @@ try {
     page.on('pageerror', error => errors.push(error.message));
     await page.goto(`${base}?target=${target}`);
     await page.waitForFunction(() => document.querySelector('#status')?.textContent?.startsWith('Ready:'), null, { timeout: 30000 });
+    if (!diagnosticsMode) {
+      assert.equal(await page.evaluate(() => window.metonicQuoteDiagnostics), undefined);
+    }
     assert.equal(await page.locator('#controls button').count(), 8);
     const canvas = page.locator('#canvas');
+    const trace = () => page.evaluate(() => window.metonicQuoteDiagnostics?.());
     const waitLines = (detail, stock, quote) => page.waitForFunction(expected => {
       const lines = [...document.querySelectorAll('#controls .gpu-text')].map(node => node.textContent);
       return lines[1] === expected[0] && lines[2] === expected[1] && lines[3] === expected[2];
@@ -63,9 +74,24 @@ try {
       return createHash('sha256').update(bytes).digest('hex');
     };
     await waitLines('Detail: Amber lamp', 'Stock: 12', 'Shipping: 112 for 1');
+    if (diagnosticsMode) {
+      const snapshot = await trace();
+      assert.equal(snapshot.owners.length, 3);
+      assert.equal(snapshot.sources.length, 4);
+      assert.equal(snapshot.derived.length, 1);
+      assert.equal(snapshot.derived[0].phase, 'ready');
+    }
     const amber = await shot('amber-ready');
     await page.getByRole('button', { name: 'Amber lamp' }).click();
     await waitLines('Detail: loading', 'Stock: loading', 'Shipping: loading (previous 112)');
+    if (diagnosticsMode) {
+      await page.getByRole('button', { name: 'Amber lamp' }).click();
+      await page.waitForFunction(() => {
+        const events = window.metonicQuoteDiagnostics?.().events ?? [];
+        return events.some(event => event.kind === 'cancel_requested')
+          && events.some(event => event.kind === 'cleanup_joined');
+      }, null, { timeout: 5000 });
+    }
     await waitLines('Detail: loading', 'Stock: 12', 'Shipping: loading (previous 112)');
     const amberPartial = await shot('amber-stock-first');
     await waitLines('Detail: Amber lamp', 'Stock: 12', 'Shipping: 112 for 1');
@@ -77,6 +103,13 @@ try {
     const partial = await shot('blue-partial');
     assert.notEqual(partial, pending, `${target}: detail-first completion did not redraw`);
     await waitLines('Detail: Blue stool', 'Stock: 7', 'Shipping: 107 for 1');
+    if (diagnosticsMode) {
+      const snapshot = await trace();
+      assert.equal(snapshot.owners.length, 3);
+      assert.equal(snapshot.sources.length, 4);
+      assert(snapshot.events.some(event => event.kind === 'owner_disposed'));
+      assert(snapshot.events.some(event => event.kind === 'source_disposed'));
+    }
     const blue = await shot('blue-ready');
     assert.notEqual(blue, partial, `${target}: stock and quote completion did not redraw`);
     await page.getByRole('button', { name: 'Quantity +' }).click();
@@ -105,6 +138,12 @@ try {
     await waitLines('Detail: Blue stool', 'Stock: 7', 'Shipping: 642 USD for 3');
     await page.getByRole('button', { name: 'Quantity +' }).click();
     await waitLines('Detail: Blue stool', 'Stock: 7', 'Shipping: failed for blue x4');
+    if (diagnosticsMode) {
+      const snapshot = await trace();
+      assert(snapshot.events.some(event => event.kind === 'expected_failure'));
+      assert.equal(snapshot.derived[0].phase, 'failed');
+      assert(!JSON.stringify(snapshot).includes('quote service unavailable'));
+    }
     assert.equal(await page.getByRole('button', { name: 'Retry quote' }).count(), 1);
     await page.waitForTimeout(300);
     await waitLines('Detail: Blue stool', 'Stock: 7', 'Shipping: failed for blue x4');
@@ -129,13 +168,20 @@ try {
     assert.equal(await note.inputValue(), 'newer draft');
     await note.fill('close draft');
     await waitNote('Note: unsaved revision 3');
+    if (diagnosticsMode) {
+      const snapshot = await trace();
+      assert(!JSON.stringify(snapshot).includes('close draft'));
+      assert(!JSON.stringify(snapshot).includes('newer draft'));
+    }
     await page.getByRole('button', { name: 'Stop' }).click();
     assert.notEqual(await page.locator('#status').textContent(), 'Stopped.');
     await page.waitForFunction(() => document.querySelector('#status')?.textContent === 'Stopped.', null, { timeout: 5000 });
     assert.deepEqual(errors, [], `${target}: browser errors`);
     await page.close();
   }
-  console.log('QUOTE_BOARD_BROWSER_OK targets=js,wasm-gc');
+  console.log(diagnosticsMode
+    ? 'QUOTE_BOARD_BROWSER_DIAGNOSTICS_OK targets=js,wasm-gc'
+    : 'QUOTE_BOARD_BROWSER_OK targets=js,wasm-gc');
 } finally {
   await browser.close();
   await new Promise(resolveClose => server.close(resolveClose));

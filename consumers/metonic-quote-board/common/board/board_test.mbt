@@ -9,6 +9,107 @@ fn button(app : @app.Application, index : Int) -> @semantics.NodeRef {
 }
 
 ///|
+async test "development diagnostics explain rejected D without note contents" {
+  let diagnostics = @async_state.TraceRegistry::new(32)
+  let app = create(_ => (), diagnostics=Some(diagnostics))
+  (app.connect_tasks)(@task.task_control(_ => ()))
+  let initial = (app.initialize)().unwrap()
+  initial.invalidate()
+  assert_eq(diagnostics.owners().length(), 3)
+  assert_eq(diagnostics.sources().length(), 4)
+  for request in initial.members() {
+    assert_eq(request.prepare().unwrap().run().apply(), @task.Changed)
+  }
+  assert_true(app.reconcile_downstreams(_ => false))
+  assert_eq(diagnostics.derived().length(), 1)
+  assert_eq(diagnostics.derived()[0].phase, "blocked")
+  assert_eq(
+    diagnostics.sources().filter(source => source.phase == "pending").length(),
+    0,
+  )
+  assert_true(
+    diagnostics.snapshot_json().stringify().contains("admission_rejected"),
+  )
+  let note = app.default_input.unwrap()
+  ignore(
+    (app.edited)({
+      target: note,
+      text: "private note marker",
+      revision: @semantics.revision(app.editor),
+    }),
+  )
+  assert_false(
+    diagnostics.snapshot_json().stringify().contains("private note marker"),
+  )
+  (app.dispose)()
+  assert_eq(diagnostics.owners().length(), 0)
+  assert_eq(diagnostics.sources().length(), 0)
+}
+
+///|
+async test "real Driver capacity denial leaves D blocked until retry" {
+  let diagnostics = @async_state.TraceRegistry::new(32)
+  let app = create(_ => (), diagnostics=Some(diagnostics))
+  let driver = @driver.driver()
+  assert_true(
+    driver.observe((operation, event) => {
+      diagnostics.driver_event(operation, event)
+    }),
+  )
+  (app.connect_tasks)(
+    @task.task_control(operation => ignore(driver.cancel_operation(operation))),
+  )
+  let initial = (app.initialize)().unwrap()
+  initial.invalidate()
+  for request in initial.members() {
+    assert_eq(request.prepare().unwrap().run().apply(), @task.Changed)
+  }
+  for _ in 0..<16 {
+    assert_true(
+      driver.submit(@task.cancel(() => (), operation=@task.Operation::new())),
+    )
+  }
+  assert_true(app.reconcile_downstreams(request => driver.submit(request)))
+  let denial = diagnostics.events().last().unwrap()
+  assert_eq(denial.kind, @async_state.AdmissionRejected)
+  assert_eq(denial.denial, Some(@task.PendingCapacity))
+  assert_eq(diagnostics.derived()[0].phase, "blocked")
+  assert_eq(
+    diagnostics.sources().filter(source => source.phase == "pending").length(),
+    0,
+  )
+  assert_false(
+    app.reconcile_downstreams(_ => abort("D repeated rejected admission")),
+  )
+  driver.close()
+  let retry = (app.view)()
+  .iter()
+  .find_first(control => control.element.text == "Retry quote")
+  .unwrap().element.reference.unwrap()
+  assert_true((app.activate)(retry) is None)
+  let requests : Array[@task.Request] = []
+  assert_true(
+    app.reconcile_downstreams(request => {
+      requests.push(request)
+      request.invalidate()
+      true
+    }),
+  )
+  assert_eq(requests.length(), 1)
+  assert_eq(
+    diagnostics.sources().filter(source => source.phase == "pending").length(),
+    1,
+  )
+  assert_eq(
+    requests[0].members()[0].prepare().unwrap().run().apply(),
+    @task.Changed,
+  )
+  ignore(app.publish())
+  assert_eq(line(app, 7), "Shipping: 112 for 1")
+  (app.dispose)()
+}
+
+///|
 async test "currency completes before the item without admitting D early" {
   let app = create(_ => ())
   (app.connect_tasks)(@task.task_control(_ => ()))
