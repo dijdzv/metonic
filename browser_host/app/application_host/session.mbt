@@ -437,6 +437,7 @@ fn Session::resize(self : Session, width : Int, height : Int) -> Int {
           @app.Checkbox => Some("gpu-button")
           @app.List => Some("gpu-list")
           @app.ListItem => Some("gpu-list-item")
+          @app.Status => Some("gpu-status")
           @app.Text => None
         },
       })
@@ -514,6 +515,13 @@ fn Session::render(self : Session) -> Int {
         node.enabled,
       )
     }
+    if control.kind == @app.Status &&
+      control.element.reference is Some(reference) &&
+      self.bindings.iter().find_first(binding => binding.reference == reference)
+      is Some(binding) &&
+      @semantics.node(self.application.editor, reference) is Ok(node) {
+      @dom_view.status(binding.element_id, node.name)
+    }
     if control.kind is @app.Input(..) &&
       control.element.reference is Some(reference) {
       guard self.editors
@@ -572,6 +580,10 @@ fn Session::render(self : Session) -> Int {
             control.element.reference is Some(reference) &&
             @semantics.node(self.application.editor, reference) is Ok(node) {
             @renderer.ListItem(selected=node.selected, enabled=node.enabled)
+          } else if control.kind == @app.Status &&
+            control.element.reference is Some(reference) &&
+            @semantics.node(self.application.editor, reference) is Ok(node) {
+            @renderer.Status(error=node.invalid)
           } else {
             @renderer.Text
           },

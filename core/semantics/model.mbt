@@ -5,6 +5,7 @@ pub(all) enum Role {
   Checkbox
   List
   ListItem
+  Status
   TextInput
 } derive(Debug, Eq)
 
@@ -161,7 +162,7 @@ pub fn focus(tree : Tree, reference : NodeRef) -> String {
     return error
   }
   let node = extra_node(tree, id).unwrap()
-  if node.role == Label || node.role == List {
+  if node.role == Label || node.role == List || node.role == Status {
     return "unsupported_action"
   }
   if !node.enabled {
@@ -448,7 +449,7 @@ pub fn set_invalid(tree : Tree, reference : NodeRef, invalid : Bool) -> String {
     return error
   }
   let node = extra_node(tree, id).unwrap()
-  if node.role != Checkbox {
+  if node.role != Checkbox && node.role != Status {
     return "unsupported_action"
   }
   if node.invalid != invalid {
@@ -626,6 +627,11 @@ pub fn add_checkbox(tree : Tree, name : String, checked : Bool) -> NodeRef? {
 ///|
 pub fn add_list(tree : Tree, name : String) -> NodeRef? {
   add_node(tree, name, List, "")
+}
+
+///|
+pub fn add_status(tree : Tree, message : String) -> NodeRef? {
+  add_node(tree, message, Status, "")
 }
 
 ///|

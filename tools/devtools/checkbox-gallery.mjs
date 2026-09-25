@@ -64,6 +64,12 @@ export async function verifyCheckboxGallery(browser, baseUrl, outputDir) {
       await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
       const topAfter = await option('Item 11').evaluate(element => element.getBoundingClientRect().top);
       assert.notEqual(topAfter, topBefore, 'List wheel did not move row placements');
+      const status = page.locator('#controls').getByRole('status');
+      assert.equal(await status.count(), 1);
+      assert.equal(await status.textContent(), 'Quote: waiting');
+      await page.getByRole('button', { name: 'Retry', exact: true }).click();
+      assert.equal(await status.textContent(), 'Quote: loading');
+      assert.equal(await status.getAttribute('aria-live'), 'polite');
 
       await page.locator('#stop').click();
       assert.equal(await page.locator('#controls button').count(), 0);

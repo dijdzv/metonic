@@ -83,6 +83,19 @@ pub fn list_item(
 }
 
 ///|
+pub fn status(id : String, message : String) -> Unit {
+  let child = element(id)
+  if child.text_content() != Some(message) {
+    text(child, message)
+  }
+  child.set_attribute("role", "status")
+  child.set_attribute("aria-live", "polite")
+  child.set_attribute("aria-atomic", "true")
+  host_style(child, "color", "transparent")
+  host_style(child, "pointer-events", "none")
+}
+
+///|
 pub fn on_keydown(
   child : @input_dom.HTMLElement,
   callback : (String) -> Bool,

@@ -4,6 +4,7 @@ pub(all) enum Surface {
   Control
   Checkbox(checked~ : Bool, enabled~ : Bool, invalid~ : Bool)
   ListItem(selected~ : Bool, enabled~ : Bool)
+  Status(error~ : Bool)
 } derive(Eq)
 
 ///|

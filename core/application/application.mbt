@@ -5,6 +5,7 @@ pub(all) enum Kind {
   Checkbox
   List
   ListItem
+  Status
   Input(single_line~ : Bool)
 } derive(Eq)
 
@@ -49,6 +50,15 @@ pub fn[K] list_item(
   clip? : @view.Bounds? = None,
 ) -> Control {
   { element: widget.element(bounds), kind: ListItem, clip, }
+}
+
+///|
+pub fn status(
+  widget : @component.UiStatus,
+  bounds : @view.Bounds,
+  clip? : @view.Bounds? = None,
+) -> Control {
+  { element: widget.element(bounds), kind: Status, clip, }
 }
 
 ///|

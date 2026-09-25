@@ -91,6 +91,14 @@ pub fn from_application(app : @portable.Application) -> Application {
                 .unwrap()
               @renderer.ListItem(selected=node.selected, enabled=node.enabled)
             }
+            @portable.Status => {
+              let reference = control.element.reference.unwrap()
+              let node = nodes
+                .iter()
+                .find_first(node => node.reference == reference)
+                .unwrap()
+              @renderer.Status(error=node.invalid)
+            }
             _ => @renderer.Text
           }
           @renderer.item(control.element, surface~, clip=control.clip)
@@ -113,7 +121,9 @@ pub fn from_application(app : @portable.Application) -> Application {
     },
     focus_order: () => {
       (app.view)().filter_map(control => {
-        if control.kind == @portable.Text || control.kind == @portable.List {
+        if control.kind == @portable.Text ||
+          control.kind == @portable.List ||
+          control.kind == @portable.Status {
           None
         } else {
           control.element.reference
@@ -134,7 +144,9 @@ pub fn from_application(app : @portable.Application) -> Application {
     navigation_blocked: () => false,
     navigate_unhandled: (_, dy) => {
       guard app.components is Some(root) else { return false }
-      guard @semantics.snapshot(app.editor).iter().find_first(node => node.focused)
+      guard @semantics.snapshot(app.editor)
+        .iter()
+        .find_first(node => node.focused)
         is Some(node) else {
         return false
       }
@@ -143,7 +155,7 @@ pub fn from_application(app : @portable.Application) -> Application {
       } else if dy >= 1000000 {
         @component.Last
       } else if dy < 0 {
-        @component.Previous
+        @component.ListMove::Previous
       } else {
         @component.Next
       }

@@ -85,6 +85,7 @@ pub struct UiRoot {
   priv actions : Array[UiAction]
   priv checks : Array[UiCheck]
   priv lists : Array[UiListAction]
+  priv statuses : Array[UiStatusBinding]
   priv labels : Array[UiText]
   priv edits : Array[UiEdit]
 }
@@ -136,6 +137,7 @@ pub fn UiRoot::new(scope : @reactive.Scope, tree : @semantics.Tree) -> UiRoot {
     actions: [],
     checks: [],
     lists: [],
+    statuses: [],
     labels: [],
     edits: [],
   }
@@ -203,6 +205,12 @@ fn UiOwner::check_key(self : UiOwner, key : String) -> Unit {
   }
   for list in self.root.lists {
     if physical_equal(list.owner.scope(), self.child.scope()) && list.key == key {
+      abort("duplicate UI control key")
+    }
+  }
+  for status in self.root.statuses {
+    if physical_equal(status.owner.scope(), self.child.scope()) &&
+      status.key == key {
       abort("duplicate UI control key")
     }
   }
@@ -574,6 +582,24 @@ pub fn UiRoot::synchronize(
       node.name != text &&
       @semantics.set_name(self.tree, label.reference, text) == "" {
       changed = true
+    }
+  }
+  for status in self.statuses {
+    if !status.owner.owns(status.reference) {
+      continue
+    }
+    let next = self.scope.graph().read_only(() => status.value.get())
+    if @semantics.node(self.tree, status.reference) is Ok(node) {
+      let message = next.message()
+      if node.name != message &&
+        @semantics.set_name(self.tree, status.reference, message) == "" {
+        changed = true
+      }
+      let invalid = next.is_error()
+      if node.invalid != invalid &&
+        @semantics.set_invalid(self.tree, status.reference, invalid) == "" {
+        changed = true
+      }
     }
   }
   for edit in self.edits {

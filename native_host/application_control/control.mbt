@@ -36,6 +36,7 @@ fn controls(state : @host.Snapshot) -> Json {
           @semantics.Checkbox => "checkbox"
           @semantics.List => "list"
           @semantics.ListItem => "list_item"
+          @semantics.Status => "status"
           @semantics.TextInput => "text_input"
         },
         "name": node.name,
