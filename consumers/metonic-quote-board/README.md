@@ -31,13 +31,16 @@ The browser output is `browser/.metonic-dist`; serve it over HTTP and select
 `?target=js` or `?target=wasm-gc`. The native release executable is under
 `native/.metonic-build/native/release/build/local/metonic_quote_native/main`.
 Source builds invoke the pinned framework's public `application-source.mbtx`
-entry and do not edit its internal workspace or host packages. This initial
-application path does not yet include independent currency, note saving,
-dynamic child removal/recreation or a distribution package; those remain in
-the parent [Issue #591](https://github.com/dijdzv/metonic/issues/591).
+entry and do not edit its internal workspace or host packages. The selected
+item owns detail and stock requests; its keyed detail child owns the shipping
+quote and display publication. `Toggle detail` removes or recreates that child
+while keeping the selected item's completed data. Independent currency, note
+saving and a distribution package remain in the parent
+[Issue #591](https://github.com/dijdzv/metonic/issues/591).
 
-The model checks assert both A/B completion orders and rejection of an old D
-result after quantity changes. The browser check runs a real HTTP server and
+The model checks assert both A/B completion orders, rejection of an old D
+result after quantity changes, and child removal/recreation during an unfinished
+quote. The browser check runs a real HTTP server and
 headless Chromium on JS and WasmGC, saving stage screenshots in the ignored
 `verification-output` directory. The native check owns a hidden window and
 checks visible states, rendered pixels, operation dispatch and cleanup. These
