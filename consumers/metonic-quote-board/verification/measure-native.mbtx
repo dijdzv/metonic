@@ -1,0 +1,76 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+}
+
+///|
+async fn main {
+  let root = @fs.realpath(".")
+  let output = root + "/verification-output"
+  if !@fs.exists(output) {
+    @fs.mkdir(output)
+  }
+  let executable = root +
+    "/native/.metonic-build/native/debug/build/local/metonic_quote_native/measure/measure.exe"
+  for sample in 0..<4 {
+    let log_path = output + "/native-measure-" + sample.to_string() + ".log"
+    let log = @process.redirect_to_file(log_path)
+    let code = @async.with_timeout(60000, () => {
+      @process.run(
+        executable,
+        [sample.to_string()],
+        stdout=log,
+        stderr=log,
+        no_console_window=true,
+      )
+    })
+    log.close()
+    assert_eq(code, 0, msg="native measurement failed: " + log_path)
+    let content = @fs.read_file(log_path).text()
+    assert_true(
+      content.contains(
+        "QUOTE_BOARD_NATIVE_MEASUREMENT_SAMPLE_OK sample=" + sample.to_string(),
+      ),
+      msg="native measurement incomplete: " + log_path,
+    )
+    println(
+      "QUOTE_BOARD_NATIVE_MEASURE sample=" + sample.to_string() + " result=ok",
+    )
+  }
+  let observer = root +
+    "/native/.metonic-build/native/debug/build/local/metonic_quote_native/release_probe/release_probe.exe"
+  let release = root +
+    "/native/.metonic-build/native/release/build/local/metonic_quote_native/main/main.exe"
+  for sample in 0..<4 {
+    let log_path = output +
+      "/native-release-resource-" +
+      sample.to_string() +
+      ".log"
+    let log = @process.redirect_to_file(log_path)
+    let code = @async.with_timeout(60000, () => {
+      @process.run(
+        observer,
+        ["--measure", release],
+        stdout=log,
+        stderr=log,
+        no_console_window=true,
+      )
+    })
+    log.close()
+    assert_eq(code, 0, msg="native release resource probe failed: " + log_path)
+    let content = @fs.read_file(log_path).text()
+    assert_true(
+      content.contains("QUOTE_BOARD_NATIVE_RELEASE_RESOURCE stage=after_async") &&
+      content.contains("GPU_OWNERSHIP_RELEASED") &&
+      content.contains("WINDOW_CLEANUP_OK"),
+      msg="native release resource result incomplete: " + log_path,
+    )
+    println(
+      "QUOTE_BOARD_NATIVE_RELEASE_RESOURCE sample=" +
+      sample.to_string() +
+      " result=ok",
+    )
+  }
+  println("QUOTE_BOARD_NATIVE_MEASUREMENT_OK warmup=1 measured=3")
+}

@@ -27,6 +27,10 @@
           "entry_package": "probe",
           "artifact": "local/metonic_quote_native/probe"
         },
+        "measure": {
+          "entry_package": "measure",
+          "artifact": "local/metonic_quote_native/measure"
+        },
         "release-probe": {
           "entry_package": "release_probe",
           "artifact": "local/metonic_quote_native/release_probe"

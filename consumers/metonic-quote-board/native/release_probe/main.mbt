@@ -31,6 +31,50 @@ extern "C" fn post(
 ) -> Int = "PostMessageW"
 
 ///|
+extern "C" fn open_process(
+  access : UInt,
+  inherit_handle : Int,
+  pid : Int,
+) -> UInt64 = "OpenProcess"
+
+///|
+extern "C" fn close_handle(handle : UInt64) -> Int = "CloseHandle"
+
+///|
+#borrow(counters)
+extern "C" fn process_memory(
+  process : UInt64,
+  counters : FixedArray[UInt64],
+  size : UInt,
+) -> Int = "K32GetProcessMemoryInfo"
+
+///|
+#borrow(count)
+extern "C" fn process_handles(process : UInt64, count : FixedArray[Int]) -> Int = "GetProcessHandleCount"
+
+///|
+fn record_resources(pid : Int, stage : String) -> Unit raise {
+  let process = open_process(0x0410U, 0, pid)
+  assert_true(process != 0UL)
+  let counters = FixedArray::make(10, 0UL)
+  counters[0] = 80UL
+  let count = FixedArray::make(1, 0)
+  assert_true(process_memory(process, counters, 80U) != 0)
+  assert_true(process_handles(process, count) != 0)
+  assert_true(close_handle(process) != 0)
+  println(
+    "QUOTE_BOARD_NATIVE_RELEASE_RESOURCE stage=" +
+    stage +
+    " working_set_bytes=" +
+    counters[2].to_string() +
+    " private_bytes=" +
+    counters[9].to_string() +
+    " handles=" +
+    count[0].to_string(),
+  )
+}
+
+///|
 fn locate(pid : Int) -> UInt64 {
   let id = FixedArray::make(1, 0)
   let mut cursor = 0UL
@@ -74,8 +118,12 @@ async fn click(window : UInt64, x : Int, y : Int) -> Unit {
 ///|
 async fn main {
   let args = @env.args()
-  assert_eq(args.length(), 2, msg="usage: release_probe.exe <QuoteBoard.exe>")
-  let executable = @fs.realpath(args[1])
+  let measure = args.length() == 3 && args[1] == "--measure"
+  assert_true(
+    args.length() == 2 || measure,
+    msg="usage: release_probe.exe [--measure] <QuoteBoard.exe>",
+  )
+  let executable = @fs.realpath(args[if measure { 2 } else { 1 }])
   let temporary = @fs.tmpdir(prefix="metonic-quote-package-")
   let resolved = @fs.realpath(temporary)
   defer {
@@ -101,10 +149,16 @@ async fn main {
         window = locate(child.pid)
         @async.sleep(50)
       }
+      if measure {
+        record_resources(child.pid, "window_ready")
+      }
       click(window, 170, 32)
       click(window, 170, 76)
       @async.sleep(1400)
       assert_true(child.try_wait() == None)
+      if measure {
+        record_resources(child.pid, "after_async")
+      }
       send(window, 0x0010U, 0UL, 0L)
       assert_eq(child.wait(), 0)
     }

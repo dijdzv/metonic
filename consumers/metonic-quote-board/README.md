@@ -63,8 +63,11 @@ Closing with unsaved text queues a save and waits for its acknowledgement. A
 failed or rejected write keeps the app open so Save note can retry it. This
 example uses an in-memory delayed storage fixture: it verifies save ordering
 and acknowledgements, but does not restore text after a process restart.
-Performance and resource baselines and final acceptance are tracked in
-[Issue #591](https://github.com/dijdzv/metonic/issues/591).
+The repeatable operation, resource and artifact-size measurements are recorded
+in [Phase 5 board measurements](../../docs/verification/phase5-quote-board-measurements.md).
+Run `mise run measure:browser` and `mise run measure:native` after building the
+pinned source; both use one warmup and three measured samples. Final consumer
+acceptance is tracked in [Issue #591](https://github.com/dijdzv/metonic/issues/591).
 
 To create distributable folders after both release builds, run the following
 from this directory with new output paths:
