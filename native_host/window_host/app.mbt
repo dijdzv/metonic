@@ -63,6 +63,7 @@ struct App {
   events : @aqueue.Queue[Event]
   hooks : Hooks
   host : @host_application.Application
+  mut publication_submit : ((@task.Request) -> Bool)?
   clipboard : @text_clipboard.Backend
   diagnostics : Diagnostics
   mut composition : @semantics.Composition?
@@ -440,7 +441,9 @@ fn App::draw(self : App) -> Unit raise Error {
 
 ///|
 fn App::publish(self : App) -> Bool {
-  (self.host.publication_round)()
+  (self.host.publication_round)(request => {
+    self.publication_submit.map(submit => submit(request)).unwrap_or(false)
+  })
 }
 
 ///|
@@ -534,6 +537,7 @@ async fn run_loop(
     events: @aqueue.Queue::Queue(kind=@aqueue.Blocking(64)),
     hooks,
     host,
+    publication_submit: None,
     clipboard: clipboard.unwrap_or_else(@platform_clipboard.backend),
     diagnostics: Diagnostics::new(),
     composition: None,
@@ -574,6 +578,7 @@ async fn run_loop(
   @async.set_external_event_loop(driver)
   event_loop.set_control_flow(@core.ControlFlow::Wait)
   let tasks = @task_runner.driver()
+  app.publication_submit = Some(request => tasks.submit(request))
   defer tasks.close()
   try {
     if minimum_size is Some((width, height)) {

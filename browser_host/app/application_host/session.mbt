@@ -32,6 +32,8 @@ priv struct Session {
   editors : Array[Editor]
   mut started : Bool
   mut reconciling : Bool
+  mut publishing : Bool
+  mut wake_pending : Bool
   mut applied_focus : @semantics.NodeRef?
   mut revealed_focus : @semantics.NodeRef?
   mut remove_wheel : (() -> Unit)?
@@ -76,6 +78,37 @@ fn Session::submit(self : Session, request : @task.Request) -> Bool {
 }
 
 ///|
+fn Session::publish(self : Session) -> Bool {
+  if self.stopped {
+    return false
+  }
+  if self.publishing {
+    abort("application publication cannot re-enter")
+  }
+  self.publishing = true
+  defer {
+    self.publishing = false
+    if self.wake_pending && !self.stopped {
+      self.wake_pending = false
+      @async.run_async_main(() => ())
+    }
+  }
+  let mut admitted = false
+  let reconciled = self.application.reconcile_downstreams(request => {
+    let accepted = self.submit(request)
+    if accepted {
+      admitted = true
+    }
+    accepted
+  })
+  if admitted {
+    self.wake_pending = true
+  }
+  let published = self.application.publish()
+  reconciled || published
+}
+
+///|
 fn Session::resume_submitted_tasks(self : Session, accepted : Bool) -> Unit {
   let _ = self
   if accepted {
@@ -111,7 +144,11 @@ fn Session::start(
   (self.application.connect_tasks)(
     @task.task_control(operation => {
       if self.tasks.cancel_operation(operation) {
-        @async.run_async_main(() => ())
+        if self.publishing {
+          self.wake_pending = true
+        } else {
+          @async.run_async_main(() => ())
+        }
       }
     }),
   )
@@ -119,7 +156,7 @@ fn Session::start(
     Some(request) => self.submit(request)
     None => false
   }
-  ignore(self.application.publish())
+  ignore(self.publish())
   self.resume_submitted_tasks(accepted)
   1
 }
@@ -328,7 +365,7 @@ fn Session::bind_editor(self : Session, editor : Editor) -> Unit {
       } else {
         false
       }
-      ignore(self.application.publish())
+      ignore(self.publish())
       self.resume_submitted_tasks(accepted)
       1
     },
@@ -345,7 +382,7 @@ async fn Session::run_tasks(self : Session) -> Unit {
       if !self.stopped {
         match completion.apply() {
           Changed => {
-            ignore(self.application.publish())
+            ignore(self.publish())
             for editor in self.editors {
               editor.sync(self.application.editor)
             }
@@ -353,10 +390,10 @@ async fn Session::run_tasks(self : Session) -> Unit {
           }
           Failed(message) => {
             (self.application.input_error)(Some(message))
-            ignore(self.application.publish())
+            ignore(self.publish())
             self.notify()
           }
-          Unchanged => if self.application.publish() { self.notify() }
+          Unchanged => if self.publish() { self.notify() }
           Rejected => ()
         }
       }
@@ -371,7 +408,7 @@ fn Session::resize(self : Session, width : Int, height : Int) -> Int {
     return 0
   }
   ignore((self.application.resize)(width, height))
-  ignore(self.application.publish())
+  ignore(self.publish())
   self.revealed_focus = None
   let scroll = self.editors.map(editor => editor.element.capture_scroll())
   let placements : Array[@dom_view.Placement] = []
@@ -532,7 +569,7 @@ fn Session::activate_reference(
     Some(request) => self.submit(request)
     None => false
   }
-  ignore(self.application.publish())
+  ignore(self.publish())
   self.resume_submitted_tasks(accepted)
   if requested is Some(_) && !accepted {
     self.notify()

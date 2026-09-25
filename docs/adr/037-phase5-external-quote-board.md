@@ -1,7 +1,7 @@
 # ADR 037: Exercise multi-source async state and component ownership in an external quote board
 
 Status: Accepted for the Phase 5 user journey, coherence and ordering
-constraints. Concrete API names and implementation remain in separate tasks.
+constraints. The remaining application and ownership work is tracked separately.
 [Issue #585](https://github.com/dijdzv/metonic/issues/585) tracks acceptance of
 this contract.
 
@@ -135,6 +135,20 @@ and browser hosts invoke the same `Application::publish()` at their event
 boundaries. `K` and `T` must be immutable or copied before sampling; generic
 deep copying of application values is not part of this API. A component that
 removes its owner Scope must also stop reading its disposed Publication.
+
+The downstream boundary is `DownstreamRegistry::new(root)` plus
+`register(owner, desired, run)` (or `register_result` for typed failures).
+`desired` returns a pure `Current[K]`; a complete value and its provenance form
+the child identity. The app passes the registry as `downstreams: Some(registry)`
+and connects it in `connect_tasks`. At every host publication boundary, the host
+samples all live desired inputs, retires obsolete child work, submits eligible
+grouped requests to the existing Driver, then publishes complete displays.
+`Downstream::current()` preserves upstream causes while the child is waiting,
+exposes Pending only after admission, and combines upstream and child origins
+when Ready. Rejection remains blocked until `Downstream::retry()` explicitly
+changes the attempt revision. A returned `Bool` from reconciliation reports a
+state change, including a rejection; only accepted requests wake the browser
+task scheduler. Scope disposal unregisters the child and rejects late results.
 
 ## Ownership and request boundary
 

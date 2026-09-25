@@ -162,8 +162,24 @@ displays are sampled first and committed together in one graph batch, so
 observers do not see half of a publication round. `K` and `T` must be
 immutable or copy-owned: the registry cannot deep-copy arbitrary MoonBit
 application values. Dispose the component Scope and stop reading its
-Publication when that component is removed. Downstream request admission
-and keyed component ownership remain separate Phase 5 tasks.
+Publication when that component is removed.
+
+When one async Source depends on a complete derived input, create
+`DownstreamRegistry::new(root)` and pass `downstreams: Some(registry)` to the
+application. Register the child under its owner Scope with
+`registry.register(owner, () => upstream_current, run)`; the desired callback
+must remain pure. `register_result` maps typed failures. Connect the registry
+to the host `TaskControl` in `connect_tasks`. The host reconciles the desired
+inputs and submits eligible child Requests before each publication round, so
+the view can observe the admitted Pending state in that same round.
+`Downstream::current()` combines the child with its upstream provenance when
+both are Ready and otherwise preserves the active failure, cancellation or
+blocked cause. Use `Downstream::admission()` to distinguish upstream waiting,
+eligibility, rejection and acceptance. Rejected admission stays blocked until
+the application calls `retry()`; it does not spin or claim that work started.
+Changing the desired value or its provenance retires old child work immediately;
+the Driver still owns completion of its cleanup. Dispose the owner Scope to
+unregister the child, and do not read it after disposal.
 
 Both hosts use the shared operation driver. Replacement invalidates earlier
 results for that identity synchronously when admission succeeds, then awaits its

@@ -15,6 +15,7 @@ async fn verify_no_input() -> Unit {
     initial_size: (480, 240),
     viewport: None,
     publications: None,
+    downstreams: None,
     connect_tasks: _ => (),
     initialize: () => None,
     view: () => {
@@ -164,6 +165,7 @@ async fn verify_empty_view() -> Unit {
     initial_size: (480, 240),
     viewport: None,
     publications: None,
+    downstreams: None,
     connect_tasks: _ => (),
     initialize: () => None,
     view: () => [],

@@ -104,7 +104,7 @@ pub fn[K : Eq, T : Eq] PublicationRegistry::register(
       let next = Published::{ demand, current: view, previous, }
       let next_last = match view {
         CurrentReady(value, provenance) =>
-          Some((demand, { value, provenance, }))
+          Some((demand, Completed::{ value, provenance, }))
         _ =>
           match previous {
             Some(completed) => Some((demand, completed))

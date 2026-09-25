@@ -13,11 +13,16 @@ priv struct Model {
   mut edit_completed : Int
   publication_root : @reactive.Scope
   publication_registry : @reactive_task.PublicationRegistry
+  downstream_registry : @reactive_task.DownstreamRegistry
   publication_source : @reactive_task.Source[String, Int]
   publication_cycle : @reactive_task.Cycle
   publication_demand : @reactive.Signal[Int]
+  downstream_key : @reactive.Signal[String]
   publication : @reactive_task.Publication[Int, Int]
+  downstream_publication : @reactive_task.Publication[Int, Int]
   publication_release : Ref[Bool]
+  downstream_release : Ref[Bool]
+  downstream_cleanup : Ref[Int]
 }
 
 ///|
@@ -71,6 +76,8 @@ fn Model::change(self : Model, command : Int) -> Unit {
     13 => self.clipped = true
     14 => self.clipped = false
     15 => self.invalid = 15
+    16 => self.downstream_key.set("other")
+    17 => self.downstream_key.set("probe")
     6 => {
       for reference in self.inputs {
         ignore(@semantics.remove(self.tree, reference))
@@ -126,16 +133,38 @@ pub fn create() -> @host.Instance {
   let publication_registry = @reactive_task.PublicationRegistry::new(
     publication_root,
   )
+  let downstream_registry = @reactive_task.DownstreamRegistry::new(
+    publication_root,
+  )
   let publication_source : @reactive_task.Source[String, Int] = @reactive_task.Source::new(
     publication_root,
   )
   let publication_cycle = @reactive_task.Cycle::new()
   let publication_demand = @reactive.Signal::new(publication_root, 0)
+  let downstream_key = @reactive.Signal::new(publication_root, "probe")
+  let downstream_release = Ref(false)
+  let downstream_cleanup = Ref(0)
   let publication = publication_registry.register(publication_root, () => {
     (
       publication_demand.get(),
       publication_source.current("probe", publication_cycle),
     )
+  })
+  let downstream = downstream_registry.register(
+    publication_root,
+    () => publication_source.current(downstream_key.get(), publication_cycle),
+    async fn(value : Int) {
+      defer {
+        downstream_cleanup.val += 1
+      }
+      while !downstream_release.val {
+        @async.sleep(1)
+      }
+      value * 2
+    },
+  )
+  let downstream_publication = publication_registry.register(publication_root, () => {
+    (publication_demand.get(), downstream.current())
   })
   let model = Model::{
     tree,
@@ -153,11 +182,16 @@ pub fn create() -> @host.Instance {
     edit_completed: 0,
     publication_root,
     publication_registry,
+    downstream_registry,
     publication_source,
     publication_cycle,
     publication_demand,
+    downstream_key,
     publication,
+    downstream_publication,
     publication_release: Ref(false),
+    downstream_release,
+    downstream_cleanup,
   }
   active.val = Some(model)
   let app : @app.Application = {
@@ -172,6 +206,7 @@ pub fn create() -> @host.Instance {
       reveal: reference => model.invalid == 15 && model.list.reveal(reference),
     }),
     publications: Some(model.publication_registry),
+    downstreams: Some(model.downstream_registry),
     connect_tasks: control => {
       if task_control.val is Some(_) {
         abort("task control connected twice")
@@ -179,6 +214,9 @@ pub fn create() -> @host.Instance {
       task_control.val = Some(control)
       if !model.publication_source.connect(control) {
         abort("publication probe source was not connected")
+      }
+      if !model.downstream_registry.connect(control) {
+        abort("downstream probe registry was not connected")
       }
     },
     initialize: () => {
@@ -275,6 +313,26 @@ pub fn create() -> @host.Instance {
         kind: Text,
         clip: None,
       })
+      controls.push({
+        element: {
+          reference: None,
+          text: match model.downstream_publication.get() {
+            Some(state) =>
+              match state.current {
+                @reactive_task.CurrentReady(value, _) =>
+                  "Downstream " + value.to_string()
+                @reactive_task.CurrentPending(_) => "Downstream pending"
+                @reactive_task.CurrentBlocked(_) => "Downstream blocked"
+                _ => "Downstream other"
+              }
+            None => "Downstream not published"
+          },
+          focused: false,
+          bounds: { x: 270, y: 48, width: 200, height: 40, },
+        },
+        kind: Text,
+        clip: None,
+      })
       controls
     },
     activate: reference => {
@@ -356,6 +414,36 @@ pub fn publication_source_phase() -> Int {
     @reactive_task.Failed(_, _, _, _) => 3
     @reactive_task.Canceled(_, _, _) => 4
   }
+}
+
+///|
+#export_name("downstream_phase")
+pub fn downstream_phase() -> Int {
+  guard active.val is Some(model) else { return -1 }
+  match model.downstream_publication.get() {
+    None => 0
+    Some(state) =>
+      match state.current {
+        @reactive_task.CurrentPending(_) => 1
+        @reactive_task.CurrentReady(14, _) => 2
+        @reactive_task.CurrentBlocked(_) => 3
+        _ => 4
+      }
+  }
+}
+
+///|
+#export_name("downstream_release")
+pub fn downstream_release() -> Unit {
+  if active.val is Some(model) {
+    model.downstream_release.val = true
+  }
+}
+
+///|
+#export_name("downstream_cleanup")
+pub fn downstream_cleanup() -> Int {
+  active.val.map(model => model.downstream_cleanup.val).unwrap_or(-1)
 }
 
 ///|

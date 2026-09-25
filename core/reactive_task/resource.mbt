@@ -44,6 +44,18 @@ pub fn Resource::dispose(self : Resource) -> Unit {
 }
 
 ///|
+/// Invalidates the current generation and requests Driver cancellation without
+/// submitting a capacity-limited Request. The Driver still owns joined cleanup.
+pub fn Resource::retire_current(self : Resource) -> Bool {
+  guard !self.scope.is_disposed() && self.control is Some(control) else {
+    return false
+  }
+  self.generation += 1
+  control.cancel(self.operation)
+  true
+}
+
+///|
 pub fn Resource::replace_prepared(
   self : Resource,
   invalidate : () -> Unit,
