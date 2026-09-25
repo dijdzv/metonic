@@ -301,23 +301,18 @@ fn Board::heading(self : Board) -> String {
 ///|
 fn Board::view(self : Board) -> Array[@app.Control] {
   let controls : Array[@app.Control] = []
+  let first_row : Array[@app.StackItem] = []
+  let second_row : Array[@app.StackItem] = []
   for index, button in self.buttons {
-    controls.push(
-      @app.button(button, {
-        x: if index < 4 {
-          16 + index * 138
-        } else {
-          16 + (index - 4) * 138
-        },
-        y: if index < 4 {
-          16
-        } else {
-          58
-        },
-        width: 128,
-        height: 36,
-      }),
+    let item = @app.StackItem::new(
+      @layout.Fixed(128),
+      @app.Widget::button(button),
     )
+    if index < 4 {
+      first_row.push(item)
+    } else {
+      second_row.push(item)
+    }
   }
   let item = self.selected.peek()
   let mut detail = "Detail: waiting"
@@ -339,23 +334,19 @@ fn Board::view(self : Board) -> Array[@app.Control] {
     }
     match child.details.get("detail") {
       Some(details) => {
-        controls.push(
-          @app.button(details.quantity_button, {
-            x: 16 + 4 * 138,
-            y: 16,
-            width: 128,
-            height: 36,
-          }),
+        first_row.push(
+          @app.StackItem::new(
+            @layout.Fixed(128),
+            @app.Widget::button(details.quantity_button),
+          ),
         )
         if details.quote.current().view() is CurrentFailed(_) ||
           details.quote.admission() is @async_state.Rejected(_, _) {
-          controls.push(
-            @app.button(details.retry_button, {
-              x: 16 + 4 * 138,
-              y: 58,
-              width: 128,
-              height: 36,
-            }),
+          second_row.push(
+            @app.StackItem::new(
+              @layout.Fixed(128),
+              @app.Widget::button(details.retry_button),
+            ),
           )
         }
         quote = match details.display.get() {
@@ -383,6 +374,19 @@ fn Board::view(self : Board) -> Array[@app.Control] {
       }
       None => quote = "Shipping: detail hidden"
     }
+  }
+  let button_row = @app.Stack::new(@layout.Horizontal, gap=10)
+  let arranged_first = button_row
+    .arrange({ x: 16, y: 16, width: 680, height: 36, }, first_row)
+    .unwrap()
+  let arranged_second = button_row
+    .arrange({ x: 16, y: 58, width: 680, height: 36, }, second_row)
+    .unwrap()
+  for control in arranged_first {
+    controls.push(control)
+  }
+  for control in arranged_second {
+    controls.push(control)
   }
   let lines = [self.heading(), detail, stock, quote]
   for index, line in lines {

@@ -5,6 +5,14 @@ fn text(app : @app.Application, index : Int) -> String {
 }
 
 ///|
+fn button(app : @app.Application, name : String) -> @semantics.NodeRef {
+  (app.view)()
+  .iter()
+  .find_first(control => control.element.text == name)
+  .unwrap().element.reference.unwrap()
+}
+
+///|
 async fn wait_text(
   app : @app.Application,
   index : Int,
@@ -25,13 +33,16 @@ async fn main {
     milliseconds => @clock.Clock::sleep(clock, milliseconds),
     diagnostics=Some(diagnostics),
   )
-  let amber_button = (app.view)()[0].element.reference.unwrap()
-  let blue = (app.view)()[1].element.reference.unwrap()
-  let toggle_detail = (app.view)()[3].element.reference.unwrap()
-  let yen = (app.view)()[4].element.reference.unwrap()
-  let dollar = (app.view)()[5].element.reference.unwrap()
+  let amber_button = button(app, "Amber lamp")
+  let blue = button(app, "Blue stool")
+  let toggle_detail = button(app, "Toggle detail")
+  let yen = button(app, "JPY")
+  let dollar = button(app, "USD")
   let heading = (app.view)().filter(control => control.kind == @app.Text)[0].element.reference.unwrap()
-  assert_eq(@semantics.node(app.editor, heading).unwrap().role, @semantics.Label)
+  assert_eq(
+    @semantics.node(app.editor, heading).unwrap().role,
+    @semantics.Label,
+  )
   let completed = Ref(false)
   @window_host.run(
     @host.from_application(app),
@@ -44,7 +55,7 @@ async fn main {
         assert_eq(diagnostics.sources().length(), 4)
         assert_eq(diagnostics.derived()[0].phase, "ready")
         assert_true(first_trace.stringify().contains("\"sources\""))
-        let increase = (app.view)()[6].element.reference.unwrap()
+        let increase = button(app, "Quantity +")
         let amber = (handle.capture)(_ => ())
         assert_eq(amber.pixels.length(), amber.width * amber.height * 4)
         assert_eq(
@@ -124,7 +135,7 @@ async fn main {
           ),
           "stale_target",
         )
-        let blue_increase = (app.view)()[6].element.reference.unwrap()
+        let blue_increase = button(app, "Quantity +")
         assert_true(blue_increase != increase)
         assert_eq(
           (handle.operate)(
@@ -174,7 +185,7 @@ async fn main {
           ),
           "",
         )
-        let recreated_increase = (app.view)()[6].element.reference.unwrap()
+        let recreated_increase = button(app, "Quantity +")
         assert_true(recreated_increase != blue_increase)
         wait_text(app, 7, "Shipping: 321 for 3")
         assert_eq(

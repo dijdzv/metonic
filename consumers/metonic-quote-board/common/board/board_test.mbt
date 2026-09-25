@@ -6,7 +6,38 @@ fn line(app : @app.Application, index : Int) -> String {
 
 ///|
 fn button(app : @app.Application, index : Int) -> @semantics.NodeRef {
-  (app.view)()[if index == 2 { 6 } else { index }].element.reference.unwrap()
+  let names = [
+    "Amber lamp", "Blue stool", "Quantity +", "Toggle detail", "JPY", "USD",
+  ]
+  (app.view)()
+  .iter()
+  .find_first(control => control.element.text == names[index])
+  .unwrap().element.reference.unwrap()
+}
+
+///|
+async test "action stacks retain button placement and identity after resize" {
+  let app = create(_ => ())
+  let before = (app.view)().filter(control =>
+    control.kind == @app.Button && control.element.text != "Save note")
+  assert_eq(before.map(control => control.element.bounds.x), [
+    16, 154, 292, 430, 16, 154,
+  ])
+  assert_eq(before.map(control => control.element.bounds.y), [
+    16, 16, 16, 16, 58, 58,
+  ])
+  ignore((app.resize)(800, 500))
+  let after = (app.view)().filter(control =>
+    control.kind == @app.Button && control.element.text != "Save note")
+  assert_eq(
+    after.map(control => control.element.reference),
+    before.map(control => control.element.reference),
+  )
+  assert_eq(
+    after.map(control => control.element.bounds.x),
+    before.map(control => control.element.bounds.x),
+  )
+  (app.dispose)()
 }
 
 ///|
