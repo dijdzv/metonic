@@ -13,6 +13,24 @@ pub(all) struct Control {
 }
 
 ///|
+pub fn button(
+  widget : @component.UiButton,
+  bounds : @view.Bounds,
+  clip? : @view.Bounds? = None,
+) -> Control {
+  { element: widget.element(bounds), kind: Button, clip, }
+}
+
+///|
+pub fn label(
+  widget : @component.UiLabel,
+  bounds : @view.Bounds,
+  clip? : @view.Bounds? = None,
+) -> Control {
+  { element: widget.element(bounds), kind: Text, clip, }
+}
+
+///|
 pub fn Control::visible_bounds(self : Control) -> @view.Bounds? {
   match self.clip {
     Some(clip) => self.element.bounds.intersection(clip)

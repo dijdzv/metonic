@@ -153,13 +153,11 @@ fn tree(_data : UInt64) -> UInt64 {
     let id = semantic.reference.id.to_uint64()
     let presentation = bridge.presentation.control(semantic.reference).unwrap()
     let box = presentation.bounds
-    let node = node_new(
-      if semantic.role is @semantics.Button {
-        18
-      } else {
-        17
-      },
-    )
+    let node = node_new(match semantic.role {
+      @semantics.Label => 3
+      @semantics.Button => 18
+      @semantics.TextInput => 17
+    })
     let name = @utf8.encode(semantic.name)
     label(node, name, name.length().to_uint64())
     let text = @utf8.encode(semantic.value)
@@ -167,7 +165,9 @@ fn tree(_data : UInt64) -> UInt64 {
     if !semantic.enabled {
       disabled(node)
     }
-    add_action(node, 1)
+    if semantic.role != @semantics.Label {
+      add_action(node, 1)
+    }
     bounds(
       node,
       box.x.to_double(),

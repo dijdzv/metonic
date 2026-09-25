@@ -1,5 +1,6 @@
 ///|
 pub(all) enum Role {
+  Label
   Button
   TextInput
 } derive(Debug, Eq)
@@ -149,6 +150,9 @@ pub fn focus(tree : Tree, reference : NodeRef) -> String {
     return error
   }
   let node = extra_node(tree, id).unwrap()
+  if node.role == Label {
+    return "unsupported_action"
+  }
   if !node.enabled {
     return "disabled"
   }
@@ -474,6 +478,11 @@ fn extra_node(tree : Tree, id : Int) -> Node? {
 ///|
 pub fn add_button(tree : Tree, name : String) -> NodeRef? {
   add_node(tree, name, Button, "")
+}
+
+///|
+pub fn add_label(tree : Tree, text : String) -> NodeRef? {
+  add_node(tree, text, Label, "")
 }
 
 ///|

@@ -33,6 +33,9 @@ async fn verify_ui_root() -> Unit {
       )
     })
     .unwrap()
+  let status = owner
+    .label("status", @component.Read::new(() => "Status: " + value.peek()))
+    .unwrap()
   let app : @portable.Application = {
     title: "Owned UI root",
     editor: tree,
@@ -57,16 +60,8 @@ async fn verify_ui_root() -> Unit {
           kind: Input(single_line=true),
           clip: None,
         },
-        {
-          element: {
-            reference: Some(button),
-            text: "Update async",
-            focused: @semantics.node(tree, button).unwrap().focused,
-            bounds: { x: 16, y: 112, width: 180, height: 40, },
-          },
-          kind: Button,
-          clip: None,
-        },
+        @portable.button(button, { x: 16, y: 112, width: 180, height: 40, }),
+        @portable.label(status, { x: 16, y: 168, width: 300, height: 30, }),
       ]
     },
     activate: reference => ui.activate(reference),
@@ -98,13 +93,14 @@ async fn verify_ui_root() -> Unit {
         )
         assert_eq(value.peek(), "initialtyped")
         assert_eq(
-          (handle.operate)(button, ActivateControl, @semantics.revision(tree)),
+          (handle.operate)(button.reference(), ActivateControl, @semantics.revision(tree)),
           "",
         )
         while value.peek() != "async" ||
               @semantics.node(tree, input).unwrap().value != "async" {
           @async.sleep(1)
         }
+        assert_eq(@semantics.node(tree, status.reference()).unwrap().name, "Status: async")
         let frame = (handle.capture)(_ => ())
         assert_true(frame.state.frames > 0)
         finished.val = true
