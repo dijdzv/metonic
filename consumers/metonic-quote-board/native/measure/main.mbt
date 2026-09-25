@@ -15,7 +15,19 @@ extern "C" fn process_handles(process : UInt64, count : FixedArray[Int]) -> Int 
 
 ///|
 fn text(app : @app.Application, index : Int) -> String {
-  (app.view)().filter(control => control.element.reference is None)[index - 4].element.text
+  let y = if index == 8 { 400 } else { 112 + (index - 4) * 48 }
+  (app.view)()
+  .iter()
+  .find_first(control => control.element.bounds.y == y)
+  .unwrap().element.text
+}
+
+///|
+fn button(app : @app.Application, name : String) -> @semantics.NodeRef {
+  (app.view)()
+  .iter()
+  .find_first(control => control.element.text == name)
+  .unwrap().element.reference.unwrap()
 }
 
 ///|
@@ -42,9 +54,9 @@ async fn main {
   let app = @board.create(milliseconds => {
     @clock.Clock::sleep(clock, milliseconds)
   })
-  let blue = (app.view)()[1].element.reference.unwrap()
-  let toggle = (app.view)()[3].element.reference.unwrap()
-  let dollar = (app.view)()[5].element.reference.unwrap()
+  let blue = button(app, "Blue stool")
+  let toggle = button(app, "Toggle detail")
+  let dollar = button(app, "USD")
   let note = app.default_input.unwrap()
   let save = (app.view)()
   .iter()
