@@ -157,3 +157,50 @@ test "label identity and button enabled state follow their owner" {
   assert_true(ui.activate(button.reference()) is None)
   scope.dispose()
 }
+
+///|
+test "keyed buttons retain handlers across reorder and revoke removed instances" {
+  let scope = @reactive.Scope::root(@reactive.Graph::new())
+  let tree = @semantics.empty(84, 1)
+  let ui = UiRoot::new(scope, tree)
+  let children : KeyedChildren[String, Unit, UiButton] = KeyedChildren::new(
+    scope, tree,
+  )
+  let activated : Array[String] = []
+  let create = (child : ChildOwner, key : String, _ : Unit) => {
+    ui
+    .adopt(child)
+    .button(key, key, () => {
+      activated.push(key)
+      None
+    })
+    .unwrap()
+  }
+  let specs : Array[ChildSpec[String, Unit]] = [
+    { key: "a", props: (), },
+    { key: "b", props: (), },
+  ]
+  assert_true(children.reconcile(specs, create, (_, _) => ()))
+  let a = children.get("a").unwrap()
+  let b = children.get("b").unwrap()
+  assert_true(children.reconcile([specs[1], specs[0]], create, (_, _) => ()))
+  assert_eq(children.ordered().map(button => button.reference()), [
+    b.reference(),
+    a.reference(),
+  ])
+  ignore(ui.activate(a.reference()))
+  ignore(ui.activate(b.reference()))
+  assert_eq(activated, ["a", "b"])
+  assert_true(children.reconcile([specs[1]], create, (_, _) => ()))
+  assert_true(@semantics.node(tree, a.reference()) is Err(_))
+  ignore(ui.activate(a.reference()))
+  ignore(ui.activate(b.reference()))
+  assert_eq(activated, ["a", "b", "b"])
+  assert_true(children.reconcile(specs, create, (_, _) => ()))
+  let recreated = children.get("a").unwrap()
+  assert_true(recreated.reference() != a.reference())
+  ignore(ui.activate(a.reference()))
+  ignore(ui.activate(recreated.reference()))
+  assert_eq(activated, ["a", "b", "b", "a"])
+  scope.dispose()
+}

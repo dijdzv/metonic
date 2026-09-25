@@ -46,7 +46,9 @@ priv struct Board {
   publications : @async_state.PublicationRegistry
   note : Note
   tree : @semantics.Tree
-  buttons : Array[@semantics.NodeRef]
+  ui : @component.UiRoot
+  mut buttons : Array[@component.UiButton]
+  mut heading_label : @component.UiLabel?
   wait : async (Int) -> Unit
   rate_result : (String) -> Result[Int, String]
   quote_result : (QuoteInput) -> Result[Int, String]
@@ -71,8 +73,8 @@ priv struct ItemChild {
 priv struct DetailChild {
   quote : @async_state.Downstream[QuoteInput, Quote]
   display : @async_state.Publication[(String, Int, String), DisplayQuote]
-  quantity_button : @semantics.NodeRef
-  retry_button : @semantics.NodeRef
+  quantity_button : @component.UiButton
+  retry_button : @component.UiButton
 }
 
 ///|
@@ -199,8 +201,19 @@ fn ItemChild::show_detail(self : ItemChild, board : Board) -> Bool {
         }
         ((self.key, board.quantity.get(), currency), converted)
       })
-      let quantity_button = owner.add_button("Quantity +").unwrap()
-      let retry_button = owner.add_button("Retry quote").unwrap()
+      let controls = board.ui.adopt(owner)
+      let quantity_button = controls
+        .button("quantity", "Quantity +", () => {
+          board.quantity.set(board.quantity.peek() + 1)
+          None
+        })
+        .unwrap()
+      let retry_button = controls
+        .button("retry", "Retry quote", () => {
+          ignore(quote.retry())
+          None
+        })
+        .unwrap()
       DetailChild::{ quote, display, quantity_button, retry_button, }
     },
     (_, _) => (),
@@ -276,36 +289,35 @@ fn Board::request(
 }
 
 ///|
+fn Board::heading(self : Board) -> String {
+  "Item: " +
+  self.selected.peek() +
+  " · Quantity: " +
+  self.quantity.peek().to_string() +
+  " · Currency: " +
+  self.currency.peek()
+}
+
+///|
 fn Board::view(self : Board) -> Array[@app.Control] {
   let controls : Array[@app.Control] = []
-  let names = [
-    "Amber lamp", "Blue stool", "Refresh", "Toggle detail", "JPY", "USD",
-  ]
-  for index, reference in self.buttons {
-    let node = @semantics.node(self.tree, reference).unwrap()
-    controls.push({
-      element: {
-        bounds: {
-          x: if index < 4 {
-            16 + index * 138
-          } else {
-            16 + (index - 4) * 138
-          },
-          y: if index < 4 {
-            16
-          } else {
-            58
-          },
-          width: 128,
-          height: 36,
+  for index, button in self.buttons {
+    controls.push(
+      @app.button(button, {
+        x: if index < 4 {
+          16 + index * 138
+        } else {
+          16 + (index - 4) * 138
         },
-        text: names[index],
-        reference: Some(reference),
-        focused: node.focused,
-      },
-      kind: @app.Button,
-      clip: None,
-    })
+        y: if index < 4 {
+          16
+        } else {
+          58
+        },
+        width: 128,
+        height: 36,
+      }),
+    )
   }
   let item = self.selected.peek()
   let mut detail = "Detail: waiting"
@@ -327,29 +339,24 @@ fn Board::view(self : Board) -> Array[@app.Control] {
     }
     match child.details.get("detail") {
       Some(details) => {
-        let node = @semantics.node(self.tree, details.quantity_button).unwrap()
-        controls.push({
-          element: {
-            bounds: { x: 16 + 4 * 138, y: 16, width: 128, height: 36, },
-            text: "Quantity +",
-            reference: Some(details.quantity_button),
-            focused: node.focused,
-          },
-          kind: @app.Button,
-          clip: None,
-        })
+        controls.push(
+          @app.button(details.quantity_button, {
+            x: 16 + 4 * 138,
+            y: 16,
+            width: 128,
+            height: 36,
+          }),
+        )
         if details.quote.current().view() is CurrentFailed(_) ||
           details.quote.admission() is @async_state.Rejected(_, _) {
-          controls.push({
-            element: {
-              bounds: { x: 16 + 4 * 138, y: 58, width: 128, height: 36, },
-              text: "Retry quote",
-              reference: Some(details.retry_button),
-              focused: @semantics.node(self.tree, details.retry_button).unwrap().focused,
-            },
-            kind: @app.Button,
-            clip: None,
-          })
+          controls.push(
+            @app.button(details.retry_button, {
+              x: 16 + 4 * 138,
+              y: 58,
+              width: 128,
+              height: 36,
+            }),
+          )
         }
         quote = match details.display.get() {
           Some({ current: CurrentReady(value, _), .. }) =>
@@ -377,33 +384,23 @@ fn Board::view(self : Board) -> Array[@app.Control] {
       None => quote = "Shipping: detail hidden"
     }
   }
-  let lines = [
-    "Item: " +
-    item +
-    " · Quantity: " +
-    self.quantity.peek().to_string() +
-    " · Currency: " +
-    self.currency.peek(),
-    detail,
-    stock,
-    quote,
-  ]
+  let lines = [self.heading(), detail, stock, quote]
   for index, line in lines {
-    controls.push({
-      element: {
-        bounds: {
-          x: 16,
-          y: 112 + index * 48,
-          width: (self.size.0 - 32).max(32),
-          height: 42,
-        },
-        text: line,
-        reference: None,
-        focused: false,
-      },
-      kind: @app.Text,
-      clip: None,
-    })
+    let bounds : @view.Bounds = {
+      x: 16,
+      y: 112 + index * 48,
+      width: (self.size.0 - 32).max(32),
+      height: 42,
+    }
+    if index == 0 {
+      controls.push(@app.label(self.heading_label.unwrap(), bounds))
+    } else {
+      controls.push({
+        element: { bounds, text: line, reference: None, focused: false, },
+        kind: @app.Text,
+        clip: None,
+      })
+    }
   }
   let note_node = @semantics.node(self.tree, self.note.input).unwrap()
   controls.push({
@@ -535,13 +532,11 @@ pub fn create_with_quote_result(
   let publications = @async_state.PublicationRegistry::new(scope)
   let serials = @async_state.SerialRegistry::new(scope)
   let tree = @semantics.empty(1, 1)
+  let ui = @component.UiRoot::new(scope, tree)
   let note = Note::new(scope, tree, serials, save)
   let items : @component.KeyedChildren[String, Unit, ItemChild] = @component.KeyedChildren::new(
     scope, tree,
   )
-  let buttons = [
-    "Amber lamp", "Blue stool", "Refresh", "Toggle detail", "JPY", "USD",
-  ].map(name => @semantics.add_button(tree, name).unwrap())
   let model : Board = {
     graph,
     scope,
@@ -555,7 +550,9 @@ pub fn create_with_quote_result(
     publications,
     note,
     tree,
-    buttons,
+    ui,
+    buttons: [],
+    heading_label: None,
     wait,
     rate_result,
     quote_result: input => quote_result(input.name, input.stock, input.quantity),
@@ -565,6 +562,37 @@ pub fn create_with_quote_result(
     size: (720, 500),
     error: None,
   }
+  let actions = ui.fixed("actions")
+  model.heading_label = ui
+    .fixed("summary")
+    .label("heading", @component.Read::new(() => model.heading()))
+  model.buttons = [
+    actions
+    .button("amber", "Amber lamp", () => model.request("amber", false))
+    .unwrap(),
+    actions
+    .button("blue", "Blue stool", () => model.request("blue", false))
+    .unwrap(),
+    actions
+    .button("refresh", "Refresh", () => {
+      model.request(model.selected.peek(), true)
+    })
+    .unwrap(),
+    actions
+    .button("detail", "Toggle detail", () => {
+      if model.items.get(model.selected.peek()) is Some(item) {
+        if item.details.get("detail") is Some(_) {
+          ignore(item.details.clear())
+        } else {
+          ignore(item.show_detail(model))
+        }
+      }
+      None
+    })
+    .unwrap(),
+    actions.button("jpy", "JPY", () => model.choose_currency("JPY")).unwrap(),
+    actions.button("usd", "USD", () => model.choose_currency("USD")).unwrap(),
+  ]
   {
     title: "Item and quote board",
     editor: tree,
@@ -574,6 +602,7 @@ pub fn create_with_quote_result(
     publications: Some(publications),
     downstreams: Some(downstreams),
     serials: Some(serials),
+    components: Some(ui),
     connect_tasks: control => {
       if !downstreams.connect(control) ||
         !rate.connect(control) ||
@@ -585,38 +614,11 @@ pub fn create_with_quote_result(
     initialize: () => model.request("amber", false),
     view: () => model.view(),
     activate: reference => {
-      if reference == model.buttons[0] {
-        model.request("amber", false)
-      } else if reference == model.buttons[1] {
-        model.request("blue", false)
-      } else if reference == model.buttons[2] {
-        model.request(model.selected.peek(), true)
-      } else if reference == model.buttons[3] {
-        if model.items.get(model.selected.peek()) is Some(item) {
-          if item.details.get("detail") is Some(_) {
-            ignore(item.details.clear())
-          } else {
-            ignore(item.show_detail(model))
-          }
-        }
-        None
-      } else if reference == model.buttons[4] {
-        model.choose_currency("JPY")
-      } else if reference == model.buttons[5] {
-        model.choose_currency("USD")
-      } else if reference == model.note.save_button {
+      if reference == model.note.save_button {
         ignore(model.note.save())
         None
       } else {
-        if model.items.get(model.selected.peek()) is Some(item) &&
-          item.details.for_reference(reference) is Some(details) {
-          if reference == details.quantity_button {
-            model.quantity.set(model.quantity.peek() + 1)
-          } else if reference == details.retry_button {
-            ignore(details.quote.retry())
-          }
-        }
-        None
+        ui.activate(reference)
       }
     },
     edited: edit => {

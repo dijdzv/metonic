@@ -15,6 +15,13 @@ The source is pinned by `dependency.json`. It is an experimental source
 consumer, not a published Metonic package. Windows setup requires mise, Git,
 Visual Studio C++ build tools and the framework prerequisites.
 
+The fixed item, refresh, detail and currency actions and the keyed quantity and
+retry actions use Metonic's owned Button component. The item summary uses an
+owned Label with a stable accessible identity. The board supplies each action's
+behavior and placement; the component layer owns semantic references, focus
+projection and dispatch. The note field and Save note action still use the
+low-level API while the TextArea migration is tracked separately.
+
 To extract only this consumer from a Metonic checkout into a new directory,
 create a short empty path first and run:
 
