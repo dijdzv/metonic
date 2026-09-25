@@ -41,6 +41,7 @@ async fn verify_publication() -> Unit {
     publications: Some(registry),
     downstreams: Some(downstream_registry),
     serials: None,
+    components: None,
     connect_tasks: control => {
       if !source.connect(control) {
         abort("publication source was not connected")
@@ -190,8 +191,8 @@ async fn verify_publication() -> Unit {
         }
         let ready = (handle.capture)(_ => ())
         assert_true(ready.pixels != switched.pixels)
-        (handle.apply)(Close)
         finished.val = true
+        (handle.apply)(Close)
       })
     }),
   )

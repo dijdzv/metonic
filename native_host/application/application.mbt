@@ -25,6 +25,7 @@ pub(all) struct Application {
   default_input : @semantics.NodeRef?
   connect_tasks : (@task.TaskControl) -> Unit
   publication_round : ((@task.Request) -> Bool) -> Bool
+  synchronize_controls : (@semantics.NodeRef?) -> Bool
   initialize : () -> TaskAction?
   initial_size : (Int, Int)
   view : () -> View

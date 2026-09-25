@@ -31,6 +31,7 @@ async fn verify_keyed() -> Unit {
     publications: None,
     downstreams: None,
     serials: None,
+    components: None,
     connect_tasks: _ => (),
     initialize: () => None,
     view: () => {
@@ -117,8 +118,8 @@ async fn verify_keyed() -> Unit {
         assert_eq(children.for_reference(recreated), Some(recreated))
         let restored = (handle.capture)(_ => ())
         assert_true(restored.pixels != reordered.pixels)
-        (handle.apply)(Close)
         finished.val = true
+        (handle.apply)(Close)
       })
     }),
   )

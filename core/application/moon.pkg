@@ -3,4 +3,5 @@ import {
   "local/p0/core/view",
   "local/p0/core/application_task" @task,
   "local/p0/core/reactive_task",
+  "local/p0/core/component",
 }

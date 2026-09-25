@@ -350,6 +350,7 @@ pub impl @windows.ApplicationHandler for App with fn window_event(
 
 ///|
 fn App::draw(self : App) -> Unit raise Error {
+  ignore((self.host.synchronize_controls)(self.composition_target))
   self.reconcile_input()
   let view = (self.host.view)()
   if self.renderer is Some(renderer) {
@@ -441,9 +442,11 @@ fn App::draw(self : App) -> Unit raise Error {
 
 ///|
 fn App::publish(self : App) -> Bool {
-  (self.host.publication_round)(request => {
+  let published = (self.host.publication_round)(request => {
     self.publication_submit.map(submit => submit(request)).unwrap_or(false)
   })
+  let synchronized = (self.host.synchronize_controls)(self.composition_target)
+  published || synchronized
 }
 
 ///|
@@ -579,7 +582,11 @@ async fn run_loop(
   event_loop.set_control_flow(@core.ControlFlow::Wait)
   let tasks = @task_runner.driver()
   if hooks.trace() is Some(registry) {
-    ignore(tasks.observe((operation, event) => registry.driver_event(operation, event)))
+    ignore(
+      tasks.observe((operation, event) => {
+        registry.driver_event(operation, event)
+      }),
+    )
   }
   app.publication_submit = Some(request => tasks.submit(request))
   defer tasks.close()

@@ -17,6 +17,7 @@ async fn verify_no_input() -> Unit {
     publications: None,
     downstreams: None,
     serials: None,
+    components: None,
     connect_tasks: _ => (),
     initialize: () => None,
     view: () => {
@@ -168,6 +169,7 @@ async fn verify_empty_view() -> Unit {
     publications: None,
     downstreams: None,
     serials: None,
+    components: None,
     connect_tasks: _ => (),
     initialize: () => None,
     view: () => [],

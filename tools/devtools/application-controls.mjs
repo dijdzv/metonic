@@ -372,8 +372,33 @@ export async function verifyDynamicControls(browser, baseUrl, outputDir) {
         globalThis.serialProbe.serial_queued(),
       ]), [2, 0, 0], 'The queued write did not finish after the first acknowledgement');
       await page.locator('#stop').click();
+      await page.reload();
+      await page.waitForFunction(() => document.querySelector('#status').textContent.startsWith('Ready:'));
+      await page.evaluate(async target => {
+        globalThis.controlledProbe = target === 'js' ? await import('./notes.mjs') : globalThis.dynamicProbe;
+      }, target);
+      await change(30);
+      const controlled = page.getByRole('textbox', { name: 'Controlled', exact: true });
+      assert.equal(await controlled.inputValue(), 'initial');
+      await controlled.fill('typed');
+      assert.equal(await page.evaluate(() => globalThis.controlledProbe.controlled_value()), 'typed');
+      await page.getByRole('button', { name: 'Update async', exact: true }).click();
+      await page.waitForFunction(() => globalThis.controlledProbe.controlled_value() === 'async');
+      assert.equal(await controlled.inputValue(), 'async');
+      await change(31);
+      assert.equal(await controlled.inputValue(), 'programmatic');
+      await controlled.evaluate(element => {
+        element.focus();
+        element.dispatchEvent(new CompositionEvent('compositionstart', { data: '' }));
+        element.value = '仮';
+        element.dispatchEvent(new InputEvent('input', { isComposing: true, data: '仮' }));
+      });
+      await change(32);
+      assert.equal(await controlled.inputValue(), '仮', 'Host synchronization replaced active preedit');
+      assert.equal(await page.evaluate(() => globalThis.controlledProbe.controlled_value()), 'deferred');
+      await page.locator('#stop').click();
       assert.deepEqual(errors, []);
-      results.push({ target, publicationBoundary: true, serializedWrite: true, add: true, reorder: true, retainedSelectionScrollComposition: true, replaceGeneration: true, lateEvents: true, removeLast: true, stop: true, exclusiveRoot: true, duplicateAndKindRejection: true });
+      results.push({ target, publicationBoundary: true, serializedWrite: true, controlledHostBoundary: true, add: true, reorder: true, retainedSelectionScrollComposition: true, replaceGeneration: true, lateEvents: true, removeLast: true, stop: true, exclusiveRoot: true, duplicateAndKindRejection: true });
     } catch (error) { await reportFailure(page); throw error; }
     finally { await page.close(); }
   }

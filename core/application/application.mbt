@@ -43,6 +43,7 @@ pub(all) struct Application {
   publications : @reactive_task.PublicationRegistry?
   downstreams : @reactive_task.DownstreamRegistry?
   serials : @reactive_task.SerialRegistry?
+  components : @component.UiRoot?
   connect_tasks : (@task.TaskControl) -> Unit
   initialize : () -> @task.Request?
   view : () -> Array[Control]
@@ -60,6 +61,14 @@ pub(all) struct Application {
 ///|
 pub fn Application::publish(self : Application) -> Bool {
   self.publications.map(registry => registry.publish()).unwrap_or(false)
+}
+
+///|
+pub fn Application::synchronize_components(
+  self : Application,
+  composing : @semantics.NodeRef?,
+) -> Bool {
+  self.components.map(root => root.synchronize(composing)).unwrap_or(false)
 }
 
 ///|

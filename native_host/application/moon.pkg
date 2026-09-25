@@ -11,3 +11,8 @@ import {
 }
 
 supported_targets = "native"
+
+import {
+  "local/p0/core/component",
+  "local/p0/core/reactive",
+} for "test"

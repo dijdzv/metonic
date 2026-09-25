@@ -71,6 +71,7 @@ pub fn Model::application(self : Model) -> @app.Application {
     publications: None,
     downstreams: None,
     serials: None,
+    components: None,
     initialize: () => None,
     view: () => {
       let controls : Array[@app.Control] = []

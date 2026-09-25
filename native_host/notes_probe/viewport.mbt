@@ -17,6 +17,7 @@ async fn verify_viewport() -> Unit {
     publications: None,
     downstreams: None,
     serials: None,
+    components: None,
     connect_tasks: _ => (),
     initialize: () => None,
     viewport: Some({

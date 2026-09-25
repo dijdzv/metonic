@@ -35,6 +35,7 @@ async fn verify_serial() -> Unit {
     publications: None,
     downstreams: None,
     serials: Some(registry),
+    components: None,
     connect_tasks: control => {
       if !registry.connect(control) {
         abort("serial registry was not connected")
