@@ -1,0 +1,20 @@
+import {
+  "local/metonic_quote/board",
+  "local/browser_host/application_host" @host,
+  "local/metonic_async/clock" @production_clock,
+  "local/p0/capabilities/clock",
+}
+
+pkgtype(kind: "foreign_library")
+
+supported_targets = "+js+wasm-gc"
+
+options(
+  link: {
+    "js": { "format": "esm" },
+    "wasm-gc": {
+      "imported-string-constants": "_",
+      "use-js-builtin-string": true,
+    },
+  },
+)

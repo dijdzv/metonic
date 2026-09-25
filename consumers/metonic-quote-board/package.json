@@ -1,0 +1,9 @@
+{
+  "name": "metonic-quote-board-source-consumer",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.3.4",
+  "devDependencies": {
+    "playwright": "1.63.0"
+  }
+}

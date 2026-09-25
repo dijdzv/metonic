@@ -1,0 +1,38 @@
+[env]
+MOON_HOME = "{{config_root}}/.metonic/framework/.tools/moonbit"
+MBT_WGPU_NATIVE_ROOT = "{{config_root}}/.metonic/framework/.work/wgpu-assets"
+_.path = ["{{config_root}}/.metonic/framework/.tools/moonbit/bin"]
+
+[tools]
+node = "26.8.1"
+pnpm = "12.3.4"
+
+[vars]
+_.file = "dependency.json"
+
+[tasks."deps:fetch"]
+description = "Fetch the pinned Metonic source"
+run = [
+  'git clone --no-checkout "{{vars.repository}}" "{{vars.directory}}"',
+  'git -C "{{vars.directory}}" checkout --detach "{{vars.revision}}"',
+]
+
+[tasks."build:browser"]
+run = '.\.metonic\framework\.tools\moonbit\bin\moon.exe run build.mbtx -- browser'
+
+[tasks."build:native"]
+run = '.\.metonic\framework\.tools\moonbit\bin\moon.exe run build.mbtx -- native'
+
+[tasks."run:native"]
+depends = ["build:native"]
+run = '.\native\.metonic-build\native\release\build\local\metonic_quote_native\main\main.exe'
+
+[tasks."verify:model"]
+run = '.\.metonic\framework\.tools\moonbit\bin\moon.exe run verify-model.mbtx'
+
+[tasks."verify:browser"]
+depends = ["build:browser"]
+run = 'node verification/browser.mjs'
+
+[tasks."verify:native"]
+run = '.\.metonic\framework\.tools\moonbit\bin\moon.exe run build.mbtx -- native-probe'

@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "targets": {
+    "browser": {
+      "workspace": "browser",
+      "members": ["app", "../common"],
+      "entries": {
+        "main": {
+          "entry_package": "app/main",
+          "artifact": "local/metonic_quote_browser/main"
+        }
+      }
+    },
+    "native": {
+      "workspace": "native",
+      "members": ["../common", "."],
+      "entries": {
+        "main": {
+          "entry_package": "main",
+          "artifact": "local/metonic_quote_native/main"
+        },
+        "probe": {
+          "entry_package": "probe",
+          "artifact": "local/metonic_quote_native/probe"
+        }
+      }
+    }
+  }
+}
