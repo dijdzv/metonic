@@ -210,6 +210,7 @@ fn Diagnostics::rejected(self : Diagnostics) -> Unit {
 
 ///|
 priv struct Hooks {
+  trace : @reactive_task.TraceRegistry?
   display_feedback : ((@wgpu.Surface) -> @gpu.DisplayObservation)?
   observer : (async (Observation) -> Unit)?
   completed : ((Observation) -> Unit raise Error)?
@@ -230,16 +231,22 @@ pub async fn run(
   font_path? : String? = None,
   report? : (String) -> Unit = println,
   clipboard? : @text_clipboard.Backend? = None,
+  diagnostics? : @reactive_task.TraceRegistry? = None,
 ) -> Unit {
   run_loop(
     application,
-    { display_feedback, observer, completed, lifecycle, controller, },
+    { trace: diagnostics, display_feedback, observer, completed, lifecycle, controller, },
     hidden,
     minimum_size,
     font_path,
     report,
     clipboard,
   )
+}
+
+///|
+fn Hooks::trace(self : Hooks) -> @reactive_task.TraceRegistry? {
+  self.trace
 }
 
 ///|

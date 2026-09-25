@@ -1,0 +1,45 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+}
+
+///|
+async fn main {
+  let destination = ".work/browser-async-diagnostics"
+  if !@fs.exists(destination) {
+    @fs.mkdir(destination, recursive=true)
+  }
+  let entries = [
+    ("examples/async_pair/browser/diagnostics.html", "index.html"),
+    ("examples/async_pair/browser/diagnostics-host.mjs", "diagnostics-host.mjs"),
+    (
+      "browser_host/_build/js/release/build/local/browser_host/async_pair_dev/async_pair_dev.js",
+      "async-pair-dev.mjs",
+    ),
+    (
+      "browser_host/_build/wasm-gc/release/build/local/browser_host/async_pair_dev/async_pair_dev.wasm",
+      "async-pair-dev.wasm",
+    ),
+    ("browser_host/runtime/surface.mjs", "surface.mjs"),
+    ("browser_host/runtime/application.mjs", "application.mjs"),
+    ("browser_host/runtime/layer-renderer.mjs", "layer-renderer.mjs"),
+    ("browser_host/runtime/wasm-imports.mjs", "wasm-imports.mjs"),
+    (".work/browser-dist/browser-buffer.mjs", "browser-buffer.mjs"),
+    (".work/browser-dist/websys-input.mjs", "websys-input.mjs"),
+    (".work/browser-dist/NotoSansJP.ttf", "NotoSansJP.ttf"),
+    (".work/browser-dist/OFL.txt", "OFL.txt"),
+    (".work/browser-dist/LICENSE-websys", "LICENSE-websys"),
+    (".work/browser-dist/LICENSE-async", "LICENSE-async"),
+  ]
+  let names = entries.map(entry => entry.1)
+  for name in @fs.readdir(destination) {
+    assert_true(
+      names.contains(name),
+      msg="unexpected diagnostics file: " + name,
+    )
+  }
+  for (source, name) in entries {
+    @fs.write_file(destination + "/" + name, @fs.read_file(source).binary())
+  }
+  println("BROWSER_ASYNC_DIAGNOSTICS_READY")
+}

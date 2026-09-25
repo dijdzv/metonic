@@ -1,0 +1,63 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/json",
+}
+
+///|
+fn field(value : Json, key : String) -> Json {
+  guard value is Json::Object(fields) else { abort("expected object") }
+  fields.get(key).unwrap()
+}
+
+///|
+async fn main {
+  @async.with_timeout(30000, () => {
+    @async.with_task_group() <| group => {
+      let (input, writer) = @process.write_to_process()
+      defer writer.close()
+      let (reader, output) = @process.read_from_process()
+      defer reader.close()
+      let child = @process.spawn(
+        group,
+        "native_host/.metonic-build/native/debug/build/local/native_host/async_pair_dev/async_pair_dev.exe",
+        [],
+        stdin=input,
+        stdout=output,
+        no_console_window=true,
+        cancel_handler=@process.hard_cancel(),
+      )
+      let mut ready = false
+      for id = 1; id <= 100; id = id + 1 {
+        writer.write("{\"id\":" + id.to_string() + ",\"op\":\"snapshot\"}\n")
+        let response = @json.parse(reader.read_until("\n").unwrap())
+        assert_eq(field(response, "error"), Json::string(""))
+        let trace = field(response, "diagnostics")
+        guard field(trace, "sources") is Json::Array(sources) else {
+          abort("sources missing")
+        }
+        assert_eq(sources.length(), 2)
+        let source = sources[0]
+        assert_true(field(source, "operation_id") is Json::Number(_))
+        assert_true(field(source, "owner_id") is Json::Number(_))
+        guard field(trace, "derived") is Json::Array(derived) else {
+          abort("derived diagnostics missing")
+        }
+        assert_eq(derived.length(), 1)
+        assert_false(trace.stringify().contains("Detail one"))
+        guard field(trace, "events") is Json::Array(events) else {
+          abort("events missing")
+        }
+        if events.any(event => field(event, "kind") == Json::string("ready")) {
+          ready = true
+          break
+        }
+        @async.sleep(25)
+      }
+      assert_true(ready)
+      writer.close()
+      assert_eq(child.wait(), 0)
+      println("ASYNC_DIAGNOSTICS_STDIO_OK")
+    }
+  })
+}

@@ -694,6 +694,10 @@ ordinary application bundle is inspected through browser-owned DevTools, so
 there is no Metonic debug endpoint to strip from its runtime. This boundary is
 different from native's separately compiled controller.
 
+Async Source and component inspection has a separate opt-in development entry;
+its bounded schema and release exclusion are described in
+[development async diagnostics](development-async-diagnostics.md).
+
 An external consumer should verify attachment, editing, actual persistence,
 capture, reconnect, detach and reload on both JS and WasmGC. DOM text insertion
 and headless screenshots do not establish physical IME or on-screen display

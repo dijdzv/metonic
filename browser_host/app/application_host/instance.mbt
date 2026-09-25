@@ -11,7 +11,12 @@ pub fn create(
   font_url~ : String,
   font_sha256~ : String,
   root_id? : String? = None,
+  diagnostics? : @reactive_task.TraceRegistry? = None,
 ) -> Instance {
+  let tasks = @task_driver.driver()
+  if diagnostics is Some(registry) {
+    ignore(tasks.observe((operation, event) => registry.driver_event(operation, event)))
+  }
   let session = Session::{
     application,
     bindings: bindings.map(binding => binding),
@@ -35,7 +40,7 @@ pub fn create(
     layers: [],
     presented: [],
     stopped: false,
-    tasks: @task_driver.driver(),
+    tasks,
   }
   @async.run_async_main(async fn() { session.run_tasks() })
   make_bridge(

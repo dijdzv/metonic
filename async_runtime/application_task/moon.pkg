@@ -7,6 +7,7 @@ import {
 import {
   "local/p0/core/task_scope",
   "local/p0/core/reactive",
+  "local/p0/core/reactive_task" @trace,
   "local/p0/examples/p0/application",
   "local/p0/examples/p0/tasks" @sample,
   "local/p0/examples/p0/scene",

@@ -51,6 +51,7 @@ pub struct Source[K, V] {
   priv source_id : Int
   priv admission_id : Ref[Int]
   priv state_revision : Ref[Int]
+  priv mut trace : ((TraceKind) -> Unit)?
 }
 
 ///|
@@ -67,6 +68,7 @@ pub fn[K, V] Source::new(parent : @reactive.Scope) -> Source[K, V] {
     source_id: fresh_identity(next_source_id, "source"),
     admission_id: Ref(0),
     state_revision: Ref(0),
+    trace: None,
   }
 }
 
@@ -89,9 +91,31 @@ pub fn[K, V] Source::peek(self : Source[K, V]) -> AsyncState[K, V] {
 }
 
 ///|
-fn[K, V] Source::publish(self : Source[K, V], next : AsyncState[K, V]) -> Unit {
+fn[K, V] Source::publish(
+  self : Source[K, V],
+  next : AsyncState[K, V],
+  failed_kind? : TraceKind = FailedTransition,
+) -> Unit {
   self.state_revision.val = fresh_identity(next_state_revision, "source state")
   self.state.set(next)
+  if self.trace is Some(record) {
+    record(
+      match next {
+        Idle => PendingTransition
+        Pending(_, _, _) => PendingTransition
+        Ready(_, _, _, _) => ReadyTransition
+        Failed(_, _, _, _) => failed_kind
+        Canceled(_, _, _) => CanceledTransition
+      },
+    )
+  }
+}
+
+///|
+fn[K, V] Source::record_trace(self : Source[K, V], kind : TraceKind) -> Unit {
+  if self.trace is Some(record) {
+    record(kind)
+  }
 }
 
 ///|
@@ -131,7 +155,10 @@ fn[K : Eq, V] Source::proposal(
     },
     () => prepare(retained.val),
     on_failure=message => {
-      self.publish(Failed(key, cycle, message, retained.val))
+      self.publish(
+        Failed(key, cycle, message, retained.val),
+        failed_kind=UnexpectedFailure,
+      )
       @task.Failed(message)
     },
   )
@@ -181,7 +208,10 @@ pub fn[K : Eq, V, E] Source::replace_result(
         match result {
           Ok(value) => self.publish(Ready(key, cycle, value, previous))
           Err(error) =>
-            self.publish(Failed(key, cycle, error_text(error), previous))
+            self.publish(
+              Failed(key, cycle, error_text(error), previous),
+              failed_kind=ExpectedFailure,
+            )
         }
         @task.Changed
       }),
@@ -193,8 +223,10 @@ pub fn[K : Eq, V, E] Source::replace_result(
 pub fn[K, V] Source::cancel(self : Source[K, V]) -> @task.Request? {
   self.resource.cancel(() => {
     match self.state.peek() {
-      Pending(key, cycle, previous) =>
+      Pending(key, cycle, previous) => {
+        self.record_trace(CancellationRequested)
         self.publish(Canceled(key, cycle, previous))
+      }
       _ => ()
     }
   })
@@ -206,8 +238,10 @@ pub fn[K, V] Source::cancel(self : Source[K, V]) -> @task.Request? {
 pub fn[K, V] Source::retire_current(self : Source[K, V]) -> Bool {
   guard self.resource.retire_current() else { return false }
   match self.state.peek() {
-    Pending(key, cycle, previous) =>
+    Pending(key, cycle, previous) => {
+      self.record_trace(CancellationRequested)
       self.publish(Canceled(key, cycle, previous))
+    }
     _ => ()
   }
   true
@@ -219,8 +253,10 @@ pub fn[K, V] Source::dispose(self : Source[K, V]) -> Unit {
     return
   }
   match self.state.peek() {
-    Pending(key, cycle, previous) =>
+    Pending(key, cycle, previous) => {
+      self.record_trace(CancellationRequested)
       self.publish(Canceled(key, cycle, previous))
+    }
     _ => ()
   }
   self.resource.dispose()

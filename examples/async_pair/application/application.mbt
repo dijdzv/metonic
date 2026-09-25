@@ -137,7 +137,10 @@ fn PairDemo::view(self : PairDemo) -> Array[@app.Control] {
 }
 
 ///|
-pub fn create(wait : async (Int) -> Unit) -> @app.Application {
+pub fn create(
+  wait : async (Int) -> Unit,
+  diagnostics? : @async_state.TraceRegistry? = None,
+) -> @app.Application {
   let graph = @reactive.Graph::new()
   let scope = @reactive.Scope::root(graph)
   let selected = @reactive.Signal::new(scope, "one")
@@ -148,6 +151,26 @@ pub fn create(wait : async (Int) -> Unit) -> @app.Application {
   let related : @async_state.Source[String, String] = @async_state.Source::new(
     scope,
   )
+  if diagnostics is Some(registry) {
+    let owner = registry
+      .track_owner(scope, None, @async_state.ApplicationOwner, 0)
+      .unwrap()
+    let key_id = key => if key == "one" { 1 } else { 2 }
+    if !registry.track_source(detail, owner, key_id) ||
+      !registry.track_source(related, owner, key_id) {
+      abort("async pair diagnostics registration failed")
+    }
+    if !registry.track_derived(scope, 1, owner, () => {
+        let contract = @async_state.Related::new(selected.peek(), cycle.peek())
+        @async_state.join_related(
+          contract.read(detail),
+          contract.read(related),
+          (_, _) => (),
+        ).current()
+      }) {
+      abort("async pair derived diagnostics registration failed")
+    }
+  }
   let view_state = @reactive.Memo::new(scope, () => {
     @async_state.derive_pair(
       selected.get(),

@@ -12,6 +12,27 @@ pub struct Operation {
 } derive(Eq, Hash)
 
 ///|
+pub(all) enum AdmissionDenial {
+  DriverClosed
+  EmptyGroup
+  PendingCapacity
+  NestedGroup
+  DuplicateOperation
+  LaneCapacity
+  QueueFull
+} derive(Debug, Eq)
+
+///|
+pub(all) enum DriverEvent {
+  RequestAdmitted(Int)
+  RequestDenied(AdmissionDenial)
+  CancelRequested(Int)
+  CleanupJoined(Int)
+  ProgressDropped(Int)
+  CompletionDropped(Int)
+} derive(Debug, Eq)
+
+///|
 let next_operation : Ref[Int] = Ref(0)
 
 ///|
@@ -24,6 +45,11 @@ pub fn Operation::new() -> Operation {
   }
   next_operation.val += 1
   { id: next_operation.val, }
+}
+
+///|
+pub fn Operation::id(self : Operation) -> Int {
+  self.id
 }
 
 ///|
