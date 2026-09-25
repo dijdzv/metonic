@@ -8,7 +8,8 @@ JPY branch neither requests nor reads that rate. It has its own
 common MoonBit model; the browser JS/WasmGC and Windows native entries use that
 same model. Fixture delays make the two items complete detail and stock in
 opposite orders. The USD multiplier of 2 is controlled test data, not a market
-exchange rate.
+exchange rate. The fixture fails the first Blue stool quote at quantity 4;
+Retry quote requests that same input once and then displays its result.
 
 The source is pinned by `dependency.json`. It is an experimental source
 consumer, not a published Metonic package. Windows setup requires mise, Git,
@@ -50,8 +51,9 @@ distribution package and the remaining end-to-end cases are tracked in
 
 The model checks assert both A/B completion orders, rejection of an old D
 result after quantity changes, child removal/recreation during an unfinished
-quote, independent currency completion and invalidation, and serialized note
-saves after newer edits, child removal and close. The browser check
+quote, independent currency completion and invalidation, explicit D failure
+and retry, and serialized note saves after newer edits, child removal and close.
+The browser check
 runs a real HTTP server and
 headless Chromium on JS and WasmGC, saving stage screenshots in the ignored
 `verification-output` directory. The native check owns a hidden window and
