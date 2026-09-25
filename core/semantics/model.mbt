@@ -2,6 +2,7 @@
 pub(all) enum Role {
   Label
   Button
+  Checkbox
   TextInput
 } derive(Debug, Eq)
 
@@ -21,6 +22,8 @@ pub struct Node {
   value : String
   enabled : Bool
   read_only : Bool
+  checked : Bool
+  invalid : Bool
   focused : Bool
   selection_start : Int
   selection_end : Int
@@ -378,6 +381,40 @@ pub fn set_enabled(tree : Tree, reference : NodeRef, enabled : Bool) -> String {
 }
 
 ///|
+pub fn set_checked(tree : Tree, reference : NodeRef, checked : Bool) -> String {
+  let (id, error) = resolve(tree, reference)
+  if id < 0 {
+    return error
+  }
+  let node = extra_node(tree, id).unwrap()
+  if node.role != Checkbox {
+    return "unsupported_action"
+  }
+  if node.checked != checked {
+    store_input(tree, { ..node, checked, })
+    tree.revision += 1
+  }
+  ""
+}
+
+///|
+pub fn set_invalid(tree : Tree, reference : NodeRef, invalid : Bool) -> String {
+  let (id, error) = resolve(tree, reference)
+  if id < 0 {
+    return error
+  }
+  let node = extra_node(tree, id).unwrap()
+  if node.role != Checkbox {
+    return "unsupported_action"
+  }
+  if node.invalid != invalid {
+    store_input(tree, { ..node, invalid, })
+    tree.revision += 1
+  }
+  ""
+}
+
+///|
 pub fn set_read_only(
   tree : Tree,
   reference : NodeRef,
@@ -495,6 +532,8 @@ pub fn restore_input(
     value,
     enabled: true,
     read_only: false,
+    checked: false,
+    invalid: false,
     focused: false,
     selection_start: value.length(),
     selection_end: value.length(),
@@ -532,6 +571,11 @@ pub fn add_button(tree : Tree, name : String) -> NodeRef? {
 }
 
 ///|
+pub fn add_checkbox(tree : Tree, name : String, checked : Bool) -> NodeRef? {
+  add_node(tree, name, Checkbox, "", checked~)
+}
+
+///|
 pub fn add_label(tree : Tree, text : String) -> NodeRef? {
   add_node(tree, text, Label, "")
 }
@@ -542,6 +586,7 @@ fn add_node(
   name : String,
   role : Role,
   value : String,
+  checked? : Bool = false,
 ) -> NodeRef? {
   if tree.closed ||
     tree.next_id == 2147483647 ||
@@ -563,6 +608,8 @@ fn add_node(
     value,
     enabled: true,
     read_only: false,
+    checked,
+    invalid: false,
     focused: false,
     selection_start: value.length(),
     selection_end: value.length(),

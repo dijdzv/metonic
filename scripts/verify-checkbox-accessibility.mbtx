@@ -1,0 +1,31 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/async@0.21.2/fs",
+}
+
+///|
+async fn main {
+  @async.with_timeout(30000, async fn() {
+    @async.with_task_group() <| group => {
+      let root = @fs.realpath(".work/native-host-build/native")
+      let app = @process.spawn(
+        group,
+        root + "/debug/build/local/native_host/notes_probe/notes_probe.exe",
+        ["--checkbox-uia"],
+        no_console_window=true,
+      )
+      defer app.cancel()
+      let client = @process.spawn(
+        group,
+        root +
+        "/debug/build/local/native_host/accessibility_probe/accessibility_probe.exe",
+        [app.pid.to_string(), "checkbox-gallery"],
+        no_console_window=true,
+      )
+      guard client.wait() == 0 else { fail("checkbox UIA client failed") }
+      guard app.wait() == 0 else { fail("checkbox gallery host failed") }
+      println("NATIVE_CHECKBOX_ACCESSIBILITY_PROCESSES_OK")
+    }
+  })
+}

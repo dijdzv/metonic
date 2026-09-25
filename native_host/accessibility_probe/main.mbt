@@ -131,9 +131,13 @@ extern "C" fn copy_name(
 ) -> Unit = "RtlMoveMemory"
 
 ///|
-fn owned_window(pid : Int, hidden? : Bool = false) -> UInt64 raise {
+fn owned_window(
+  pid : Int,
+  hidden? : Bool = false,
+  name? : String = "Metonic",
+) -> UInt64 raise {
   let owner = FixedArray::make(1, 0)
-  let title = FixedArray::make(16, b'\x00')
+  let title = FixedArray::make(name.length() * 2 + 2, b'\x00')
   let mut selected = 0UL
   let mut cursor = 0UL
   for _ in 0..<4096 {
@@ -144,14 +148,85 @@ fn owned_window(pid : Int, hidden? : Bool = false) -> UInt64 raise {
     if window_pid(cursor, owner) != 0U &&
       owner[0] == pid &&
       (hidden || visible(cursor) != 0) &&
-      window_title_length(cursor) == 7 &&
-      window_title(cursor, title, 8) == 7 &&
-      title == utf16z("Metonic") {
+      window_title_length(cursor) == name.length() &&
+      window_title(cursor, title, name.length() + 1) == name.length() &&
+      title == utf16z(name) {
       guard selected == 0UL else { fail("multiple owned Metonic windows") }
       selected = cursor
     }
   }
   fail("owned window enumeration exceeded its bound")
+}
+
+///|
+fn boolean(node : UInt64, id : Int) -> Int {
+  let value = FixedArray::make(3, 0UL)
+  if property(node, id, value) != 0 {
+    return -1
+  }
+  defer ignore(clear(value))
+  if value[0] == 11UL {
+    if (value[1] & 65535UL) != 0UL {
+      1
+    } else {
+      0
+    }
+  } else {
+    -1
+  }
+}
+
+///|
+async fn verify_checkbox_gallery(hwnd : UInt64) -> Unit {
+  let root = FixedArray::make(1, 0UL)
+  guard node_from_handle(hwnd, root) == 0 && root[0] != 0UL else {
+    fail("checkbox gallery UIA root missing")
+  }
+  defer ignore(release_node(root[0]))
+  guard text_is(root[0], 30005, "Checkbox gallery") &&
+    integer(root[0], 30003) == 50032 else {
+    fail("checkbox gallery UIA root role/name mismatch")
+  }
+  for
+    state in [
+      ("Checked", 1, 1),
+      ("Unchecked", 0, 1),
+      ("Disabled", 0, 0),
+      ("Error", 0, 1),
+      ("Dynamic", 0, 1),
+    ] {
+    let (name, checked, enabled) = state
+    let node = child_named(root[0], name)
+    guard node != 0UL else { fail("checkbox UIA node missing: " + name) }
+    defer ignore(release_node(node))
+    guard integer(node, 30003) == 50002 &&
+      integer(node, 30086) == checked &&
+      boolean(node, 30010) == enabled else {
+      fail("checkbox UIA role/state mismatch: " + name)
+    }
+  }
+  let unchecked = child_named(root[0], "Unchecked")
+  guard unchecked != 0UL else { fail("unchecked UIA node missing") }
+  defer ignore(release_node(unchecked))
+  let provider = FixedArray::make(1, 0UL)
+  guard pattern(unchecked, 10015, provider) == 0 && provider[0] != 0UL else {
+    fail("checkbox Toggle pattern missing")
+  }
+  defer ignore(release_pattern(provider[0]))
+  guard toggle(provider[0]) == 0 else { fail("checkbox UIA toggle failed") }
+  for _ in 0..<250 {
+    if integer(unchecked, 30086) == 1 {
+      break
+    }
+    @async.sleep(20)
+  }
+  guard integer(unchecked, 30086) == 1 else {
+    fail("checkbox UIA toggle did not update checked state")
+  }
+  guard post(hwnd, 0x0010U, 0UL, 0L) != 0 else {
+    fail("checkbox gallery close request failed")
+  }
+  println("NATIVE_CHECKBOX_UIA_OK role state disabled toggle")
 }
 
 ///|
@@ -316,12 +391,22 @@ async fn main {
     }
     defer uninitialize()
     let pid = @string.parse_int(@env.args()[1][:])
+    let checkbox_gallery = @env.args().length() == 3 &&
+      @env.args()[2] == "checkbox-gallery"
     let hidden_close = @env.args().length() == 3 &&
       @env.args()[2] == "close-hidden"
     let mut hwnd = 0UL
     while hwnd == 0UL {
-      hwnd = owned_window(pid, hidden=hidden_close)
+      hwnd = owned_window(
+        pid,
+        hidden=hidden_close || checkbox_gallery,
+        name=if checkbox_gallery { "Checkbox gallery" } else { "Metonic" },
+      )
       @async.sleep(20)
+    }
+    if checkbox_gallery {
+      verify_checkbox_gallery(hwnd)
+      return
     }
     if hidden_close ||
       (@env.args().length() == 3 && @env.args()[2] == "close-only") {

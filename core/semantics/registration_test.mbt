@@ -94,3 +94,24 @@ test "read-only input preserves selection and rejects user edits while controlle
   assert_eq(set_controlled_text(tree, input, "disabled update"), "")
   assert_eq(node(tree, input).unwrap().value, "disabled update")
 }
+
+///|
+test "checkbox keeps checked and invalid state independent of its name" {
+  let tree = empty(9, 1)
+  let box = add_checkbox(tree, "Send updates", false).unwrap()
+  assert_eq(node(tree, box).unwrap().role, Checkbox)
+  assert_false(node(tree, box).unwrap().checked)
+  assert_eq(set_checked(tree, box, true), "")
+  assert_eq(set_invalid(tree, box, true), "")
+  assert_eq(set_name(tree, box, "Send email updates"), "")
+  let current = node(tree, box).unwrap()
+  assert_true(current.checked)
+  assert_true(current.invalid)
+  assert_eq(current.name, "Send email updates")
+  assert_eq(set_enabled(tree, box, false), "")
+  assert_eq(set_checked(tree, box, false), "")
+  assert_false(node(tree, box).unwrap().checked)
+  assert_eq(remove(tree, box), "")
+  assert_eq(set_checked(tree, box, true), "stale_target")
+  assert_eq(set_invalid(tree, box, false), "stale_target")
+}

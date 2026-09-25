@@ -41,6 +41,7 @@ fn Session::reconcile_controls(
       let compatible = match control.kind {
         @app.Text => node.role == @semantics.Label
         @app.Button => node.role == @semantics.Button
+        @app.Checkbox => node.role == @semantics.Checkbox
         @app.Input(..) => node.role == @semantics.TextInput
       }
       if !compatible {
@@ -113,12 +114,15 @@ fn Session::reconcile_controls(
         self.next_control += 1
         let tag = match control.kind {
           @app.Button => "button"
+          @app.Checkbox => "button"
           @app.Input(single_line=true) => "input"
           @app.Input(single_line=false) => "textarea"
           @app.Text => "span"
         }
         let element = @dom_view.create_control(root, id, tag)
-        let remove_listener = if control.kind == @app.Button &&
+        let remove_listener = if (
+            control.kind == @app.Button || control.kind == @app.Checkbox
+          ) &&
           control.element.reference is Some(reference) {
           let remove_click = @dom_view.on_click(element, () => {
             ignore(self.activate_reference(reference))
@@ -168,6 +172,7 @@ fn Session::reconcile_controls(
       class_name: Some(
         match control.kind {
           @app.Button => "gpu-button"
+          @app.Checkbox => "gpu-button"
           @app.Input(..) => "gpu-input"
           @app.Text => "gpu-text"
         },

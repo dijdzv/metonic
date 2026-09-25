@@ -39,6 +39,25 @@ pub fn button(id : String, label : String, enabled : Bool) -> Unit {
 }
 
 ///|
+pub fn checkbox(
+  id : String,
+  label : String,
+  enabled : Bool,
+  checked : Bool,
+  invalid : Bool,
+) -> Unit {
+  let child = element(id)
+  let button = @input_dom.HTMLButtonElement::from_element_opt(
+    child.as_element(),
+  ).unwrap()
+  button.set_disabled(!enabled)
+  text(child, label)
+  child.set_attribute("role", "checkbox")
+  child.set_attribute("aria-checked", checked.to_string())
+  child.set_attribute("aria-invalid", invalid.to_string())
+}
+
+///|
 pub fn create_control(
   parent : @input_dom.HTMLElement,
   id : String,

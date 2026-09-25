@@ -114,7 +114,7 @@ fn App::operate_control(
   }
   let error = match action {
     ActivateControl => {
-      if node.role != @semantics.Button {
+      if node.role != @semantics.Button && node.role != @semantics.Checkbox {
         return "unsupported_action"
       }
       ignore(@semantics.focus(app.host.editor, target))

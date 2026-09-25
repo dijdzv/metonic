@@ -2,6 +2,7 @@
 pub(all) enum Kind {
   Text
   Button
+  Checkbox
   Input(single_line~ : Bool)
 } derive(Eq)
 
@@ -19,6 +20,15 @@ pub fn button(
   clip? : @view.Bounds? = None,
 ) -> Control {
   { element: widget.element(bounds), kind: Button, clip, }
+}
+
+///|
+pub fn checkbox(
+  widget : @component.UiCheckbox,
+  bounds : @view.Bounds,
+  clip? : @view.Bounds? = None,
+) -> Control {
+  { element: widget.element(bounds), kind: Checkbox, clip, }
 }
 
 ///|

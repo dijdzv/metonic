@@ -1,0 +1,13 @@
+import {
+  "local/p0/core/application" @app,
+  "local/p0/core/application_task" @task,
+  "local/p0/core/component",
+  "local/p0/core/layout",
+  "local/p0/core/reactive",
+  "local/p0/core/semantics",
+  "local/p0/core/view",
+}
+
+import {
+  "moonbitlang/async",
+} for "test"

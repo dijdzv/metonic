@@ -52,6 +52,9 @@ extern "C" fn read_only(node : UInt64) -> Unit = "accesskit_node_set_read_only"
 extern "C" fn toggled(node : UInt64, value : Int) -> Unit = "accesskit_node_set_toggled"
 
 ///|
+extern "C" fn invalid(node : UInt64, value : Int) -> Unit = "accesskit_node_set_invalid"
+
+///|
 extern "C" fn bounds(
   node : UInt64,
   x : Double,
@@ -157,6 +160,7 @@ fn tree(_data : UInt64) -> UInt64 {
       match semantic.role {
         @semantics.Label => 3
         @semantics.Button => 18
+        @semantics.Checkbox => 15
         @semantics.TextInput => 17
       },
     )
@@ -166,6 +170,9 @@ fn tree(_data : UInt64) -> UInt64 {
     value(node, text, text.length().to_uint64())
     if !semantic.enabled {
       disabled(node)
+    }
+    if semantic.invalid {
+      invalid(node, 0)
     }
     if semantic.role != @semantics.Label {
       add_action(node, 1)
@@ -177,9 +184,12 @@ fn tree(_data : UInt64) -> UInt64 {
       box.width.to_double(),
       box.height.to_double(),
     )
-    if semantic.role is @semantics.Button {
+    if semantic.role is @semantics.Button ||
+      semantic.role is @semantics.Checkbox {
       add_action(node, 0)
-      if presentation.toggled is Some(active) {
+      if semantic.role is @semantics.Checkbox {
+        toggled(node, if semantic.checked { 1 } else { 0 })
+      } else if presentation.toggled is Some(active) {
         toggled(node, if active { 1 } else { 0 })
       }
     } else if bridge.presentation.text_owner == Some(semantic.reference) {

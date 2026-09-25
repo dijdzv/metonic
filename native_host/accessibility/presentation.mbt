@@ -81,7 +81,11 @@ fn valid_presentation(
       return false
     }
     if !valid_bounds(control.bounds) ||
-      (control.toggled is Some(_) && node.role != @semantics.Button) {
+      (
+        control.toggled is Some(_) &&
+        node.role != @semantics.Button &&
+        node.role != @semantics.Checkbox
+      ) {
       return false
     }
   }

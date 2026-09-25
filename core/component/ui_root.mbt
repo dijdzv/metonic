@@ -51,6 +51,17 @@ priv struct UiText {
 }
 
 ///|
+priv struct UiCheck {
+  key : String
+  owner : ChildOwner
+  reference : @semantics.NodeRef
+  label : Read[String]
+  value : Controlled[Bool]
+  enabled : Read[Bool]
+  invalid : Read[Bool]
+}
+
+///|
 priv struct UiEdit {
   key : String
   owner : ChildOwner
@@ -72,6 +83,7 @@ pub struct UiRoot {
   priv tree : @semantics.Tree
   priv fixed : Array[FixedOwner]
   priv actions : Array[UiAction]
+  priv checks : Array[UiCheck]
   priv labels : Array[UiText]
   priv edits : Array[UiEdit]
 }
@@ -84,6 +96,13 @@ pub struct UiOwner {
 
 ///|
 pub struct UiButton {
+  priv root : UiRoot
+  priv owner : ChildOwner
+  priv reference : @semantics.NodeRef
+}
+
+///|
+pub struct UiCheckbox {
   priv root : UiRoot
   priv owner : ChildOwner
   priv reference : @semantics.NodeRef
@@ -109,7 +128,7 @@ pub fn UiRoot::new(scope : @reactive.Scope, tree : @semantics.Tree) -> UiRoot {
   if scope.is_disposed() {
     abort("UI root requires a live scope")
   }
-  { scope, tree, fixed: [], actions: [], labels: [], edits: [], }
+  { scope, tree, fixed: [], actions: [], checks: [], labels: [], edits: [], }
 }
 
 ///|
@@ -166,6 +185,12 @@ fn UiOwner::check_key(self : UiOwner, key : String) -> Unit {
       abort("duplicate UI control key")
     }
   }
+  for check in self.root.checks {
+    if physical_equal(check.owner.scope(), self.child.scope()) &&
+      check.key == key {
+      abort("duplicate UI control key")
+    }
+  }
   for edit in self.root.edits {
     if physical_equal(edit.owner.scope(), self.child.scope()) && edit.key == key {
       abort("duplicate UI control key")
@@ -210,6 +235,45 @@ pub fn UiOwner::button(
 }
 
 ///|
+pub fn UiOwner::checkbox(
+  self : UiOwner,
+  key : String,
+  label : String,
+  value : Controlled[Bool],
+  enabled? : Read[Bool] = Read::new(() => true),
+  invalid? : Read[Bool] = Read::new(() => false),
+) -> UiCheckbox? {
+  self.check_key(key)
+  let initial = self.root.scope.graph().read_only(() => value.get())
+  guard self.child.add_checkbox(label, initial) is Some(reference) else {
+    return None
+  }
+  let is_enabled = self.root.scope.graph().read_only(() => enabled.get())
+  let is_invalid = self.root.scope.graph().read_only(() => invalid.get())
+  if !is_enabled {
+    ignore(@semantics.set_enabled(self.root.tree, reference, false))
+  }
+  if is_invalid {
+    ignore(@semantics.set_invalid(self.root.tree, reference, true))
+  }
+  self.root.checks.push({
+    key,
+    owner: self.child,
+    reference,
+    label: Read::new(() => label),
+    value,
+    enabled,
+    invalid,
+  })
+  self.child
+  .scope()
+  .on_dispose(() => {
+    self.root.checks.retain(check => check.reference != reference)
+  })
+  Some({ root: self.root, owner: self.child, reference, })
+}
+
+///|
 pub fn UiOwner::label(
   self : UiOwner,
   key : String,
@@ -229,6 +293,11 @@ pub fn UiOwner::label(
 
 ///|
 pub fn UiButton::reference(self : UiButton) -> @semantics.NodeRef {
+  self.reference
+}
+
+///|
+pub fn UiCheckbox::reference(self : UiCheckbox) -> @semantics.NodeRef {
   self.reference
 }
 
@@ -254,6 +323,23 @@ pub fn UiButton::element(
 ) -> @view.Element {
   if !self.owner.owns(self.reference) {
     abort("UI button owner is disposed")
+  }
+  let node = @semantics.node(self.root.tree, self.reference).unwrap()
+  {
+    bounds,
+    text: node.name,
+    reference: Some(self.reference),
+    focused: node.focused,
+  }
+}
+
+///|
+pub fn UiCheckbox::element(
+  self : UiCheckbox,
+  bounds : @view.Bounds,
+) -> @view.Element {
+  if !self.owner.owns(self.reference) {
+    abort("UI checkbox owner is disposed")
   }
   let node = @semantics.node(self.root.tree, self.reference).unwrap()
   {
@@ -354,17 +440,28 @@ pub fn UiRoot::activate(
   reference : @semantics.NodeRef,
 ) -> @task.Request? {
   guard !self.scope.is_disposed() else { return None }
-  guard self.actions.iter().find_first(action => action.reference == reference)
-    is Some(action) &&
-    action.owner.owns(reference) else {
+  guard @semantics.node(self.tree, reference) is Ok(node) && node.enabled else {
     return None
   }
-  guard @semantics.node(self.tree, reference) is Ok(node) &&
-    node.role == @semantics.Button &&
-    node.enabled else {
-    return None
+  if node.role == @semantics.Button {
+    guard self.actions
+      .iter()
+      .find_first(action => action.reference == reference)
+      is Some(action) &&
+      action.owner.owns(reference) else {
+      return None
+    }
+    return (action.callback)()
   }
-  (action.callback)()
+  if node.role == @semantics.Checkbox {
+    guard self.checks.iter().find_first(check => check.reference == reference)
+      is Some(check) &&
+      check.owner.owns(reference) else {
+      return None
+    }
+    return (check.value.commit)(!node.checked)
+  }
+  None
 }
 
 ///|
@@ -412,6 +509,33 @@ pub fn UiRoot::synchronize(
       }
       if node.enabled != next_enabled &&
         @semantics.set_enabled(self.tree, action.reference, next_enabled) == "" {
+        changed = true
+      }
+    }
+  }
+  for check in self.checks {
+    if !check.owner.owns(check.reference) {
+      continue
+    }
+    let next_name = self.scope.graph().read_only(() => check.label.get())
+    let next_enabled = self.scope.graph().read_only(() => check.enabled.get())
+    let next_checked = self.scope.graph().read_only(() => check.value.get())
+    let next_invalid = self.scope.graph().read_only(() => check.invalid.get())
+    if @semantics.node(self.tree, check.reference) is Ok(node) {
+      if node.name != next_name &&
+        @semantics.set_name(self.tree, check.reference, next_name) == "" {
+        changed = true
+      }
+      if node.enabled != next_enabled &&
+        @semantics.set_enabled(self.tree, check.reference, next_enabled) == "" {
+        changed = true
+      }
+      if node.checked != next_checked &&
+        @semantics.set_checked(self.tree, check.reference, next_checked) == "" {
+        changed = true
+      }
+      if node.invalid != next_invalid &&
+        @semantics.set_invalid(self.tree, check.reference, next_invalid) == "" {
         changed = true
       }
     }

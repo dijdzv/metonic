@@ -45,7 +45,14 @@ pub fn from_application(app : @portable.Application) -> Application {
             bounds: control
             .visible_bounds()
             .unwrap_or({ ..control.element.bounds, width: 0, height: 0, }),
-            toggled: None,
+            toggled: if control.kind == @portable.Checkbox {
+              nodes
+              .iter()
+              .find_first(node => node.reference == reference)
+              .map(node => node.checked)
+            } else {
+              None
+            },
           })
         },
       )
@@ -62,10 +69,21 @@ pub fn from_application(app : @portable.Application) -> Application {
       }
       {
         items: controls.map(control => {
-          let surface = if control.kind == @portable.Button {
-            @renderer.Control
-          } else {
-            @renderer.Text
+          let surface = match control.kind {
+            @portable.Button => @renderer.Control
+            @portable.Checkbox => {
+              let reference = control.element.reference.unwrap()
+              let node = nodes
+                .iter()
+                .find_first(node => node.reference == reference)
+                .unwrap()
+              @renderer.Checkbox(
+                checked=node.checked,
+                enabled=node.enabled,
+                invalid=node.invalid,
+              )
+            }
+            _ => @renderer.Text
           }
           @renderer.item(control.element, surface~, clip=control.clip)
         }),

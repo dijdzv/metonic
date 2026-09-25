@@ -17,6 +17,7 @@ import {
   "local/p0/core/reactive_task",
   "local/p0/core/component",
   "local/p0/examples/notes/operations_fixture" @operations,
+  "local/p0/examples/component_gallery" @gallery,
 }
 
 pkgtype(kind: "executable")
