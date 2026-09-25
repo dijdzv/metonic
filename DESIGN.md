@@ -89,6 +89,11 @@ batching, untracked reads, cycles, conditional child removal, and cleanup exactl
 ownership and scheduling boundary for persistent UI nodes; the consumer and
 performance acceptance remain separate from the core package.
 
+[ADR 038](docs/adr/038-standard-ui-components.md) defines the staged standard
+control contract over those same scopes and the existing host event boundary.
+It specifies fixed and keyed owners, controlled input, semantic roles, and
+shared style before exposing the first widget group.
+
 A scope owns subscriptions and tasks. Disposing it prevents subsequent writes.
 Async completions carry request identity/generation so superseded responses cannot
 overwrite newer state. Worker threads enqueue results; only the UI thread mutates
