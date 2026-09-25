@@ -81,6 +81,8 @@ priv struct FixedOwner {
 pub struct UiRoot {
   priv scope : @reactive.Scope
   priv tree : @semantics.Tree
+  priv mut theme : @theme.Theme
+  priv mut theme_dirty : Bool
   priv fixed : Array[FixedOwner]
   priv actions : Array[UiAction]
   priv checks : Array[UiCheck]
@@ -126,13 +128,22 @@ pub struct UiInput {
 }
 
 ///|
-pub fn UiRoot::new(scope : @reactive.Scope, tree : @semantics.Tree) -> UiRoot {
+pub fn UiRoot::new(
+  scope : @reactive.Scope,
+  tree : @semantics.Tree,
+  theme? : @theme.Theme = @theme.default(),
+) -> UiRoot {
   if scope.is_disposed() {
     abort("UI root requires a live scope")
+  }
+  if !theme.valid() {
+    abort("invalid UI theme")
   }
   {
     scope,
     tree,
+    theme,
+    theme_dirty: false,
     fixed: [],
     actions: [],
     checks: [],
@@ -141,6 +152,24 @@ pub fn UiRoot::new(scope : @reactive.Scope, tree : @semantics.Tree) -> UiRoot {
     labels: [],
     edits: [],
   }
+}
+
+///|
+pub fn UiRoot::theme(self : UiRoot) -> @theme.Theme {
+  self.theme
+}
+
+///|
+pub fn UiRoot::set_theme(self : UiRoot, theme : @theme.Theme) -> Bool {
+  if self.scope.is_disposed() || !theme.valid() {
+    return false
+  }
+  if self.theme == theme {
+    return false
+  }
+  self.theme = theme
+  self.theme_dirty = true
+  true
 }
 
 ///|
@@ -630,6 +659,10 @@ pub fn UiRoot::synchronize(
       @semantics.set_controlled_text(self.tree, edit.reference, next) == "" {
       changed = true
     }
+  }
+  if self.theme_dirty {
+    self.theme_dirty = false
+    changed = true
   }
   changed
 }

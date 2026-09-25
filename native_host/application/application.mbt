@@ -26,6 +26,7 @@ pub(all) struct Application {
   connect_tasks : (@task.TaskControl) -> Unit
   publication_round : ((@task.Request) -> Bool) -> Bool
   synchronize_controls : (@semantics.NodeRef?) -> Bool
+  theme : () -> @theme.Theme
   initialize : () -> TaskAction?
   initial_size : (Int, Int)
   view : () -> View

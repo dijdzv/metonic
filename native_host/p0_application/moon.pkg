@@ -3,6 +3,7 @@ import {
   "local/p0/examples/p0/application",
   "local/p0/examples/p0/scene",
   "local/p0/core/semantics",
+  "local/p0/core/theme",
   "local/p0/examples/p0/semantics" @sample,
   "local/p0/examples/p0/view_renderer",
   "local/native_host/p0_accessibility",

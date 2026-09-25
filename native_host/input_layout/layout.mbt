@@ -94,14 +94,28 @@ pub fn Registry::prepare_single_line(
   text : String,
   width : Int,
   active_caret : Int?,
+  theme? : @theme.Theme = @theme.default(),
 ) -> Bool {
   guard self.find(reference) is Some(input) else { return false }
   if !input.single_line || width <= 0 || width > 1024 {
     return false
   }
-  if !@raster.matches_layout(input.engine, text, width, true) {
+  if !@raster.matches_layout(
+      input.engine,
+      text,
+      width,
+      true,
+      typography=theme.typography,
+    ) {
     ignore(
-      @raster.render(input.engine, text, width, 32, single_line_scroll=Some(0)),
+      @raster.render(
+        input.engine,
+        text,
+        width,
+        theme.typography.line_height.ceil().to_int(),
+        single_line_scroll=Some(0),
+        theme~,
+      ),
     )
   }
   if @raster.caret_position(input.engine, text.length()) is Some((end_x, _)) {

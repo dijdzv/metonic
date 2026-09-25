@@ -6,7 +6,7 @@ Status: Accepted for staged Phase 5 implementation. [Issue #618](https://github.
 
 ADR 035 owns synchronous values with `Graph` and `Scope`; ADR 037 owns dynamic UI lifetime through `KeyedChildren` and the host's event boundary. The external quote board proves those low-level contracts, but its `Board::view` constructs each `Control` and absolute rectangle, looks up semantic nodes to recover focus and text, and its `Application.activate` compares every `NodeRef` to route events. The note field separately creates its semantic input and mirrors edits. A second app must not have to repeat that wiring to get a button or editable field.
 
-The present `core/component` only wraps keyed child `Scope`s and their semantic references. `core/application` renders `Text`, `Button`, and `Input`; `core/semantics` has only Button and TextInput roles. The browser host maps those controls to DOM elements, while the native host maps semantic nodes to AccessKit and draws through the shared view. These are the boundaries to extend, not parallel component, editor, or task runtimes.
+At the time of this decision, `core/component` only wrapped keyed child `Scope`s and their semantic references. `core/application` rendered `Text`, `Button`, and `Input`; `core/semantics` had only Button and TextInput roles. The browser host mapped those controls to DOM elements, while the native host mapped semantic nodes to AccessKit and drew through the shared view. These were the boundaries to extend, not parallel component, editor, or task runtimes.
 
 ## Decision: one owner, one event boundary
 
@@ -16,7 +16,7 @@ The application passes this optional root to the host. At the existing event bou
 
 Expose a read-only `Read[T]` descriptor for labels and derived display values, and a `Controlled[T]` descriptor with `read` and `write` for editable/selected values. These descriptors are owner-scoped sampling and event contracts, not another reactive graph. `read` can refer to `Signal`, `Memo`, or a published async view. `write` runs only in response to a valid host event. The semantic editor owns the in-progress text, selection, and IME composition. The controlled value receives committed edits; a programmatic change is reconciled at the host event boundary, preserving selection when text is unchanged. Preedit is never copied back into the application model or reset by a render. An input may be read-only or disabled without pretending that its value callback should run.
 
-The following is the **target consumer shape**, illustrating the contract rather than claiming these names are implemented already:
+The following is the **intended consumer shape** from the decision. The integrated API follows this ownership pattern; exact call signatures and the executable quote-board consumer are authoritative:
 
 ```moonbit
 let ui = @component.UiRoot::new(app_scope, tree, theme=theme)
@@ -49,7 +49,7 @@ details.reconcile(specs, (child_owner, key, _) => {
 
 Here `UiRoot::fixed` owns a child `Scope`; `adopt` uses the already-created keyed `ChildOwner` instead of creating a second lifetime. Widget handles expose identity and state to layout without making app code compare `NodeRef`s. A fixed region can also be hidden without disposal; a keyed region can be removed and recreated. Visibility does not stop tasks; owner disposal does. Shared model state belongs to an ancestor Scope, while local widget state belongs to the widget owner. A parent may read a child's state only while that child is live; long-lived shared values must be promoted deliberately to an ancestor.
 
-The quote board currently builds six fixed button rectangles, conditional quantity/retry rectangles, four text rectangles, a note rectangle, and a save rectangle in `Board::view`, and branches on the associated references in `activate`. With this contract the app still supplies labels, data dependencies, callbacks, and a layout arrangement; component creation, focus/disabled state, semantic registration, live-reference checks, and dispatch move into the framework. The expected reduction is the repeated control and routing code, not the app's A/B/C/D request logic. Implementation acceptance compares the resulting consumer source and built behavior to this baseline; this ADR does not claim a measured reduction before migration.
+Before migration the quote board built six fixed button rectangles, conditional quantity/retry rectangles, four text rectangles, a note rectangle, and a save rectangle in `Board::view`, and compared references in `activate`. It now uses owned controls and Status components for the repeated wiring while still supplying labels, data dependencies, callbacks, and layout. The A/B/C/D request logic remains application code.
 
 ## Semantics and presentation path
 
@@ -75,9 +75,11 @@ Status presentation is a stable, non-focusable semantic node. The application de
 
 ## Theme and invalidation
 
-Use a small common theme of typography, spacing, background/foreground/border colors, and focus/error indicators. Each widget resolves `normal`, `disabled`, `focused`, and `error` states from semantic/application state; callers may override tokens, not fork host behavior. The theme is app-scoped and read-only while a frame is prepared. A theme update is an application event, not a mutation during render.
+Use a small common theme of typography, spacing, background/foreground/border colors, and focus/error indicators. Each widget resolves `normal`, `disabled`, `focused`, and `error` states from semantic/application state; callers may override tokens, not fork host behavior. `UiRoot::new(theme=...)` owns the theme for one application, and `UiRoot::set_theme` schedules its replacement through the normal event-boundary synchronization. A frame samples that theme without mutating it during render. Applications without a `UiRoot` use the default theme.
 
-Separate text layout inputs (text, font, size, available width) from paint-only inputs (colors, border and focus ring). A state-only change reuses text shaping and layout when those inputs are equal; it repaints affected visible bounds as needed. Focus/error transitions still require a visible frame. Both hosts need a regression check for unchanged text geometry and a measurement of redraw/layout work; do not claim that the current renderer already has this optimization.
+An application imports `local/p0/core/theme`, derives a value from `@theme.default()`, and passes it to `UiRoot::new(scope, tree, theme=...)`. The same value controls browser and native output; `UiRoot::set_theme` returns `false` for an invalid or unchanged theme. A layout may read `ui.theme().spacing.gap` when arranging controls.
+
+Separate text layout inputs (text, font, size, available width and wrapping mode) from paint-only inputs (colors, border and focus ring). The shared raster engine now caches up to 64 layouts per engine and reuses shaping when those inputs match; a typography or width change produces a new layout. Paint-only changes repaint visible layers, and the browser currently submits the whole frame rather than only dirty rectangles. Focus/error transitions require a visible frame. Layout-hit and paint counts are asserted by the rendering test and host-visible repaint is checked in the gallery; the [verification record](../verification/phase5-component-theme.md) states the measured scope rather than extrapolating a general performance gain.
 
 ## Stages and acceptance
 

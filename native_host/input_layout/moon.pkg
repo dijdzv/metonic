@@ -1,6 +1,7 @@
 import {
   "local/p0/core/semantics",
   "local/p0/text_raster" @raster,
+  "local/p0/core/theme",
 }
 
 import {

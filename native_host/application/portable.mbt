@@ -4,6 +4,7 @@ pub fn from_application(app : @portable.Application) -> Application {
   let revealed : Ref[@semantics.NodeRef?] = Ref(None)
   {
     editor: app.editor,
+    theme: () => app.theme(),
     default_input: app.default_input,
     connect_tasks: app.connect_tasks,
     publication_round: submit => {
@@ -101,7 +102,21 @@ pub fn from_application(app : @portable.Application) -> Application {
             }
             _ => @renderer.Text
           }
-          @renderer.item(control.element, surface~, clip=control.clip)
+          @renderer.item(
+            control.element,
+            surface~,
+            clip=control.clip,
+            disabled=control.kind == @portable.Button &&
+              control.element.reference
+              .map(reference => {
+                nodes
+                .iter()
+                .find_first(node => node.reference == reference)
+                .map(node => !node.enabled)
+                .unwrap_or(false)
+              })
+              .unwrap_or(false),
+          )
         }),
         inputs,
         rectangle: None,

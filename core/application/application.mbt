@@ -135,6 +135,11 @@ pub fn Application::publish(self : Application) -> Bool {
 }
 
 ///|
+pub fn Application::theme(self : Application) -> @theme.Theme {
+  self.components.map(root => root.theme()).unwrap_or(@theme.default())
+}
+
+///|
 pub fn Application::synchronize_components(
   self : Application,
   composing : @semantics.NodeRef?,

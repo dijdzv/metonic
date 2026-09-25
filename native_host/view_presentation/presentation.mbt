@@ -21,6 +21,7 @@ pub struct Presenter {
   priv decoration : @raster.Engine
   priv mut inputs : Array[@semantics.NodeRef]
   priv mut previous : Array[@renderer.Item]?
+  priv mut previous_theme : @theme.Theme?
   priv mut manual_scroll : Array[@renderer.Item]
 }
 
@@ -39,6 +40,7 @@ pub fn create(
     decoration,
     inputs: [],
     previous: None,
+    previous_theme: None,
     manual_scroll: [],
   })
 }
@@ -63,6 +65,7 @@ fn copy_item(
   @renderer.item(
     item.element,
     surface=item.surface,
+    disabled=item.disabled,
     clip=item.clip,
     selection=item.selection,
     selection_ranges?=item.selection_ranges.map(ranges => ranges.copy()),
@@ -80,6 +83,7 @@ pub fn Presenter::render(
   items : Array[@renderer.Item],
   inputs : Array[Input],
   preedit : Preedit?,
+  theme? : @theme.Theme = @theme.default(),
 ) -> Result[Array[@renderer.Layer]?, String] {
   let references : Array[@semantics.NodeRef] = []
   for input in inputs {
@@ -169,7 +173,7 @@ pub fn Presenter::render(
       (node.selection_start, node.selection_end)
     }
     let width = if item.surface == @renderer.Control {
-      (item.element.bounds.width - 16).max(1)
+      (item.element.bounds.width - theme.spacing.inset * 2).max(1)
     } else {
       item.element.bounds.width
     }
@@ -184,6 +188,7 @@ pub fn Presenter::render(
           } else {
             None
           },
+          theme~,
         ),
       )
     }
@@ -229,7 +234,7 @@ pub fn Presenter::render(
       prepared
     }
   })
-  if self.previous == Some(prepared) {
+  if self.previous == Some(prepared) && self.previous_theme == Some(theme) {
     return Ok(None)
   }
   let layers : Array[@renderer.Layer] = []
@@ -238,7 +243,7 @@ pub fn Presenter::render(
       Some(input) => self.layouts.engine(input.reference).unwrap()
       None => self.decoration
     }
-    match @renderer.render(engine, [item], retain_layout=0) {
+    match @renderer.render(engine, [item], retain_layout=0, theme~) {
       Ok(rendered) => layers.append(rendered)
       Err(error) => return Err(error)
     }
@@ -259,6 +264,7 @@ pub fn Presenter::render(
       }
     }),
   )
+  self.previous_theme = Some(theme)
   Ok(Some(layers))
 }
 

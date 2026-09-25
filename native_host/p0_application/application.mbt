@@ -13,6 +13,7 @@ pub fn create(model : @application.Model) -> @host.Application {
     default_input: Some(model.editor_input),
     publication_round: _ => false,
     synchronize_controls: _ => false,
+    theme: () => @theme.default(),
     connect_tasks: _ => (),
     initialize: () => {
       ignore(

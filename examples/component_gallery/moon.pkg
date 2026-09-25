@@ -6,8 +6,6 @@ import {
   "local/p0/core/reactive",
   "local/p0/core/semantics",
   "local/p0/core/view",
-}
-
-import {
+  "local/p0/core/theme",
   "moonbitlang/async",
-} for "test"
+}

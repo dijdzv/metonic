@@ -17,6 +17,35 @@ async test "input layouts retain independent geometry and scroll without sample 
     layouts.prepare_single_line(first, long_text, 40, Some(long_text.length())),
   )
   assert_true(layouts.scroll_x(first) > 0)
+  let custom = {
+    ..@theme.default(),
+    typography: {
+      ..@theme.default().typography,
+      size: 26.0F,
+      line_height: 34.0F,
+    },
+  }
+  assert_true(
+    layouts.prepare_single_line(
+      first,
+      long_text,
+      40,
+      Some(long_text.length()),
+      theme=custom,
+    ),
+  )
+  assert_true(
+    @raster.matches_layout(
+      layouts.engine(first).unwrap(),
+      long_text,
+      40,
+      true,
+      typography=custom.typography,
+    ),
+  )
+  assert_false(
+    @raster.matches_layout(layouts.engine(first).unwrap(), long_text, 40, true),
+  )
   assert_eq(layouts.scroll_x(second), 0)
   let first_end = @raster.caret_position(
     layouts.engine(first).unwrap(),

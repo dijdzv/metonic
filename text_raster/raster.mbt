@@ -3,10 +3,24 @@ pub struct Engine {
   system : @cosmic.FontSystem
   mut cache : @cosmic.SwashCache
   mut layout : @cosmic.Buffer?
+  priv layouts : Array[CachedLayout]
+  mut layout_builds : Int
+  mut layout_hits : Int
+  mut paints : Int
   mut text : String
   mut width : Int
   mut single_line : Bool
+  mut typography : @theme.Typography
   mut scroll_y : Int
+}
+
+///|
+priv struct CachedLayout {
+  text : String
+  width : Int
+  single_line : Bool
+  typography : @theme.Typography
+  buffer : @cosmic.Buffer
 }
 
 ///|
@@ -19,9 +33,14 @@ pub fn create(font : Bytes) -> Engine? {
       system,
       cache: @cosmic.SwashCache::new(),
       layout: None,
+      layouts: [],
+      layout_builds: 0,
+      layout_hits: 0,
+      paints: 0,
       text: "",
       width: 0,
       single_line: false,
+      typography: @theme.default().typography,
       scroll_y: 0,
     })
   }
@@ -40,29 +59,67 @@ pub fn render(
   single_line_scroll? : Int? = None,
   vertical_scroll? : Int = 0,
   follow_caret? : Int? = None,
+  theme? : @theme.Theme = @theme.default(),
 ) -> Bytes {
   if width < 1 || width > 1024 || height < 1 || height > 1024 {
     Bytes::makei(0, _ => b'\x00')
   } else {
-    let mut buffer = @cosmic.Buffer::new(@cosmic.Metrics::new(24.0F, 32.0F))
-    let attrs = @cosmic.AttrsList::new(
-      @cosmic.Attrs::new().family(@cosmic.Family::Name("Noto Sans JP")),
-    )
-    buffer = buffer
-      .set_text(text, attrs, @cosmic.Shaping::Advanced)
-      .set_size(Some(Float::from_int(width)), None)
-      .set_wrap(
-        if single_line_scroll is Some(_) {
-          @cosmic.Wrap::None
-        } else {
-          @cosmic.Wrap::WordOrGlyph
-        },
-      )
-      .layout_all_with_font_system(engine.system)
+    engine.paints += 1
+    let single_line = single_line_scroll is Some(_)
+    let buffer = match
+      engine.layouts
+      .iter()
+      .find_first(entry => {
+        entry.text == text &&
+        entry.width == width &&
+        entry.single_line == single_line &&
+        entry.typography == theme.typography
+      }) {
+      Some(entry) => {
+        engine.layout_hits += 1
+        entry.buffer
+      }
+      None => {
+        let attrs = @cosmic.AttrsList::new(
+          @cosmic.Attrs::new().family(
+            @cosmic.Family::Name(theme.typography.family),
+          ),
+        )
+        let buffer = @cosmic.Buffer::new(
+            @cosmic.Metrics::new(
+              theme.typography.size,
+              theme.typography.line_height,
+            ),
+          )
+          .set_text(text, attrs, @cosmic.Shaping::Advanced)
+          .set_size(Some(Float::from_int(width)), None)
+          .set_wrap(
+            if single_line {
+              @cosmic.Wrap::None
+            } else {
+              @cosmic.Wrap::WordOrGlyph
+            },
+          )
+          .layout_all_with_font_system(engine.system)
+        engine.layout_builds += 1
+        if engine.layouts.length() == 64 {
+          ignore(engine.layouts.remove(0))
+        }
+        engine.layouts.push({
+          text,
+          width,
+          single_line,
+          typography: theme.typography,
+          buffer,
+        })
+        buffer
+      }
+    }
     engine.layout = Some(buffer)
     engine.text = text
     engine.width = width
-    engine.single_line = single_line_scroll is Some(_)
+    engine.single_line = single_line
+    engine.typography = theme.typography
     let mut bottom = 0
     for run in buffer.layout_runs() {
       bottom = bottom.max((run.line_top + run.line_height).ceil().to_int())
@@ -70,7 +127,10 @@ pub fn render(
     let mut scroll_y = vertical_scroll.max(0).min((bottom - height).max(0))
     if follow_caret is Some(offset) {
       if caret_position(engine, offset, after=caret_after) is Some((_, y)) {
-        scroll_y = scroll_y.min(y).max(y + 32 - height).max(0)
+        scroll_y = scroll_y
+          .min(y)
+          .max(y + theme.typography.line_height.ceil().to_int() - height)
+          .max(0)
       }
     }
     engine.scroll_y = scroll_y
@@ -133,33 +193,60 @@ pub fn render(
         let y = y - scroll_y
         if x >= 0 {
           let x = x.min(width - 1)
-          for py in y.max(0)..<(y + 32).min(height) {
+          for
+            py in y.max(0)..<(y + theme.typography.line_height.ceil().to_int()).min(
+              height,
+            ) {
             pixels[py * width + x] = 0
           }
         }
       }
     }
-    pack_rgba(pixels, selected)
+    pack_rgba(pixels, selected, theme~)
   }
 }
 
 ///|
-fn pack_rgba(pixels : Array[Int], selected : Array[Bool]) -> Bytes {
+fn pack_rgba(
+  pixels : Array[Int],
+  selected : Array[Bool],
+  theme? : @theme.Theme = @theme.default(),
+) -> Bytes {
   let rgba = FixedArray::make(pixels.length() * 4, b'\xff')
   for index, gray in pixels {
     let offset = index * 4
-    if selected[index] {
-      rgba[offset] = (gray * 180 / 255).to_byte()
-      rgba[offset + 1] = (gray * 210 / 255).to_byte()
-      rgba[offset + 2] = gray.to_byte()
+    let background = if selected[index] {
+      theme.selection
     } else {
-      let ink = gray.to_byte()
-      rgba[offset] = ink
-      rgba[offset + 1] = ink
-      rgba[offset + 2] = ink
+      theme.background
     }
+    rgba[offset] = ((
+      gray * background.red.to_int() +
+      (255 - gray) * theme.foreground.red.to_int()
+    ) /
+    255).to_byte()
+    rgba[offset + 1] = ((
+      gray * background.green.to_int() +
+      (255 - gray) * theme.foreground.green.to_int()
+    ) /
+    255).to_byte()
+    rgba[offset + 2] = ((
+      gray * background.blue.to_int() +
+      (255 - gray) * theme.foreground.blue.to_int()
+    ) /
+    255).to_byte()
   }
   rgba.unsafe_reinterpret_as_bytes()
+}
+
+///|
+pub fn Engine::layout_stats(self : Engine) -> (Int, Int) {
+  (self.layout_builds, self.layout_hits)
+}
+
+///|
+pub fn Engine::paint_count(self : Engine) -> Int {
+  self.paints
 }
 
 ///|
@@ -173,11 +260,13 @@ pub fn matches_layout(
   text : String,
   width : Int,
   single_line : Bool,
+  typography? : @theme.Typography = @theme.default().typography,
 ) -> Bool {
   engine.layout is Some(_) &&
   engine.text == text &&
   engine.width == width &&
-  engine.single_line == single_line
+  engine.single_line == single_line &&
+  engine.typography == typography
 }
 
 ///|

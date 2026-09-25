@@ -566,6 +566,15 @@ fn Session::render(self : Session) -> Int {
         @renderer.item(
           control.element,
           clip=control.clip,
+          disabled=control.kind == @app.Button &&
+            control.element.reference
+            .map(reference => {
+              match @semantics.node(self.application.editor, reference) {
+                Ok(node) => !node.enabled
+                Err(_) => false
+              }
+            })
+            .unwrap_or(false),
           surface=if control.kind == @app.Button {
             @renderer.Control
           } else if control.kind == @app.Checkbox &&
@@ -591,7 +600,7 @@ fn Session::render(self : Session) -> Int {
       )
     }
   }
-  match @renderer.render(engine, items) {
+  match @renderer.render(engine, items, theme=self.application.theme()) {
     Ok(layers) => {
       self.layers = layers
       self.presented = view
