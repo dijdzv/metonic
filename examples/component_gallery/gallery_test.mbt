@@ -110,7 +110,7 @@ test "gallery list revokes deleted rows before late activation" {
 }
 
 ///|
-test "gallery status changes phase without changing identity and retry stays a button" {
+async test "gallery status changes phase without changing identity and retry stays a button" {
   let scope = @reactive.Scope::root(@reactive.Graph::new())
   let tree = @semantics.empty(918, 1)
   let ui = @component.UiRoot::new(scope, tree)
@@ -132,10 +132,14 @@ test "gallery status changes phase without changing identity and retry stays a b
   gallery.status_value.set(@component.StatusState::Failed("Quote: failed"))
   assert_true(ui.synchronize(None))
   assert_true(@semantics.node(tree, status).unwrap().invalid)
-  ignore(ui.activate(gallery.retry.reference()))
+  let retry = ui.activate(gallery.retry.reference()).unwrap()
   assert_true(ui.synchronize(None))
   assert_eq(@semantics.node(tree, status).unwrap().name, "Quote: loading")
   assert_false(@semantics.node(tree, status).unwrap().invalid)
+  retry.invalidate()
+  assert_eq(retry.prepare().unwrap().run().apply(), @task.Changed)
+  assert_true(ui.synchronize(None))
+  assert_eq(@semantics.node(tree, status).unwrap().name, "Quote: 112")
   assert_true(
     gallery
     .view()
@@ -145,4 +149,51 @@ test "gallery status changes phase without changing identity and retry stays a b
   )
   scope.dispose()
   assert_true(@semantics.node(tree, status) is Err("stale_target"))
+}
+
+///|
+test "gallery theme, text inputs and row order follow one owner boundary" {
+  let scope = @reactive.Scope::root(@reactive.Graph::new())
+  let tree = @semantics.empty(919, 1)
+  let ui = @component.UiRoot::new(scope, tree)
+  let gallery = Gallery::new(ui)
+  assert_eq(
+    @semantics.node(tree, gallery.heading.reference()).unwrap().role,
+    @semantics.Label,
+  )
+  assert_false(
+    @semantics.node(tree, gallery.disabled_input.reference()).unwrap().enabled,
+  )
+  assert_false(
+    @semantics.node(tree, gallery.disabled_button.reference()).unwrap().enabled,
+  )
+  assert_eq(
+    @semantics.node(tree, gallery.multi.reference()).unwrap().value,
+    "First line\nSecond line",
+  )
+  assert_eq(
+    @semantics.set_text(tree, gallery.single.reference(), "new key"),
+    "",
+  )
+  ignore(
+    ui.edited(gallery.single.reference(), "new key", @semantics.revision(tree)),
+  )
+  assert_eq(gallery.single_value.peek(), "new key")
+  let first = gallery.list.items()[0].reference()
+  ignore(ui.activate(gallery.rotate.reference()))
+  assert_eq(gallery.list.items()[11].reference(), first)
+  assert_true(@semantics.node(tree, first).unwrap().selected)
+  assert_eq(ui.theme(), @theme.default())
+  ignore(ui.activate(gallery.theme_toggle.reference()))
+  assert_eq(ui.theme().border, @theme.Rgb::{
+    red: b'\x63',
+    green: b'\x45',
+    blue: b'\x91',
+  })
+  assert_true(ui.synchronize(None))
+  assert_false(ui.synchronize(None))
+  ignore(ui.activate(gallery.theme_toggle.reference()))
+  assert_eq(ui.theme(), @theme.default())
+  assert_true(ui.synchronize(None))
+  scope.dispose()
 }

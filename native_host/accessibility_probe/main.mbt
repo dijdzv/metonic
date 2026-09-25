@@ -241,6 +241,32 @@ async fn verify_checkbox_gallery(hwnd : UInt64) -> Unit {
     fail("list item SelectionItem pattern missing")
   }
   ignore(release_pattern(selected_pattern[0]))
+  let rotate = child_named(root[0], "Rotate rows")
+  guard rotate != 0UL else { fail("rotate UIA button missing") }
+  defer ignore(release_node(rotate))
+  let rotate_invoke = FixedArray::make(1, 0UL)
+  guard pattern(rotate, 10000, rotate_invoke) == 0 && rotate_invoke[0] != 0UL else {
+    fail("rotate Invoke pattern missing")
+  }
+  defer ignore(release_pattern(rotate_invoke[0]))
+  guard invoke(rotate_invoke[0]) == 0 else { fail("rotate UIA invoke failed") }
+  let mut rotated = false
+  for _ in 0..<50 {
+    let updated_list = child_named(root[0], "Selectable items")
+    if updated_list != 0UL {
+      let first_after = @uia.navigate(updated_list, 3)
+      if first_after != 0UL {
+        rotated = text_is(first_after, 30005, "Item 1")
+        ignore(release_node(first_after))
+      }
+      ignore(release_node(updated_list))
+    }
+    if rotated {
+      break
+    }
+    @async.sleep(20)
+  }
+  guard rotated else { fail("rotated list order missing") }
   let status = child_named(root[0], "Quote: waiting")
   guard status != 0UL else { fail("status UIA node missing") }
   defer ignore(release_node(status))
@@ -264,6 +290,31 @@ async fn verify_checkbox_gallery(hwnd : UInt64) -> Unit {
   }
   guard text_is(status, 30005, "Quote: loading") else {
     fail("status UIA update missing")
+  }
+  for _ in 0..<50 {
+    if text_is(status, 30005, "Quote: 112") {
+      break
+    }
+    @async.sleep(20)
+  }
+  guard text_is(status, 30005, "Quote: 112") else {
+    fail("async gallery completion missing")
+  }
+  let theme_button = child_named(root[0], "Switch theme")
+  guard theme_button != 0UL else { fail("theme UIA button missing") }
+  defer ignore(release_node(theme_button))
+  let theme_invoke = FixedArray::make(1, 0UL)
+  guard pattern(theme_button, 10000, theme_invoke) == 0 &&
+    theme_invoke[0] != 0UL else {
+    fail("theme Invoke pattern missing")
+  }
+  defer ignore(release_pattern(theme_invoke[0]))
+  guard invoke(theme_invoke[0]) == 0 else { fail("theme UIA invoke failed") }
+  let disabled_button = child_named(root[0], "Disabled button")
+  guard disabled_button != 0UL else { fail("disabled button UIA node missing") }
+  defer ignore(release_node(disabled_button))
+  guard boolean(disabled_button, 30010) == 0 else {
+    fail("disabled button UIA state mismatch")
   }
   guard post(hwnd, 0x0010U, 0UL, 0L) != 0 else {
     fail("checkbox gallery close request failed")
@@ -407,7 +458,7 @@ async fn expect_text(node : UInt64, expected : String) -> Unit {
 ///|
 fn child_named(parent : UInt64, name : String) -> UInt64 {
   let mut node = @uia.navigate(parent, 3)
-  for _ in 0..<16 {
+  for _ in 0..<64 {
     if node == 0UL {
       return 0UL
     }

@@ -45,6 +45,12 @@ host without the P0 user-lookup flow. It has native, JS and WasmGC entry points.
 The [independent Notes consumer](consumers/metonic-notes/README.md) is a separate
 application source with a pinned Metonic dependency and its own build and
 verification commands.
+The [quote-board consumer](consumers/metonic-quote-board/README.md) exercises
+public owned controls, async data dependencies, status and retry presentation,
+and independent JS/WasmGC and Windows builds. The
+[standard-control contract](docs/adr/038-standard-ui-components.md) describes
+ownership and app-scoped theme tokens; the component gallery verifies controls
+and accessibility states on both hosts.
 
 On Windows x64, install [mise](https://mise.jdx.dev/) 2026.9.4 or newer,
 Git for Windows, GitHub CLI (`gh`), and

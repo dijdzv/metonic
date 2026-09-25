@@ -5,6 +5,7 @@ import {
   "local/p0/core/input_navigation" @navigation,
   "local/native_host/input_layout" @layout,
   "local/p0/text_raster" @raster,
+  "local/p0/core/theme",
 }
 
 supported_targets = "native"

@@ -5,6 +5,7 @@ import {
   "local/p0/core/reactive_task",
   "local/p0/core/component",
   "local/p0/core/layout",
+  "local/p0/core/theme",
 }
 
 import {

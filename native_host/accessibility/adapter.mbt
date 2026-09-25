@@ -153,6 +153,10 @@ fn tree(_data : UInt64) -> UInt64 {
       focus = node.reference.id.to_uint64()
     }
   }
+  let nodes_by_id : Map[Int, @semantics.Node] = Map([])
+  for node in bridge.nodes {
+    nodes_by_id[node.reference.id] = node
+  }
   let result = update_new(focus)
   set_tree(result, tree_new(0UL))
   for semantic in bridge.nodes {
@@ -256,16 +260,20 @@ fn tree(_data : UInt64) -> UInt64 {
       }
     }
     if semantic.role is @semantics.List {
-      for child in bridge.nodes {
-        if child.parent == Some(semantic.reference) {
-          push_child(node, child.reference.id.to_uint64())
+      for control in bridge.presentation.controls {
+        if nodes_by_id.get(control.reference.id) is Some(child) &&
+          child.parent == Some(semantic.reference) {
+          push_child(node, control.reference.id.to_uint64())
         }
       }
     }
-    if semantic.parent is None {
-      push_child(root, id)
-    }
     push_node(result, id, node)
+  }
+  for control in bridge.presentation.controls {
+    if nodes_by_id.get(control.reference.id) is Some(child) &&
+      child.parent is None {
+      push_child(root, control.reference.id.to_uint64())
+    }
   }
   for item in bridge.presentation.statuses {
     let status = node_new(3)

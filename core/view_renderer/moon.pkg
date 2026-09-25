@@ -1,4 +1,5 @@
 import {
   "local/p0/core/view",
   "local/p0/text_raster" @raster,
+  "local/p0/core/theme",
 }

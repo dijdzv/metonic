@@ -11,6 +11,7 @@ pub(all) enum Surface {
 pub struct Item {
   element : @view.Element
   surface : Surface
+  disabled : Bool
   selection : (Int, Int)
   selection_ranges : Array[(Int, Int)]?
   caret : Int?
@@ -25,6 +26,7 @@ pub struct Item {
 pub fn item(
   element : @view.Element,
   surface? : Surface = Text,
+  disabled? : Bool = false,
   selection? : (Int, Int) = (0, 0),
   selection_ranges? : Array[(Int, Int)],
   caret? : Int? = None,
@@ -37,6 +39,7 @@ pub fn item(
   {
     element,
     surface,
+    disabled,
     selection,
     selection_ranges,
     caret,

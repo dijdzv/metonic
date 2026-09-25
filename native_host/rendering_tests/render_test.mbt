@@ -43,14 +43,66 @@ async test "application item order and retained input layout are independent" {
   )
   assert_true(@raster.text_runs(engine, input.text) is Some(_))
   assert_true(@raster.text_runs(engine, button.text) is None)
+  let (shaped, _) = engine.layout_stats()
+  assert_eq(shaped, 3)
+  assert_eq(engine.paint_count(), 3)
   let reordered_layout = @renderer.render(engine, items, retain_layout=0).unwrap()
   assert_eq(reordered_layout[1].pixels, layers[1].pixels)
+  let (reshaped, hits) = engine.layout_stats()
+  assert_eq(reshaped, shaped)
+  assert_eq(hits, 3)
+  assert_eq(engine.paint_count(), 6)
   assert_true(@raster.text_runs(engine, title.text) is Some(_))
+  let focused = @renderer.render(engine, [
+      @renderer.item({ ..button, focused: true, }, surface=Control),
+    ]).unwrap()[0]
+  assert_true(focused.pixels != layers[2].pixels)
+  assert_eq(engine.layout_stats().0, shaped)
+  assert_eq(engine.paint_count(), 7)
+  let dark_ink = {
+    ..@theme.default(),
+    foreground: { red: b'\x20', green: b'\x30', blue: b'\x40', },
+    background: { red: b'\xF0', green: b'\xF5', blue: b'\xFA', },
+  }
+  let recolored = @renderer.render(
+      engine,
+      [@renderer.item(button, surface=Control)],
+      theme=dark_ink,
+    ).unwrap()[0]
+  assert_true(recolored.pixels != layers[2].pixels)
+  assert_eq(recolored.pixels[(5 * 96 + 5) * 4], b'\xF0')
+  assert_eq(engine.layout_stats().0, shaped)
+  assert_eq(engine.paint_count(), 8)
+  let disabled = @renderer.render(engine, [
+      @renderer.item(button, surface=Control, disabled=true),
+    ]).unwrap()[0]
+  assert_true(disabled.pixels != layers[2].pixels)
+  assert_eq(disabled.pixels[(5 * 96 + 5) * 4], b'\xEF')
+  assert_eq(engine.layout_stats().0, shaped)
+  assert_eq(engine.paint_count(), 9)
+  let larger = {
+    ..@theme.default(),
+    typography: {
+      ..@theme.default().typography,
+      size: 26.0F,
+      line_height: 34.0F,
+    },
+  }
+  ignore(
+    @renderer.render(
+      engine,
+      [@renderer.item(button, surface=Control)],
+      theme=larger,
+    ),
+  )
+  assert_eq(engine.layout_stats().0, shaped + 1)
+  assert_eq(engine.paint_count(), 10)
+  assert_true(@raster.text_runs(engine, button.text) is Some(_))
   assert_true(
     @renderer.render(engine, items, retain_layout=3)
     is Err("invalid_retained_item"),
   )
-  assert_true(@raster.text_runs(engine, title.text) is Some(_))
+  assert_true(@raster.text_runs(engine, button.text) is Some(_))
   assert_true(
     @renderer.render(engine, [
       @renderer.item({ ..title, bounds: { ..title.bounds, width: 0, }, }),

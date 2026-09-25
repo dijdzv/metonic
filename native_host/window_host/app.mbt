@@ -379,7 +379,12 @@ fn App::draw(self : App) -> Unit raise Error {
         })
       _ => None
     }
-    let rendered = presenter.render(view.items, view.inputs, preedit)
+    let rendered = presenter.render(
+      view.items,
+      view.inputs,
+      preedit,
+      theme=(self.host.theme)(),
+    )
     let layers = match rendered {
       Ok(layers) => layers
       Err(error) => raise WindowFailure::Failure(error)
@@ -809,7 +814,11 @@ async fn run_loop(
               } else if kind == 1 || kind == 2 {
                 if (app.host.navigate_unhandled)(
                     0,
-                    if kind == 1 { -1000000 } else { 1000000 },
+                    if kind == 1 {
+                      -1000000
+                    } else {
+                      1000000
+                    },
                   ) {
                   ignore(app.publish())
                 }
