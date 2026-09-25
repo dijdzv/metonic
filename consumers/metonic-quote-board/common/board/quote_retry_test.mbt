@@ -7,6 +7,17 @@ fn retry_quote_button(app : @app.Application) -> @semantics.NodeRef {
 }
 
 ///|
+fn quote_status(app : @app.Application) -> @semantics.NodeRef {
+  ignore(app.synchronize_components(None))
+  (app.view)()
+  .iter()
+  .find_first(control => {
+    control.kind == @app.Status && control.element.bounds.y == 256
+  })
+  .unwrap().element.reference.unwrap()
+}
+
+///|
 async test "a failed quote stays failed until Retry requests the same input" {
   let attempts = Ref(0)
   let app = create_with_quote_result(_ => (), _ => Ok(2), _ => Ok(()), (
@@ -41,6 +52,11 @@ async test "a failed quote stays failed until Retry requests the same input" {
   )
   ignore(app.publish())
   assert_eq(line(app, 7), "Shipping: failed for amber x1")
+  let status = quote_status(app)
+  let failed = @semantics.node(app.editor, status).unwrap()
+  assert_eq(failed.role, @semantics.Status)
+  assert_true(failed.invalid)
+  assert_false(failed.name.contains("quote service unavailable"))
   assert_eq(attempts.val, 1)
   assert_false(app.reconcile_tasks(_ => abort("failure must not auto-retry")))
   assert_eq(attempts.val, 1)
@@ -55,17 +71,21 @@ async test "a failed quote stays failed until Retry requests the same input" {
   assert_eq(quotes.length(), 2)
   ignore(app.publish())
   assert_eq(line(app, 7), "Shipping: loading")
+  assert_eq(quote_status(app), status)
+  assert_false(@semantics.node(app.editor, status).unwrap().invalid)
   assert_eq(
     quotes[1].members()[0].prepare().unwrap().run().apply(),
     @task.Changed,
   )
   ignore(app.publish())
   assert_eq(line(app, 7), "Shipping: 112 for 1")
+  assert_eq(quote_status(app), status)
   assert_eq(attempts.val, 2)
   assert_false(
     (app.view)().any(control => control.element.text == "Retry quote"),
   )
   (app.dispose)()
+  assert_true(@semantics.node(app.editor, status) is Err("stale_target"))
 }
 
 ///|

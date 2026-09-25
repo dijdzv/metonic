@@ -66,6 +66,9 @@ while keeping the selected item's completed data. The note editor and Save note
 button belong to the application Scope. Each save captures its text and edit
 revision; writes for this document complete in order even if the selected item
 or detail disappears. The status shows unsaved, saving, saved and failed states.
+Detail, stock and shipping results use owned Status components; Retry quote is
+an ordinary owned Button. A retained shipping quote is labeled as previous
+until the current request completes.
 Closing with unsaved text queues a save and waits for its acknowledgement. A
 failed or rejected write keeps the app open so Save note can retry it. This
 example uses an in-memory delayed storage fixture: it verifies save ordering

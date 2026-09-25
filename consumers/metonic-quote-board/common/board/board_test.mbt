@@ -1,7 +1,11 @@
 ///|
 fn line(app : @app.Application, index : Int) -> String {
   ignore(app.synchronize_components(None))
-  (app.view)().filter(control => control.kind == @app.Text)[index - 4].element.text
+  let y = if index == 8 { 400 } else { 112 + (index - 4) * 48 }
+  (app.view)()
+  .iter()
+  .find_first(control => control.element.bounds.y == y)
+  .unwrap().element.text
 }
 
 ///|
@@ -18,8 +22,9 @@ fn button(app : @app.Application, index : Int) -> @semantics.NodeRef {
 ///|
 async test "action stacks retain button placement and identity after resize" {
   let app = create(_ => ())
-  let before = (app.view)().filter(control =>
-    control.kind == @app.Button && control.element.text != "Save note")
+  let before = (app.view)().filter(control => {
+    control.kind == @app.Button && control.element.text != "Save note"
+  })
   assert_eq(before.map(control => control.element.bounds.x), [
     16, 154, 292, 430, 16, 154,
   ])
@@ -27,8 +32,9 @@ async test "action stacks retain button placement and identity after resize" {
     16, 16, 16, 16, 58, 58,
   ])
   ignore((app.resize)(800, 500))
-  let after = (app.view)().filter(control =>
-    control.kind == @app.Button && control.element.text != "Save note")
+  let after = (app.view)().filter(control => {
+    control.kind == @app.Button && control.element.text != "Save note"
+  })
   assert_eq(
     after.map(control => control.element.reference),
     before.map(control => control.element.reference),

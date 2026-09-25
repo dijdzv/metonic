@@ -1,7 +1,11 @@
 ///|
 fn text(app : @app.Application, index : Int) -> String {
   ignore(app.synchronize_components(None))
-  (app.view)().filter(control => control.kind == @app.Text)[index - 4].element.text
+  let y = if index == 8 { 400 } else { 112 + (index - 4) * 48 }
+  (app.view)()
+  .iter()
+  .find_first(control => control.element.bounds.y == y)
+  .unwrap().element.text
 }
 
 ///|
