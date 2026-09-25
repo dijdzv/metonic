@@ -577,6 +577,7 @@ pub fn create_collection(
       reveal: reference => model.list.reveal(reference),
     }),
     publications: None,
+    downstreams: None,
     connect_tasks: control => {
       if tasks_connected.val {
         abort("Notes task control connected twice")
