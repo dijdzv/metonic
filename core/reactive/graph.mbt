@@ -85,6 +85,23 @@ fn Node::detach(self : Node) -> Unit {
 }
 
 ///|
+fn Node::depends_on(self : Node, target : Int, seen : Array[Int]) -> Bool {
+  if self.id == target {
+    return true
+  }
+  if seen.contains(self.id) {
+    return false
+  }
+  seen.push(self.id)
+  for dependency in self.deps {
+    if dependency.depends_on(target, seen) {
+      return true
+    }
+  }
+  false
+}
+
+///|
 fn Node::dispose(self : Node) -> Unit {
   if self.disposed {
     return
@@ -233,6 +250,12 @@ pub fn[T] Graph::untracked(self : Graph, f : () -> T) -> T {
   self.active = previous
   active_graph.val = previous_graph
   result
+}
+
+///|
+pub fn[T] Graph::read_only(self : Graph, f : () -> T) -> T {
+  let _ = self
+  guard_writes(f)
 }
 
 ///|

@@ -142,9 +142,28 @@ place them in Memos, and read a conditional Source only in the selected branch.
 A previous Source snapshot never becomes current Ready. The [Phase 5 quote-board
 contract](adr/037-phase5-external-quote-board.md) uses related item detail/stock
 A+B and an independent currency C to exercise this distinction.
-Complete-display retention, downstream request admission and component
-ownership have separate implementation tasks; this projection does not yet
-provide those contracts.
+
+For a whole-display snapshot, create one `PublicationRegistry` under the
+application's root Scope and pass `publications: Some(registry)` to
+`Application`. Register each live display with
+`registry.register(component_scope, () => (semantic_demand, current))`.
+The host calls `Application::publish()` after it has applied input or task
+state and before rendering; the application should read `Publication::get()`
+in its view. Before the first round it returns `None`. Thereafter the result
+has a `current` phase and an optional earlier *complete* `previous` value
+with its original provenance. Previous is available only while the semantic
+demand matches; include item, quantity and conditional currency branch in
+that demand, but exclude an incidental refresh Cycle. Changing the demand
+clears history, including if the user later returns to the old demand.
+
+The registration callback must be a pure, synchronous derivation. It cannot
+start work, write Signals or read any Publication output. Two registered
+displays are sampled first and committed together in one graph batch, so
+observers do not see half of a publication round. `K` and `T` must be
+immutable or copy-owned: the registry cannot deep-copy arbitrary MoonBit
+application values. Dispose the component Scope and stop reading its
+Publication when that component is removed. Downstream request admission
+and keyed component ownership remain separate Phase 5 tasks.
 
 Both hosts use the shared operation driver. Replacement invalidates earlier
 results for that identity synchronously when admission succeeds, then awaits its

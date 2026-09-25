@@ -68,6 +68,7 @@ pub fn Model::application(self : Model) -> @app.Application {
     initial_size: (480, 320),
     viewport: None,
     connect_tasks: _ => (),
+    publications: None,
     initialize: () => None,
     view: () => {
       let controls : Array[@app.Control] = []

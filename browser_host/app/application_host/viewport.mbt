@@ -22,6 +22,7 @@ fn Session::scroll_viewport(
     }
   }
   if (viewport.scroll)(x, y, delta) {
+    ignore(self.application.publish())
     self.notify()
     true
   } else {

@@ -334,6 +334,7 @@ run = [
   '.\\.work\\native-host-build\\native\\debug\\build\\local\\native_host\\notes_probe\\notes_probe.exe --operations',
   '.\\.work\\native-host-build\\native\\debug\\build\\local\\native_host\\notes_probe\\notes_probe.exe --edits',
   '.\\.work\\native-host-build\\native\\debug\\build\\local\\native_host\\notes_probe\\notes_probe.exe --viewport',
+  '.\\.work\\native-host-build\\native\\debug\\build\\local\\native_host\\notes_probe\\notes_probe.exe --publication',
   '.\\.tools\\moonbit\\bin\\moon.exe run scripts/verify-resource-relocation.mbtx',
 ]
 

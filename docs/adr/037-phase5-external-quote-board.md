@@ -121,9 +121,20 @@ complete must not later mutate through shared Arrays/Refs; the API must require
 immutable values or transfer/copy ownership on publication. Publication
 outputs cannot feed their own or another Publication's input in this first
 contract, preventing a publication loop. Scope disposal unregisters the owner
-without writing a disposed Signal. The final public names and value encoding
-remain implementation decisions, but these timing and provenance guarantees
-do not.
+without writing a disposed Signal. The timing and provenance guarantees are
+part of this contract.
+
+The first implementation uses `PublicationRegistry::new(root)` and registers
+each display with `register(owner, sample)`, where `sample` returns a semantic
+demand and `Current[T]`. `Publication::get()` returns a `Published[K, T]?`;
+`None` means the host has not published the first round. A published value
+contains the current `CurrentView`, and a `previous` whole `Completed` value
+only while demand still matches. Both include Source provenance. The
+application passes `Some(registry)` in its `publications` field, and the native
+and browser hosts invoke the same `Application::publish()` at their event
+boundaries. `K` and `T` must be immutable or copied before sampling; generic
+deep copying of application values is not part of this API. A component that
+removes its owner Scope must also stop reading its disposed Publication.
 
 ## Ownership and request boundary
 

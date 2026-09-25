@@ -3,6 +3,8 @@ import {
   "local/p0/core/view",
   "local/p0/core/application" @app,
   "local/p0/core/application_task" @task,
+  "local/p0/core/reactive",
+  "local/p0/core/reactive_task",
   "local/p0/core/semantics",
   "local/browser_host/application_host" @host,
   "local/p0/examples/notes/operations_fixture" @operations,

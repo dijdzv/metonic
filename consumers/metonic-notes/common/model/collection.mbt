@@ -576,6 +576,7 @@ pub fn create_collection(
       scroll: (x, y, pixels) => model.list.scroll_at(x, y, pixels),
       reveal: reference => model.list.reveal(reference),
     }),
+    publications: None,
     connect_tasks: control => {
       if tasks_connected.val {
         abort("Notes task control connected twice")

@@ -251,6 +251,21 @@ test "effect switches dependencies and ignores old branch" {
 }
 
 ///|
+test "memo dependency inspection follows an already cached middle memo" {
+  let graph = Graph::new()
+  let scope = Scope::root(graph)
+  let source = Signal::new(scope, 3)
+  let other = Signal::new(scope, 4)
+  let middle = Memo::new(scope, () => source.get() * 2)
+  assert_eq(middle.get(), 6)
+  let outer = Memo::new(scope, () => middle.get() + other.get())
+  assert_eq(outer.get(), 10)
+  assert_true(outer.depends_on_node_id(source.node_id()))
+  assert_true(outer.depends_on_node_id(other.node_id()))
+  scope.dispose()
+}
+
+///|
 test "scope disposal skips queued effects and runs child cleanup first" {
   let graph = Graph::new()
   let root = Scope::root(graph)

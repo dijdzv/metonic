@@ -5,7 +5,9 @@ fn App::navigate_vertical(
   extend_selection : Bool,
 ) -> Unit raise {
   guard app.input_node() is Some(node) && node.focused else {
-    ignore((app.host.navigate_unhandled)(0, if down { 10 } else { -10 }))
+    if (app.host.navigate_unhandled)(0, if down { 10 } else { -10 }) {
+      ignore(app.publish())
+    }
     app.draw()
     return
   }
