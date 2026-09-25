@@ -1,0 +1,56 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/env",
+}
+
+///|
+async fn main {
+  let args = @env.args()
+  assert_true(
+    args.length() == 2,
+    msg="usage: build.mbtx browser|native|native-probe",
+  )
+  let target = args[1]
+  assert_true(
+    target == "browser" || target == "native" || target == "native-probe",
+  )
+  let root = @fs.realpath(".")
+  let framework = root + "/.metonic/framework"
+  let moon = framework + "/.tools/moonbit/bin/moon.exe"
+  let selected = if target == "browser" { "browser" } else { "native" }
+  let entry = if target == "native-probe" { "probe" } else { "main" }
+  let profile = if target == "native-probe" { "debug" } else { "release" }
+  assert_eq(
+    @process.run(
+      "mise",
+      [
+        "-C", framework, "exec", "--", moon, "run", "scripts/application-source.mbtx",
+        "--", "build", root, selected, entry, profile,
+      ],
+      cwd=framework,
+      no_console_window=true,
+    ),
+    0,
+  )
+  if target == "browser" {
+    for name in ["index.html", "main.mjs"] {
+      @fs.write_file(
+        root + "/browser/.metonic-dist/" + name,
+        @fs.read_file(root + "/browser/" + name).binary(),
+      )
+    }
+  } else if target == "native-probe" {
+    assert_eq(
+      @process.run(
+        root +
+        "/native/.metonic-build/native/debug/build/local/metonic_quote_native/probe/probe.exe",
+        [],
+        cwd=root,
+        no_console_window=true,
+      ),
+      0,
+    )
+  }
+}

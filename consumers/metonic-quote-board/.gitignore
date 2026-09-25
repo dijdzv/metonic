@@ -1,0 +1,11 @@
+.metonic/
+.metonic-build/
+.metonic-dist/
+.metonic-workspace-owner
+moon.work
+.work/
+.mooncakes/
+_build/
+node_modules/
+verification-output/
+*.log

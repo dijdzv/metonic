@@ -536,6 +536,10 @@ Metonic to generate it. The generated workspaces have one top-level directory
 each. A browser build produces both JS and WasmGC release artifacts. A native
 build accepts `release` or `debug` and selects an entry defined by the consumer.
 The consumer may add its own HTML and distribution packaging after the build.
+The generated `moon.work` includes prepared framework and dependency members.
+When formatting an external application, pass its package paths to `moon fmt`
+explicitly; a workspace-wide `moon fmt` would also rewrite pinned dependency
+sources and cause the next source-entry verification to reject that checkout.
 When updating Metonic, check out the new commit and change `dependency.json` to
 that same full SHA. Rerun the checkout's bootstrap if `toolchain.json` changed,
 then build each required target again. The entry refuses to build while the
