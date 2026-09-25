@@ -126,6 +126,47 @@ async test "rejected downstream stays blocked until explicit retry" {
 }
 
 ///|
+async test "downstream exposes its private Source through bounded diagnostics" {
+  let root = @reactive.Scope::root(@reactive.Graph::new())
+  let registry = DownstreamRegistry::new(root)
+  let diagnostics = TraceRegistry::new(8)
+  let owner = diagnostics.track_owner(root, None, ApplicationOwner, 0).unwrap()
+  let upstream : Source[Int, Int] = Source::new(root)
+  let cycle = Cycle::new()
+  let control = @task.task_control(_ => ())
+  assert_true(upstream.connect(control))
+  assert_true(registry.connect(control))
+  let downstream = registry.register(root, () => upstream.current(7, cycle), fn(
+    value : Int,
+  ) -> Int {
+    value + 1
+  })
+  assert_true(downstream.track_source(diagnostics, owner, value => value))
+  assert_false(downstream.track_source(diagnostics, owner, value => value))
+  assert_true(
+    diagnostics.track_derived(root, 1, owner, () => downstream.current()),
+  )
+  let request = upstream.replace(7, cycle, false, () => 4).unwrap()
+  request.invalidate()
+  assert_eq(request.prepare().unwrap().run().apply(), @task.Changed)
+  assert_true(registry.reconcile(_ => false))
+  assert_true(downstream.admission() is Rejected(4, _))
+  assert_eq(diagnostics.sources()[0].phase, "idle")
+  assert_eq(diagnostics.derived()[0].phase, "blocked")
+  assert_true(downstream.retry())
+  assert_true(
+    registry.reconcile(request => {
+      request.invalidate()
+      true
+    }),
+  )
+  assert_eq(diagnostics.sources()[0].phase, "pending")
+  assert_eq(diagnostics.sources()[0].key_id, Some(4))
+  root.dispose()
+  assert_eq(diagnostics.sources().length(), 0)
+}
+
+///|
 async test "upstream A to B to A retires every obsolete downstream result" {
   let graph = @reactive.Graph::new()
   let root = @reactive.Scope::root(graph)
