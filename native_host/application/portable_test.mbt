@@ -73,6 +73,7 @@ test "native adapter exposes host-boundary controlled input synchronization" {
       }),
     )
     .unwrap()
+    .reference()
   let app : @portable.Application = {
     title: "Controlled",
     editor: tree,

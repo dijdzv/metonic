@@ -31,6 +31,19 @@ pub fn label(
 }
 
 ///|
+pub fn input(
+  widget : @component.UiInput,
+  bounds : @view.Bounds,
+  clip? : @view.Bounds? = None,
+) -> Control {
+  {
+    element: widget.element(bounds),
+    kind: Input(single_line=widget.single_line()),
+    clip,
+  }
+}
+
+///|
 pub fn Control::visible_bounds(self : Control) -> @view.Bounds? {
   match self.clip {
     Some(clip) => self.element.bounds.intersection(clip)

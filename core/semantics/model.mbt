@@ -20,6 +20,7 @@ pub struct Node {
   name : String
   value : String
   enabled : Bool
+  read_only : Bool
   focused : Bool
   selection_start : Int
   selection_end : Int
@@ -169,6 +170,25 @@ pub fn focus(tree : Tree, reference : NodeRef) -> String {
 
 ///|
 pub fn set_text(tree : Tree, reference : NodeRef, value : String) -> String {
+  set_text_value(tree, reference, value, false)
+}
+
+///|
+pub fn set_controlled_text(
+  tree : Tree,
+  reference : NodeRef,
+  value : String,
+) -> String {
+  set_text_value(tree, reference, value, true)
+}
+
+///|
+fn set_text_value(
+  tree : Tree,
+  reference : NodeRef,
+  value : String,
+  controlled : Bool,
+) -> String {
   let (kind, error) = resolve(tree, reference)
   if kind < 0 {
     error
@@ -177,8 +197,10 @@ pub fn set_text(tree : Tree, reference : NodeRef, value : String) -> String {
   } else {
     match input_node(tree, kind) {
       Some(node) =>
-        if !node.enabled {
+        if !controlled && !node.enabled {
           "disabled"
+        } else if !controlled && node.read_only {
+          "read_only"
         } else if @text_position.utf16_to_scalar(value, 0) is None {
           "invalid_text"
         } else if node.value == value {
@@ -218,6 +240,9 @@ pub fn replace_selection(
     Some(node) => {
       if !node.enabled {
         return "disabled"
+      }
+      if node.read_only {
+        return "read_only"
       }
       if @text_position.utf16_to_scalar(inserted, 0) is None {
         return "invalid_text"
@@ -261,6 +286,9 @@ pub fn delete_backward(tree : Tree, reference : NodeRef) -> String {
   if !node.enabled {
     return "disabled"
   }
+  if node.read_only {
+    return "read_only"
+  }
   if node.selection_start != node.selection_end {
     return replace_selection(tree, reference, "")
   }
@@ -296,6 +324,9 @@ pub fn delete_forward(tree : Tree, reference : NodeRef) -> String {
   }
   if !node.enabled {
     return "disabled"
+  }
+  if node.read_only {
+    return "read_only"
   }
   if node.selection_start != node.selection_end {
     return replace_selection(tree, reference, "")
@@ -342,6 +373,25 @@ pub fn set_enabled(tree : Tree, reference : NodeRef, enabled : Bool) -> String {
     return ""
   }
   store_input(tree, { ..node, enabled, focused: enabled && node.focused, })
+  tree.revision += 1
+  ""
+}
+
+///|
+pub fn set_read_only(
+  tree : Tree,
+  reference : NodeRef,
+  read_only : Bool,
+) -> String {
+  let (id, error) = resolve(tree, reference)
+  if id < 0 {
+    return error
+  }
+  guard input_node(tree, id) is Some(node) else { return "unsupported_action" }
+  if node.read_only == read_only {
+    return ""
+  }
+  store_input(tree, { ..node, read_only, })
   tree.revision += 1
   ""
 }
@@ -444,6 +494,7 @@ pub fn restore_input(
     name,
     value,
     enabled: true,
+    read_only: false,
     focused: false,
     selection_start: value.length(),
     selection_end: value.length(),
@@ -511,6 +562,7 @@ fn add_node(
     name,
     value,
     enabled: true,
+    read_only: false,
     focused: false,
     selection_start: value.length(),
     selection_end: value.length(),

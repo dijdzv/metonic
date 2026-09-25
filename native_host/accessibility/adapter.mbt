@@ -153,11 +153,13 @@ fn tree(_data : UInt64) -> UInt64 {
     let id = semantic.reference.id.to_uint64()
     let presentation = bridge.presentation.control(semantic.reference).unwrap()
     let box = presentation.bounds
-    let node = node_new(match semantic.role {
-      @semantics.Label => 3
-      @semantics.Button => 18
-      @semantics.TextInput => 17
-    })
+    let node = node_new(
+      match semantic.role {
+        @semantics.Label => 3
+        @semantics.Button => 18
+        @semantics.TextInput => 17
+      },
+    )
     let name = @utf8.encode(semantic.name)
     label(node, name, name.length().to_uint64())
     let text = @utf8.encode(semantic.value)
@@ -181,7 +183,7 @@ fn tree(_data : UInt64) -> UInt64 {
         toggled(node, if active { 1 } else { 0 })
       }
     } else if bridge.presentation.text_owner == Some(semantic.reference) {
-      if bridge.presentation.composing {
+      if bridge.presentation.composing || semantic.read_only {
         read_only(node)
       } else {
         add_value_action(node)
@@ -225,7 +227,11 @@ fn tree(_data : UInt64) -> UInt64 {
     }
     if semantic.role is @semantics.TextInput &&
       bridge.presentation.text_owner != Some(semantic.reference) {
-      add_value_action(node)
+      if semantic.read_only {
+        read_only(node)
+      } else {
+        add_value_action(node)
+      }
     }
     push_child(root, id)
     push_node(result, id, node)

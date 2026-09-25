@@ -72,3 +72,25 @@ test "explicit composition and restored slots preserve target generations" {
   assert_eq(restore_input(tree, fresh.id, "Duplicate", ""), None)
   assert_eq(restore_input(tree, 999, "Unissued", ""), None)
 }
+
+///|
+test "read-only input preserves selection and rejects user edits while controlled updates remain possible" {
+  let tree = empty(8, 1)
+  let input = add_input(tree, "Draft", "abcd").unwrap()
+  let button = add_button(tree, "Save").unwrap()
+  assert_eq(set_read_only(tree, button, true), "unsupported_action")
+  assert_eq(set_read_only(tree, input, true), "")
+  assert_eq(focus(tree, input), "")
+  assert_eq(set_selection(tree, input, 1, 3), "")
+  assert_eq(set_text(tree, input, "replacement"), "read_only")
+  assert_eq(replace_selection(tree, input, "X"), "read_only")
+  assert_eq(delete_backward(tree, input), "read_only")
+  assert_eq(delete_forward(tree, input), "read_only")
+  assert_true(begin_composition(tree, target=input) is None)
+  assert_eq(node(tree, input).unwrap().value, "abcd")
+  assert_eq(set_controlled_text(tree, input, "updated"), "")
+  assert_eq(node(tree, input).unwrap().value, "updated")
+  assert_eq(set_enabled(tree, input, false), "")
+  assert_eq(set_controlled_text(tree, input, "disabled update"), "")
+  assert_eq(node(tree, input).unwrap().value, "disabled update")
+}

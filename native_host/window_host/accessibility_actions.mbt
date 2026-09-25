@@ -33,7 +33,7 @@ fn App::apply_accessibility(
     }
     @accessibility.SetValue(target, text) => {
       guard app.accessibility_target(target) is Some(node) else { return }
-      guard node.role == @semantics.TextInput else { return }
+      guard node.role == @semantics.TextInput && !node.read_only else { return }
       ignore(@semantics.set_text(app.host.editor, node.reference, text))
       app.report_edit(node.reference, node.value)
     }
