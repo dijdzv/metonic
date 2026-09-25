@@ -316,3 +316,15 @@ pub fn[K : Eq, V] Downstream::retry(self : Downstream[K, V]) -> Bool {
   self.control.set({ ..state, retry: state.retry + 1, })
   true
 }
+
+///|
+pub fn[K, V] Downstream::track_source(
+  self : Downstream[K, V],
+  registry : TraceRegistry,
+  owner_id : Int,
+  key_id : (K) -> Int,
+) -> Bool {
+  registry.track_source(self.source, owner_id, identity => {
+    key_id(identity.value)
+  })
+}
