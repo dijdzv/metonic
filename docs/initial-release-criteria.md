@@ -71,8 +71,9 @@ implementation and source integration passed the bounded final checks in the
 broader support promise requires its own decision.
 
 The other open P2 tasks cover subsequent improvements and upstream proposals;
-their currently working product paths stay in place. P3 tasks include optional
-gRPC and intermittent problems with explicit recurrence triggers. A fresh
+their currently working product paths stay in place. The unused gRPC task was
+closed as not planned; intermittent problems retain explicit recurrence
+triggers. A fresh
 reproduction that demonstrates a release defect can change this scope, but its
 evidence and impact must be recorded on the relevant Issue before promoting it.
 

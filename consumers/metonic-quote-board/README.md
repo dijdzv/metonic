@@ -19,8 +19,10 @@ The fixed item, refresh, detail and currency actions and the keyed quantity and
 retry actions use Metonic's owned Button component. The item summary uses an
 owned Label with a stable accessible identity. The board supplies each action's
 behavior and placement; the component layer owns semantic references, focus
-projection and dispatch. The note field and Save note action still use the
-low-level API while the TextArea migration is tracked separately.
+projection and dispatch. The note field uses an owned TextArea with a Controlled
+value. Save note still uses a low-level semantic button and explicit reference
+dispatch. The [owned component guide](../../docs/owned-components.md) explains
+the current state, ownership, event and layout boundaries.
 
 To extract only this consumer from a Metonic checkout into a new directory,
 create a short empty path first and run:

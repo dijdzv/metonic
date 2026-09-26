@@ -51,6 +51,9 @@ and independent JS/WasmGC and Windows builds. The
 [standard-control contract](docs/adr/038-standard-ui-components.md) describes
 ownership and app-scoped theme tokens; the component gallery verifies controls
 and accessibility states on both hosts.
+The [owned component and state guide](docs/owned-components.md) shows the current
+public composition pattern and distinguishes implemented state primitives from
+a future structured Store API.
 
 On Windows x64, install [mise](https://mise.jdx.dev/) 2026.9.4 or newer,
 Git for Windows, GitHub CLI (`gh`), and
