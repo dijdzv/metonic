@@ -1,7 +1,7 @@
 #include <windows.h>
 #include <stdint.h>
 #include "accesskit.h"
-#include "../accessibility_probe/navigate.c"
+#include "../uia_test_bridge/navigate.c"
 
 static HANDLE entered, resume_callback, caller;
 static accesskit_action_handler_callback receiver;
