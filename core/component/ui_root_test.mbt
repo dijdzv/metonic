@@ -55,6 +55,96 @@ test "UI root dispatches live fixed controls and synchronizes committed values" 
 }
 
 ///|
+test "tracked UI values skip unrelated Store fields and retire with their owner" {
+  let scope = @reactive.Scope::root(@reactive.Graph::new())
+  let tree = @semantics.empty(97, 1)
+  let ui = UiRoot::new(scope, tree)
+  let owner = ui.fixed("tracked")
+  let store = @reactive.Store::new(scope)
+  let title = store.field("First")
+  let details = store.field("Details")
+  let title_samples = Ref(0)
+  let detail_samples = Ref(0)
+  let title_label = owner
+    .label(
+      "title",
+      Read::tracked(scope, () => {
+        title_samples.val += 1
+        title.read().get()
+      }),
+    )
+    .unwrap()
+  let detail_label = owner
+    .label(
+      "details",
+      Read::tracked(scope, () => {
+        detail_samples.val += 1
+        details.read().get()
+      }),
+    )
+    .unwrap()
+  assert_eq((title_samples.val, detail_samples.val), (1, 1))
+  assert_false(ui.synchronize(None))
+  let unchanged_revision = @semantics.revision(tree)
+  title.set("Second")
+  assert_eq((title_samples.val, detail_samples.val), (2, 1))
+  assert_true(ui.synchronize(None))
+  assert_eq(
+    @semantics.node(tree, title_label.reference()).unwrap().name,
+    "Second",
+  )
+  assert_eq(
+    @semantics.node(tree, detail_label.reference()).unwrap().name,
+    "Details",
+  )
+  assert_eq((title_samples.val, detail_samples.val), (2, 1))
+  assert_false(ui.synchronize(None))
+  assert_true(@semantics.revision(tree) > unchanged_revision)
+  owner.scope().dispose()
+  title.set("Third")
+  assert_eq((title_samples.val, detail_samples.val), (2, 1))
+  scope.dispose()
+}
+
+///|
+test "tracked controlled input restores rejected edits and defers IME text" {
+  let scope = @reactive.Scope::root(@reactive.Graph::new())
+  let tree = @semantics.empty(98, 1)
+  let ui = UiRoot::new(scope, tree)
+  let owner = ui.fixed("editor")
+  let value = @reactive.Signal::new(scope, "original")
+  let samples = Ref(0)
+  let field = owner
+    .text_input(
+      "title",
+      "Title",
+      Controlled::tracked(
+        scope,
+        () => {
+          samples.val += 1
+          value.get()
+        },
+        _ => None,
+      ),
+    )
+    .unwrap()
+    .reference()
+  assert_false(ui.synchronize(None))
+  assert_eq(@semantics.set_text(tree, field, "rejected"), "")
+  ignore(ui.edited(field, "rejected", @semantics.revision(tree)))
+  assert_true(ui.synchronize(None))
+  assert_eq(@semantics.node(tree, field).unwrap().value, "original")
+  assert_eq(samples.val, 1)
+  value.set("external")
+  assert_false(ui.synchronize(Some(field)))
+  assert_eq(@semantics.node(tree, field).unwrap().value, "original")
+  assert_true(ui.synchronize(None))
+  assert_eq(@semantics.node(tree, field).unwrap().value, "external")
+  assert_eq(samples.val, 2)
+  scope.dispose()
+}
+
+///|
 test "controlled checkbox toggles through its live owner and keeps semantic states" {
   let scope = @reactive.Scope::root(@reactive.Graph::new())
   let tree = @semantics.empty(85, 1)

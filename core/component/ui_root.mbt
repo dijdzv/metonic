@@ -1,11 +1,23 @@
 ///|
 pub struct Read[T] {
   priv sample : () -> T
+  priv tracking_scope : @reactive.Scope?
+  priv constant : T?
 }
 
 ///|
 pub fn[T] Read::new(sample : () -> T) -> Read[T] {
-  { sample, }
+  { sample, tracking_scope: None, constant: None, }
+}
+
+///|
+pub fn[T] Read::constant(value : T) -> Read[T] {
+  { sample: () => value, tracking_scope: None, constant: Some(value), }
+}
+
+///|
+pub fn[T] Read::tracked(scope : @reactive.Scope, sample : () -> T) -> Read[T] {
+  { sample, tracking_scope: Some(scope), constant: None, }
 }
 
 ///|
@@ -17,6 +29,7 @@ pub fn[T] Read::get(self : Read[T]) -> T {
 pub struct Controlled[T] {
   priv sample : () -> T
   priv commit : (T) -> @task.Request?
+  priv tracking_scope : @reactive.Scope?
 }
 
 ///|
@@ -24,7 +37,16 @@ pub fn[T] Controlled::new(
   sample : () -> T,
   commit : (T) -> @task.Request?,
 ) -> Controlled[T] {
-  { sample, commit, }
+  { sample, commit, tracking_scope: None, }
+}
+
+///|
+pub fn[T] Controlled::tracked(
+  scope : @reactive.Scope,
+  sample : () -> T,
+  commit : (T) -> @task.Request?,
+) -> Controlled[T] {
+  { sample, commit, tracking_scope: Some(scope), }
 }
 
 ///|
@@ -33,12 +55,17 @@ pub fn[T] Controlled::get(self : Controlled[T]) -> T {
 }
 
 ///|
+fn[T] Controlled::as_read(self : Controlled[T]) -> Read[T] {
+  { sample: self.sample, tracking_scope: self.tracking_scope, constant: None, }
+}
+
+///|
 priv struct UiAction {
   key : String
   owner : ChildOwner
   reference : @semantics.NodeRef
-  label : Read[String]
-  enabled : Read[Bool]
+  label : PreparedInput[String]
+  enabled : PreparedInput[Bool]
   callback : () -> @task.Request?
 }
 
@@ -47,7 +74,7 @@ priv struct UiText {
   key : String
   owner : ChildOwner
   reference : @semantics.NodeRef
-  value : Read[String]
+  value : PreparedInput[String]
 }
 
 ///|
@@ -55,10 +82,11 @@ priv struct UiCheck {
   key : String
   owner : ChildOwner
   reference : @semantics.NodeRef
-  label : Read[String]
+  label : PreparedInput[String]
   value : Controlled[Bool]
-  enabled : Read[Bool]
-  invalid : Read[Bool]
+  desired_value : PreparedInput[Bool]
+  enabled : PreparedInput[Bool]
+  invalid : PreparedInput[Bool]
 }
 
 ///|
@@ -67,8 +95,9 @@ priv struct UiEdit {
   owner : ChildOwner
   reference : @semantics.NodeRef
   value : Controlled[String]
-  enabled : Read[Bool]
-  read_only : Read[Bool]
+  desired_value : PreparedInput[String]
+  enabled : PreparedInput[Bool]
+  read_only : PreparedInput[Bool]
 }
 
 ///|
@@ -262,20 +291,27 @@ pub fn UiOwner::button(
   key : String,
   label : String,
   on_activate : () -> @task.Request?,
-  enabled? : Read[Bool] = Read::new(() => true),
+  enabled? : Read[Bool] = Read::constant(true),
 ) -> UiButton? {
   self.check_key(key)
   guard self.child.add_button(label) is Some(reference) else { return None }
-  let state = self.root.scope.graph().read_only(() => enabled.get())
+  let prepared_enabled = PreparedInput::new(self.child.scope(), enabled)
+  let state = prepared_enabled.current()
   if !state {
     ignore(@semantics.set_enabled(self.root.tree, reference, false))
   }
+  prepared_enabled.consume()
+  let prepared_label = PreparedInput::new(
+    self.child.scope(),
+    Read::constant(label),
+  )
+  prepared_label.consume()
   self.root.actions.push({
     key,
     owner: self.child,
     reference,
-    label: Read::new(() => label),
-    enabled,
+    label: prepared_label,
+    enabled: prepared_enabled,
     callback: on_activate,
   })
   self.child
@@ -292,30 +328,42 @@ pub fn UiOwner::checkbox(
   key : String,
   label : String,
   value : Controlled[Bool],
-  enabled? : Read[Bool] = Read::new(() => true),
-  invalid? : Read[Bool] = Read::new(() => false),
+  enabled? : Read[Bool] = Read::constant(true),
+  invalid? : Read[Bool] = Read::constant(false),
 ) -> UiCheckbox? {
   self.check_key(key)
-  let initial = self.root.scope.graph().read_only(() => value.get())
+  let prepared_value = PreparedInput::new(self.child.scope(), value.as_read())
+  let prepared_enabled = PreparedInput::new(self.child.scope(), enabled)
+  let prepared_invalid = PreparedInput::new(self.child.scope(), invalid)
+  let initial = prepared_value.current()
   guard self.child.add_checkbox(label, initial) is Some(reference) else {
     return None
   }
-  let is_enabled = self.root.scope.graph().read_only(() => enabled.get())
-  let is_invalid = self.root.scope.graph().read_only(() => invalid.get())
+  let is_enabled = prepared_enabled.current()
+  let is_invalid = prepared_invalid.current()
   if !is_enabled {
     ignore(@semantics.set_enabled(self.root.tree, reference, false))
   }
   if is_invalid {
     ignore(@semantics.set_invalid(self.root.tree, reference, true))
   }
+  prepared_value.consume()
+  prepared_enabled.consume()
+  prepared_invalid.consume()
+  let prepared_label = PreparedInput::new(
+    self.child.scope(),
+    Read::constant(label),
+  )
+  prepared_label.consume()
   self.root.checks.push({
     key,
     owner: self.child,
     reference,
-    label: Read::new(() => label),
+    label: prepared_label,
     value,
-    enabled,
-    invalid,
+    desired_value: prepared_value,
+    enabled: prepared_enabled,
+    invalid: prepared_invalid,
   })
   self.child
   .scope()
@@ -332,9 +380,16 @@ pub fn UiOwner::label(
   value : Read[String],
 ) -> UiLabel? {
   self.check_key(key)
-  let text = self.root.scope.graph().read_only(() => value.get())
+  let prepared_value = PreparedInput::new(self.child.scope(), value)
+  let text = prepared_value.current()
   guard self.child.add_label(text) is Some(reference) else { return None }
-  self.root.labels.push({ key, owner: self.child, reference, value, })
+  prepared_value.consume()
+  self.root.labels.push({
+    key,
+    owner: self.child,
+    reference,
+    value: prepared_value,
+  })
   self.child
   .scope()
   .on_dispose(() => {
@@ -431,8 +486,8 @@ pub fn UiOwner::text_input(
   key : String,
   label : String,
   value : Controlled[String],
-  enabled? : Read[Bool] = Read::new(() => true),
-  read_only? : Read[Bool] = Read::new(() => false),
+  enabled? : Read[Bool] = Read::constant(true),
+  read_only? : Read[Bool] = Read::constant(false),
 ) -> UiInput? {
   self.add_text_input(key, label, value, true, enabled, read_only)
 }
@@ -443,8 +498,8 @@ pub fn UiOwner::text_area(
   key : String,
   label : String,
   value : Controlled[String],
-  enabled? : Read[Bool] = Read::new(() => true),
-  read_only? : Read[Bool] = Read::new(() => false),
+  enabled? : Read[Bool] = Read::constant(true),
+  read_only? : Read[Bool] = Read::constant(false),
 ) -> UiInput? {
   self.add_text_input(key, label, value, false, enabled, read_only)
 }
@@ -460,25 +515,32 @@ fn UiOwner::add_text_input(
   read_only : Read[Bool],
 ) -> UiInput? {
   self.check_key(key)
-  let initial = self.root.scope.graph().read_only(() => value.get())
+  let prepared_value = PreparedInput::new(self.child.scope(), value.as_read())
+  let prepared_enabled = PreparedInput::new(self.child.scope(), enabled)
+  let prepared_read_only = PreparedInput::new(self.child.scope(), read_only)
+  let initial = prepared_value.current()
   guard self.child.add_input(label, initial) is Some(reference) else {
     return None
   }
-  let is_enabled = self.root.scope.graph().read_only(() => enabled.get())
-  let is_read_only = self.root.scope.graph().read_only(() => read_only.get())
+  let is_enabled = prepared_enabled.current()
+  let is_read_only = prepared_read_only.current()
   if !is_enabled {
     ignore(@semantics.set_enabled(self.root.tree, reference, false))
   }
   if is_read_only {
     ignore(@semantics.set_read_only(self.root.tree, reference, true))
   }
+  prepared_value.consume()
+  prepared_enabled.consume()
+  prepared_read_only.consume()
   self.root.edits.push({
     key,
     owner: self.child,
     reference,
     value,
-    enabled,
-    read_only,
+    desired_value: prepared_value,
+    enabled: prepared_enabled,
+    read_only: prepared_read_only,
   })
   self.child
   .scope()
@@ -511,7 +573,9 @@ pub fn UiRoot::activate(
       check.owner.owns(reference) else {
       return None
     }
-    return (check.value.commit)(!node.checked)
+    let request = (check.value.commit)(!node.checked)
+    check.desired_value.mark_pending()
+    return request
   }
   if node.role == @semantics.ListItem {
     guard self.lists.iter().find_first(list => (list.contains)(reference))
@@ -545,7 +609,130 @@ pub fn UiRoot::edited(
     node.value == text else {
     return None
   }
-  (edit.value.commit)(text)
+  let request = (edit.value.commit)(text)
+  edit.desired_value.mark_pending()
+  request
+}
+
+///|
+fn UiRoot::sync_name(
+  self : UiRoot,
+  reference : @semantics.NodeRef,
+  input : PreparedInput[String],
+) -> Bool {
+  guard input.needs_sync() else { return false }
+  let desired = input.current()
+  guard @semantics.node(self.tree, reference) is Ok(node) else { return false }
+  if node.name == desired {
+    input.consume()
+    return false
+  }
+  let changed = @semantics.set_name(self.tree, reference, desired) == ""
+  if changed {
+    input.consume()
+  }
+  changed
+}
+
+///|
+fn UiRoot::sync_enabled(
+  self : UiRoot,
+  reference : @semantics.NodeRef,
+  input : PreparedInput[Bool],
+) -> Bool {
+  guard input.needs_sync() else { return false }
+  let desired = input.current()
+  guard @semantics.node(self.tree, reference) is Ok(node) else { return false }
+  if node.enabled == desired {
+    input.consume()
+    return false
+  }
+  let changed = @semantics.set_enabled(self.tree, reference, desired) == ""
+  if changed {
+    input.consume()
+  }
+  changed
+}
+
+///|
+fn UiRoot::sync_checked(
+  self : UiRoot,
+  reference : @semantics.NodeRef,
+  input : PreparedInput[Bool],
+) -> Bool {
+  guard input.needs_sync() else { return false }
+  let desired = input.current()
+  guard @semantics.node(self.tree, reference) is Ok(node) else { return false }
+  if node.checked == desired {
+    input.consume()
+    return false
+  }
+  let changed = @semantics.set_checked(self.tree, reference, desired) == ""
+  if changed {
+    input.consume()
+  }
+  changed
+}
+
+///|
+fn UiRoot::sync_invalid(
+  self : UiRoot,
+  reference : @semantics.NodeRef,
+  input : PreparedInput[Bool],
+) -> Bool {
+  guard input.needs_sync() else { return false }
+  let desired = input.current()
+  guard @semantics.node(self.tree, reference) is Ok(node) else { return false }
+  if node.invalid == desired {
+    input.consume()
+    return false
+  }
+  let changed = @semantics.set_invalid(self.tree, reference, desired) == ""
+  if changed {
+    input.consume()
+  }
+  changed
+}
+
+///|
+fn UiRoot::sync_read_only(
+  self : UiRoot,
+  reference : @semantics.NodeRef,
+  input : PreparedInput[Bool],
+) -> Bool {
+  guard input.needs_sync() else { return false }
+  let desired = input.current()
+  guard @semantics.node(self.tree, reference) is Ok(node) else { return false }
+  if node.read_only == desired {
+    input.consume()
+    return false
+  }
+  let changed = @semantics.set_read_only(self.tree, reference, desired) == ""
+  if changed {
+    input.consume()
+  }
+  changed
+}
+
+///|
+fn UiRoot::sync_text(
+  self : UiRoot,
+  reference : @semantics.NodeRef,
+  input : PreparedInput[String],
+) -> Bool {
+  guard input.needs_sync() else { return false }
+  let desired = input.current()
+  guard @semantics.node(self.tree, reference) is Ok(node) else { return false }
+  if node.value == desired {
+    input.consume()
+    return false
+  }
+  let changed = @semantics.set_controlled_text(self.tree, reference, desired) ==
+    ""
+  if changed {
+    input.consume()
+  }
+  changed
 }
 
 ///|
@@ -556,109 +743,85 @@ pub fn UiRoot::synchronize(
   guard !self.scope.is_disposed() else { return false }
   let mut changed = false
   for action in self.actions {
+    if !action.label.needs_sync() && !action.enabled.needs_sync() {
+      continue
+    }
     if !action.owner.owns(action.reference) {
       continue
     }
-    let next_name = self.scope.graph().read_only(() => action.label.get())
-    let next_enabled = self.scope.graph().read_only(() => action.enabled.get())
-    if @semantics.node(self.tree, action.reference) is Ok(node) {
-      if node.name != next_name &&
-        @semantics.set_name(self.tree, action.reference, next_name) == "" {
-        changed = true
-      }
-      if node.enabled != next_enabled &&
-        @semantics.set_enabled(self.tree, action.reference, next_enabled) == "" {
-        changed = true
-      }
-    }
+    changed = self.sync_name(action.reference, action.label) || changed
+    changed = self.sync_enabled(action.reference, action.enabled) || changed
   }
   for list in self.lists {
     changed = (list.synchronize)() || changed
   }
   for check in self.checks {
+    if !check.label.needs_sync() &&
+      !check.enabled.needs_sync() &&
+      !check.desired_value.needs_sync() &&
+      !check.invalid.needs_sync() {
+      continue
+    }
     if !check.owner.owns(check.reference) {
       continue
     }
-    let next_name = self.scope.graph().read_only(() => check.label.get())
-    let next_enabled = self.scope.graph().read_only(() => check.enabled.get())
-    let next_checked = self.scope.graph().read_only(() => check.value.get())
-    let next_invalid = self.scope.graph().read_only(() => check.invalid.get())
-    if @semantics.node(self.tree, check.reference) is Ok(node) {
-      if node.name != next_name &&
-        @semantics.set_name(self.tree, check.reference, next_name) == "" {
-        changed = true
-      }
-      if node.enabled != next_enabled &&
-        @semantics.set_enabled(self.tree, check.reference, next_enabled) == "" {
-        changed = true
-      }
-      if node.checked != next_checked &&
-        @semantics.set_checked(self.tree, check.reference, next_checked) == "" {
-        changed = true
-      }
-      if node.invalid != next_invalid &&
-        @semantics.set_invalid(self.tree, check.reference, next_invalid) == "" {
-        changed = true
-      }
-    }
+    changed = self.sync_name(check.reference, check.label) || changed
+    changed = self.sync_enabled(check.reference, check.enabled) || changed
+    changed = self.sync_checked(check.reference, check.desired_value) || changed
+    changed = self.sync_invalid(check.reference, check.invalid) || changed
   }
   for label in self.labels {
+    if !label.value.needs_sync() {
+      continue
+    }
     if !label.owner.owns(label.reference) {
       continue
     }
-    let text = self.scope.graph().read_only(() => label.value.get())
-    if @semantics.node(self.tree, label.reference) is Ok(node) &&
-      node.name != text &&
-      @semantics.set_name(self.tree, label.reference, text) == "" {
-      changed = true
-    }
+    changed = self.sync_name(label.reference, label.value) || changed
   }
   for status in self.statuses {
+    if !status.value.needs_sync() {
+      continue
+    }
     if !status.owner.owns(status.reference) {
       continue
     }
-    let next = self.scope.graph().read_only(() => status.value.get())
+    let next = status.value.current()
     if @semantics.node(self.tree, status.reference) is Ok(node) {
       let message = next.message()
-      if node.name != message &&
-        @semantics.set_name(self.tree, status.reference, message) == "" {
+      let name_ok = node.name == message ||
+        @semantics.set_name(self.tree, status.reference, message) == ""
+      if name_ok && node.name != message {
         changed = true
       }
       let invalid = next.is_error()
-      if node.invalid != invalid &&
-        @semantics.set_invalid(self.tree, status.reference, invalid) == "" {
+      let invalid_ok = node.invalid == invalid ||
+        @semantics.set_invalid(self.tree, status.reference, invalid) == ""
+      if invalid_ok && node.invalid != invalid {
         changed = true
+      }
+      if name_ok && invalid_ok {
+        status.value.consume()
       }
     }
   }
   for edit in self.edits {
+    if !edit.enabled.needs_sync() &&
+      !edit.read_only.needs_sync() &&
+      !edit.desired_value.needs_sync() &&
+      composing != Some(edit.reference) {
+      continue
+    }
     if !edit.owner.owns(edit.reference) {
       continue
     }
-    let next_enabled = self.scope.graph().read_only(() => edit.enabled.get())
-    let next_read_only = self.scope
-      .graph()
-      .read_only(() => edit.read_only.get())
-    if @semantics.node(self.tree, edit.reference) is Ok(node) {
-      if node.enabled != next_enabled &&
-        @semantics.set_enabled(self.tree, edit.reference, next_enabled) == "" {
-        changed = true
-      }
-      if node.read_only != next_read_only &&
-        @semantics.set_read_only(self.tree, edit.reference, next_read_only) ==
-        "" {
-        changed = true
-      }
-    }
+    changed = self.sync_enabled(edit.reference, edit.enabled) || changed
+    changed = self.sync_read_only(edit.reference, edit.read_only) || changed
     if composing == Some(edit.reference) {
+      edit.desired_value.mark_pending()
       continue
     }
-    let next = self.scope.graph().read_only(() => edit.value.get())
-    if @semantics.node(self.tree, edit.reference) is Ok(node) &&
-      node.value != next &&
-      @semantics.set_controlled_text(self.tree, edit.reference, next) == "" {
-      changed = true
-    }
+    changed = self.sync_text(edit.reference, edit.desired_value) || changed
   }
   if self.theme_dirty {
     self.theme_dirty = false
