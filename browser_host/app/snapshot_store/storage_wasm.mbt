@@ -20,3 +20,13 @@ pub fn save(key : String, value : String) -> Result[Unit, String] {
       }
   }
 }
+
+///|
+fn storage_access() -> Result[@dom.Storage, @snapshot.Failure] {
+  match storage_window().local_storage() {
+    Ok(storage) => Ok(storage)
+    Err(@dom.WindowGetLocalStorageError::SecurityError(_)) =>
+      Err(@snapshot.AccessDenied)
+    Err(_) => Err(@snapshot.Failed)
+  }
+}

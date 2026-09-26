@@ -1,0 +1,7 @@
+import {
+  "local/browser_host/snapshot_store" @storage,
+  "local/p0/capabilities/snapshot",
+  "moonbitlang/async",
+} for "test"
+
+supported_targets = "+js"

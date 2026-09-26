@@ -1,0 +1,8 @@
+import {
+  "moonbitlang/core/encoding/utf8",
+}
+
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/cond_var",
+} for "test"

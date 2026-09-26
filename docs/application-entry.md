@@ -755,7 +755,7 @@ ended. The following boundaries are deliberately different:
 | Time | `capabilities/clock.Clock`; `async_runtime/clock.SystemClock::new()` for production; `VirtualClock` for tests | Select a clock when work needs one. One production instance supports repeated and concurrent waits; cancellation belongs to each async task, not the clock. |
 | HTTP | Bounded POST through `capabilities/http.Http`, native `http.NativeHttp`, browser `http_transport.create`; `async_runtime/http.TimedHttp` adds a deadline | Select the endpoint, accepted content types and response limit. Browser CORS/permissions still apply. Create a browser transport per exchange; its controller/reader are cleaned up after use. |
 | Display and host | `core/application.Control`, native `application.from_application`/`window_host.run`, browser `application_host.create` | Define layout, state, semantic references and actions. Hosts own GPU objects, rasterization, input and shutdown. Ordinary applications need no GPU types. The managed browser entry reconciles element bindings with the current view. |
-| Storage | Native `snapshot_store.Store` and browser `snapshot_store.load/save` | Adapt bytes or strings into the application's format and recovery policy. Native locking/async IO and browser synchronous origin-scoped storage have different lifetime and failure contracts, described below. |
+| Storage | `capabilities/snapshot.Snapshot` for one small text snapshot; native `snapshot_store.Store::text_snapshot` and browser `snapshot_store.text_snapshot(key)` adapters | Inject the port at startup. The application owns its format, saved revision and recovery policy. Native locking/async IO and browser synchronous origin-scoped storage have different lifetime and failure contracts, described below. |
 | Clipboard | `core/text_clipboard` editing policy and native backend; browser DOM editing | Display input-operation failures separately from storage failures. Native access does not grant browser clipboard permissions. Rich text, images and clipboard history are not provided. |
 | Fonts and packaged assets | Native executable-relative resource resolution/font override; browser font URL and digest | Select and distribute licensed resources. Host code loads and rasterizes the configured font. `resources.asset_path` resolves a file path; it does not decode an image. |
 | Images | No image control or image-loading API in the portable entry | The owned-control catalog is described in the [component guide](owned-components.md). Image widgets/decoders require a separate extension; access to low-level rendering internals is not a portable image API. |
@@ -767,6 +767,20 @@ scheduler or hide platform permissions and persistence differences.
 
 ## Current limits and verification
 
+`capabilities/snapshot.Snapshot` exposes async `load` and `save` methods, with
+`Ok(None)` distinct from an empty saved string. A single port rejects overlapping
+calls with `Busy` and bounds a text snapshot to 1 MiB of UTF-8 bytes. The native
+and browser adapters return `TooLarge`, `Busy`, `Closed`, `InvalidData`,
+`AccessDenied`, `CapacityExceeded` or a general `Failed` where that distinction
+is actually known. The WebSys browser binding supplies typed `SecurityError` and
+`QuotaExceededError` results; other failures remain general. Cancellation
+propagates as task cancellation, not as a `Failure` value. The async method shape does not make
+browser localStorage nonblocking or cancellable midway through its synchronous
+operation. A successful save reports that this call completed at the adapter;
+the application must capture its own immutable snapshot and revision before the
+call, and acknowledge only that revision. A canceled or unobserved call does not
+prove that no write happened.
+
 `native_host/snapshot_store` stores one opaque snapshot in an application-selected
 directory. It holds an exclusive writer lock until `Store.close`, bounds reads
 and writes to 1 MiB, writes a sibling staging file with file synchronization, and
@@ -774,17 +788,22 @@ replaces the live snapshot only after staging succeeds. A missing snapshot is
 distinct from an IO failure. The application owns serialization, its storage
 directory and user-visible recovery; this package does not interpret memo data.
 
-The caller must finish or cancel and await outstanding IO before closing the
-store. Concurrent calls and premature close are rejected. A failed or canceled
+Open it in the native entry, pass its `text_snapshot()` port to shared
+application code, and retain the native `Store` for cleanup. The caller must
+finish or cancel and await outstanding IO before closing the store. Concurrent
+calls and premature close are rejected. A failed or canceled
 save may leave `snapshot.pending`; it is replaced by the next save under the
 writer lock. This mechanism protects against truncating the last snapshot during
 staging, but does not claim power-loss durability of directory metadata or support
 for noncooperating writers. Close the store in the application's `dispose`
 callback, after host-owned work has ended.
 
-`browser_host/app/snapshot_store` exposes `load(key)` and `save(key, text)` on JS
-and WasmGC, returning `Result` for storage access and write failures. It uses
-the current origin's localStorage through generated WebSys bindings. A missing
+`browser_host/app/snapshot_store` exposes `text_snapshot(key)` on JS and WasmGC.
+It uses typed WebSys results to map security and quota errors to distinct
+failures and other errors to `Failed`. The older `load(key)` and
+`save(key, text)` functions retain their string-error results for existing
+consumers. Both paths use the current origin's localStorage through generated
+WebSys bindings. A missing
 key returns `Ok(None)`; access denial is an error. The application owns the key,
 serialization, versioning and retry policy. Calls are synchronous and intended
 for small snapshots; use them inside the application's task adapter, not its

@@ -3,8 +3,8 @@
 ## Status
 
 Accepted as the boundary policy for application-facing resources. Existing
-Clock/Http packages implement parts of this policy; this decision does not claim
-that every adapter or future capability is already available.
+Clock, Http and Snapshot packages implement parts of this policy; this decision
+does not claim that every adapter or future capability is already available.
 
 ## Context
 
@@ -70,10 +70,11 @@ contracts and may depend on lower-level platform packages. Put substantial
 Windows-specific mechanisms below the native host when that separation serves
 an actual dependency boundary; do not move every file merely to mirror a diagram.
 
-The `capabilities/clock` and `capabilities/http` packages are capabilities/ports,
-distinct from reactive effects and the language's async/raise effects. Their
-public paths use the capability terminology; no parallel alias packages are
-provided. Source consumers updating from the former `effects/clock` and
+The `capabilities/clock`, `capabilities/http` and `capabilities/snapshot`
+packages are capabilities/ports, distinct from reactive effects and the
+language's async/raise effects. Their public paths use the capability
+terminology; no parallel alias packages are provided. Source consumers updating
+from the former `effects/clock` and
 `effects/http` paths must update their imports with the framework revision.
 The contracts and task ownership are unchanged by this rename.
 
@@ -98,7 +99,8 @@ command interpreter, a service locator or an application-wide resource record.
 ## Adoption and verification
 
 Adopt small capabilities, explicit environment packages and separate ownership.
-Qualify broad Storage/Clipboard commonality by the actual guarantees. Defer
+The Snapshot port covers one small text snapshot, not general Storage. Qualify
+broader Storage/Clipboard commonality by the actual guarantees. Defer
 unneeded platform APIs, wholesale folder moves and public-path renaming until
 their consumers and migration are concrete.
 
