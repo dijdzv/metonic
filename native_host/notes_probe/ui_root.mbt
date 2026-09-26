@@ -34,6 +34,10 @@ async fn verify_ui_root() -> Unit {
       )
     })
     .unwrap()
+  let selected : @reactive.Signal[String?] = @reactive.Signal::new(scope, None)
+  let list = owner.list("items", "Items", selected).unwrap()
+  ignore(list.reconcile([{ key: "first", label: "First", enabled: true, }]))
+  let list_item = list.items()[0].reference()
   let status = owner
     .label("status", @component.Read::new(() => "Status: " + value.peek()))
     .unwrap()
@@ -50,7 +54,7 @@ async fn verify_ui_root() -> Unit {
     connect_tasks: _ => (),
     initialize: () => None,
     view: () => {
-      [
+      let controls : Array[@portable.Control] = [
         {
           element: {
             reference: Some(input),
@@ -63,7 +67,19 @@ async fn verify_ui_root() -> Unit {
         },
         @portable.button(button, { x: 16, y: 112, width: 180, height: 40, }),
         @portable.label(status, { x: 16, y: 168, width: 300, height: 30, }),
+        @portable.list(list, { x: 220, y: 112, width: 180, height: 40, }),
       ]
+      for item in list.items() {
+        controls.push(
+          @portable.list_item(item, {
+            x: 220,
+            y: 112,
+            width: 180,
+            height: 40,
+          }),
+        )
+      }
+      controls
     },
     activate: reference => ui.activate(reference),
     edited: edit => ui.edited(edit.target, edit.text, edit.revision),
@@ -108,6 +124,25 @@ async fn verify_ui_root() -> Unit {
         assert_eq(
           @semantics.node(tree, status.reference()).unwrap().name,
           "Status: async",
+        )
+        assert_eq(
+          (handle.operate)(
+            list_item,
+            ActivateControl,
+            @semantics.revision(tree),
+          ),
+          "",
+        )
+        assert_eq(selected.peek(), Some("first"))
+        ignore(list.reconcile([]))
+        assert_eq(selected.peek(), None)
+        assert_eq(
+          (handle.operate)(
+            list_item,
+            ActivateControl,
+            @semantics.revision(tree),
+          ),
+          "stale_target",
         )
         let frame = (handle.capture)(_ => ())
         assert_true(frame.state.frames > 0)
