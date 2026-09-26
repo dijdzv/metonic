@@ -1,6 +1,7 @@
 import {
   "local/metonic_work_orders/work_orders",
   "local/browser_host/application_host" @host,
+  "local/browser_host/snapshot_store" @storage,
 }
 
 pkgtype(kind: "foreign_library")

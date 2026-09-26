@@ -4,6 +4,8 @@ import {
   "local/native_host/window_host",
   "local/native_host/application_control",
   "moonbitlang/async",
+  "moonbitlang/core/env",
+  "local/metonic_work_orders_native/storage",
 }
 
 pkgtype(kind: "executable")

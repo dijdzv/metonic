@@ -3,6 +3,8 @@ import {
   "local/native_host/application" @host,
   "local/native_host/window_host",
   "moonbitlang/async",
+  "moonbitlang/core/env",
+  "local/metonic_work_orders_native/storage",
 }
 
 pkgtype(kind: "executable")
