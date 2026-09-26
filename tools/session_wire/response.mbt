@@ -56,16 +56,21 @@ fn application_response(value : Json) -> Bool {
   }
   controls.all(control => {
     let target = field(control, "target")
+    let role = match field(control, "role") {
+      Json::String(name) => name
+      _ => ""
+    }
     ["session", "window", "id", "generation"].all(name => {
       integer(field(target, name), 0, 2147483647)
     }) &&
-    (
-      field(control, "role") == Json::string("button") ||
-      field(control, "role") == Json::string("text_input")
+    ["label", "button", "checkbox", "list", "list_item", "status", "text_input"].contains(
+      role,
     ) &&
     field(control, "name") is Json::String(_) &&
     field(control, "value") is Json::String(_) &&
     field(control, "enabled") is (Json::True | Json::False) &&
+    field(control, "checked") is (Json::True | Json::False) &&
+    field(control, "invalid") is (Json::True | Json::False) &&
     field(control, "focused") is (Json::True | Json::False) &&
     integer(field(control, "selection_start"), 0, 2147483647) &&
     integer(field(control, "selection_end"), 0, 2147483647)
