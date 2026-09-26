@@ -1,0 +1,168 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/async@0.21.2/process",
+  "moonbitlang/core/json",
+}
+
+///|
+fn field(value : Json, name : String) -> Json {
+  guard value is Json::Object(fields) else { abort("Expected an object") }
+  fields.get(name).unwrap_or(Json::null())
+}
+
+///|
+fn control(response : Json, name : String) -> Json? {
+  guard field(response, "controls") is Json::Array(controls) else {
+    return None
+  }
+  controls.iter().find_first(item => field(item, "name") == Json::string(name))
+}
+
+///|
+async fn request(
+  writer : @process.WriteToProcess,
+  reader : @process.ReadFromProcess,
+  message : Json,
+) -> Json {
+  writer.write(message.stringify() + "\n")
+  let response = @json.parse(reader.read_until("\n").unwrap())
+  assert_eq(field(response, "error"), Json::string(""))
+  assert_eq(field(response, "application_protocol"), Json::number(1))
+  response
+}
+
+///|
+async fn ready(
+  writer : @process.WriteToProcess,
+  reader : @process.ReadFromProcess,
+  next_id : Ref[Int],
+) -> Json {
+  for _ in 0..<100 {
+    let response = request(writer, reader, {
+      "id": next_id.val,
+      "op": "snapshot",
+    })
+    next_id.val += 1
+    if control(response, "Title") is Some(title) &&
+      field(title, "enabled") == Json::boolean(true) {
+      return response
+    }
+    @async.sleep(50)
+  }
+  abort("Work-order application did not finish loading")
+}
+
+///|
+async fn run_instance(
+  executable : String,
+  directory : String,
+  expected_title : String,
+  new_title : String?,
+) -> Unit {
+  @async.with_timeout(30000, () => {
+    @async.with_task_group() <| group => {
+      let (input, writer) = @process.write_to_process()
+      defer writer.close()
+      let (reader, output) = @process.read_from_process()
+      defer reader.close()
+      let environment : Map[String, String] = Map([
+        ("METONIC_WORK_ORDERS_DATA", directory),
+      ])
+      let child = @process.spawn(
+        group,
+        executable,
+        [],
+        stdin=input,
+        stdout=output,
+        extra_env=environment,
+        no_console_window=true,
+        cancel_handler=@process.hard_cancel(),
+      )
+      let id : Ref[Int] = Ref(1)
+      let initial = ready(writer, reader, id)
+      let title = control(initial, "Title").unwrap()
+      assert_eq(field(title, "value"), Json::string(expected_title))
+      if new_title is Some(value) {
+        let target = field(title, "target")
+        let selected = request(writer, reader, {
+          "id": id.val,
+          "op": "select",
+          "target": target,
+          "expected_semantic_revision": field(initial, "semantic_revision"),
+          "selection_start": 0,
+          "selection_end": expected_title.length(),
+        })
+        id.val += 1
+        let edited = request(writer, reader, {
+          "id": id.val,
+          "op": "insert",
+          "target": target,
+          "expected_semantic_revision": field(selected, "semantic_revision"),
+          "text": value,
+        })
+        id.val += 1
+        assert_eq(
+          field(control(edited, "Title").unwrap(), "value"),
+          Json::string(value),
+        )
+        let save = control(edited, "Save").unwrap()
+        ignore(
+          request(writer, reader, {
+            "id": id.val,
+            "op": "activate",
+            "target": field(save, "target"),
+            "expected_semantic_revision": field(edited, "semantic_revision"),
+          }),
+        )
+        id.val += 1
+        let mut saved = false
+        for _ in 0..<100 {
+          let response = request(writer, reader, {
+            "id": id.val,
+            "op": "snapshot",
+          })
+          id.val += 1
+          if control(response, "Saved") is Some(_) &&
+            field(control(response, "Save").unwrap(), "enabled") ==
+            Json::boolean(false) {
+            saved = true
+            break
+          }
+          @async.sleep(50)
+        }
+        assert_true(saved, msg="Save did not reach acknowledged state")
+        assert_true(@fs.exists(directory + "/snapshot"))
+      } else {
+        assert_true(control(initial, "Saved") is Some(_))
+      }
+      writer.close()
+      assert_eq(child.wait(), 0)
+    }
+  })
+}
+
+///|
+async fn main {
+  let root = @fs.realpath(".")
+  let executable = root +
+    "/consumers/metonic-work-orders/native/.metonic-build/native/debug/build/local/metonic_work_orders_native/dev/dev.exe"
+  assert_true(
+    @fs.exists(executable),
+    msg="Build the Work orders native dev entry first",
+  )
+  let session = @fs.tmpdir(prefix="metonic-work-orders-")
+  let directory = session + "/data"
+  run_instance(
+    executable,
+    directory,
+    "Inspect entry light",
+    Some("Native saved title"),
+  )
+  run_instance(executable, directory, "Native saved title", None)
+  @fs.remove(directory + "/snapshot")
+  @fs.remove(directory + "/writer.lock")
+  @fs.rmdir(directory)
+  @fs.rmdir(session)
+  println("WORK_ORDERS_NATIVE_STORAGE_OK save exit reopen restore")
+}

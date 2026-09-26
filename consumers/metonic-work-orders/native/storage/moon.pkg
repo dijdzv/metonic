@@ -1,0 +1,7 @@
+import {
+  "local/native_host/snapshot_store" @store,
+  "local/p0/capabilities/snapshot",
+  "moonbitlang/async",
+}
+
+supported_targets = "native"

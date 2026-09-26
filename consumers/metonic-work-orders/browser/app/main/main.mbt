@@ -2,7 +2,9 @@
 #export_name("create")
 pub fn create() -> @host.Instance {
   @host.create(
-    @work_orders.create(),
+    @work_orders.create(@storage.text_snapshot("metonic-work-orders-v1"), () => {
+      ()
+    }),
     [],
     root_id=Some("controls"),
     canvas_id="canvas",
