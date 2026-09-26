@@ -1,7 +1,7 @@
 ///|
 test "application snapshots use control identities without P0 task fields" {
   let response =
-    #|{"id":1,"error":"","application_protocol":1,"semantic_revision":0,"frames":1,"width":480,"height":240,"composing":false,"closed":false,"controls":[{"target":{"session":1,"window":1,"id":1,"generation":1},"role":"text_input","name":"Note","value":"text","enabled":true,"focused":true,"selection_start":0,"selection_end":0}]}
+    #|{"id":1,"error":"","application_protocol":1,"semantic_revision":0,"frames":1,"width":480,"height":240,"composing":false,"closed":false,"controls":[{"target":{"session":1,"window":1,"id":1,"generation":1},"role":"text_input","name":"Note","value":"text","enabled":true,"checked":false,"invalid":false,"focused":true,"selection_start":0,"selection_end":0}]}
   assert_eq(validate_response(response, true, false), "")
   for
     invalid in [
@@ -15,12 +15,49 @@ test "application snapshots use control identities without P0 task fields" {
         new="\"role\":\"unknown\"",
       ),
       response.replace(old="\"enabled\":true", new="\"enabled\":0"),
+      response.replace(old="\"checked\":false", new="\"checked\":0"),
+      response.replace(old="\"invalid\":false", new="\"invalid\":0"),
     ] {
     assert_eq(
       validate_response(invalid, true, false),
       "invalid native response",
     )
   }
+}
+
+///|
+test "application snapshots accept every standard semantic role" {
+  let roles = [
+    "label", "button", "checkbox", "list", "list_item", "status", "text_input",
+  ]
+  let controls : Array[Json] = []
+  for role in roles {
+    controls.push({
+      "target": { "session": 1, "window": 1, "id": 1, "generation": 1 },
+      "role": role,
+      "name": "Control",
+      "value": "",
+      "enabled": true,
+      "checked": false,
+      "invalid": false,
+      "focused": false,
+      "selection_start": 0,
+      "selection_end": 0,
+    })
+  }
+  let response : Json = {
+    "id": 1,
+    "error": "",
+    "application_protocol": 1,
+    "semantic_revision": 1,
+    "frames": 1,
+    "width": 800,
+    "height": 500,
+    "composing": false,
+    "closed": false,
+    "controls": controls,
+  }
+  assert_eq(validate_response(response.stringify(), true, false), "")
 }
 
 ///|
