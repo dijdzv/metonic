@@ -59,3 +59,34 @@ close test uses an owned hidden window and an OS close message, not visual
 inspection of the displayed controls. The browser storage error injection
 verifies response to the named DOM exceptions; it does not establish every
 browser permission or quota policy.
+
+## Typed Store migration (2026-09-27)
+
+The consumer pin moved to `9882e7dc6fd697ef327014a5cd7869b17a491e91`,
+which supplies tracked owned controls and bound list rows. The independent
+consumer now holds per-order title, details and closed fields in a keyed Store,
+the query in a component Store, and the closed-order setting in an application
+Store. List row keys include the keyed item's generation. Selection remains a
+Signal because `UiList` currently accepts that type.
+
+The common package tests passed 10/10 on JS and Windows native, and 5/5 on
+WasmGC (the five asynchronous persistence tests are not run by that test
+runner). The new model tests verify separate title/details invalidation,
+reorder preserving a row reference and focus, same-ID recreation revoking the
+old row, and rejection of an old edit. In the controlled UI fixture, one
+details write evaluates the details input once and the title input and list
+source zero times; one title write evaluates the title input and list source
+once each. These are dependency and semantic counts, not elapsed-time or GPU
+submission measurements.
+
+The pinned public source entry built browser JS/WasmGC and Windows native
+development and release entries. The browser and native package commands
+produced 19 and 26 files respectively. The native development executable
+selected a second order, edited its details, returned to the first order,
+then passed save, exit and reopen restoration; the `WM_CLOSE` Save, Discard and
+Cancel checks passed. Headless Chromium passed selection, details editing,
+search, the closed-order filter, save/reload, unsaved reload, malformed-data
+retry, access denial and quota failure on both JS and WasmGC. The previous
+limits on physical input and durability still apply. Host frame, layout and
+paint cost remain a separate measurement before closing the tracked-UI
+follow-up.

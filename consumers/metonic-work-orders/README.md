@@ -14,6 +14,14 @@ The same `common/work_orders` application code runs in Windows native and in
 browser JS and WasmGC. Each entry injects a small text snapshot capability;
 the shared code has no filesystem or browser API dependency.
 
+The document uses a typed keyed Store: title, details and closed state are
+separate fields under the document Scope. Search belongs to a component Store,
+and the closed-order filter belongs to the application Store. The list reads
+only the fields it needs and applies row changes at the host synchronization
+boundary. Selection remains a Signal because the current selectable List API
+accepts one; its key includes the item's generation so a removed and recreated
+order cannot inherit an old row or callback.
+
 ## Save and close
 
 The document stores a versioned JSON snapshot of work orders. Search, the
@@ -77,9 +85,17 @@ the generated dependency workspaces.
 | Kind | Observed work |
 | --- | --- |
 | Application logic | Order identity, filter behavior, selected document, editable fields, snapshot format, saved revision and close choice. |
-| Framework-required code | Explicit `UiList.reconcile` after search, setting and title changes; manual control bounds and `Application` callback wiring. |
+| Framework-required code | Manual control bounds and `Application` callback wiring remain. Tracked list inputs removed the explicit reconciliation calls after search, setting and title changes. |
 | Host boundary | Small native and browser entry packages inject their storage adapters; the native entry selects the application data directory. Consumer packaging scripts still list runtime files and native notices explicitly. |
-| Granularity gap | `Signal[Array[WorkOrder]]` replaces the whole array on one edit. This is a deliberate evaluation baseline, not the Phase 6 Store design. |
+| Granularity | Keyed Store updates one title or details field without replacing the full array. The list source reads titles and closed flags, so a details edit does not reevaluate its rows. |
+
+The original whole-array version was an evaluation baseline. In the current
+common model test, editing details evaluates the details control once, the
+title control zero times and the list source zero times; editing a title
+evaluates its title control and the list source once each. These are
+deterministic dependency counts, not frame-time measurements. The tests also
+cover reorder, same-ID recreation, selection clearing and stale activation on
+JS, WasmGC and Windows native.
 
 The Windows development CLI initially rejected snapshots with the standard
 list and checkbox roles, then rejected list-item activation. The corresponding

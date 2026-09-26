@@ -31,90 +31,10 @@ fn seed_orders() -> Array[WorkOrder] {
 }
 
 ///|
-fn selected_order(
-  orders : @reactive.Signal[Array[WorkOrder]],
-  selected : @reactive.Signal[String?],
-) -> WorkOrder? {
-  guard selected.get() is Some(id) else { return None }
-  for order in orders.get() {
-    if order.id == id {
-      return Some(order)
-    }
-  }
-  None
-}
-
-///|
-fn reconcile_rows(
-  list : @component.UiList[String],
-  orders : @reactive.Signal[Array[WorkOrder]],
-  query : @reactive.Signal[String],
-  show_closed : @reactive.Signal[Bool],
-) -> Unit {
-  let rows : Array[@component.ListRow[String]] = []
-  for order in orders.peek() {
-    if (show_closed.peek() || !order.closed) &&
-      (
-        query.peek() == "" ||
-        order.id.contains(query.peek()) ||
-        order.title.contains(query.peek())
-      ) {
-      rows.push({
-        key: order.id,
-        label: order.id + "  " + order.title,
-        enabled: true,
-      })
-    }
-  }
-  ignore(list.reconcile(rows))
-}
-
-///|
-fn edit_selected(
-  orders : @reactive.Signal[Array[WorkOrder]],
-  selected : @reactive.Signal[String?],
-  value : String,
-  title : Bool,
-) -> Bool {
-  guard selected.peek() is Some(id) else { return false }
-  let revised : Array[WorkOrder] = []
-  let mut changed = false
-  for order in orders.peek() {
-    if order.id == id {
-      if (if title { order.title } else { order.details }) != value {
-        changed = true
-        revised.push({
-          id: order.id,
-          title: if title {
-            value
-          } else {
-            order.title
-          },
-          details: if title {
-            order.details
-          } else {
-            value
-          },
-          closed: order.closed,
-        })
-      } else {
-        revised.push(order)
-      }
-    } else {
-      revised.push(order)
-    }
-  }
-  if changed {
-    orders.set(revised)
-  }
-  changed
-}
-
-///|
 priv struct WorkOrdersUi {
   root : @reactive.Scope
   tree : @semantics.Tree
-  list : @component.UiList[String]
+  list : @component.UiList[OrderIdentity]
   list_view : @app.ScrollView
   search : @component.UiInput
   show_closed : @component.UiCheckbox
@@ -231,59 +151,73 @@ pub fn create(
   let root = @reactive.Scope::root(@reactive.Graph::new())
   let document = root.child()
   let persistence = Persistence::new(root, snapshot)
-  let orders : @reactive.Signal[Array[WorkOrder]] = @reactive.Signal::new(
-    document,
-    [],
-  )
-  let selected : @reactive.Signal[String?] = @reactive.Signal::new(
+  let orders = OrderModel::new(document)
+  let orders_read = orders.read()
+  let selected : @reactive.Signal[OrderIdentity?] = @reactive.Signal::new(
     document,
     None,
   )
-  let show_closed = @reactive.Signal::new(root, false)
+  let show_closed = @reactive.Store::new(root).field(false)
   let tree = @semantics.empty(91, 1)
-  let ui = @component.UiRoot::new(root, tree)
+  let ui = @component.UiRoot::new(document, tree)
   let filters = ui.fixed("filters")
-  let query = @reactive.Signal::new(filters.scope(), "")
+  let query = @reactive.Store::new(filters.scope()).field("")
   let list = filters.list("orders", "Work orders", selected).unwrap()
-  reconcile_rows(list, orders, query, show_closed)
+  list.track_selection(document)
+  list.bind_rows(
+    @component.Read::tracked(filters.scope(), () => {
+      visible_rows(orders_read, query.read(), show_closed.read())
+    }),
+  )
   let apply_loaded = (loaded : Array[WorkOrder]) => {
     root
     .graph()
     .batch(() => {
-      orders.set(loaded)
-      selected.set(if loaded.length() > 0 { Some(loaded[0].id) } else { None })
-      reconcile_rows(list, orders, query, show_closed)
+      orders.replace_all(loaded)
+      selected.set(
+        if loaded.length() > 0 {
+          orders.identity(loaded[0].id)
+        } else {
+          None
+        },
+      )
     })
   }
   let search = filters
     .text_input(
       "search",
       "Search work orders",
-      @component.Controlled::new(() => query.get(), text => {
-        query.set(text)
-        reconcile_rows(list, orders, query, show_closed)
-        None
-      }),
+      @component.Controlled::tracked(
+        filters.scope(),
+        () => query.read().get(),
+        text => {
+          query.set(text)
+          None
+        },
+      ),
     )
     .unwrap()
   let show_closed_input = filters
     .checkbox(
       "show-closed",
       "Show closed",
-      @component.Controlled::new(() => show_closed.get(), value => {
-        show_closed.set(value)
-        reconcile_rows(list, orders, query, show_closed)
-        None
-      }),
+      @component.Controlled::tracked(
+        filters.scope(),
+        () => show_closed.read().get(),
+        value => {
+          show_closed.set(value)
+          None
+        },
+      ),
     )
     .unwrap()
   let detail_owner = ui.fixed("detail")
   let heading = detail_owner
     .label(
       "heading",
-      @component.Read::new(() => {
-        match selected_order(orders, selected) {
-          Some(order) => order.id
+      @component.Read::tracked(detail_owner.scope(), () => {
+        match selected_fields(orders_read, selected) {
+          Some(_) => selected.get().unwrap().id
           None => "Select a work order"
         }
       }),
@@ -293,10 +227,11 @@ pub fn create(
     .text_input(
       "title",
       "Title",
-      @component.Controlled::new(
+      @component.Controlled::tracked(
+        detail_owner.scope(),
         () => {
-          selected_order(orders, selected)
-          .map(order => order.title)
+          selected_fields(orders_read, selected)
+          .map(fields => fields.title.get())
           .unwrap_or("")
         },
         value => {
@@ -305,16 +240,16 @@ pub fn create(
             persistence.reject_edit("Title exceeds the editor limit")
             return None
           }
-          if edit_selected(orders, selected, value, true) {
+          if selected.peek() is Some(identity) &&
+            orders.edit(identity, value, true) {
             persistence.edited()
-            reconcile_rows(list, orders, query, show_closed)
           }
           None
         },
       ),
-      enabled=@component.Read::new(() => {
+      enabled=@component.Read::tracked(detail_owner.scope(), () => {
         ignore(persistence.status())
-        persistence.can_edit() && selected.peek() is Some(_)
+        persistence.can_edit() && selected.get() is Some(_)
       }),
     )
     .unwrap()
@@ -322,10 +257,11 @@ pub fn create(
     .text_area(
       "details",
       "Details",
-      @component.Controlled::new(
+      @component.Controlled::tracked(
+        detail_owner.scope(),
         () => {
-          selected_order(orders, selected)
-          .map(order => order.details)
+          selected_fields(orders_read, selected)
+          .map(fields => fields.details.get())
           .unwrap_or("")
         },
         value => {
@@ -334,28 +270,32 @@ pub fn create(
             persistence.reject_edit("Details exceed the editor limit")
             return None
           }
-          if edit_selected(orders, selected, value, false) {
+          if selected.peek() is Some(identity) &&
+            orders.edit(identity, value, false) {
             persistence.edited()
           }
           None
         },
       ),
-      enabled=@component.Read::new(() => {
+      enabled=@component.Read::tracked(detail_owner.scope(), () => {
         ignore(persistence.status())
-        persistence.can_edit() && selected.peek() is Some(_)
+        persistence.can_edit() && selected.get() is Some(_)
       }),
     )
     .unwrap()
   let actions = ui.fixed("storage-actions")
   let status = actions
-    .label("status", @component.Read::new(() => persistence.status()))
+    .label(
+      "status",
+      @component.Read::tracked(actions.scope(), () => persistence.status()),
+    )
     .unwrap()
   let save_button = actions
     .button(
       "save",
       "Save",
-      () => persistence.save(orders.peek()),
-      enabled=@component.Read::new(() => {
+      () => persistence.save(orders.snapshot()),
+      enabled=@component.Read::tracked(actions.scope(), () => {
         ignore(persistence.status())
         persistence.can_save()
       }),
@@ -366,7 +306,7 @@ pub fn create(
       "retry-load",
       "Retry load",
       () => persistence.load(apply_loaded),
-      enabled=@component.Read::new(() => {
+      enabled=@component.Read::tracked(actions.scope(), () => {
         ignore(persistence.status())
         persistence.can_retry_load()
       }),
@@ -380,7 +320,7 @@ pub fn create(
         persistence.discard_and_close()
         None
       },
-      enabled=@component.Read::new(() => {
+      enabled=@component.Read::tracked(actions.scope(), () => {
         ignore(persistence.status())
         persistence.close_pending && !persistence.saving
       }),
@@ -394,7 +334,7 @@ pub fn create(
         persistence.cancel_close()
         None
       },
-      enabled=@component.Read::new(() => {
+      enabled=@component.Read::tracked(actions.scope(), () => {
         ignore(persistence.status())
         persistence.close_pending
       }),

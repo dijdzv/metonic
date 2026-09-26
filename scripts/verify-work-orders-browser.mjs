@@ -50,7 +50,27 @@ try {
     const context = await browser.newContext({ viewport: { width: 1000, height: 800 } });
     const { page, errors } = await open(context, target);
     const title = page.getByRole('textbox', { name: 'Title' });
+    const details = page.getByRole('textbox', { name: 'Details' });
+    const search = page.getByRole('textbox', { name: 'Search work orders' });
+    const option = id => page.getByRole('option', { name: new RegExp(`^${id} `) });
     const save = page.getByRole('button', { name: 'Save', exact: true });
+    assert.equal(await title.inputValue(), 'Inspect entry light');
+    assert.equal(await page.getByRole('option').count(), 2);
+    await option('WO-102').click();
+    assert.equal(await title.inputValue(), 'Replace room filter');
+    assert.equal(await details.inputValue(), 'Confirm the replacement size.');
+    await details.fill('Measured replacement size.');
+    assert.equal(await option('WO-102').getAttribute('aria-label'), 'WO-102  Replace room filter');
+    await search.fill('entry');
+    assert.equal(await page.getByRole('option').count(), 1);
+    assert.equal(await title.inputValue(), '');
+    await search.fill('');
+    const closed = page.getByRole('checkbox', { name: 'Show closed' });
+    await closed.click();
+    assert.equal(await page.getByRole('option').count(), 3);
+    await closed.click();
+    assert.equal(await page.getByRole('option').count(), 2);
+    await option('WO-101').click();
     assert.equal(await title.inputValue(), 'Inspect entry light');
     await status(page, 'Unsaved changes');
     await title.fill(`Saved ${target} 😀`);
@@ -98,7 +118,7 @@ try {
     assert.equal(await quota.page.evaluate(key => localStorage.getItem(key), key), null);
     assert.deepEqual(quota.errors, []);
     await quotaContext.close();
-    console.log(`WORK_ORDERS_BROWSER_STORAGE_OK target=${target} save reload unsaved malformed retry denied quota`);
+    console.log(`WORK_ORDERS_BROWSER_STORAGE_OK target=${target} select edit search filter save reload unsaved malformed retry denied quota`);
   }
 } finally {
   await browser?.close();

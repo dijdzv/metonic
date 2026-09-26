@@ -84,6 +84,54 @@ async fn run_instance(
       let title = control(initial, "Title").unwrap()
       assert_eq(field(title, "value"), Json::string(expected_title))
       if new_title is Some(value) {
+        let second = control(initial, "WO-102  Replace room filter").unwrap()
+        let selected_second = request(writer, reader, {
+          "id": id.val,
+          "op": "activate",
+          "target": field(second, "target"),
+          "expected_semantic_revision": field(initial, "semantic_revision"),
+        })
+        id.val += 1
+        assert_eq(
+          field(control(selected_second, "Title").unwrap(), "value"),
+          Json::string("Replace room filter"),
+        )
+        let details = control(selected_second, "Details").unwrap()
+        let selected_details = request(writer, reader, {
+          "id": id.val,
+          "op": "select",
+          "target": field(details, "target"),
+          "expected_semantic_revision": field(
+            selected_second, "semantic_revision",
+          ),
+          "selection_start": 0,
+          "selection_end": "Confirm the replacement size.".length(),
+        })
+        id.val += 1
+        let edited_details = request(writer, reader, {
+          "id": id.val,
+          "op": "insert",
+          "target": field(details, "target"),
+          "expected_semantic_revision": field(
+            selected_details, "semantic_revision",
+          ),
+          "text": "Measured replacement size.",
+        })
+        id.val += 1
+        assert_eq(
+          field(control(edited_details, "Details").unwrap(), "value"),
+          Json::string("Measured replacement size."),
+        )
+        let first = control(edited_details, "WO-101  Inspect entry light").unwrap()
+        let initial = request(writer, reader, {
+          "id": id.val,
+          "op": "activate",
+          "target": field(first, "target"),
+          "expected_semantic_revision": field(
+            edited_details, "semantic_revision",
+          ),
+        })
+        id.val += 1
         let target = field(title, "target")
         let selected = request(writer, reader, {
           "id": id.val,
@@ -164,5 +212,7 @@ async fn main {
   @fs.remove(directory + "/writer.lock")
   @fs.rmdir(directory)
   @fs.rmdir(session)
-  println("WORK_ORDERS_NATIVE_STORAGE_OK save exit reopen restore")
+  println(
+    "WORK_ORDERS_NATIVE_STORAGE_OK select details save exit reopen restore",
+  )
 }
