@@ -1,0 +1,14 @@
+import {
+  "local/jev-test/policy",
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/process",
+  "moonbitlang/async/http",
+  "moonbitlang/async/io",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+}
+
+pkgtype(kind: "executable")
+
+supported_targets = "wasm"

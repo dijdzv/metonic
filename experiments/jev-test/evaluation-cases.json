@@ -1,0 +1,307 @@
+{
+  "catalog": "FULL-INVENTORY.md",
+  "catalog_count": 1880,
+  "mode": "compact-symbols",
+  "policy": {
+    "max_score": 0.5,
+    "min_confidence": 0.6,
+    "min_p0": 0.6
+  },
+  "cases": [
+    {
+      "name": "task-value",
+      "split": "tuning",
+      "evidence": "static-expectation-not-executed",
+      "reason": "complete stores 0 instead of 42; test asserts field 2 equals 42",
+      "expected_ids": [
+        "js:local/p0/core/task_scope:scope_test.mbt:0",
+        "wasm-gc:local/p0/core/task_scope:scope_test.mbt:0",
+        "native:local/p0/core/task_scope:scope_test.mbt:0",
+        "wasm:local/p0/core/task_scope:scope_test.mbt:0"
+      ],
+      "changed": [
+        "core/task_scope/scope.mbt"
+      ],
+      "diff": "diff --git a/core/task_scope/scope.mbt b/core/task_scope/scope.mbt\n--- a/core/task_scope/scope.mbt\n+++ b/core/task_scope/scope.mbt\n@@ -42,7 +42,7 @@\n   if scope.disposed || scope.status != 1 || scope.current_id != id {\n     false\n   } else {\n-    scope.value = value\n+    scope.value = 0\n     scope.status = 2\n     scope.revision += 1\n     true"
+    },
+    {
+      "name": "task-error",
+      "split": "tuning",
+      "evidence": "static-expectation-not-executed",
+      "reason": "fail stores 0 instead of 77; test asserts field 3 equals 77",
+      "expected_ids": [
+        "js:local/p0/core/task_scope:scope_test.mbt:1",
+        "wasm-gc:local/p0/core/task_scope:scope_test.mbt:1",
+        "native:local/p0/core/task_scope:scope_test.mbt:1",
+        "wasm:local/p0/core/task_scope:scope_test.mbt:1"
+      ],
+      "changed": [
+        "core/task_scope/scope.mbt"
+      ],
+      "diff": "diff --git a/core/task_scope/scope.mbt b/core/task_scope/scope.mbt\n--- a/core/task_scope/scope.mbt\n+++ b/core/task_scope/scope.mbt\n@@ -54,7 +54,7 @@\n   if scope.disposed || scope.status != 1 || scope.current_id != id {\n     false\n   } else {\n-    scope.error_code = error_code\n+    scope.error_code = 0\n     scope.status = 3\n     scope.revision += 1\n     true"
+    },
+    {
+      "name": "signal-invalidation",
+      "split": "tuning",
+      "evidence": "static-expectation-not-executed",
+      "reason": "Signal.set stops invalidation; observed parity and compute count must update",
+      "expected_ids": [
+        "js:local/p0/core/reactive:reactive_test.mbt:0",
+        "wasm-gc:local/p0/core/reactive:reactive_test.mbt:0",
+        "native:local/p0/core/reactive:reactive_test.mbt:0",
+        "wasm:local/p0/core/reactive:reactive_test.mbt:0"
+      ],
+      "changed": [
+        "core/reactive/value.mbt"
+      ],
+      "diff": "diff --git a/core/reactive/value.mbt b/core/reactive/value.mbt\n--- a/core/reactive/value.mbt\n+++ b/core/reactive/value.mbt\n@@ -56,7 +56,7 @@\n   }\n   self.value = next\n   self.node.version = self.node.version + 1\n-  self.node.graph.invalidate(self.node)\n+  // invalidation omitted\n   self.node.graph.flush()\n }\n "
+    },
+    {
+      "name": "clock-deadline",
+      "split": "tuning",
+      "evidence": "static-expectation-not-executed",
+      "reason": "waiter does not wake at exactly 1000; test waits after advance to exactly deadline",
+      "expected_ids": [
+        "js:local/metonic_async/clock:virtual_test.mbt:0",
+        "native:local/metonic_async/clock:virtual_test.mbt:0"
+      ],
+      "changed": [
+        "async_runtime/clock/virtual.mbt"
+      ],
+      "diff": "diff --git a/async_runtime/clock/virtual.mbt b/async_runtime/clock/virtual.mbt\n--- a/async_runtime/clock/virtual.mbt\n+++ b/async_runtime/clock/virtual.mbt\n@@ -77,7 +77,7 @@\n     }\n   })\n   for waiter in self.waiters {\n-    if waiter.deadline <= self.time && !waiter.ready {\n+    if waiter.deadline < self.time && !waiter.ready {\n       waiter.ready = true\n       waiter.signal.signal()\n     }"
+    },
+    {
+      "name": "unicode-width",
+      "split": "tuning",
+      "evidence": "static-expectation-not-executed",
+      "reason": "Japanese prefix UTF8 byte offsets become incorrect",
+      "expected_ids": [
+        "js:local/p0/core/text_position:position_test.mbt:0",
+        "wasm-gc:local/p0/core/text_position:position_test.mbt:0",
+        "native:local/p0/core/text_position:position_test.mbt:0",
+        "wasm:local/p0/core/text_position:position_test.mbt:0"
+      ],
+      "changed": [
+        "core/text_position/position.mbt"
+      ],
+      "diff": "diff --git a/core/text_position/position.mbt b/core/text_position/position.mbt\n--- a/core/text_position/position.mbt\n+++ b/core/text_position/position.mbt\n@@ -52,7 +52,7 @@\n         return None\n       } else {\n         u16 += 1\n-        u8 += if unit <= 0x7F { 1 } else if unit <= 0x7FF { 2 } else { 3 }\n+        u8 += 1\n       }\n     }\n     if offset == u16 {"
+    },
+    {
+      "name": "task-first-id",
+      "split": "holdout",
+      "evidence": "static-expectation-not-executed",
+      "reason": "first begin returns 2 rather than asserted 1",
+      "expected_ids": [
+        "js:local/p0/core/task_scope:scope_test.mbt:0",
+        "wasm-gc:local/p0/core/task_scope:scope_test.mbt:0",
+        "native:local/p0/core/task_scope:scope_test.mbt:0",
+        "wasm:local/p0/core/task_scope:scope_test.mbt:0"
+      ],
+      "changed": [
+        "core/task_scope/scope.mbt"
+      ],
+      "diff": "diff --git a/core/task_scope/scope.mbt b/core/task_scope/scope.mbt\n--- a/core/task_scope/scope.mbt\n+++ b/core/task_scope/scope.mbt\n@@ -13,7 +13,7 @@\n pub fn create() -> Scope {\n   {\n     disposed: false,\n-    next_id: 1,\n+    next_id: 2,\n     current_id: 0,\n     status: 0,\n     value: 0,"
+    },
+    {
+      "name": "task-dispose-status",
+      "split": "holdout",
+      "evidence": "static-expectation-not-executed",
+      "reason": "disposed status field is asserted as 5",
+      "expected_ids": [
+        "js:local/p0/core/task_scope:scope_test.mbt:5",
+        "wasm-gc:local/p0/core/task_scope:scope_test.mbt:5",
+        "native:local/p0/core/task_scope:scope_test.mbt:5",
+        "wasm:local/p0/core/task_scope:scope_test.mbt:5"
+      ],
+      "changed": [
+        "core/task_scope/scope.mbt"
+      ],
+      "diff": "diff --git a/core/task_scope/scope.mbt b/core/task_scope/scope.mbt\n--- a/core/task_scope/scope.mbt\n+++ b/core/task_scope/scope.mbt\n@@ -80,7 +80,7 @@\n   } else {\n     scope.disposed = true\n     scope.current_id = 0\n-    scope.status = 5\n+    scope.status = 4\n     scope.revision += 1\n     true\n   }"
+    },
+    {
+      "name": "framing-limit",
+      "split": "holdout",
+      "evidence": "static-expectation-not-executed",
+      "reason": "exactly four-byte okay line is rejected",
+      "expected_ids": [
+        "js:local/p0/tools/session_wire:framing_wbtest.mbt:2",
+        "native:local/p0/tools/session_wire:framing_wbtest.mbt:2",
+        "wasm:local/p0/tools/session_wire:framing_wbtest.mbt:2"
+      ],
+      "changed": [
+        "tools/session_wire/framing.mbt"
+      ],
+      "diff": "diff --git a/tools/session_wire/framing.mbt b/tools/session_wire/framing.mbt\n--- a/tools/session_wire/framing.mbt\n+++ b/tools/session_wire/framing.mbt\n@@ -39,7 +39,7 @@\n   for i = 0; i < parts.length(); i = i + 1 {\n     let part = parts[i].to_owned()\n     let size = @utf8.encode(part).length()\n-    if size > state.limit - state.bytes {\n+    if size >= state.limit - state.bytes {\n       state.error = \"native session response line exceeds 32MiB\"\n       clear_response_framer(state)\n       return lines"
+    },
+    {
+      "name": "framing-crlf",
+      "split": "holdout",
+      "evidence": "static-expectation-not-executed",
+      "reason": "returned first line retains carriage return",
+      "expected_ids": [
+        "js:local/p0/tools/session_wire:framing_wbtest.mbt:0",
+        "native:local/p0/tools/session_wire:framing_wbtest.mbt:0",
+        "wasm:local/p0/tools/session_wire:framing_wbtest.mbt:0"
+      ],
+      "changed": [
+        "tools/session_wire/framing.mbt"
+      ],
+      "diff": "diff --git a/tools/session_wire/framing.mbt b/tools/session_wire/framing.mbt\n--- a/tools/session_wire/framing.mbt\n+++ b/tools/session_wire/framing.mbt\n@@ -53,7 +53,7 @@\n       clear_response_framer(state)\n       lines.push(\n         if text.has_suffix(\"\\r\") {\n-          text[:text.length() - 1].to_owned()\n+          text\n         } else {\n           text\n         },"
+    },
+    {
+      "name": "framing-clear",
+      "split": "holdout",
+      "evidence": "static-expectation-not-executed",
+      "reason": "discard fragment survives clear and prefixes new response",
+      "expected_ids": [
+        "js:local/p0/tools/session_wire:framing_wbtest.mbt:4",
+        "native:local/p0/tools/session_wire:framing_wbtest.mbt:4",
+        "wasm:local/p0/tools/session_wire:framing_wbtest.mbt:4"
+      ],
+      "changed": [
+        "tools/session_wire/framing.mbt"
+      ],
+      "diff": "diff --git a/tools/session_wire/framing.mbt b/tools/session_wire/framing.mbt\n--- a/tools/session_wire/framing.mbt\n+++ b/tools/session_wire/framing.mbt\n@@ -15,7 +15,7 @@\n ///|\n #export_name(\"clear_response_framer\")\n pub fn clear_response_framer(state : ResponseFramer) -> Unit {\n-  state.parts.clear()\n+  // pending fragments retained\n   state.bytes = 0\n }\n "
+    },
+    {
+      "name": "session-last-id",
+      "split": "holdout",
+      "evidence": "static-expectation-not-executed",
+      "reason": "last permitted ID returns 0",
+      "expected_ids": [
+        "js:local/p0/tools/session_wire:policy_wbtest.mbt:1",
+        "native:local/p0/tools/session_wire:policy_wbtest.mbt:1",
+        "wasm:local/p0/tools/session_wire:policy_wbtest.mbt:1"
+      ],
+      "changed": [
+        "tools/session_wire/policy.mbt"
+      ],
+      "diff": "diff --git a/tools/session_wire/policy.mbt b/tools/session_wire/policy.mbt\n--- a/tools/session_wire/policy.mbt\n+++ b/tools/session_wire/policy.mbt\n@@ -53,7 +53,7 @@\n ///|\n #export_name(\"allocate_session_id\")\n pub fn allocate_session_id(state : SessionPolicy) -> Int {\n-  if state.next_id > 2147483647L {\n+  if state.next_id >= 2147483647L {\n     return 0\n   }\n   let id = state.next_id.to_int()"
+    },
+    {
+      "name": "scope-child-disposal",
+      "split": "holdout",
+      "evidence": "static-expectation-not-executed",
+      "reason": "child cleanup and effect cleanup no longer run",
+      "expected_ids": [
+        "js:local/p0/core/reactive:reactive_test.mbt:13",
+        "wasm-gc:local/p0/core/reactive:reactive_test.mbt:13",
+        "native:local/p0/core/reactive:reactive_test.mbt:13",
+        "wasm:local/p0/core/reactive:reactive_test.mbt:13"
+      ],
+      "changed": [
+        "core/reactive/scope.mbt"
+      ],
+      "diff": "diff --git a/core/reactive/scope.mbt b/core/reactive/scope.mbt\n--- a/core/reactive/scope.mbt\n+++ b/core/reactive/scope.mbt\n@@ -81,7 +81,7 @@\n     self.graph.untracked(fn() {\n       guard_writes(fn() {\n         for i = self.children.length() - 1; i >= 0; i = i - 1 {\n-          self.children[i].dispose()\n+          // child disposal omitted\n         }\n         for i = self.disposers.length() - 1; i >= 0; i = i - 1 {\n           self.disposers[i]()"
+    },
+    {
+      "name": "clock-detach",
+      "split": "holdout",
+      "evidence": "static-expectation-not-executed",
+      "reason": "pending remains one after cancellation",
+      "expected_ids": [
+        "js:local/metonic_async/clock:virtual_test.mbt:1",
+        "native:local/metonic_async/clock:virtual_test.mbt:1"
+      ],
+      "changed": [
+        "async_runtime/clock/virtual.mbt"
+      ],
+      "diff": "diff --git a/async_runtime/clock/virtual.mbt b/async_runtime/clock/virtual.mbt\n--- a/async_runtime/clock/virtual.mbt\n+++ b/async_runtime/clock/virtual.mbt\n@@ -56,7 +56,7 @@\n   }\n   self.next_id += 1L\n   self.waiters.push(waiter)\n-  defer self.waiters.retain(entry => entry.id != waiter.id)\n+  // canceled waiter retained\n   while !waiter.ready {\n     waiter.signal.wait()\n   }"
+    },
+    {
+      "name": "snapshot-replacement",
+      "split": "holdout",
+      "evidence": "static-expectation-not-executed",
+      "reason": "second save cannot replace existing snapshot",
+      "expected_ids": [
+        "native:local/native_host/snapshot_store:store_test.mbt:0"
+      ],
+      "changed": [
+        "native_host/snapshot_store/store.mbt"
+      ],
+      "diff": "diff --git a/native_host/snapshot_store/store.mbt b/native_host/snapshot_store/store.mbt\n--- a/native_host/snapshot_store/store.mbt\n+++ b/native_host/snapshot_store/store.mbt\n@@ -64,7 +64,7 @@\n   // The live snapshot is never truncated. A failed or canceled staging write\n   // may leave this private file; the next save replaces it under the same lock.\n   @fs.write_file(temporary, bytes, sync=Full)\n-  @fs.rename(temporary, self.directory + \"/snapshot\", replace=true)\n+  @fs.rename(temporary, self.directory + \"/snapshot\", replace=false)\n }\n \n ///|"
+    },
+    {
+      "name": "contract-valid",
+      "split": "holdout",
+      "evidence": "static-expectation-not-executed",
+      "reason": "successful valid typecheck is now rejected",
+      "expected_ids": [
+        "contract:scripts/verify-types.mbtx:js:valid",
+        "contract:scripts/verify-types.mbtx:wasm-gc:valid",
+        "contract:scripts/verify-types.mbtx:native:valid"
+      ],
+      "changed": [
+        "scripts/verify-types.mbtx"
+      ],
+      "diff": "diff --git a/scripts/verify-types.mbtx b/scripts/verify-types.mbtx\n--- a/scripts/verify-types.mbtx\n+++ b/scripts/verify-types.mbtx\n@@ -95,7 +95,7 @@\n     @fs.write_file(probe + \"/check.stderr\", check_err.text())\n     let diagnostics = (check_out.text() + \"\\n\" + check_err.text()).to_lower()\n     if name == \"valid\" {\n-      if check_code != 0 {\n+      if check_code == 0 {\n         fail(\"valid check failed: \" + diagnostics)\n       }\n       let (build_code, _, build_err) = @process.collect_output("
+    },
+    {
+      "name": "label",
+      "split": "tuning",
+      "evidence": "historical-failure",
+      "reason": "Previously saved failing execution; no new test execution",
+      "expected_ids": [
+        "js:local/p0/core/component:ui_root_test.mbt:3",
+        "js:local/p0/core/component:keyed_test.mbt:0",
+        "js:local/p0/core/semantics:registration_test.mbt:1"
+      ],
+      "changed": [
+        "core/semantics/model.mbt"
+      ],
+      "diff": "diff --git a/core/semantics/model.mbt b/core/semantics/model.mbt\nindex a1f98cf..ae10e1f 100644\n--- a/core/semantics/model.mbt\n+++ b/core/semantics/model.mbt\n@@ -113,7 +113,7 @@ pub fn set_name(tree : Tree, reference : NodeRef, name : String) -> String {\n   if node.name == name {\n     return \"\"\n   }\n-  store_input(tree, { ..node, name, })\n+  store_input(tree, { ..node, name: node.name, })\n   tree.revision += 1\n   \"\"\n }"
+    },
+    {
+      "name": "navigation",
+      "split": "tuning",
+      "evidence": "historical-failure",
+      "reason": "Previously saved failing execution; no new test execution",
+      "expected_ids": [
+        "js:local/p0/core/input_navigation:navigation_test.mbt:0"
+      ],
+      "changed": [
+        "core/input_navigation/navigation.mbt"
+      ],
+      "diff": "diff --git a/core/input_navigation/navigation.mbt b/core/input_navigation/navigation.mbt\nindex 14faa07..0a28acf 100644\n--- a/core/input_navigation/navigation.mbt\n+++ b/core/input_navigation/navigation.mbt\n@@ -39,7 +39,7 @@ fn State::find(\n   }\n   for position in self.positions {\n     if position.reference == reference &&\n-      position.revision == @semantics.revision(self.tree) &&\n+      position.revision >= 0 &&\n       position.caret == caret &&\n       position.width == width {\n       return Some(position)"
+    },
+    {
+      "name": "disabled-focus",
+      "split": "tuning",
+      "evidence": "historical-failure",
+      "reason": "Previously saved failing execution; no new test execution",
+      "expected_ids": [
+        "js:local/p0/core/semantics:registration_test.mbt:0"
+      ],
+      "changed": [
+        "core/semantics/model.mbt"
+      ],
+      "diff": "diff --git a/core/semantics/model.mbt b/core/semantics/model.mbt\nindex a1f98cf..02512e0 100644\n--- a/core/semantics/model.mbt\n+++ b/core/semantics/model.mbt\n@@ -341,7 +341,7 @@ pub fn set_enabled(tree : Tree, reference : NodeRef, enabled : Bool) -> String {\n   if node.enabled == enabled {\n     return \"\"\n   }\n-  store_input(tree, { ..node, enabled, focused: enabled && node.focused, })\n+  store_input(tree, { ..node, enabled, focused: node.focused, })\n   tree.revision += 1\n   \"\"\n }"
+    },
+    {
+      "name": "node-pending",
+      "split": "tuning",
+      "evidence": "historical-failure",
+      "reason": "Previously saved failing execution; no new test execution",
+      "expected_ids": [
+        "node:tools/devtools/browser-observation.test.mjs:outstanding requests remain bounded and disappear after completion"
+      ],
+      "changed": [
+        "tools/devtools/browser-observation.mjs"
+      ],
+      "diff": "diff --git a/tools/devtools/browser-observation.mjs b/tools/devtools/browser-observation.mjs\nindex 4830b78..2e114b5 100644\n--- a/tools/devtools/browser-observation.mjs\n+++ b/tools/devtools/browser-observation.mjs\n@@ -21,7 +21,7 @@ export async function observedPage(browser, options) {\n   page.on('request', request => {\n     saved.pendingCount += 1;\n     // Keep the oldest outstanding requests: a busy page must not evict its stall.\n-    if (pending.size < 8) {\n+    if (pending.size < 7) {\n       let path = '(invalid URL)';\n       try { path = new URL(request.url()).pathname.slice(0, 512); } catch {}\n       pending.set(request, { path, method: request.method(), started: performance.now() });"
+    },
+    {
+      "name": "bootstrap-marker",
+      "split": "tuning",
+      "evidence": "historical-failure",
+      "reason": "Previously saved failing execution; no new test execution",
+      "expected_ids": [
+        "verifier:scripts/bootstrap.mbtx"
+      ],
+      "changed": [
+        "scripts/bootstrap.mbtx"
+      ],
+      "diff": "diff --git a/scripts/bootstrap.mbtx b/scripts/bootstrap.mbtx\nindex b614123..33f7fd6 100644\n--- a/scripts/bootstrap.mbtx\n+++ b/scripts/bootstrap.mbtx\n@@ -95,7 +95,7 @@ async fn promote(\n async fn marker_matches(path : String, expected : String) -> Bool raise Error {\n   // An async RHS of && is evaluated eagerly by the pinned compiler.\n   if @fs.exists(path) {\n-    @fs.read_file(path).text() == expected\n+    @fs.read_file(path).text() != expected\n   } else {\n     false\n   }"
+    }
+  ]
+}

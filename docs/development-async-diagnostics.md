@@ -35,6 +35,10 @@ development entry. Browser development uses the dedicated
 function; `async-pair:diagnostics-browser` exercises both JS and WasmGC. The
 ordinary release inventory does not include either development entry.
 
+Both diagnostic verification tasks are included in `verification.json`'s full
+gate list. They run in the pre-push runtime lane and the standalone full gate;
+the pre-commit lane remains focused on its existing checks.
+
 The browser release packager scans its fixed asset inventory for diagnostic
 entry markers and verifies that the production WasmGC module does not retain
 diagnostic history strings. The native release entry has no diagnostic

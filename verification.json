@@ -12,6 +12,7 @@
     "native:window-integration", "native:notes-test", "async-pair:native-verify", "native:application-control-test", "native:pipe-verify",
     "native:host-verify", "native:async",
     "native:surface", "native:binding", "rpc:verify", "native:production-integration",
+    "async-pair:diagnostics-browser", "async-pair:diagnostics-test",
     "demo:test",
     "prerequisites:test", "bootstrap:test"
   ]
