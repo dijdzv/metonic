@@ -1,0 +1,66 @@
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/fs",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+  "moonbitlang/x@0.5.1/crypto",
+}
+
+///|
+async fn main {
+  let args = @env.args()
+  assert_true(
+    args.length() == 2,
+    msg="usage: package-browser.mbtx <new-output-directory>",
+  )
+  let output = args[1]
+  assert_true(
+    !@fs.exists(output),
+    msg="Package destination already exists; choose a new directory",
+  )
+  let files : Array[(String, String)] = []
+  for
+    name in [
+      "app.mjs", "app.wasm", "application.mjs", "browser-buffer.mjs", "layer-renderer.mjs",
+      "surface.mjs", "wasm-imports.mjs", "websys-input.mjs", "NotoSansJP.ttf", "OFL.txt",
+      "LICENSE-APACHE", "LICENSE-MIT", "LICENSE-async", "LICENSE-chicle", "LICENSE-websys",
+    ] {
+    files.push(("browser/.metonic-dist/" + name, name))
+  }
+  files.push(("browser/index.html", "index.html"))
+  files.push(("browser/main.mjs", "main.mjs"))
+  for name in ["LICENSE", "NOTICE"] {
+    files.push(
+      (
+        ".metonic/framework/.tools/moonbit/lib/core/" + name,
+        name + "-moonbit-core",
+      ),
+    )
+  }
+  let contents : Array[(String, Bytes)] = []
+  for (source, name) in files {
+    contents.push((name, @fs.read_file(source).binary()))
+  }
+  @fs.mkdir(output, recursive=true)
+  let inventory : Array[Json] = []
+  for (name, bytes) in contents {
+    @fs.write_file(output + "/" + name, bytes)
+    inventory.push({
+      "path": name,
+      "bytes": bytes.length(),
+      "sha256": @crypto.bytes_to_hex_string(@crypto.sha256(bytes)),
+    })
+  }
+  let manifest : Json = {
+    "schema_version": 1,
+    "application": "Work orders",
+    "targets": ["js", "wasm-gc"],
+    "framework": @json.parse(@fs.read_file("dependency.json").text()),
+    "files": inventory,
+  }
+  @fs.write_file(output + "/distribution.json", manifest.stringify(indent=2))
+  println(
+    "WORK_ORDERS_BROWSER_PACKAGE_OK files=\{inventory.length()} output=" +
+    @fs.realpath(output),
+  )
+}

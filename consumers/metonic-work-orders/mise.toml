@@ -1,0 +1,8 @@
+[env]
+MOON_HOME = "{{config_root}}/.metonic/framework/.tools/moonbit"
+MBT_WGPU_NATIVE_ROOT = "{{config_root}}/.metonic/framework/.work/wgpu-assets"
+_.path = ["{{config_root}}/.metonic/framework/.tools/moonbit/bin"]
+
+[tools]
+node = "26.8.1"
+pnpm = "12.3.4"
