@@ -88,7 +88,8 @@ partially built fields before returning `ClosedStore`.
 `Store::batch` can group remove/reinsert and field updates, including a
 same-key recreation. Observers run after the outer batch and see the final
 generation. Reads made explicitly *inside* a batch see the state at that point;
-there is no rollback. UI list reconciliation remains a separate boundary.
+there is no rollback. Bound UI lists apply structural changes at the next
+application synchronization boundary.
 
 ## Construct controls once per owner
 
@@ -108,7 +109,8 @@ let text = @reactive.Signal::new(owner.scope(), "")
 let input = owner.text_area(
   "body",
   "Note",
-  @component.Controlled::new(
+  @component.Controlled::tracked(
+    owner.scope(),
     () => text.get(),
     value => {
       text.set(value)
@@ -120,17 +122,27 @@ let clear = owner.button("clear", "Clear", () => {
   text.set("")
   None
 }).unwrap()
-let heading = owner.label(
-  "heading", @component.Read::new(() => "Note editor"),
-).unwrap()
+let heading = owner.label("heading", @component.Read::constant("Note editor")).unwrap()
 ```
 
-`Read` and `Controlled` describe sampling and event callbacks; they do not
-create a second reactive graph. The Controlled callback receives committed
-edits and may return a task Request. The semantic editor keeps selection and
-IME composition. The host synchronizes programmatic values at its event
-boundary and avoids overwriting active composition. Unchanged text preserves
-selection. This contract does not imply physical IME verification on every OS.
+Use `Read::tracked(scope, sample)` or `Controlled::tracked(scope, sample,
+commit)` when `sample` calls tracked `get` on Signals, Store reads, or Memos.
+Use `Read::constant` for fixed values. The existing `Read::new` and
+`Controlled::new` remain useful for nonreactive values or `peek` closures,
+but poll at each synchronization boundary. The tracking Scope must be able to
+read every dependency according to the Graph lifetime rule: place a component
+under its document Scope when its input combines document state with local
+state. The component owner disposes its subscription; dispose or rebind the
+component when its source Scope ends.
+
+`Read` and `Controlled` use the existing reactive Graph. Tracked inputs prepare
+desired values when dependencies change, then apply semantic changes at the
+host's existing event boundary; they do not introduce another scheduler. The
+Controlled callback receives committed edits and may return a task Request.
+The semantic editor keeps selection and IME composition. The host avoids
+overwriting active composition and rechecks rejected edits even if the model
+value did not change. Unchanged text preserves selection. This contract does
+not imply physical IME verification on every OS.
 
 ## Connect the existing Application boundary
 
@@ -152,6 +164,12 @@ The first group includes Label, Button, TextInput, TextArea, Checkbox, selectabl
 List, Status and a separate Retry Button. List uses an application-owned
 `Signal[Key?]` for selection; focus navigation and selection are distinct.
 Reordering keeps keyed owners, while removing a selected row clears selection.
+Call `list.bind_rows(Read::tracked(scope, () => rows.get()))` to derive rows
+from a tracked source. Return a fresh row array from the sample; the list copies
+it before applying changes. `list.track_selection(scope)` also avoids polling
+the selection Signal. Bound rows and manual `list.reconcile` cannot be mixed.
+Row structure and selection are applied together at the application boundary,
+while a field change unrelated to the row source leaves its owners untouched.
 Loading/error/previous-result messages derive from application async state;
 Status does not own requests or a separate loading state machine.
 

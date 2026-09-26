@@ -11,7 +11,7 @@ pub struct Gallery {
   list : @component.UiList[String]
   list_view : @app.ScrollView
   list_selection : @reactive.Signal[String?]
-  mut list_rows : Array[@component.ListRow[String]]
+  list_rows : @reactive.Signal[Array[@component.ListRow[String]]]
   status_value : @reactive.Signal[@component.StatusState]
   status : @component.UiStatus
   retry : @component.UiButton
@@ -51,12 +51,12 @@ fn checked_control(
   .checkbox(
     key,
     label,
-    @component.Controlled::new(() => value.peek(), checked => {
+    @component.Controlled::tracked(owner.scope(), () => value.get(), checked => {
       value.set(checked)
       None
     }),
-    enabled=@component.Read::new(() => enabled),
-    invalid=@component.Read::new(() => invalid),
+    enabled=@component.Read::constant(enabled),
+    invalid=@component.Read::constant(invalid),
   )
   .unwrap()
 }
@@ -73,6 +73,7 @@ pub fn Gallery::new(ui : @component.UiRoot) -> Gallery {
     .unwrap()
   let list_selection = @reactive.Signal::new(fixed.scope(), Some("item-0"))
   let list = fixed.list("items", "Selectable items", list_selection).unwrap()
+  list.track_selection(fixed.scope())
   let list_rows : Array[@component.ListRow[String]] = []
   for index in 0..<12 {
     list_rows.push({
@@ -81,13 +82,17 @@ pub fn Gallery::new(ui : @component.UiRoot) -> Gallery {
       enabled: index != 4,
     })
   }
-  ignore(list.reconcile(list_rows))
+  let list_rows = @reactive.Signal::new(fixed.scope(), list_rows)
+  list.bind_rows(@component.Read::tracked(fixed.scope(), () => list_rows.get()))
   let status_value = @reactive.Signal::new(
     fixed.scope(),
     @component.StatusState::Waiting("Quote: waiting"),
   )
   let status = fixed
-    .status("quote-status", @component.Read::new(() => status_value.peek()))
+    .status(
+      "quote-status",
+      @component.Read::tracked(fixed.scope(), () => status_value.get()),
+    )
     .unwrap()
   let retry = fixed
     .button("retry", "Retry", () => {
@@ -115,11 +120,11 @@ pub fn Gallery::new(ui : @component.UiRoot) -> Gallery {
   let rotate = fixed
     .button("rotate", "Rotate rows", () => {
       let gallery = self_ref.val.unwrap()
-      let rows = gallery.list_rows.copy()
+      let rows = gallery.list_rows.peek().copy()
       if !rows.is_empty() {
         let first = rows.remove(0)
         rows.push(first)
-        ignore(gallery.set_list_rows(rows))
+        gallery.set_list_rows(rows)
       }
       None
     })
@@ -144,11 +149,11 @@ pub fn Gallery::new(ui : @component.UiRoot) -> Gallery {
       "disabled-button",
       "Disabled button",
       () => None,
-      enabled=@component.Read::new(() => false),
+      enabled=@component.Read::constant(false),
     )
     .unwrap()
   let heading = fixed
-    .label("heading", @component.Read::new(() => "Standard controls"))
+    .label("heading", @component.Read::constant("Standard controls"))
     .unwrap()
   let single_value = @reactive.Signal::new(fixed.scope(), "Item key")
   let multi_value = @reactive.Signal::new(
@@ -159,7 +164,7 @@ pub fn Gallery::new(ui : @component.UiRoot) -> Gallery {
     .text_input(
       "single",
       "Single line",
-      @component.Controlled::new(() => single_value.peek(), value => {
+      @component.Controlled::tracked(fixed.scope(), () => single_value.get(), value => {
         single_value.set(value)
         None
       }),
@@ -169,7 +174,7 @@ pub fn Gallery::new(ui : @component.UiRoot) -> Gallery {
     .text_area(
       "multi",
       "Multiple lines",
-      @component.Controlled::new(() => multi_value.peek(), value => {
+      @component.Controlled::tracked(fixed.scope(), () => multi_value.get(), value => {
         multi_value.set(value)
         None
       }),
@@ -180,7 +185,7 @@ pub fn Gallery::new(ui : @component.UiRoot) -> Gallery {
       "disabled-input",
       "Disabled input",
       @component.Controlled::new(() => "Unavailable", _ => None),
-      enabled=@component.Read::new(() => false),
+      enabled=@component.Read::constant(false),
     )
     .unwrap()
   let gallery : Gallery = {
@@ -225,9 +230,8 @@ pub fn Gallery::new(ui : @component.UiRoot) -> Gallery {
 pub fn Gallery::set_list_rows(
   self : Gallery,
   rows : Array[@component.ListRow[String]],
-) -> Bool {
-  self.list_rows = rows
-  self.list.reconcile(rows)
+) -> Unit {
+  self.list_rows.set(rows)
 }
 
 ///|

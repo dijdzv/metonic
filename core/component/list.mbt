@@ -3,7 +3,7 @@ pub(all) struct ListRow[K] {
   key : K
   label : String
   enabled : Bool
-}
+} derive(Eq)
 
 ///|
 pub(all) enum ListMove {
@@ -33,8 +33,10 @@ pub struct UiList[K] {
   priv owner : UiOwner
   priv reference : @semantics.NodeRef
   priv selected : @reactive.Signal[K?]
+  priv mut selected_input : PreparedInput[K?]
   priv on_select : (K) -> @task.Request?
   priv rows : KeyedChildren[K, ListRowProps, UiListItem[K]]
+  priv mut rows_source : PreparedInput[Array[ListRow[K]]]?
 }
 
 ///|
@@ -63,8 +65,13 @@ pub fn[K : Eq] UiOwner::list(
     owner: self,
     reference,
     selected,
+    selected_input: PreparedInput::new(
+      self.child.scope(),
+      Read::new(() => selected.peek()),
+    ),
     on_select,
     rows: KeyedChildren::new(self.child.scope(), self.root.tree),
+    rows_source: None,
   }
   self.root.lists.push({
     key,
@@ -127,7 +134,53 @@ pub fn[K] UiList::items(self : UiList[K]) -> Array[UiListItem[K]] {
 }
 
 ///|
+pub fn[K : Eq] UiList::track_selection(
+  self : UiList[K],
+  scope : @reactive.Scope,
+) -> Unit {
+  if !self.owner.child.owns(self.reference) ||
+    self.selected_input.read.tracking_scope is Some(_) {
+    abort("UI list selection requires a live untracked owner")
+  }
+  self.selected_input = PreparedInput::new(
+    self.owner.child.scope(),
+    Read::tracked(scope, () => self.selected.get()),
+  )
+  ignore(self.synchronize_selection())
+}
+
+///|
 pub fn[K : Eq] UiList::reconcile(
+  self : UiList[K],
+  entries : Array[ListRow[K]],
+) -> Bool {
+  if self.rows_source is Some(_) {
+    abort("bound UI list rows cannot be reconciled manually")
+  }
+  self.reconcile_rows(entries)
+}
+
+///|
+pub fn[K : Eq] UiList::bind_rows(
+  self : UiList[K],
+  source : Read[Array[ListRow[K]]],
+) -> Unit {
+  if self.rows_source is Some(_) || !self.owner.child.owns(self.reference) {
+    abort("UI list rows require a live unbound owner")
+  }
+  let snapshot : Read[Array[ListRow[K]]] = {
+    sample: () => source.get().copy(),
+    tracking_scope: source.tracking_scope,
+    constant: source.constant.map(rows => rows.copy()),
+  }
+  self.rows_source = Some(
+    PreparedInput::new(self.owner.child.scope(), snapshot),
+  )
+  ignore(self.synchronize())
+}
+
+///|
+fn[K : Eq] UiList::reconcile_rows(
   self : UiList[K],
   entries : Array[ListRow[K]],
 ) -> Bool {
@@ -199,22 +252,59 @@ pub fn[K : Eq] UiList::reconcile(
       ignore(@semantics.focus(self.root.tree, reference))
     }
   }
-  self.synchronize() || changed
+  self.selected_input.mark_pending()
+  self.synchronize_selection() || changed
 }
 
 ///|
 fn[K : Eq] UiList::synchronize(self : UiList[K]) -> Bool {
+  if !self.selected_input.needs_sync() &&
+    (match self.rows_source {
+      Some(source) => !source.needs_sync()
+      None => true
+    }) {
+    return false
+  }
   guard self.owner.child.owns(self.reference) else { return false }
-  let selected = self.root.scope.graph().read_only(() => self.selected.peek())
   let mut changed = false
+  if self.rows_source is Some(source) {
+    let mut rounds = 0
+    while source.needs_sync() {
+      if rounds >= 16 {
+        abort("tracked UI list rows did not stabilize")
+      }
+      let rows = source.current()
+      source.consume()
+      changed = self.reconcile_rows(rows) || changed
+      rounds += 1
+    }
+  }
+  self.synchronize_selection() || changed
+}
+
+///|
+fn[K : Eq] UiList::synchronize_selection(self : UiList[K]) -> Bool {
+  guard self.selected_input.needs_sync() else { return false }
+  guard self.owner.child.owns(self.reference) else { return false }
+  let selected = self.selected_input.current()
+  let mut changed = false
+  let mut complete = true
   for item in self.rows.ordered() {
     if @semantics.node(self.root.tree, item.reference) is Ok(node) {
       let next = selected == Some(item.key)
-      if node.selected != next &&
-        @semantics.set_selected(self.root.tree, item.reference, next) == "" {
-        changed = true
+      if node.selected != next {
+        if @semantics.set_selected(self.root.tree, item.reference, next) == "" {
+          changed = true
+        } else {
+          complete = false
+        }
       }
+    } else {
+      complete = false
     }
+  }
+  if complete {
+    self.selected_input.consume()
   }
   changed
 }

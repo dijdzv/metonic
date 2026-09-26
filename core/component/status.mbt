@@ -44,7 +44,7 @@ priv struct UiStatusBinding {
   key : String
   owner : ChildOwner
   reference : @semantics.NodeRef
-  value : Read[StatusState]
+  value : PreparedInput[StatusState]
 }
 
 ///|
@@ -61,14 +61,21 @@ pub fn UiOwner::status(
   value : Read[StatusState],
 ) -> UiStatus? {
   self.check_key(key)
-  let initial = self.root.scope.graph().read_only(() => value.get())
+  let prepared_value = PreparedInput::new(self.child.scope(), value)
+  let initial = prepared_value.current()
   guard self.child.add_status(initial.message()) is Some(reference) else {
     return None
   }
   if initial.is_error() {
     ignore(@semantics.set_invalid(self.root.tree, reference, true))
   }
-  self.root.statuses.push({ key, owner: self.child, reference, value, })
+  prepared_value.consume()
+  self.root.statuses.push({
+    key,
+    owner: self.child,
+    reference,
+    value: prepared_value,
+  })
   self.child
   .scope()
   .on_dispose(() => {
