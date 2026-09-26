@@ -1,7 +1,10 @@
 # Application entry
 
 `core/application.Application` is an experimental platform-independent entry for
-text, button and input views. It contains the semantic editor,
+owned labels, buttons, inputs, checkboxes, selectable lists and status views.
+Start with the [owned component and state guide](owned-components.md) for the
+current application-author API; the low-level controls remain available.
+It contains the semantic editor,
 default input reference, initial size, initialization, view, activation, resize and disposal
 callbacks. A view supplies `Control` values with a common view element and kind.
 The application owns its model and semantic references; it does not own GPU
@@ -755,7 +758,7 @@ ended. The following boundaries are deliberately different:
 | Storage | Native `snapshot_store.Store` and browser `snapshot_store.load/save` | Adapt bytes or strings into the application's format and recovery policy. Native locking/async IO and browser synchronous origin-scoped storage have different lifetime and failure contracts, described below. |
 | Clipboard | `core/text_clipboard` editing policy and native backend; browser DOM editing | Display input-operation failures separately from storage failures. Native access does not grant browser clipboard permissions. Rich text, images and clipboard history are not provided. |
 | Fonts and packaged assets | Native executable-relative resource resolution/font override; browser font URL and digest | Select and distribute licensed resources. Host code loads and rasterizes the configured font. `resources.asset_path` resolves a file path; it does not decode an image. |
-| Images | No image control or image-loading API in the portable entry | The current control kinds are Text, Button and Input. Image widgets/decoders require a separate extension; access to low-level rendering internals is not a portable image API. |
+| Images | No image control or image-loading API in the portable entry | The owned-control catalog is described in the [component guide](owned-components.md). Image widgets/decoders require a separate extension; access to low-level rendering internals is not a portable image API. |
 
 Storage serialization and memo CRUD belong to the consumer. GPU setup, OS input
 handling and resource teardown belong to the hosts. Task requests use the
@@ -802,7 +805,7 @@ discarding unsaved text. The existing raster layer size limits also apply.
 The native default input is optional, allowing empty and button-only views. The
 managed browser entry creates DOM controls dynamically and places them at the
 bounds supplied by the application. The shared fixed-height vertical list is
-available, but a general layout system and list virtualization are not.
+available alongside Stack/ScrollView composition, but list virtualization is not.
 Unexpected task failures use the handler/outcome contract described above;
 there is no automatic retry or durable background job queue.
 The portable task entry alone does not establish durable saving or recovery;
