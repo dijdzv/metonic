@@ -16,11 +16,20 @@ pub fn[T] Signal::new_by(
   initial : T,
   equal : (T, T) -> Bool,
 ) -> Signal[T] {
+  let signal = Signal::new_unowned_by(scope, initial, equal)
+  scope.own(fn() { signal.node.dispose() })
+  signal
+}
+
+///|
+fn[T] Signal::new_unowned_by(
+  scope : Scope,
+  initial : T,
+  equal : (T, T) -> Bool,
+) -> Signal[T] {
   scope.assert_alive()
   let node = Node::new(scope, false)
-  let signal : Signal[T] = { node, value: initial, equal, }
-  scope.own(fn() { node.dispose() })
-  signal
+  { node, value: initial, equal, }
 }
 
 ///|

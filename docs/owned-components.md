@@ -39,11 +39,56 @@ store.batch(() => {
 The compiler does not make a mutable `T` immutable: do not expose a mutable
 Array, Ref or other shared object through a read handle without copying it or
 transferring ownership. `Store::batch` uses the existing Graph batch for fields
-on that Graph, so
-observers see the final combination after the outer batch; it is not a rollback
-transaction. A keyed item collection and tracked list reconciliation are still
-separate work. Wrapping an entire model in one Signal does not establish
-field-level invalidation. A general Context/provider API is not supplied.
+on that Graph, so observers see the final combination after the outer batch;
+it is not a rollback transaction. Wrapping an entire model in one Signal does
+not establish field-level invalidation. A general Context/provider API is not
+supplied.
+
+## Ordered keyed state
+
+`Store::keyed()` creates a `KeyedStore[K, R, W]` under the document Store's
+Scope. `K` must support equality and hashing and remain immutable while in the
+collection. Define an item-specific read
+projection `R` containing `StoreRead` fields and a writer projection `W`
+containing the corresponding `StoreField`s. `insert(key, builder => (read,
+write))` makes those fields through `StoreItemBuilder::field` or `field_by`.
+The builder is usable only during insertion. Keep `W` with the model owner;
+pass `KeyedStore::read()` and its `KeyedItemRead` values to consumers. The
+collection's read-only API does not expose the writer projection.
+
+For a retained item, call `KeyedItemRead::fields()` on each read and handle
+`StaleItem` before accessing a field. This checked access tracks item liveness,
+so removing the item invalidates a Memo even when the projection contains no
+reactive fields. Avoid retaining a raw `StoreRead` or `StoreField` beyond that
+item's lifetime.
+
+`keys()` tracks order and returns a copy. `lookup(key)` tracks membership and
+returns a generation-bearing item handle; `fields()` checks that its generation
+is still live. Changing one item field does not invalidate order, membership,
+or other item fields. Reordering changes only order and retains item handles.
+Insertion and removal change order and membership. The first lookup policy
+invalidates all membership readers on any insertion or removal, even when a
+different key changes; it does not do so on field edits or reorder.
+
+Duplicate insertion, unknown removal and an incomplete, duplicate or unknown
+reorder return a typed error without changing the collection. Removing an item
+retires its field nodes and registrations. Recreating the same key issues a new
+generation; old `KeyedItemRead::fields()` and `KeyedItemWrite::fields()` return
+`StaleItem`. A field projection obtained *before* removal must not be used
+afterwards: its underlying Store field follows the existing disposed-Signal
+contract. Retaining an item handle does not keep the retired field payload or
+registrations in the collection. A document-level Memo may read item fields
+because their dependency Scope is the document's Scope, while the keyed
+collection releases each item's nodes when it is removed. The Graph rule
+against longer-lived readers depending on a shorter-lived Scope remains.
+Structural edits attempted from inside the same collection's item factory
+return `ReentrantEdit`, and an owner closed during construction retires the
+partially built fields before returning `ClosedStore`.
+
+`Store::batch` can group remove/reinsert and field updates, including a
+same-key recreation. Observers run after the outer batch and see the final
+generation. Reads made explicitly *inside* a batch see the state at that point;
+there is no rollback. UI list reconciliation remains a separate boundary.
 
 ## Construct controls once per owner
 
