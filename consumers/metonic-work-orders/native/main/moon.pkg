@@ -1,0 +1,18 @@
+import {
+  "local/metonic_work_orders/work_orders",
+  "local/native_host/application" @host,
+  "local/native_host/window_host",
+  "moonbitlang/async",
+}
+
+pkgtype(kind: "executable")
+
+supported_targets = "native"
+
+options(
+  link: {
+    "native": {
+      "cc-link-flags": "/link /SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup",
+    },
+  },
+)

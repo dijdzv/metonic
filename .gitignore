@@ -8,5 +8,6 @@ _build/
 !.env.example
 node_modules/
 .mooncakes/
+.playwright-cli/
 # External-build fixture artifacts
 native_host/.metonic-build/
