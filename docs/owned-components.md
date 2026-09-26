@@ -1,7 +1,7 @@
 # Owned components and application state
 
-Metonic currently supplies `Graph`, `Signal`, `Memo` and `Scope` for state, and
-`core/component.UiRoot` for owned controls. These are experimental public source
+Metonic supplies `Graph`, `Signal`, `Memo`, `Scope` and typed `Store` fields for
+state, and `core/component.UiRoot` for owned controls. These are experimental public source
 APIs, not a stable published package. Start an independent workspace using the
 [source-consumer instructions](application-entry.md#external-workspace-builds)
 and pin the framework revision. The executable
@@ -18,9 +18,32 @@ and pin the framework revision. The executable
 
 Derived nodes must not depend on a shorter-lived child. Promote shared state to
 the appropriate ancestor instead. `Memo` computes synchronous derived values;
-its evaluation must not write state or start I/O. A structured, field-selective
-Store and a general Context/provider API are not currently supplied. Wrapping
-an entire model in one Signal does not establish field-level invalidation.
+its evaluation must not write state or start I/O. `Store::new(owner)` uses that
+owner's Graph and Scope. Create independent typed fields for the model values
+that must invalidate independently:
+
+```moonbit
+let store = @reactive.Store::new(document_scope)
+let title = store.field("Inspect entry light")
+let details = store.field("Check the switch and lamp.")
+let title_for_view = title.read()
+let label = @reactive.Memo::new(document_scope, () => title_for_view.get())
+store.batch(() => {
+  title.set("Replace room filter")
+  details.set("Confirm the replacement size.")
+})
+```
+
+`StoreRead[T]` exposes tracked `get` and untracked `peek`, not a setter. Keep
+`StoreField[T]` with the model owner and pass the read handle to consumers.
+The compiler does not make a mutable `T` immutable: do not expose a mutable
+Array, Ref or other shared object through a read handle without copying it or
+transferring ownership. `Store::batch` uses the existing Graph batch for fields
+on that Graph, so
+observers see the final combination after the outer batch; it is not a rollback
+transaction. A keyed item collection and tracked list reconciliation are still
+separate work. Wrapping an entire model in one Signal does not establish
+field-level invalidation. A general Context/provider API is not supplied.
 
 ## Construct controls once per owner
 
