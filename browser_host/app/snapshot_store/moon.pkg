@@ -1,6 +1,7 @@
 import {
   "local/websys-input" @dom,
   "moonbitlang/core/debug",
+  "local/p0/capabilities/snapshot",
 }
 
 supported_targets = "+js+wasm-gc"

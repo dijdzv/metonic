@@ -1,5 +1,8 @@
 import {
+  "local/p0/capabilities/snapshot",
+  "moonbitlang/async",
   "moonbitlang/async/fs",
+  "moonbitlang/core/encoding/utf8",
 }
 
 import {
